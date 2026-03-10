@@ -3,12 +3,14 @@
 import React, { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
-
 import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
-  Settings, LogOut, ChevronLeft, ChevronRight, X, Menu,
+  Settings, LogOut, ChevronLeft, ChevronRight, X, Menu, User,
   ChevronDown, ChevronUp, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone
 } from 'lucide-react';
+import { Button } from '@/components/UI/button';
+import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
+import { RoleProvider } from '@/lib/role-context';
 
 
 const NAV_ITEMS = [
@@ -30,34 +32,48 @@ const PORTAL_ITEMS = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const router = useRouter();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar
-        isOpen={sidebarOpen}
-        isExpanded={sidebarExpanded}
-        onClose={() => setSidebarOpen(false)}
-        onToggleExpand={() => setSidebarExpanded(prev => !prev)}
-      />
+    <RoleProvider>
+      <div className="flex h-screen overflow-hidden bg-slate-50">
+        <Sidebar
+          isOpen={sidebarOpen}
+          isExpanded={sidebarExpanded}
+          onClose={() => setSidebarOpen(false)}
+          onToggleExpand={() => setSidebarExpanded(prev => !prev)}
+        />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar — mobile only */}
-        <header className="lg:hidden flex items-center justify-between px-4 h-14 bg-white border-b border-slate-200 shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
-          >
-            <Menu size={22} />
-          </button>
-          <Image src="/images/agila_logo.webp" alt="ATMS" width={28} height={28} className="rounded-sm" />
-          <div className="w-9" />
-        </header>
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top bar */}
+          <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 z-30 shadow-sm">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu size={20} />
+              </Button>
+            </div>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10">
-          {children}
-        </main>
+            <div className="flex items-center gap-2">
+              <NotificationDropdown />
+              <Button
+                variant="ghost"
+                onClick={() => router.push('/dashboard/profile')}
+              >
+                <User size={18} />
+              </Button>
+            </div>
+          </header>
+
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </RoleProvider>
   );
 }
 
