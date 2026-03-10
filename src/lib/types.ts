@@ -31,3 +31,12 @@ export interface TurnoverDocuments {
   tosNo: string;
   generatedAt: string;
 }
+
+// Service plan types
+export interface ServiceItem {
+  id: string;
+  name: string;
+  teamInCharge: string;
+  government: string;
+  rate: number;
+}
