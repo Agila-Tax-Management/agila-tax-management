@@ -1,0 +1,28 @@
+model App {
+    id    String @id @default(cuid())
+    name  String @unique
+    label String
+
+    accesses EmployeeAppAccess[]
+
+    createdAt DateTime @default(now())
+}
+
+model EmployeeAppAccess {
+    id String @id @default(cuid())
+
+    employeeId Int
+    employee   Employee @relation(fields: [employeeId], references: [id])
+
+    appId String
+    app   App    @relation(fields: [appId], references: [id])
+
+    canView   Boolean @default(true)
+    canCreate Boolean @default(false)
+    canEdit   Boolean @default(false)
+    canDelete Boolean @default(false)
+
+    createdAt DateTime @default(now())
+
+    @@unique([employeeId, appId])
+}

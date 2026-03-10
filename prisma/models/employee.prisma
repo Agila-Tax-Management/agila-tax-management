@@ -1,0 +1,139 @@
+enum EmploymentType {
+    REGULAR
+    PROBATIONARY
+    CONTRACTUAL
+    PROJECT_BASED
+    PART_TIME
+    INTERN
+}
+
+enum DisbursedMethod {
+    CASH_SALARY
+    FUND_TRANSFER
+}
+
+model Employee {
+    id Int @id @default(autoincrement())
+
+    userId String? @unique
+    user   User?   @relation(fields: [userId], references: [id])
+
+    firstName  String
+    middleName String?
+    lastName   String
+
+    username   String?
+    employeeNo String? @unique
+
+    email String?
+
+    birthDate DateTime
+    gender    String
+
+    phone   String
+    address String
+
+    departmentId Int?
+    department   Department? @relation(fields: [departmentId], references: [id])
+
+    positionId Int?
+    position   Position? @relation(fields: [positionId], references: [id])
+
+    teamId Int?
+    team   EmployeeTeam? @relation("TeamMembers", fields: [teamId], references: [id])
+
+    employmentType EmploymentType?
+
+    pcfRole   String?
+    hierarchy String?
+
+    startDate DateTime?
+
+    active     Boolean @default(true)
+    softDelete Boolean @default(false)
+
+    resetToken  String?
+    tokenExpiry DateTime?
+
+    monthlyRate Decimal? @db.Decimal(10, 2)
+    weeklyRate  Decimal? @db.Decimal(10, 2)
+    dailyRate   Decimal? @db.Decimal(10, 2)
+    hourlyRate  Decimal? @db.Decimal(10, 2)
+
+    sss        Decimal? @db.Decimal(11, 2)
+    pagibig    Decimal? @db.Decimal(11, 2)
+    philhealth Decimal? @db.Decimal(11, 2)
+
+    disbursedMethod DisbursedMethod?
+
+    payType String? @default("Variable Pay")
+
+    bankDetails String?
+
+    requirements EmployeeRequirement[]
+
+    appAccess EmployeeAppAccess[]
+
+    createdAt     DateTime       @default(now())
+    updatedAt     DateTime       @updatedAt
+    employeeTeams EmployeeTeam[]
+    ledTeams      EmployeeTeam[] @relation("TeamLeader") // Add this line
+}
+
+model EmployeeRequirement {
+    id Int @id @default(autoincrement())
+
+    employeeId Int
+    employee   Employee @relation(fields: [employeeId], references: [id])
+
+    resume            String?
+    birthCertificate  String?
+    validId           String?
+    nbiClearance      String?
+    barangayClearance String?
+    medicalResults    String?
+    bankQr            String?
+
+    createdAt DateTime @default(now())
+
+    @@map("atms_submitted_documents")
+}
+
+model Department {
+    id Int @id @default(autoincrement())
+
+    name String @unique
+
+    employees Employee[]
+    positions Position[]
+
+    createdAt DateTime @default(now())
+}
+
+model Position {
+    id Int @id @default(autoincrement())
+
+    title String
+
+    departmentId Int
+    department   Department @relation(fields: [departmentId], references: [id])
+
+    employees Employee[]
+
+    createdAt DateTime @default(now())
+}
+
+model EmployeeTeam {
+    id Int @id @default(autoincrement())
+
+    name String
+
+    leaderId Int?
+    leader   Employee? @relation("TeamLeader", fields: [leaderId], references: [id])
+
+    members Employee[] @relation("TeamMembers")
+
+    createdAt  DateTime  @default(now())
+    employee   Employee? @relation(fields: [employeeId], references: [id])
+    employeeId Int?
+}

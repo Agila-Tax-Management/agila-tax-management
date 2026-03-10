@@ -1,0 +1,174 @@
+model Client {
+    id String @id @default(cuid())
+
+    companyName String?
+    contactName String?
+    email       String?
+    phone       String?
+    address     String?
+
+    clientUsers ClientUser[]
+
+    createdAt           DateTime             @default(now())
+    updatedAt           DateTime             @updatedAt
+    professionalClients ProfessionalClient[]
+    soleProprietorships SoleProprietorship[]
+}
+
+model ClientUser {
+    id       String @id @default(cuid())
+    email    String @unique
+    password String
+
+    role   Role    @default(CLIENT)
+    active Boolean @default(true)
+
+    name String?
+
+    clientId String?
+    client   Client? @relation(fields: [clientId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model ProfessionalClient {
+    id Int @id @default(autoincrement())
+
+    clientId String
+    client   Client @relation(fields: [clientId], references: [id])
+
+    firstName  String?
+    middleName String?
+    lastName   String?
+
+    residentialAddress String?
+    businessType       String?
+    tradeName          String?
+
+    civilStatus String?
+    dateOfBirth DateTime?
+    age         Int?
+    gender      String?
+
+    tinNumber    String?
+    citizenship  String?
+    placeOfBirth String?
+
+    prcLicense String?
+
+    contactNumber String?
+    contactEmail  String?
+    contactPerson String?
+
+    idType   String?
+    idNumber String?
+
+    spouseTinNumber    String?
+    spouseEmployerName String?
+    spouseEmployerTin  String?
+
+    spouseFirstName        String?
+    spouseMiddleName       String?
+    spouseLastName         String?
+    spouseEmploymentStatus String?
+
+    motherFirstName  String?
+    motherMiddleName String?
+    motherLastName   String?
+
+    fatherFirstName  String?
+    fatherMiddleName String?
+    fatherLastName   String?
+
+    createdAt DateTime @default(now())
+
+    @@map("atms_professional")
+}
+
+model SoleProprietorship {
+    id Int @id @default(autoincrement())
+
+    clientId String
+    client   Client @relation(fields: [clientId], references: [id])
+
+    businessName String?
+
+    firstName  String?
+    middleName String?
+    lastName   String?
+
+    residentialAddress String?
+    businessAddress    String?
+
+    businessType String?
+    tradeName    String?
+
+    civilStatus String?
+
+    dateOfBirth DateTime?
+    age         Int?
+    gender      String?
+
+    tinNumber    String?
+    citizenship  String?
+    placeOfBirth String?
+
+    businessArea      String?
+    numberOfEmployees Int?
+
+    beginningCapital String?
+
+    landlineNumber String?
+    faxNumber      String?
+
+    motherFirstName  String?
+    motherMiddleName String?
+    motherLastName   String?
+
+    fatherFirstName  String?
+    fatherMiddleName String?
+    fatherLastName   String?
+
+    spouseFirstName  String?
+    spouseMiddleName String?
+    spouseLastName   String?
+
+    spouseEmploymentStatus String?
+    spouseTinNumber        String?
+    spouseEmployerName     String?
+    spouseEmployerTin      String?
+
+    businessPlace String?
+
+    ownedDocs   String?
+    ownedReason String?
+
+    rentedContract      String?
+    rentedNotarized     String?
+    rentedDocStamp      String?
+    rentedMonthlyRent   String?
+    rentedLessorName    String?
+    rentedLessorAddress String?
+
+    propertyOwner String?
+
+    noRentReason String?
+
+    landlordOwnDocs   String?
+    landlordOwnReason String?
+
+    landlordLeaseDocs   String?
+    landlordLeaseReason String?
+
+    contactPerson String?
+    contactEmail  String?
+    contactNumber String?
+
+    idType   String?
+    idNumber String?
+
+    createdAt DateTime @default(now())
+
+    @@map("atms_sole_proprietorship")
+}
