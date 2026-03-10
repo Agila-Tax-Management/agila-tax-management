@@ -87,7 +87,17 @@ export default function LoginPage() {
             >
               {submitting ? 'Signing in…' : 'Log In'}
             </button>
+
           </form>
+
+          {/* Direct to Dashboard button */}
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard')}
+            className="w-full mt-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md text-sm transition-colors shadow-sm"
+          >
+            Go to Dashboard
+          </button>
 
           {/* Footer links */}
           <div className="flex items-center justify-center gap-5 mt-6">
