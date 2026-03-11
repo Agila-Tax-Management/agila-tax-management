@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo, JSX } from 'react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -11,6 +11,7 @@ import {
   ArrowUpRight, FileSpreadsheet, Filter,
 } from 'lucide-react';
 import { MOCK_COMPLIANCE_CLIENTS } from '@/lib/mock-compliance-data';
+import type { ClientPlanDetails } from '@/lib/types';
 
 interface ComplianceStatus {
   bir?: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
@@ -21,7 +22,7 @@ interface ComplianceStatus {
   secDeadline?: string;
   mayorsPermitDeadline?: string;
   dtiDeadline?: string;
-  [key: string]: string | undefined;
+  [key: string]: unknown;
 }
 
 interface MonthPayment {
@@ -30,13 +31,19 @@ interface MonthPayment {
   amount: number;
 }
 
+type ComplianceReportPlanDetails = Omit<ClientPlanDetails, 'basePlan'> & {
+  basePlan?: string;
+  _compliance?: ComplianceStatus;
+  _payments?: MonthPayment[];
+};
+
 interface ClientData {
   id: string;
   clientNo: string;
   businessName: string;
   finalAmount?: number;
   createdAt: string;
-  planDetails?: any;
+  planDetails?: Partial<ComplianceReportPlanDetails> | null;
   status: string;
 }
 
@@ -133,7 +140,7 @@ function downloadCSV(report: GeneratedReport) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const ComplianceReports: React.FC = () => {
+export const ComplianceReports = (): JSX.Element => {
   const initialClients: ClientData[] = MOCK_COMPLIANCE_CLIENTS.map(c => ({
     id: c.id,
     clientNo: c.clientNo,

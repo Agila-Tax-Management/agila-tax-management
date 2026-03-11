@@ -14,7 +14,7 @@ import type { UserRecord } from "@/lib/schemas/user-management";
  * profile and portal access entries.
  * Restricted to SUPER_ADMIN and ADMIN.
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

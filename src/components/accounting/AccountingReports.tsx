@@ -5,7 +5,7 @@ import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import {
   BarChart3, TrendingUp, TrendingDown, ArrowUpRight,
-  DollarSign, Users, Receipt, Calendar, PieChart,
+  DollarSign, Users, PieChart,
 } from 'lucide-react';
 import {
   INITIAL_PAYMENTS,

@@ -6,10 +6,10 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { useRouter } from 'next/navigation';
 import {
-  DollarSign, CreditCard, FileText, Receipt,
+  DollarSign, FileText,
   TrendingUp, ArrowUpRight, ArrowRight,
   AlertTriangle, Clock, CheckCircle2, Users,
-  BarChart3, CircleDot,
+  BarChart3,
 } from 'lucide-react';
 import {
   INITIAL_PAYMENTS,

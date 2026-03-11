@@ -90,10 +90,12 @@ export const ServicePlans: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Reset page when filters change
-  useEffect(() => {
+  // Reset page when filters change ("adjust state during render" pattern)
+  const [prevFilters, setPrevFilters] = useState({ searchTerm, filterTeam, filterAgency });
+  if (prevFilters.searchTerm !== searchTerm || prevFilters.filterTeam !== filterTeam || prevFilters.filterAgency !== filterAgency) {
+    setPrevFilters({ searchTerm, filterTeam, filterAgency });
     setCurrentPage(1);
-  }, [searchTerm, filterTeam, filterAgency]);
+  }
 
   // ── Bulk Import ─────────────────────────────────────────────
   /**

@@ -140,7 +140,7 @@ export default function UserViewModal({
                     key={access.portal}
                     className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl border border-border bg-muted/30"
                   >
-                    <span className="text-sm font-medium text-foreground min-w-[160px]">
+                    <span className="text-sm font-medium text-foreground min-w-40">
                       {PORTAL_LABELS[access.portal] ?? access.portal}
                     </span>
                     <div className="flex flex-wrap gap-2">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo, JSX } from 'react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -24,11 +24,16 @@ interface StoredCase {
   dueDate?: string;
 }
 
+interface OpenCasesPlanDetails {
+  _compliance?: Record<string, string>;
+  _cases?: StoredCase[];
+}
+
 interface ClientData {
   id: string;
   clientNo: string;
   businessName: string;
-  planDetails: any;
+  planDetails: OpenCasesPlanDetails | null;
 }
 
 interface Agent {
@@ -65,15 +70,24 @@ const AGENCY_DEADLINE_KEYS: Record<string, string> = {
   mayorsPermit: 'mayorsPermitDeadline', dti: 'dtiDeadline',
 };
 
-export const OpenCases: React.FC = () => {
+type NewCaseState = {
+  clientId: string;
+  agency: string;
+  type: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  notes: string;
+  dueDate: string;
+};
+
+export const OpenCases = (): JSX.Element => {
   const initialClients: ClientData[] = MOCK_COMPLIANCE_CLIENTS.map(c => ({
     id: c.id,
     clientNo: c.clientNo,
     businessName: c.businessName,
     planDetails: {
-      ...c.planDetails,
-      _compliance: c.complianceStatus,
-      _cases: MOCK_STORED_CASES[c.id] ?? [],
+      ...(c.planDetails ?? {}),
+      _compliance: c.complianceStatus as Record<string, string>,
+      _cases: (MOCK_STORED_CASES[c.id] ?? []) as StoredCase[],
     },
   }));
   const [clients, setClients] = useState<ClientData[]>(initialClients);
@@ -82,7 +96,7 @@ export const OpenCases: React.FC = () => {
   const [managingCase, setManagingCase] = useState<CaseItem | null>(null);
   const [manageDraft, setManageDraft] = useState<{ status: CaseItem['status']; assignedTo: string; notes: string } | null>(null);
   const [isNewCaseOpen, setIsNewCaseOpen] = useState(false);
-  const [newCase, setNewCase] = useState({ clientId: '', agency: 'bir', type: AGENCY_CASE_TYPES['bir'], priority: 'MEDIUM' as const, notes: '', dueDate: '' });
+  const [newCase, setNewCase] = useState<NewCaseState>({ clientId: '', agency: 'bir', type: AGENCY_CASE_TYPES['bir'], priority: 'MEDIUM', notes: '', dueDate: '' });
   const [saving, setSaving] = useState(false);
 
   const cases = useMemo(() => {
@@ -108,7 +122,7 @@ export const OpenCases: React.FC = () => {
               assignedTo: '—',
               notes: '',
               date: new Date().toISOString().slice(0, 10),
-              dueDate: (compliance as any)?.[AGENCY_DEADLINE_KEYS[key]] ?? '',
+              dueDate: (compliance as Record<string, string | undefined>)?.[AGENCY_DEADLINE_KEYS[key]] ?? '',
               isAutoDetected: true,
             });
           }
@@ -469,7 +483,7 @@ export const OpenCases: React.FC = () => {
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority</label>
               <select
                 value={newCase.priority}
-                onChange={e => setNewCase(prev => ({ ...prev, priority: e.target.value as any }))}
+                onChange={e => setNewCase(prev => ({ ...prev, priority: e.target.value as 'HIGH' | 'MEDIUM' | 'LOW' }))}
                 className="w-full h-11 px-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none"
               >
                 <option value="HIGH">High</option>

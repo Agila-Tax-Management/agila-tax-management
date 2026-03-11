@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Client } from '@/lib/types';
 import { MOCK_COMPLIANCE_CLIENTS } from '@/lib/mock-compliance-data';
+import type { ClientPlanDetails } from '@/lib/types';
 
 const formatDate = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -24,7 +25,7 @@ const formatDate = (date: Date): string => {
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAY_NAMES   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
-const getOverallCompliance = (planDetails: any): 'COMPLIANT' | 'PENDING' | 'OVERDUE' => {
+const getOverallCompliance = (planDetails: ClientPlanDetails | null | undefined): 'COMPLIANT' | 'PENDING' | 'OVERDUE' => {
   const cs = planDetails?._compliance;
   if (!cs) return 'PENDING';
   const vals = [cs.bir, cs.sec, cs.mayorsPermit, cs.dti];
@@ -273,7 +274,7 @@ export const ComplianceDashboard: React.FC = () => {
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} domain={[0, 100]} unit="%" />
                 <Tooltip
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
-                  formatter={(val: any) => [`${val}%`, 'Health']}
+                  formatter={(val) => [typeof val === 'number' ? `${val}%` : '—', 'Health']}
                 />
                 <Line
                   type="monotone"

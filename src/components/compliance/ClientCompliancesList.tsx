@@ -8,6 +8,7 @@ import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import { Search, Eye, AlertCircle, CheckCircle, FileText } from 'lucide-react';
 import { MOCK_COMPLIANCE_CLIENTS } from '@/lib/mock-compliance-data';
+import type { ClientPlanDetails } from '@/lib/types';
 
 interface ComplianceStatus {
   bir: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
@@ -31,7 +32,7 @@ interface ClientWithCompliance {
   businessAddress: string;
   isBusinessRegistered: boolean;
   isPaid: boolean;
-  planDetails: any;
+  planDetails: ClientPlanDetails | null;
   finalAmount: number;
   createdAt: string;
   status: string;
@@ -123,8 +124,8 @@ export const ClientCompliancesList: React.FC = () => {
       }
     });
 
-    const updatedPlanDetails = { ...(selectedClient.planDetails ?? {}), _compliance: adjusted };
-    const updated = { ...selectedClient, complianceStatus: adjusted, planDetails: updatedPlanDetails };
+    const updatedPlanDetails = selectedClient.planDetails ? { ...selectedClient.planDetails, _compliance: adjusted } : selectedClient.planDetails;
+    const updated: ClientWithCompliance = { ...selectedClient, complianceStatus: adjusted, planDetails: updatedPlanDetails };
     setClients(prev => prev.map(c => c.id === selectedClient.id ? updated : c));
     setSelectedClient(updated);
     setIsUpdateModalOpen(false);
@@ -418,7 +419,7 @@ export const ClientCompliancesList: React.FC = () => {
                       <p className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">{label}</p>
                       <select
                         value={updateDraft[key]}
-                        onChange={e => setUpdateDraft(prev => prev ? { ...prev, [key]: e.target.value as any } : prev)}
+                        onChange={e => setUpdateDraft(prev => prev ? { ...prev, [key]: e.target.value as 'COMPLIANT' | 'PENDING' | 'OVERDUE' } : prev)}
                         className="h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium w-full text-slate-900"
                       >
                         <option value="COMPLIANT">Compliant</option>

@@ -87,7 +87,7 @@ export function TaskBoard() {
   const handleCreateTask = () => {
     if (!newTitle.trim() || !newDueDate) return;
     const task: AOTask = {
-      id: `task-${Date.now()}`,
+      id: `task-${crypto.randomUUID()}`,
       title: newTitle.trim(),
       description: newDescription.trim(),
       status: 'To Do',

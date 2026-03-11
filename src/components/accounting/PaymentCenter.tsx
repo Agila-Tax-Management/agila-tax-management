@@ -7,8 +7,8 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import {
-  Search, Filter, CreditCard, Clock, CheckCircle2,
-  AlertTriangle, Eye, DollarSign, Building2, ChevronDown,
+  Search, CreditCard, Clock, CheckCircle2,
+  AlertTriangle, Eye,
   ArrowUpRight, ArrowDownRight, CircleDot,
 } from 'lucide-react';
 import {

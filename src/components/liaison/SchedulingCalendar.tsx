@@ -31,7 +31,7 @@ const EVENT_TYPE_CONFIG: Record<CalendarEvent['type'], { label: string; color: s
 type ViewType = 'month' | 'week' | 'agenda';
 
 export function SchedulingCalendar() {
-  const today = new Date(2026, 2, 11); // March 11, 2026
+  const today = useMemo(() => new Date(2026, 2, 11), []); // March 11, 2026
   const [currentDate, setCurrentDate] = useState(today);
   const [viewType, setViewType] = useState<ViewType>('month');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -116,7 +116,7 @@ export function SchedulingCalendar() {
     return filteredEvents
       .filter(e => e.date >= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
-  }, [filteredEvents]);
+  }, [filteredEvents, today]);
 
   // ── Stats ─────────────────────────────────────────────────
   const todayEvents = getEventsForDate(getDateStr(today));

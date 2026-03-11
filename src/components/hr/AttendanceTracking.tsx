@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Clock, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import {
-  ATTENDANCE_RECORDS, AttendanceRecord, AttendanceStatus,
+  ATTENDANCE_RECORDS, AttendanceStatus,
 } from '@/lib/mock-hr-data';
 
 const STATUS_VARIANT: Record<AttendanceStatus, 'success' | 'warning' | 'danger' | 'info' | 'neutral'> = {

@@ -7,7 +7,6 @@ import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import {
   Search, Receipt, Eye, Users, CheckCircle2,
-  AlertTriangle, Clock, PauseCircle, Calendar,
   TrendingUp,
 } from 'lucide-react';
 import {

@@ -112,6 +112,84 @@ src/
 
 ## Coding Rules
 
+### Linting (ESLint)
+
+- Config: `eslint.config.mjs` — flat config with `eslint-config-next/core-web-vitals` + `eslint-config-next/typescript`
+- Run: `npm run lint` — must pass with **zero errors** before committing
+- Generated files (`src/generated/**`) are excluded from linting
+
+#### Key rules and conventions
+
+| Rule | Level | Convention |
+|---|---|---|
+| `@typescript-eslint/no-unused-vars` | warn | Prefix intentionally unused variables with `_` (e.g., `_request`, `_error`) |
+| `@typescript-eslint/no-explicit-any` | warn | Avoid `any` — use specific types, `unknown`, `Record<string, unknown>`, or union types |
+| `@typescript-eslint/no-empty-object-type` | warn | Use `type Alias = ParentType` instead of `interface Alias extends ParentType {}` |
+| `react-hooks/set-state-in-effect` | error | **Never** call `setState` synchronously in `useEffect` — use the "adjust state during render" pattern or lazy initializers |
+| `react-hooks/purity` | error | **Never** call impure functions (`Date.now()`, `Math.random()`) during render — use `crypto.randomUUID()` or move to event handlers |
+| `react-hooks/exhaustive-deps` | warn | Include all dependencies; wrap expensive object creation in `useMemo` to stabilize references |
+| `prefer-const` | warn | Use `const` when a variable is never reassigned |
+
+#### Unused variables pattern
+
+```typescript
+// Prefix with _ to signal intentional non-use
+export async function GET(_request: NextRequest) { ... }
+const [_error] = useState<string | null>(null);
+```
+
+#### Resetting state when props change (no useEffect)
+
+Use the React-approved "adjust state during render" pattern instead of `useEffect` + `setState`:
+
+```typescript
+// ✅ Correct — adjust state during render
+const [prevIsOpen, setPrevIsOpen] = useState(false);
+if (isOpen !== prevIsOpen) {
+  setPrevIsOpen(isOpen);
+  if (isOpen) {
+    setStep('initial');
+    setFormData({});
+  }
+}
+
+// ❌ Wrong — triggers cascading renders
+useEffect(() => {
+  if (isOpen) {
+    setStep('initial');
+    setFormData({});
+  }
+}, [isOpen]);
+```
+
+#### Resetting pagination on filter change
+
+```typescript
+// ✅ Correct — derived reset during render
+const [prevFilters, setPrevFilters] = useState({ searchTerm, filterTeam });
+if (prevFilters.searchTerm !== searchTerm || prevFilters.filterTeam !== filterTeam) {
+  setPrevFilters({ searchTerm, filterTeam });
+  setCurrentPage(1);
+}
+
+// ❌ Wrong — setState in useEffect
+useEffect(() => { setCurrentPage(1); }, [searchTerm, filterTeam]);
+```
+
+#### Exception: localStorage / browser API sync
+
+Suppress the lint rule when reading browser-only APIs on mount (hydration-safe pattern):
+
+```typescript
+/* eslint-disable react-hooks/set-state-in-effect -- Hydration-safe: must read localStorage after mount */
+useEffect(() => {
+  const stored = localStorage.getItem('theme');
+  if (stored === 'dark') setTheme('dark');
+  setMounted(true);
+}, []);
+/* eslint-enable react-hooks/set-state-in-effect */
+```
+
 ### TypeScript
 
 - Never use `any` or implicit `any`

@@ -3,7 +3,7 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Calendar, UserCircle
+  ClipboardList, Calendar, UserCircle
 } from 'lucide-react';
 import { INITIAL_LIAISON_TASKS } from '@/lib/mock-liaison-data';
 

@@ -5,7 +5,7 @@ import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import {
-  Bell, CheckCheck, RefreshCw, MessageSquare,
+  Bell, CheckCheck, MessageSquare,
   UserPlus, ArrowRightLeft, Filter,
 } from 'lucide-react';
 import { INITIAL_AO_NOTIFICATIONS } from '@/lib/mock-ao-data';

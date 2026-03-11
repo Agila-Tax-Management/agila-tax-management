@@ -3,9 +3,11 @@
 // Will be replaced by API calls when the backend is ready.
 
 import { INITIAL_CLIENTS } from './mock-clients';
+import type { ClientPlanDetails } from './types';
 
 // ── Types (local to mock) ─────────────────────────────────
 export interface MockComplianceStatus {
+  [key: string]: string | undefined;
   bir: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
   sec: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
   mayorsPermit: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
@@ -27,7 +29,7 @@ export interface MockClientWithCompliance {
   businessAddress: string;
   isBusinessRegistered: boolean;
   isPaid: boolean;
-  planDetails: any;
+  planDetails: ClientPlanDetails | null;
   finalAmount: number;
   createdAt: string;
   status: string;

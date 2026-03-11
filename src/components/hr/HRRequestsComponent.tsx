@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Eye, FileQuestion, AlertCircle, CheckCircle, UserPlus } from 'lucide-react';
+import { Search, Filter, Eye, AlertCircle, CheckCircle, UserPlus } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Users, ChevronRight, Target, ExternalLink, ArrowRight,
+  Users, ChevronRight, ExternalLink, ArrowRight,
   Calendar, ShieldCheck, Star, Settings, Clock, FileText,
   BarChart3, Briefcase, DollarSign, UserCheck, Building2,
   Globe, BookOpen, Megaphone, Zap,

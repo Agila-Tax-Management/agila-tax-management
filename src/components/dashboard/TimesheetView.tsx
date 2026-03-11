@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -82,8 +82,8 @@ export const TimesheetView: React.FC = () => {
     !user?.isClockedIn   ? 'Clocked Out' :
     user?.isOnLunch      ? 'On Lunch'    : 'Clocked In';
 
-  const clockInTime   = user?.clockInTime   ? new Date(user.clockInTime)   : null;
-  const lunchStartCtx = user?.lunchStartTime ? new Date(user.lunchStartTime) : null;
+  const clockInTime   = useMemo(() => user?.clockInTime   ? new Date(user.clockInTime)   : null, [user?.clockInTime]);
+  const lunchStartCtx = useMemo(() => user?.lunchStartTime ? new Date(user.lunchStartTime) : null, [user?.lunchStartTime]);
 
   useEffect(() => {
     setIsClient(true);

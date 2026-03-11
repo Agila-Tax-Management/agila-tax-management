@@ -1,5 +1,3 @@
-import { INITIAL_CLIENTS } from './mock-clients';
-
 // ── Types ────────────────────────────────────────────────
 
 export type EmployeeStatus = 'Active' | 'On Leave' | 'Probationary' | 'Resigned';

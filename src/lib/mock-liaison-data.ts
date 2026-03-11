@@ -1,7 +1,7 @@
 // ── Mock Liaison Data ─────────────────────────────────────
 // Frontend-only mock data for the Liaison portal.
 
-import type { AOTask, AOTeamMember, AOTaskComment } from './types';
+import type { AOTask, AOTeamMember } from './types';
 
 // ── Liaison Team ──────────────────────────────────────────
 export const LIAISON_TEAM: AOTeamMember[] = [

@@ -130,7 +130,7 @@ const MOCK_AUDIT_DATA: AuditData = {
 export const ASPDashboard: React.FC = () => {
   const [data] = useState<DashboardData>(MOCK_DASHBOARD_DATA);
   const [isLoading, setIsLoading] = useState(true);
-  const [error] = useState<string | null>(null);
+  const [_error] = useState<string | null>(null);
 
   // Modal states
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);

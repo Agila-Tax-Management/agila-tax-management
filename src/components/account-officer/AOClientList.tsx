@@ -3,12 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
-import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { TaskDetailsModal } from './TaskDetailsModal';
 import {
   Search, LayoutGrid, LayoutList, Building2,
-  Mail, Phone, User, ClipboardList,
+  Mail, User, ClipboardList,
   CheckCircle2, Clock, AlertTriangle, X, ChevronRight,
 } from 'lucide-react';
 import { INITIAL_AO_TASKS, AO_TEAM_MEMBERS } from '@/lib/mock-ao-data';
@@ -57,9 +56,6 @@ export function AOClientList() {
 
   const getAssigneeName = (assigneeId: string) =>
     AO_TEAM_MEMBERS.find(m => m.id === assigneeId)?.name ?? 'Unassigned';
-
-  const getAssigneeAvatar = (assigneeId: string) =>
-    AO_TEAM_MEMBERS.find(m => m.id === assigneeId)?.avatar ?? '?';
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });

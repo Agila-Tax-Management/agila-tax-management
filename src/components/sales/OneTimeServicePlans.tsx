@@ -78,9 +78,12 @@ export function OneTimeServicePlans(): React.ReactNode {
     setCurrentPage(1);
   };
 
-  useEffect(() => {
+  // Reset page when filters change ("adjust state during render" pattern)
+  const [prevFilters, setPrevFilters] = useState({ searchTerm, filterTeam, filterAgency });
+  if (prevFilters.searchTerm !== searchTerm || prevFilters.filterTeam !== filterTeam || prevFilters.filterAgency !== filterAgency) {
+    setPrevFilters({ searchTerm, filterTeam, filterAgency });
     setCurrentPage(1);
-  }, [searchTerm, filterTeam, filterAgency]);
+  }
 
   const handleBulkImport = () => {
     setServices([...MOCK_SERVICES]);

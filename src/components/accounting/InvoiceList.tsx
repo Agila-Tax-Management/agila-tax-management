@@ -6,7 +6,7 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import {
-  Search, FileText, Eye, Download, Plus, Send,
+  Search, FileText, Eye, Send,
   CheckCircle2, Clock, AlertTriangle, XCircle, CircleDot,
   Building2, Mail,
 } from 'lucide-react';

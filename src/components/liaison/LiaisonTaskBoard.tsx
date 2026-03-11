@@ -87,7 +87,7 @@ export function LiaisonTaskBoard() {
   const handleCreateTask = () => {
     if (!newTitle.trim() || !newDueDate) return;
     const task: AOTask = {
-      id: `lia-task-${Date.now()}`,
+      id: `lia-task-${crypto.randomUUID()}`,
       title: newTitle.trim(),
       description: newDescription.trim(),
       status: 'To Do',

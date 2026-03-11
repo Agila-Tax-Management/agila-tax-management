@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal } from '@/components/UI/Modal';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -52,15 +52,20 @@ export default function ServicePlanModal({
 
   const plan = selectedPlan ? PLAN_DATA[selectedPlan] : undefined;
 
-  // Reset state when modal opens/closes or plan changes
-  useEffect(() => {
+  // Reset state when modal opens or plan changes
+  // (React-approved "adjust state during render" pattern)
+  const [prevIsOpen, setPrevIsOpen] = useState(false);
+  const [prevPlan, setPrevPlan] = useState(selectedPlan);
+  if (isOpen !== prevIsOpen || selectedPlan !== prevPlan) {
+    setPrevIsOpen(isOpen);
+    setPrevPlan(selectedPlan);
     if (isOpen) {
       setStep('details');
       setSelectedServiceIds(new Set());
       setSearchTerm('');
       setFilterTeam('All');
     }
-  }, [isOpen, selectedPlan]);
+  }
 
   // ── Customization Logic ─────────────────────────────────────
   const toggleService = (id: string) => {
