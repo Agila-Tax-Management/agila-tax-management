@@ -40,3 +40,40 @@ export interface ServiceItem {
   government: string;
   rate: number;
 }
+
+// ── Client Types ──────────────────────────────────────────
+export interface ClientService {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  rate: number;
+}
+
+export interface ClientPlanDetails {
+  basePlan: string;
+  displayName: string;
+  customFeaturesIncluded: string[];
+  customFeaturesMore: string[];
+  customFreebies: string[];
+  customPrice: string;
+  selectedServiceIds: string[];
+}
+
+export interface Client {
+  id: string;
+  clientNo: string;
+  businessName: string;
+  companyCode: string;
+  authorizedRep: string;
+  email: string;
+  phone: string;
+  status: string;
+  agentId: string;
+  planDetails: ClientPlanDetails | null;
+  clientServices: ClientService[];
+  isPaid: boolean;
+  commissionPaid: boolean;
+  finalAmount: number;
+  hasUpsell: boolean;
+  upsellAmount: number;
+}

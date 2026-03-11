@@ -20,7 +20,6 @@ const ASP_NAV_ITEMS = [
   { id: 'commissions', label: 'Commissions', icon: Wallet, href: '/portal/sales/commissions' },
   { id: 'after-sales', label: 'After Sales', icon: ShoppingBag, href: '/portal/sales/after-sales' },
   { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/sales/reports' },
-  { id: 'faq', label: 'FAQ', icon: HelpCircle, href: '/portal/sales/faq' },
 ];
 
 interface ASPSidebarProps {

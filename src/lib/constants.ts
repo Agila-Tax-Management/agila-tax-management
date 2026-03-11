@@ -19,10 +19,10 @@ export const LEAD_STATUSES = [
 ];
 
 export const MOCK_AGENTS = [
-  { id: 'agent-1', name: 'Maria Santos', email: 'maria.santos@agila.ph', role: 'Senior Agent' },
-  { id: 'agent-2', name: 'Juan Dela Cruz', email: 'juan.delacruz@agila.ph', role: 'Agent' },
-  { id: 'agent-3', name: 'Ana Reyes', email: 'ana.reyes@agila.ph', role: 'Agent' },
-  { id: 'agent-4', name: 'Carlos Garcia', email: 'carlos.garcia@agila.ph', role: 'Junior Agent' },
+  { id: 'agent-1', name: 'Maria Santos', type: 'INTERNAL', email: 'maria.santos@agila.ph', contact: '09171234567', role: 'Senior Agent' },
+  { id: 'agent-2', name: 'Juan Dela Cruz', type: 'INTERNAL', email: 'juan.delacruz@agila.ph', contact: '09189876543', role: 'Agent' },
+  { id: 'agent-3', name: 'Ana Reyes', type: 'EXTERNAL', email: 'ana.reyes@agila.ph', contact: '09201112233', role: 'Agent' },
+  { id: 'agent-4', name: 'Carlos Garcia', type: 'INTERNAL', email: 'carlos.garcia@agila.ph', contact: '09334455667', role: 'Junior Agent' },
 ];
 
 export const BUSINESS_TYPES = [
