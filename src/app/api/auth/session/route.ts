@@ -1,9 +1,9 @@
-// src/app/app/api/auth/session/route.ts
+// src/app/api/auth/session/route.ts
 import { NextResponse } from "next/server";
 import { getSessionWithAccess } from "@/lib/session";
 
 /**
- * GET /app/api/auth/session
+ * GET /api/auth/session
  *
  * Returns the authenticated user's session enriched with their
  * employee profile and portal-level permissions.

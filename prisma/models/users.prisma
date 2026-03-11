@@ -21,6 +21,10 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
+  activityLogs           ActivityLog[]
+  notificationsReceived  InternalNotification[] @relation("NotificationRecipient")
+  notificationsTriggered InternalNotification[] @relation("NotificationActor")
+
   @@unique([email])
   @@map("user")
 }

@@ -1,0 +1,55 @@
+enum LogAction {
+    CREATED
+    UPDATED
+    DELETED
+    VIEWED
+    EXPORTED
+    IMPORTED
+    LOGIN
+    LOGOUT
+    STATUS_CHANGE
+    PERMISSION_CHANGE
+    ASSIGNED
+    UNASSIGNED
+    APPROVED
+    REJECTED
+    SUBMITTED
+    CANCELLED
+    ARCHIVED
+    RESTORED
+}
+
+model ActivityLog {
+    id String @id @default(cuid())
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    action LogAction
+
+    /// The type of entity acted upon (e.g. "Client", "Employee", "Lead")
+    entity String
+
+    /// The primary key of the affected record
+    entityId String?
+
+    /// Human-readable summary shown in the UI
+    description String
+
+    /// Optional JSON blob for extra context (old/new values, metadata)
+    metadata Json?
+
+    /// IP address of the request (when available)
+    ipAddress String?
+
+    /// Browser / client user-agent string
+    userAgent String?
+
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@index([entity, entityId])
+    @@index([action])
+    @@index([createdAt])
+    @@map("activity_log")
+}
