@@ -11,13 +11,14 @@ import {
 import { Button } from '@/components/UI/button';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { RoleProvider } from '@/lib/role-context';
+import { AuthProvider } from '@/context/AuthContext';
 
 
 const NAV_ITEMS = [
-  { href: '/dashboard',            label: 'Dashboard',   icon: LayoutDashboard },
-  { href: '/dashboard/timesheet',  label: 'Timesheet',   icon: Clock },
-  { href: '/dashboard/payslips',   label: 'Payslip',     icon: FileBadge },
-  { href: '/dashboard/hr-apps',    label: 'Application', icon: SendHorizontal },
+  { href: '/dashboard',                   label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/dashboard/timesheet',         label: 'Timesheet',   icon: Clock },
+  { href: '/dashboard/payslip',           label: 'Payslip',     icon: FileBadge },
+  { href: '/dashboard/hr-applications',   label: 'Application', icon: SendHorizontal },
 ];
 
 const PORTAL_ITEMS = [
@@ -36,6 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <RoleProvider>
+      <AuthProvider>
       <div className="flex h-screen overflow-hidden bg-slate-50">
         <Sidebar
           isOpen={sidebarOpen}
@@ -73,6 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+      </AuthProvider>
     </RoleProvider>
   );
 }

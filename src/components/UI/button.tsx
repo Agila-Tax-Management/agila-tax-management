@@ -1,6 +1,6 @@
 import React from 'react';
 
-type ButtonVariant = 'default' | 'ghost' | 'outline';
+type ButtonVariant = 'default' | 'ghost' | 'outline' | 'primary';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -8,6 +8,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   default: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm',
+  primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm',
   ghost: 'text-slate-600 hover:bg-slate-100',
   outline: 'border border-slate-200 text-slate-700 hover:bg-slate-50',
 };

@@ -18,10 +18,11 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   size?: ModalSize;
+  contentClassName?: string;
   children: React.ReactNode;
 }
 
-export function Modal({ isOpen, onClose, title, size = 'md', children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, size = 'md', contentClassName, children }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -64,7 +65,9 @@ export function Modal({ isOpen, onClose, title, size = 'md', children }: ModalPr
             <X size={18} />
           </button>
         )}
-        {children}
+        <div className={contentClassName}>
+          {children}
+        </div>
       </div>
     </div>
   );

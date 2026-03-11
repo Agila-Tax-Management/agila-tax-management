@@ -15,7 +15,6 @@ const EMPLOYEE_SERVICES = [
   { id: 'timesheet',   title: 'Timesheet',            description: 'Track daily attendance and clock in/out records.',       href: '/dashboard/timesheet',  icon: <Clock />,      color: 'bg-blue-600'   },
   { id: 'payslips',    title: 'Payslip',               description: 'View and download your salary breakdown.',              href: '/dashboard/payslips',   icon: <DollarSign />, color: 'bg-emerald-600' },
   { id: 'hr-apps',     title: 'HR Applications',       description: 'Submit leave, overtime, and other HR requests.',        href: '/dashboard/hr-apps',    icon: <FileText />,   color: 'bg-purple-600' },
-  { id: 'performance', title: 'Performance',            description: 'Review your KPIs and weekly performance scores.',       href: '/dashboard/performance',icon: <Target />,     color: 'bg-orange-500' },
 ];
 
 const PORTALS = [
