@@ -3,56 +3,28 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Users, MessageSquare,
-  Bell, UserCircle
+  LayoutDashboard, ClipboardList, Calendar, UserCircle
 } from 'lucide-react';
-import { INITIAL_AO_TASKS, INITIAL_AO_NOTIFICATIONS, INITIAL_AO_DISCUSSIONS } from '@/lib/mock-ao-data';
+import { INITIAL_LIAISON_TASKS } from '@/lib/mock-liaison-data';
 
-// Mock badge counts derived from mock data
-const TASK_BADGE_COUNT = INITIAL_AO_TASKS.filter(t => t.status !== 'Done').length;
-const NOTIF_BADGE_COUNT = INITIAL_AO_NOTIFICATIONS.filter(n => !n.isRead).length;
-const DISCUSSION_BADGE_COUNT = (() => {
-  // Count client messages that came after the last AO reply per thread
-  const clientIds = [...new Set(INITIAL_AO_DISCUSSIONS.map(m => m.clientId))];
-  let total = 0;
-  for (const cid of clientIds) {
-    const msgs = INITIAL_AO_DISCUSSIONS.filter(m => m.clientId === cid);
-    const lastAO = msgs
-      .filter(m => m.senderRole === 'account-officer')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-    if (!lastAO) {
-      total += msgs.filter(m => m.senderRole === 'client').length;
-    } else {
-      total += msgs.filter(m => m.senderRole === 'client' && new Date(m.createdAt) > new Date(lastAO.createdAt)).length;
-    }
-  }
-  return total;
-})();
+const TASK_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.status !== 'Done').length;
 
-const AO_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/account-officer', badge: 0 },
+const LIAISON_NAV_ITEMS = [
   {
     id: 'management',
     label: 'MANAGEMENT',
     isSection: true,
   },
-  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/account-officer/tasks', badge: TASK_BADGE_COUNT },
-  { id: 'clients', label: 'Clients', icon: Users, href: '/portal/account-officer/clients', badge: 0 },
-  {
-    id: 'communication',
-    label: 'COMMUNICATION',
-    isSection: true,
-  },
-  { id: 'discussions', label: 'Discussions', icon: MessageSquare, href: '/portal/account-officer/discussions', badge: DISCUSSION_BADGE_COUNT },
-  { id: 'notifications', label: 'Notifications', icon: Bell, href: '/portal/account-officer/notifications', badge: NOTIF_BADGE_COUNT },
+  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison', badge: TASK_BADGE_COUNT },
+  { id: 'calendar', label: 'Schedule Calendar', icon: Calendar, href: '/portal/liaison/calendar', badge: 0 },
 ];
 
-interface AOSidebarProps {
+interface LiaisonSidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
+export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -77,12 +49,12 @@ export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
       >
         <div className="p-6 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#25238e] rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center">
               <UserCircle size={20} className="text-white" />
             </div>
             <div>
               <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                Account Officer
+                Liaison
               </h2>
               <p className="text-xs text-slate-500">Management Portal</p>
             </div>
@@ -90,7 +62,7 @@ export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {AO_NAV_ITEMS.map((item) => {
+          {LIAISON_NAV_ITEMS.map((item) => {
             if (item.isSection) {
               return (
                 <div key={item.id} className="pt-6 pb-2">
@@ -111,7 +83,7 @@ export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
                   ${isActive
-                    ? 'bg-[#25238e]/10 text-[#25238e] shadow-sm font-bold'
+                    ? 'bg-violet-600/10 text-violet-700 shadow-sm font-bold'
                     : 'text-slate-600 hover:bg-slate-50 font-medium'
                   }
                 `}
@@ -119,7 +91,7 @@ export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
                 {Icon && <Icon size={18} />}
                 <span className="text-sm flex-1 text-left">{item.label}</span>
                 {'badge' in item && item.badge !== undefined && item.badge > 0 && (
-                  <span className="min-w-5 h-5 px-1.5 bg-[#25238e] rounded-full flex items-center justify-center text-[10px] font-bold text-white">
+                  <span className="min-w-5 h-5 px-1.5 bg-violet-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white">
                     {item.badge}
                   </span>
                 )}

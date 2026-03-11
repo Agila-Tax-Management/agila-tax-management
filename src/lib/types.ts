@@ -57,6 +57,16 @@ export interface ClientPlanDetails {
   customFreebies: string[];
   customPrice: string;
   selectedServiceIds: string[];
+  _compliance?: {
+    bir?: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
+    sec?: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
+    mayorsPermit?: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
+    dti?: 'COMPLIANT' | 'PENDING' | 'OVERDUE';
+    birDeadline?: string;
+    secDeadline?: string;
+    mayorsPermitDeadline?: string;
+    dtiDeadline?: string;
+  };
 }
 
 export interface Client {
