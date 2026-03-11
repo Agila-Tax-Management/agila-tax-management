@@ -42,16 +42,16 @@ interface COAData   { dateAffected: string; action: string; reason: string; }
 interface OTData    { dateOT: string; otType: string; timeFrom: string; timeTo: string; reason: string; }
 interface LeaveData { leaveType: string; dateFrom: string; dateTo: string; isHalfDay: boolean; halfDayTime: string; reason: string; }
 
-const LABEL    = 'text-[10px] font-black text-slate-500 uppercase tracking-widest';
-const FIELD    = 'w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm font-medium text-slate-900 focus:ring-2 focus:ring-teal-500 focus:border-transparent';
-const TEXTAREA = 'w-full min-h-[90px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium text-slate-900 focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-slate-400 resize-none';
+const LABEL    = 'text-[10px] font-black text-muted-foreground uppercase tracking-widest';
+const FIELD    = 'w-full h-11 bg-muted border border-border rounded-xl px-4 text-sm font-medium text-foreground focus:ring-2 focus:ring-teal-500 focus:border-transparent';
+const TEXTAREA = 'w-full min-h-[90px] bg-muted border border-border rounded-xl p-4 text-sm font-medium text-foreground focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:text-muted-foreground resize-none';
 
 // ── COA Form ─────────────────────────────────────────────────────────
 const COAForm: React.FC<{ data: COAData; set: React.Dispatch<React.SetStateAction<COAData>> }> = ({ data, set }) => (
   <div className="space-y-4">
     <div className="space-y-1.5">
       <label className={LABEL}>Date Affected</label>
-      <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl text-slate-900" value={data.dateAffected} onChange={e => set(d => ({ ...d, dateAffected: e.target.value }))} />
+      <Input type="date" className="bg-muted border-border rounded-xl text-foreground" value={data.dateAffected} onChange={e => set(d => ({ ...d, dateAffected: e.target.value }))} />
     </div>
     <div className="space-y-1.5">
       <label className={LABEL}>Action to Correct</label>
@@ -75,7 +75,7 @@ const OTForm: React.FC<{ data: OTData; set: React.Dispatch<React.SetStateAction<
   <div className="space-y-4">
     <div className="space-y-1.5">
       <label className={LABEL}>Date of Overtime</label>
-      <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl text-slate-900" value={data.dateOT} onChange={e => set(d => ({ ...d, dateOT: e.target.value }))} />
+      <Input type="date" className="bg-muted border-border rounded-xl text-foreground" value={data.dateOT} onChange={e => set(d => ({ ...d, dateOT: e.target.value }))} />
     </div>
     <div className="space-y-1.5">
       <label className={LABEL}>Overtime Type</label>
@@ -85,14 +85,14 @@ const OTForm: React.FC<{ data: OTData; set: React.Dispatch<React.SetStateAction<
         <option value="Rest Day Overtime">Rest Day Overtime</option>
       </select>
     </div>
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-1.5">
         <label className={LABEL}>Time Coverage — From</label>
-        <Input type="time" className="bg-slate-50 border-slate-200 rounded-xl text-slate-900" value={data.timeFrom} onChange={e => set(d => ({ ...d, timeFrom: e.target.value }))} />
+        <Input type="time" className="bg-muted border-border rounded-xl text-foreground" value={data.timeFrom} onChange={e => set(d => ({ ...d, timeFrom: e.target.value }))} />
       </div>
       <div className="space-y-1.5">
         <label className={LABEL}>Time Coverage — To</label>
-        <Input type="time" className="bg-slate-50 border-slate-200 rounded-xl text-slate-900" value={data.timeTo} onChange={e => set(d => ({ ...d, timeTo: e.target.value }))} />
+        <Input type="time" className="bg-muted border-border rounded-xl text-foreground" value={data.timeTo} onChange={e => set(d => ({ ...d, timeTo: e.target.value }))} />
       </div>
     </div>
     <div className="space-y-1.5">
@@ -114,18 +114,18 @@ const LeaveForm: React.FC<{ data: LeaveData; set: React.Dispatch<React.SetStateA
         {LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
       </select>
     </div>
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-1.5">
         <label className={LABEL}>Date From</label>
-        <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl text-slate-900" value={data.dateFrom} onChange={e => set(d => ({ ...d, dateFrom: e.target.value }))} />
+        <Input type="date" className="bg-muted border-border rounded-xl text-foreground" value={data.dateFrom} onChange={e => set(d => ({ ...d, dateFrom: e.target.value }))} />
       </div>
       <div className="space-y-1.5">
         <label className={LABEL}>Date To</label>
-        <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl text-slate-900" value={data.dateTo} onChange={e => set(d => ({ ...d, dateTo: e.target.value }))} />
+        <Input type="date" className="bg-muted border-border rounded-xl text-foreground" value={data.dateTo} onChange={e => set(d => ({ ...d, dateTo: e.target.value }))} />
       </div>
     </div>
 
-    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+    <div className="flex items-center gap-3 p-4 bg-muted rounded-xl border border-border">
       <input
         type="checkbox"
         id="halfday"
@@ -133,7 +133,7 @@ const LeaveForm: React.FC<{ data: LeaveData; set: React.Dispatch<React.SetStateA
         checked={data.isHalfDay}
         onChange={e => set(d => ({ ...d, isHalfDay: e.target.checked, halfDayTime: '' }))}
       />
-      <label htmlFor="halfday" className="text-sm font-bold text-slate-700 cursor-pointer">Half Day</label>
+      <label htmlFor="halfday" className="text-sm font-bold text-foreground cursor-pointer">Half Day</label>
     </div>
 
     {data.isHalfDay && (
@@ -209,8 +209,8 @@ export const ApplicationsView: React.FC = () => {
             <SendHorizontal size={26} />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight uppercase">HR Applications</h1>
-            <p className="text-slate-500 text-sm mt-0.5">Submit and track your requests</p>
+            <h1 className="text-2xl font-black text-foreground tracking-tight uppercase">HR Applications</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">Submit and track your requests</p>
           </div>
         </div>
         <Button onClick={openModal} className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-6 font-bold shadow-lg shadow-teal-600/20">
@@ -220,38 +220,38 @@ export const ApplicationsView: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 border-slate-100 shadow-sm flex items-center gap-4">
+        <Card className="p-6 border-border shadow-sm flex items-center gap-4">
           <div className="p-4 bg-teal-50 text-teal-600 rounded-xl"><CheckCircle2 size={22} /></div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Available Leave</p>
-            <p className="text-2xl font-black text-slate-900">12.5 Days</p>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Available Leave</p>
+            <p className="text-2xl font-black text-foreground">12.5 Days</p>
           </div>
         </Card>
-        <Card className="p-6 border-slate-100 shadow-sm flex items-center gap-4">
+        <Card className="p-6 border-border shadow-sm flex items-center gap-4">
           <div className="p-4 bg-amber-50 text-amber-600 rounded-xl"><Clock size={22} /></div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Review</p>
-            <p className="text-2xl font-black text-slate-900">{requests.filter(r => r.status === 'Pending').length}</p>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Pending Review</p>
+            <p className="text-2xl font-black text-foreground">{requests.filter(r => r.status === 'Pending').length}</p>
           </div>
         </Card>
-        <Card className="p-6 border-slate-100 shadow-sm flex items-center gap-4">
+        <Card className="p-6 border-border shadow-sm flex items-center gap-4">
           <div className="p-4 bg-violet-50 text-violet-600 rounded-xl"><FileText size={22} /></div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">YTD Applications</p>
-            <p className="text-2xl font-black text-slate-900">{requests.length + 21}</p>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">YTD Applications</p>
+            <p className="text-2xl font-black text-foreground">{requests.length + 21}</p>
           </div>
         </Card>
       </div>
 
       {/* Table */}
-      <Card className="border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100">
-          <h2 className="font-black text-slate-800 uppercase tracking-tight text-sm">Recent Submissions</h2>
+      <Card className="border-border shadow-sm overflow-hidden">
+        <div className="px-6 py-5 border-b border-border">
+          <h2 className="font-black text-foreground uppercase tracking-tight text-sm">Recent Submissions</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <tr className="bg-muted border-b border-border text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                 <th className="px-6 py-4">Type</th>
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Duration / Coverage</th>
@@ -259,20 +259,20 @@ export const ApplicationsView: React.FC = () => {
                 <th className="px-6 py-4 text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-border">
               {requests.map(req => (
-                <tr key={req.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={req.id} className="hover:bg-muted/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
                         <FileText size={15} />
                       </div>
-                      <span className="font-bold text-slate-800 text-sm">{req.type}</span>
+                      <span className="font-bold text-foreground text-sm">{req.type}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{req.date}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-slate-700">{req.duration}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500 italic max-w-xs truncate">{req.description}</td>
+                  <td className="px-6 py-4 text-sm text-muted-foreground">{req.date}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-foreground">{req.duration}</td>
+                  <td className="px-6 py-4 text-sm text-muted-foreground italic max-w-xs truncate">{req.description}</td>
                   <td className="px-6 py-4 text-right">
                     <Badge variant={req.status === 'Approved' ? 'success' : req.status === 'Pending' ? 'warning' : 'danger'}>
                       {req.status}
@@ -290,21 +290,21 @@ export const ApplicationsView: React.FC = () => {
         <div className="p-6">
         {step === 'select' ? (
           <div className="space-y-3">
-            <p className="text-sm text-slate-500 mb-4">Select the type of application you want to file.</p>
+            <p className="text-sm text-muted-foreground mb-4">Select the type of application you want to file.</p>
             {APP_TYPES.map(({ type, label, desc, icon, color }) => (
               <button
                 key={type}
                 onClick={() => selectType(type)}
-                className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-left group"
+                className="w-full flex items-center gap-4 p-4 rounded-xl border border-border hover:border-slate-300 hover:bg-muted transition-all text-left group"
               >
                 <div className={`w-11 h-11 ${color} rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm`}>
                   {icon}
                 </div>
                 <div className="flex-1">
-                  <p className="font-black text-slate-800 text-sm">{label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{desc}</p>
+                  <p className="font-black text-foreground text-sm">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
                 </div>
-                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
+                <ChevronRight size={16} className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
               </button>
             ))}
           </div>
@@ -312,7 +312,7 @@ export const ApplicationsView: React.FC = () => {
           <div className="space-y-5">
             <button
               onClick={() => setStep('select')}
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-700 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronRight size={13} className="rotate-180" /> Back
             </button>
@@ -321,7 +321,7 @@ export const ApplicationsView: React.FC = () => {
             {appType === 'Overtime' && <OTForm    data={ot}    set={setOt}    />}
             {appType === 'Leave'    && <LeaveForm data={leave} set={setLeave} />}
 
-            <div className="flex gap-3 pt-4 border-t border-slate-100">
+            <div className="flex gap-3 pt-4 border-t border-border">
               <Button variant="ghost" className="flex-1 rounded-xl font-bold" onClick={closeModal}>Cancel</Button>
               <Button
                 className="flex-1 rounded-xl font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20"

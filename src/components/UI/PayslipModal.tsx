@@ -87,17 +87,17 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Payslip — {payslip.id}</h2>
-          <div className="flex items-center gap-2">
+      <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 border-b border-border gap-3">
+          <h2 className="text-lg font-bold text-foreground truncate">Payslip — {payslip.id}</h2>
+          <div className="flex items-center gap-2 shrink-0">
             <Button variant="outline" className="rounded-xl text-xs" onClick={handlePrint} data-download-btn>
-              <Download size={14} className="mr-1" /> Download
+              <Download size={14} className="mr-1" /> <span className="hidden sm:inline">Download</span>
             </Button>
             <Button variant="ghost" className="rounded-xl text-xs" onClick={handlePrint}>
-              <Printer size={14} className="mr-1" /> Print
+              <Printer size={14} className="mr-1" /> <span className="hidden sm:inline">Print</span>
             </Button>
-            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition">
+            <button onClick={onClose} className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition">
               <X size={18} />
             </button>
           </div>
@@ -105,33 +105,33 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-4rem)]" ref={printRef}>
           {/* Employee Info */}
-          <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <div className="space-y-2">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employee</p>
-              <p className="text-sm font-bold text-slate-900">{payslip.employeeName}</p>
-              <p className="text-xs text-slate-500">{payslip.designation}</p>
-              <p className="text-xs text-slate-500 font-mono">{payslip.employeeCode}</p>
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Employee</p>
+              <p className="text-sm font-bold text-foreground">{payslip.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{payslip.designation}</p>
+              <p className="text-xs text-muted-foreground font-mono">{payslip.employeeCode}</p>
             </div>
             <div className="space-y-2 text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pay Period</p>
-              <p className="text-sm font-bold text-slate-900">{payslip.period}</p>
-              <p className="text-xs text-slate-500">Crediting: {payslip.creditingDate}</p>
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Pay Period</p>
+              <p className="text-sm font-bold text-foreground">{payslip.period}</p>
+              <p className="text-xs text-muted-foreground">Crediting: {payslip.creditingDate}</p>
             </div>
           </div>
 
           {/* Government IDs */}
-          <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-xl mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-muted rounded-xl mb-6">
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SSS No.</p>
-              <p className="text-xs font-bold text-slate-700 font-mono">{payslip.sssNo}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">SSS No.</p>
+              <p className="text-xs font-bold text-foreground font-mono">{payslip.sssNo}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PhilHealth No.</p>
-              <p className="text-xs font-bold text-slate-700 font-mono">{payslip.philhealthNo}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">PhilHealth No.</p>
+              <p className="text-xs font-bold text-foreground font-mono">{payslip.philhealthNo}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">HDMF No.</p>
-              <p className="text-xs font-bold text-slate-700 font-mono">{payslip.hdmfNo}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">HDMF No.</p>
+              <p className="text-xs font-bold text-foreground font-mono">{payslip.hdmfNo}</p>
             </div>
           </div>
 
@@ -139,30 +139,30 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
           <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3">Earnings</p>
           <div className="space-y-4 mb-6">
             <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Taxable</p>
-              <div className="grid grid-cols-3 gap-3">
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Taxable</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Basic', value: e.taxable.basic },
                   { label: 'Overtime', value: e.taxable.overtime },
                   { label: 'Adjustments', value: e.taxable.adjustments },
                 ].map(item => (
                   <div key={item.label} className="p-3 bg-emerald-50 rounded-lg">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">{item.label}</p>
+                    <p className="text-[9px] font-black text-muted-foreground uppercase">{item.label}</p>
                     <p className="text-sm font-bold text-emerald-700">{fmt(item.value)}</p>
                   </div>
                 ))}
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Non-Taxable</p>
-              <div className="grid grid-cols-3 gap-3">
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Non-Taxable</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Bonus', value: e.nonTaxable.bonus },
                   { label: 'Allowances', value: e.nonTaxable.allowances },
                   { label: 'De Minimis', value: e.nonTaxable.deMinimis },
                 ].map(item => (
                   <div key={item.label} className="p-3 bg-emerald-50 rounded-lg">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">{item.label}</p>
+                    <p className="text-[9px] font-black text-muted-foreground uppercase">{item.label}</p>
                     <p className="text-sm font-bold text-emerald-700">{fmt(item.value)}</p>
                   </div>
                 ))}
@@ -178,7 +178,7 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
           <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-3">Deductions</p>
           <div className="space-y-4 mb-6">
             <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Taxes & Statutories</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Taxes & Statutories</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: 'Absences', value: d.taxesAndStatutories.absences },
@@ -190,14 +190,14 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
                   { label: 'Withholding Tax', value: d.taxesAndStatutories.withholdingTax },
                 ].map(item => (
                   <div key={item.label} className="p-3 bg-rose-50 rounded-lg">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">{item.label}</p>
+                    <p className="text-[9px] font-black text-muted-foreground uppercase">{item.label}</p>
                     <p className="text-sm font-bold text-rose-700">{fmt(item.value)}</p>
                   </div>
                 ))}
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Loans & Others</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Loans & Others</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: 'Loan', value: d.loansAndOthers.loan },
@@ -206,7 +206,7 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
                   { label: 'Adjustments', value: d.loansAndOthers.adjustments },
                 ].map(item => (
                   <div key={item.label} className="p-3 bg-rose-50 rounded-lg">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">{item.label}</p>
+                    <p className="text-[9px] font-black text-muted-foreground uppercase">{item.label}</p>
                     <p className="text-sm font-bold text-rose-700">{fmt(item.value)}</p>
                   </div>
                 ))}
@@ -225,23 +225,23 @@ export function PayslipModal({ isOpen, onClose, payslip }: PayslipModalProps) {
           </div>
 
           {/* Payment Info */}
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Payment Method</p>
-          <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl">
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3">Payment Method</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted rounded-xl">
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Bank</p>
-              <p className="text-xs font-bold text-slate-700">{payslip.payment.bank}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase">Bank</p>
+              <p className="text-xs font-bold text-foreground">{payslip.payment.bank}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Account Name</p>
-              <p className="text-xs font-bold text-slate-700">{payslip.payment.accountName}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase">Account Name</p>
+              <p className="text-xs font-bold text-foreground">{payslip.payment.accountName}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Account No.</p>
-              <p className="text-xs font-bold text-slate-700 font-mono">{payslip.payment.accountNumber}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase">Account No.</p>
+              <p className="text-xs font-bold text-foreground font-mono">{payslip.payment.accountNumber}</p>
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Reference No.</p>
-              <p className="text-xs font-bold text-slate-700 font-mono">{payslip.payment.referenceNumber}</p>
+              <p className="text-[9px] font-black text-muted-foreground uppercase">Reference No.</p>
+              <p className="text-xs font-bold text-foreground font-mono">{payslip.payment.referenceNumber}</p>
             </div>
           </div>
         </div>

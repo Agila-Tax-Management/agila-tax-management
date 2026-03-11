@@ -243,33 +243,33 @@ export const PayrollComputation: React.FC = () => {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 max-w-400 mx-auto">
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-3xl shadow-sm border border-border">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             onClick={() => router.back()}
-            className="h-10 w-10 p-0 rounded-xl hover:bg-slate-100 text-slate-500"
+            className="h-10 w-10 p-0 rounded-xl hover:bg-muted text-muted-foreground"
           >
             <ArrowLeft size={20} />
           </Button>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payroll Computation</h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <h1 className="text-2xl font-black text-foreground tracking-tight">Payroll Computation</h1>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
               {payslipId} — employee payroll breakdown
             </p>
           </div>
         </div>
         <div className="flex flex-col items-end">
-          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Pay Period</span>
-          <span className="text-sm font-bold text-slate-900">{meta.payPeriod}</span>
+          <span className="text-xs font-black text-muted-foreground uppercase tracking-widest">Pay Period</span>
+          <span className="text-sm font-bold text-foreground">{meta.payPeriod}</span>
         </div>
       </div>
 
       {/* Employee Info */}
-      <Card className="p-0 border-none shadow-sm overflow-hidden bg-white rounded-3xl">
-        <div className="bg-slate-50/50 px-6 py-3 border-b border-slate-100 flex items-center gap-2">
+      <Card className="p-0 border-none shadow-sm overflow-hidden bg-card rounded-3xl">
+        <div className="bg-muted/50 px-6 py-3 border-b border-border flex items-center gap-2">
           <User size={16} className="text-blue-600" />
-          <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employee Information</h2>
+          <h2 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Employee Information</h2>
           <div className="ml-auto">
             <Button className="h-8 px-4 bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest rounded-lg">
               <Printer size={14} className="mr-2" /> Generate
@@ -278,44 +278,44 @@ export const PayrollComputation: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 p-6">
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Personal</h3>
+            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Personal</h3>
             <div className="space-y-2">
-              <Row label="Name"         value={<span className="font-bold text-slate-900">{meta.employeeName}</span>} />
+              <Row label="Name"         value={<span className="font-bold text-foreground">{meta.employeeName}</span>} />
               <Row label="Employee No." value={<Badge variant="neutral" className="bg-blue-50 text-blue-600 font-bold">{meta.employeeNo}</Badge>} />
-              <Row label="Hire Date"    value={<span className="font-bold text-slate-900">{meta.hireDate}</span>} />
+              <Row label="Hire Date"    value={<span className="font-bold text-foreground">{meta.hireDate}</span>} />
             </div>
           </div>
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Payroll</h3>
+            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Payroll</h3>
             <div className="space-y-2">
-              <Row label="Agreed Salary Rate" value={<span className="font-bold text-slate-900">{fmtPeso(meta.monthlyRate, true)}</span>} />
-              <Row label="Daily Rate"         value={<span className="font-bold text-slate-900">{fmtPeso(rate, true)}</span>} />
+              <Row label="Agreed Salary Rate" value={<span className="font-bold text-foreground">{fmtPeso(meta.monthlyRate, true)}</span>} />
+              <Row label="Daily Rate"         value={<span className="font-bold text-foreground">{fmtPeso(rate, true)}</span>} />
               <Row label="Payslip Status"     value={
                 <Badge variant={meta.payslipStatus === 'Approved' ? 'success' : 'warning'}
                   className={meta.payslipStatus === 'Approved' ? 'bg-emerald-50 text-emerald-600 font-bold' : 'bg-amber-50 text-amber-600 font-bold'}>
                   {meta.payslipStatus}
                 </Badge>
               }/>
-              <Row label="Pay Type" value={<span className="font-bold text-slate-900">{meta.payType}</span>} />
+              <Row label="Pay Type" value={<span className="font-bold text-foreground">{meta.payType}</span>} />
             </div>
           </div>
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Approval</h3>
+            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Approval</h3>
             <div className="space-y-2">
-              <Row label="Work Schedule"   value={<button onClick={() => router.push(`/dashboard/payslip/schedule?emp=${meta.employeeNo}`)} className="text-blue-600 font-bold hover:underline">View</button>} />
-              <Row label="Compensation"    value={<button onClick={() => router.push(`/dashboard/payslip/compensation?emp=${meta.employeeNo}`)} className="text-blue-600 font-bold hover:underline">View</button>} />
-              <Row label="Approved by"     value={<span className="font-bold text-slate-900">{meta.approvedBy}</span>} />
-              <Row label="Acknowledged by" value={<span className="font-bold text-slate-900">{meta.acknowledgedBy}</span>} />
+              <Row label="Work Schedule"   value={<button onClick={() => router.push(`/dashboard/payslips/schedule?emp=${meta.employeeNo}`)} className="text-blue-600 font-bold hover:underline">View</button>} />
+              <Row label="Compensation"    value={<button onClick={() => router.push(`/dashboard/payslips/compensation?emp=${meta.employeeNo}`)} className="text-blue-600 font-bold hover:underline">View</button>} />
+              <Row label="Approved by"     value={<span className="font-bold text-foreground">{meta.approvedBy}</span>} />
+              <Row label="Acknowledged by" value={<span className="font-bold text-foreground">{meta.acknowledgedBy}</span>} />
             </div>
           </div>
         </div>
       </Card>
 
       {/* Daily Breakdown Table */}
-      <Card className="p-0 border-none shadow-sm overflow-hidden bg-white rounded-3xl">
-        <div className="bg-slate-50/50 px-6 py-3 border-b border-slate-100 flex items-center gap-2">
+      <Card className="p-0 border-none shadow-sm overflow-hidden bg-card rounded-3xl">
+        <div className="bg-muted/50 px-6 py-3 border-b border-border flex items-center gap-2">
           <Calendar size={16} className="text-blue-600" />
-          <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Daily Breakdown</h2>
+          <h2 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Daily Breakdown</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-450">
@@ -332,36 +332,36 @@ export const PayrollComputation: React.FC = () => {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {rows.map((row, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors text-[9px] font-bold text-slate-600">
-                  <td className="px-2 py-2 border-r border-slate-100 whitespace-nowrap">{row.date}</td>
-                  <td className="px-2 py-2 border-r border-slate-100">{row.day}</td>
-                  <td className="px-2 py-2 border-r border-slate-100 font-mono">{row.timeIn}</td>
-                  <td className="px-2 py-2 border-r border-slate-100 font-mono">{row.lunchStart}</td>
-                  <td className="px-2 py-2 border-r border-slate-100 font-mono">{row.lunchEnd}</td>
-                  <td className="px-2 py-2 border-r border-slate-100 font-mono">{row.timeOut}</td>
-                  <td className="px-2 py-2 border-r border-slate-100">
-                    <Badge variant="neutral" className={`text-[7px] font-black uppercase px-1 py-0.5 rounded whitespace-nowrap ${STATUS_CLS[row.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                <tr key={i} className="hover:bg-muted/50 transition-colors text-[9px] font-bold text-muted-foreground">
+                  <td className="px-2 py-2 border-r border-border whitespace-nowrap">{row.date}</td>
+                  <td className="px-2 py-2 border-r border-border">{row.day}</td>
+                  <td className="px-2 py-2 border-r border-border font-mono">{row.timeIn}</td>
+                  <td className="px-2 py-2 border-r border-border font-mono">{row.lunchStart}</td>
+                  <td className="px-2 py-2 border-r border-border font-mono">{row.lunchEnd}</td>
+                  <td className="px-2 py-2 border-r border-border font-mono">{row.timeOut}</td>
+                  <td className="px-2 py-2 border-r border-border">
+                    <Badge variant="neutral" className={`text-[7px] font-black uppercase px-1 py-0.5 rounded whitespace-nowrap ${STATUS_CLS[row.status] ?? 'bg-muted text-muted-foreground'}`}>
                       {row.status}
                     </Badge>
                   </td>
-                  <td className="px-2 py-2 border-r border-slate-100 text-slate-900">{fmtPeso(row.regPay)}</td>
-                  {[0,1,2].map(j => <td key={j} className="px-2 py-2 border-r border-slate-100">-</td>)}
-                  <td className="px-2 py-2 border-r border-slate-100 text-rose-500">{fmtDeduct(row.lateAmt)}</td>
-                  <td className="px-2 py-2 border-r border-slate-100 text-rose-500">{fmtDeduct(row.underAmt)}</td>
-                  {Array.from({length: 12}).map((_, j) => <td key={j} className="px-2 py-2 border-r border-slate-100">-</td>)}
+                  <td className="px-2 py-2 border-r border-border text-foreground">{fmtPeso(row.regPay)}</td>
+                  {[0,1,2].map(j => <td key={j} className="px-2 py-2 border-r border-border">-</td>)}
+                  <td className="px-2 py-2 border-r border-border text-rose-500">{fmtDeduct(row.lateAmt)}</td>
+                  <td className="px-2 py-2 border-r border-border text-rose-500">{fmtDeduct(row.underAmt)}</td>
+                  {Array.from({length: 12}).map((_, j) => <td key={j} className="px-2 py-2 border-r border-border">-</td>)}
                   <td className="px-2 py-2 font-black text-emerald-600">{fmtPeso(row.gross)}</td>
                 </tr>
               ))}
 
-              <tr className="bg-blue-50/50 font-black text-[9px] text-slate-900 border-t-2 border-slate-200">
-                <td colSpan={7} className="px-2 py-3 text-center uppercase tracking-widest text-slate-500">Totals</td>
-                <td className="px-2 py-3 border-r border-slate-200 text-slate-900">{fmtPeso(totals.regPayTotal)}</td>
-                {[0,1,2].map(j => <td key={j} className="px-2 py-3 border-r border-slate-200">-</td>)}
-                <td className="px-2 py-3 border-r border-slate-200 text-rose-500">{fmtDeduct(totals.lateTotal)}</td>
-                <td className="px-2 py-3 border-r border-slate-200 text-rose-500">{fmtDeduct(totals.underTotal)}</td>
-                {Array.from({length: 12}).map((_, j) => <td key={j} className="px-2 py-3 border-r border-slate-200">-</td>)}
+              <tr className="bg-blue-50/50 font-black text-[9px] text-foreground border-t-2 border-border">
+                <td colSpan={7} className="px-2 py-3 text-center uppercase tracking-widest text-muted-foreground">Totals</td>
+                <td className="px-2 py-3 border-r border-border text-foreground">{fmtPeso(totals.regPayTotal)}</td>
+                {[0,1,2].map(j => <td key={j} className="px-2 py-3 border-r border-border">-</td>)}
+                <td className="px-2 py-3 border-r border-border text-rose-500">{fmtDeduct(totals.lateTotal)}</td>
+                <td className="px-2 py-3 border-r border-border text-rose-500">{fmtDeduct(totals.underTotal)}</td>
+                {Array.from({length: 12}).map((_, j) => <td key={j} className="px-2 py-3 border-r border-border">-</td>)}
                 <td className="px-2 py-3 bg-blue-500 text-white text-center font-black">{fmtPeso(totals.grossTotal, true)}</td>
               </tr>
             </tbody>
@@ -373,13 +373,13 @@ export const PayrollComputation: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
 
-          <Card className="p-0 border-none shadow-sm overflow-hidden bg-white rounded-3xl">
-            <div className="bg-slate-50/50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <Card className="p-0 border-none shadow-sm overflow-hidden bg-card rounded-3xl">
+            <div className="bg-muted/50 px-6 py-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
                   <TrendingUp size={16} />
                 </div>
-                <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Earnings & Additionals</h2>
+                <h2 className="text-[10px] font-black text-foreground uppercase tracking-widest">Earnings & Additionals</h2>
               </div>
               <Badge variant="neutral" className="bg-emerald-50 text-emerald-600 border-none font-black text-[9px] uppercase tracking-widest">+ Credits</Badge>
             </div>
@@ -388,21 +388,21 @@ export const PayrollComputation: React.FC = () => {
                 { label: 'Gross Pay',  value: fmtPeso(totals.grossTotal, true) },
                 { label: 'Allowance', value: fmtPeso(meta.allowance, true) },
               ].map(item => (
-                <div key={item.label} className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col items-start">
+                <div key={item.label} className="p-5 bg-muted/50 rounded-2xl border border-border flex flex-col items-start">
                   <span className="text-emerald-600 font-black text-xl tracking-tighter">{item.value}</span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.label}</span>
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.label}</span>
                 </div>
               ))}
             </div>
           </Card>
 
-          <Card className="p-0 border-none shadow-sm overflow-hidden bg-white rounded-3xl">
-            <div className="bg-slate-50/50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <Card className="p-0 border-none shadow-sm overflow-hidden bg-card rounded-3xl">
+            <div className="bg-muted/50 px-6 py-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center">
                   <AlertCircle size={16} />
                 </div>
-                <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Deductions</h2>
+                <h2 className="text-[10px] font-black text-foreground uppercase tracking-widest">Deductions</h2>
               </div>
               <Badge variant="neutral" className="bg-rose-50 text-rose-600 border-none font-black text-[9px] uppercase tracking-widest">- Debits</Badge>
             </div>
@@ -416,9 +416,9 @@ export const PayrollComputation: React.FC = () => {
                 { label: 'PAG-IBIG Loan',          value: meta.pagibigLoan  },
                 { label: 'Cash Advance Repayment', value: meta.cashAdvance  },
               ].map(item => (
-                <div key={item.label} className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col items-start">
+                <div key={item.label} className="p-5 bg-muted/50 rounded-2xl border border-border flex flex-col items-start">
                   <span className="text-rose-600 font-black text-sm tracking-tight">{fmtPeso(item.value, true)}</span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.label}</span>
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.label}</span>
                 </div>
               ))}
             </div>
@@ -454,10 +454,10 @@ export const PayrollComputation: React.FC = () => {
       </div>
 
       {/* Legend */}
-      <Card className="p-0 border-none shadow-sm overflow-hidden bg-white rounded-3xl">
-        <div className="bg-slate-50/50 px-6 py-3 border-b border-slate-100 flex items-center gap-2">
+      <Card className="p-0 border-none shadow-sm overflow-hidden bg-card rounded-3xl">
+        <div className="bg-muted/50 px-6 py-3 border-b border-border flex items-center gap-2">
           <Info size={16} className="text-blue-600" />
-          <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pay Rates & Legend</h2>
+          <h2 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Pay Rates & Legend</h2>
         </div>
         <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
           <div className="space-y-6">
@@ -475,7 +475,7 @@ export const PayrollComputation: React.FC = () => {
               ].map(item => (
                 <div key={item.code} className="flex items-center gap-3">
                   <Badge className="w-14 h-6 flex items-center justify-center text-[8px] font-black bg-blue-600 text-white border-none rounded-md shrink-0">{item.code}</Badge>
-                  <span className="text-[10px] font-bold text-slate-500">{item.label}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">{item.label}</span>
                 </div>
               ))}
             </div>
@@ -503,7 +503,7 @@ export const PayrollComputation: React.FC = () => {
               ].map(item => (
                 <div key={item.code} className="flex items-center gap-3">
                   <Badge className="w-14 h-6 flex items-center justify-center text-[8px] font-black bg-emerald-600 text-white border-none rounded-md shrink-0">{item.code}</Badge>
-                  <span className="text-[10px] font-bold text-slate-500">{item.label}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">{item.label}</span>
                 </div>
               ))}
             </div>
@@ -517,7 +517,7 @@ export const PayrollComputation: React.FC = () => {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between text-sm">
-      <span className="text-slate-500 font-medium">{label}:</span>
+      <span className="text-muted-foreground font-medium">{label}:</span>
       {value}
     </div>
   );

@@ -75,11 +75,11 @@ export default function DashboardPage() {
       {/* ── 1. Welcome ─────────────────────────────────── */}
       <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-slate-500 font-medium">{formatDate(currentTime)}</p>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+          <p className="text-sm text-muted-foreground font-medium">{formatDate(currentTime)}</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-1">
             Welcome back, <span className="text-blue-600">{displayName}</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Here&apos;s an overview of your workspace and portals.</p>
+          <p className="text-muted-foreground text-sm mt-1">Here&apos;s an overview of your workspace and portals.</p>
         </div>
         <button
           onClick={() => handleNav('/dashboard/timesheet')}
@@ -97,7 +97,7 @@ export default function DashboardPage() {
             <button
               key={svc.id}
               onClick={() => handleNav(svc.href)}
-              className={`group relative text-left overflow-hidden rounded-2xl p-7 bg-white border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between min-h-56 ${idx === 0 ? 'md:col-span-2' : ''}`}
+              className={`group relative text-left overflow-hidden rounded-2xl p-7 bg-card border border-border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between min-h-56 ${idx === 0 ? 'md:col-span-2' : ''}`}
             >
               {/* Background icon */}
               <div className="absolute top-4 right-4 opacity-[0.04] group-hover:scale-110 transition-transform duration-700">
@@ -107,8 +107,8 @@ export default function DashboardPage() {
                 <div className={`${svc.color} w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:rotate-3 transition-transform`}>
                   {React.cloneElement(svc.icon as React.ReactElement<{ size?: number }>, { size: 24 })}
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mt-5 group-hover:text-blue-600 transition-colors">{svc.title}</h3>
-                <p className="text-slate-500 text-sm mt-1.5 max-w-xs">{svc.description}</p>
+                <h3 className="text-xl font-bold text-foreground mt-5 group-hover:text-blue-600 transition-colors">{svc.title}</h3>
+                <p className="text-muted-foreground text-sm mt-1.5 max-w-xs">{svc.description}</p>
               </div>
               <div className="relative z-10 flex items-center gap-1.5 text-xs font-bold text-blue-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all mt-4">
                 Open Module <ArrowRight size={14} />
@@ -123,7 +123,7 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
           <div>
             <SectionHeader icon={<GridIcon size={14} className="text-indigo-500" />} label="Enterprise Portals" />
-            <p className="text-slate-900 text-xl font-bold mt-1.5 tracking-tight">Agila Internal Portals</p>
+            <p className="text-foreground text-xl font-bold mt-1.5 tracking-tight">Agila Internal Portals</p>
           </div>
           <button className="text-blue-600 font-bold text-xs uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
             View All <ChevronRight size={14} />
@@ -135,27 +135,27 @@ export default function DashboardPage() {
             <button
               key={portal.id}
               onClick={() => handleNav(portal.href)}
-              className="group text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden"
+              className="group text-left bg-card rounded-2xl border border-border shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden"
             >
               <div className="p-7 flex flex-col justify-between h-full">
                 <div className="flex justify-between items-start mb-8">
                   <div className={`${portal.color} w-14 h-14 rounded-2xl shadow-lg text-white flex items-center justify-center group-hover:rotate-3 group-hover:scale-105 transition-all`}>
                     {React.cloneElement(portal.icon as React.ReactElement<{ size?: number }>, { size: 28 })}
                   </div>
-                  <div className="p-2.5 bg-slate-50 rounded-full text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <div className="p-2.5 bg-muted rounded-full text-muted-foreground group-hover:bg-blue-600 group-hover:text-white transition-all">
                     <ExternalLink size={16} />
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-slate-900 mb-1.5">{portal.title}</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">{portal.description}</p>
+                  <h3 className="font-bold text-lg text-foreground mb-1.5">{portal.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{portal.description}</p>
                 </div>
-                <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between">
+                <div className="mt-6 pt-5 border-t border-border flex items-center justify-between">
                   <div>
-                    <p className="text-[9px] uppercase font-bold text-slate-400 tracking-widest">{portal.stats.label}</p>
-                    <p className="text-xl font-extrabold text-slate-900 mt-0.5">{portal.stats.value}</p>
+                    <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">{portal.stats.label}</p>
+                    <p className="text-xl font-extrabold text-foreground mt-0.5">{portal.stats.value}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
                     <ShieldCheck size={12} className="text-blue-500" /> Verified
                   </div>
                 </div>
@@ -166,7 +166,7 @@ export default function DashboardPage() {
       </section>
 
       {/* ── 4. App Systems + Quick Links ───────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-8 border-t border-slate-100">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-8 border-t border-border">
 
         {/* Application Systems */}
         <section className="lg:col-span-7 space-y-5">
@@ -176,16 +176,16 @@ export default function DashboardPage() {
               <button
                 key={app.id}
                 onClick={() => handleNav(app.href)}
-                className="group flex items-center gap-4 p-5 rounded-xl bg-white border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left"
+                className="group flex items-center gap-4 p-5 rounded-xl bg-card border border-border hover:border-blue-300 hover:shadow-lg transition-all text-left"
               >
                 <div className={`${app.color} p-3.5 rounded-xl text-white shadow-md shrink-0 group-hover:scale-105 transition-transform`}>
                   {React.cloneElement(app.icon as React.ReactElement<{ size?: number }>, { size: 22 })}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-sm text-slate-800 group-hover:text-blue-600 transition-colors truncate">{app.title}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">{app.description}</p>
+                  <h3 className="font-bold text-sm text-foreground group-hover:text-blue-600 transition-colors truncate">{app.title}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{app.description}</p>
                 </div>
-                <ChevronRight size={16} className="text-slate-200 group-hover:text-blue-600 shrink-0 transition-colors" />
+                <ChevronRight size={16} className="text-muted-foreground group-hover:text-blue-600 shrink-0 transition-colors" />
               </button>
             ))}
           </div>
@@ -194,19 +194,19 @@ export default function DashboardPage() {
         {/* Quick Links */}
         <section className="lg:col-span-5 space-y-5">
           <SectionHeader icon={<Zap size={14} />} label="Quick Links" />
-          <div className="bg-white rounded-2xl border border-slate-100 p-3 shadow-sm grid grid-cols-2 gap-1.5">
+          <div className="bg-card rounded-2xl border border-border p-3 shadow-sm grid grid-cols-2 gap-1.5">
             {QUICK_LINKS.map(link => (
               <button
                 key={link.title}
                 onClick={() => handleNav(link.href)}
-                className="flex items-center gap-3 p-3.5 rounded-xl hover:bg-slate-50 transition group text-left"
+                className="flex items-center gap-3 p-3.5 rounded-xl hover:bg-muted transition group text-left"
               >
-                <div className="w-9 h-9 bg-slate-50 text-slate-400 group-hover:bg-blue-600 group-hover:text-white rounded-lg flex items-center justify-center transition-all shrink-0">
+                <div className="w-9 h-9 bg-muted text-muted-foreground group-hover:bg-blue-600 group-hover:text-white rounded-lg flex items-center justify-center transition-all shrink-0">
                   {React.cloneElement(link.icon as React.ReactElement<{ size?: number }>, { size: 16 })}
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-800 block truncate">{link.title}</span>
-                  {link.external && <span className="text-[9px] text-slate-400 font-semibold uppercase mt-0.5 block">External</span>}
+                  <span className="text-xs font-bold text-foreground block truncate">{link.title}</span>
+                  {link.external && <span className="text-[9px] text-muted-foreground font-semibold uppercase mt-0.5 block">External</span>}
                 </div>
               </button>
             ))}
@@ -221,7 +221,7 @@ export default function DashboardPage() {
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 px-1">
+    <h2 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2 px-1">
       {icon} {label}
     </h2>
   );

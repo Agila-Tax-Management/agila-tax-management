@@ -6,19 +6,21 @@ import Image from 'next/image';
 import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
   Settings, LogOut, ChevronLeft, ChevronRight, X, Menu, User,
-  ChevronDown, ChevronUp, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone
+  ChevronDown, ChevronUp, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
+  Sun, Moon
 } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { RoleProvider } from '@/lib/role-context';
 import { AuthProvider } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 
 
 const NAV_ITEMS = [
   { href: '/dashboard',                   label: 'Dashboard',   icon: LayoutDashboard },
   { href: '/dashboard/timesheet',         label: 'Timesheet',   icon: Clock },
-  { href: '/dashboard/payslip',           label: 'Payslip',     icon: FileBadge },
-  { href: '/dashboard/hr-applications',   label: 'Application', icon: SendHorizontal },
+  { href: '/dashboard/payslips',          label: 'Payslip',     icon: FileBadge },
+  { href: '/dashboard/hr-apps',            label: 'Application', icon: SendHorizontal },
 ];
 
 const PORTAL_ITEMS = [
@@ -34,11 +36,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <RoleProvider>
       <AuthProvider>
-      <div className="flex h-screen overflow-hidden bg-slate-50">
+      <div className="flex h-screen overflow-hidden bg-background">
         <Sidebar
           isOpen={sidebarOpen}
           isExpanded={sidebarExpanded}
@@ -48,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top bar */}
-          <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 z-30 shadow-sm">
+          <header className="bg-header border-b border-header-border px-6 py-4 flex items-center justify-between shrink-0 z-30 shadow-sm">
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
@@ -60,6 +63,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={toggleTheme}
+                className="rounded-xl text-muted-foreground hover:text-foreground"
+                title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              >
+                {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+              </Button>
               <NotificationDropdown />
               <Button
                 variant="ghost"
@@ -116,12 +127,12 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
           fixed inset-y-0 left-0 z-50 lg:static
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${isExpanded ? 'w-64' : 'w-20'}
-          bg-slate-900 text-white transition-all duration-300 flex flex-col h-screen shadow-2xl
+          bg-sidebar text-sidebar-foreground transition-all duration-300 flex flex-col h-screen shadow-2xl
         `}
       >
         {/* Header */}
         <div
-          className={`p-5 flex items-center ${isExpanded ? 'justify-between' : 'justify-center'} shrink-0 border-b border-slate-800`}
+          className={`p-5 flex items-center ${isExpanded ? 'justify-between' : 'justify-center'} shrink-0 border-b border-sidebar-border`}
           onMouseEnter={() => !isExpanded && setLogoHovered(true)}
           onMouseLeave={() => !isExpanded && setLogoHovered(false)}
         >
@@ -138,7 +149,7 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
               {/* Collapse / close buttons */}
               <button
                 onClick={isOpen ? onClose : onToggleExpand}
-                className="flex items-center justify-center w-7 h-7 rounded-md border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition lg:flex"
+                className="flex items-center justify-center w-7 h-7 rounded-md border border-sidebar-border text-slate-400 hover:bg-slate-800 hover:text-white transition lg:flex"
                 title={isOpen ? 'Close' : 'Collapse sidebar'}
               >
                 {isOpen ? <X size={16} /> : <ChevronLeft size={16} />}
@@ -216,7 +227,7 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-800 shrink-0 space-y-1">
+        <div className="p-3 border-t border-sidebar-border shrink-0 space-y-1">
           <button
             onClick={() => navigate('/dashboard/settings')}
             className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition`}

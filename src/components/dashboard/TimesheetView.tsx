@@ -221,21 +221,21 @@ export const TimesheetView: React.FC = () => {
           <div className="flex items-center gap-2 text-blue-600 font-black uppercase tracking-[0.2em] text-[10px]">
             <ShieldCheck size={14} /> Secure Session Active
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter leading-none">
+          <h1 className="text-5xl font-black text-foreground tracking-tighter leading-none">
             TIMESHEET<span className="text-blue-600">.</span>
           </h1>
-          <p className="text-slate-500 font-medium text-sm max-w-md">
+          <p className="text-muted-foreground font-medium text-sm max-w-md">
             Precision attendance tracking and performance metrics for the current billing cycle.
           </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right hidden sm:block">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current System Time</p>
-            <p className="text-2xl font-black text-slate-900 tabular-nums font-mono" suppressHydrationWarning>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Current System Time</p>
+            <p className="text-2xl font-black text-foreground tabular-nums font-mono" suppressHydrationWarning>
               {isClient ? fmtClock(currentTime) : '00:00:00'}
             </p>
           </div>
-          <div className="h-12 w-px bg-slate-200 mx-2 hidden sm:block" />
+          <div className="h-12 w-px bg-border mx-2 hidden sm:block" />
           <Button variant="outline" className="h-12 px-6 rounded-xl border-2 font-bold flex gap-2">
             <Download size={18} /> Export Report
           </Button>
@@ -245,58 +245,25 @@ export const TimesheetView: React.FC = () => {
       {/* ── Stats ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s, i) => (
-          <Card key={i} className="p-6 border-none bg-white shadow-sm hover:shadow-md transition-all">
+          <Card key={i} className="p-6 border-none bg-card shadow-sm hover:shadow-md transition-all">
             <div className="flex justify-between items-start mb-4">
               <div className={`p-2.5 rounded-xl ${s.bg} ${s.color}`}>{s.icon}</div>
             </div>
-            <p className="text-3xl font-black text-slate-900 tracking-tight">{s.value}</p>
-            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-1">{s.label}</p>
-            <p className="text-[10px] font-medium text-slate-400 mt-2">{s.sub}</p>
+            <p className="text-3xl font-black text-foreground tracking-tight">{s.value}</p>
+            <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mt-1">{s.label}</p>
+            <p className="text-[10px] font-medium text-muted-foreground mt-2">{s.sub}</p>
           </Card>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        {/* ── Left: Profile + Controls ───────────────────────────────────── */}
+        {/* ── Left: Controls + Profile ───────────────────────────────────── */}
         <div className="lg:col-span-4 space-y-6">
 
-          {/* Profile */}
-          <Card className="p-6 border-none bg-slate-900 text-white overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full blur-3xl -mr-16 -mt-16" />
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl font-black shadow-xl shadow-blue-900/40">
-                {initials}
-              </div>
-              <div>
-                <h2 className="text-xl font-black tracking-tight">{displayName}</h2>
-                <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">{user?.role ?? '—'}</p>
-              </div>
-            </div>
-            <div className="mt-8 grid grid-cols-2 gap-4 relative z-10">
-              <div>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Employee ID</p>
-                <p className="text-sm font-bold font-mono mt-1">{user?.employeeId ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Department</p>
-                <p className="text-sm font-bold mt-1">{user?.department ?? '—'}</p>
-              </div>
-            </div>
-            <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-between relative z-10">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full animate-pulse ${
-                  status === 'Clocked In' ? 'bg-emerald-500' :
-                  status === 'On Lunch'   ? 'bg-amber-500'   : 'bg-slate-500'
-                }`} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{status}</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* Session Controls */}
-          <Card className="p-6 border-none bg-white shadow-sm space-y-3">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-1">
+          {/* Session Controls — first on mobile for quick clock in/out access */}
+          <Card className="p-6 border-none bg-card shadow-sm space-y-3">
+            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-1">
               <Activity size={14} className="text-blue-600" /> Session Controls
             </h3>
 
@@ -306,7 +273,7 @@ export const TimesheetView: React.FC = () => {
               className={`w-full h-14 rounded-xl font-black uppercase text-xs flex items-center justify-between px-6 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
                 status === 'Clocked Out'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700'
-                  : 'bg-slate-100 text-slate-400'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               <span className="flex items-center gap-3"><LogIn size={18} /> Clock In</span>
@@ -320,7 +287,7 @@ export const TimesheetView: React.FC = () => {
                 className={`h-14 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
                   status === 'Clocked In'
                     ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 hover:bg-amber-600'
-                    : 'bg-slate-100 text-slate-400'
+                    : 'bg-muted text-muted-foreground'
                 }`}
               >
                 <Utensils size={16} /> Lunch Start
@@ -331,7 +298,7 @@ export const TimesheetView: React.FC = () => {
                 className={`h-14 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
                   status === 'On Lunch'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700'
-                    : 'bg-slate-100 text-slate-400'
+                    : 'bg-muted text-muted-foreground'
                 }`}
               >
                 <Coffee size={16} /> Lunch End
@@ -344,7 +311,7 @@ export const TimesheetView: React.FC = () => {
               className={`w-full h-14 rounded-xl font-black uppercase text-xs flex items-center justify-between px-6 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
                 status !== 'Clocked Out'
                   ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-black'
-                  : 'bg-slate-100 text-slate-400'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               <span className="flex items-center gap-3"><LogOut size={18} /> Clock Out</span>
@@ -360,42 +327,75 @@ export const TimesheetView: React.FC = () => {
             )}
 
             {status !== 'Clocked Out' && (
-              <div className="mt-2 p-4 bg-slate-50 rounded-xl flex items-center justify-between">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session Total</span>
+              <div className="mt-2 p-4 bg-muted rounded-xl flex items-center justify-between">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Session Total</span>
                 <span className="text-lg font-black text-blue-600 tabular-nums font-mono" suppressHydrationWarning>
                   {liveHours} hrs
                 </span>
               </div>
             )}
           </Card>
+
+          {/* Profile */}
+          <Card className="p-6 border-none bg-slate-900 text-white overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full blur-3xl -mr-16 -mt-16" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl font-black shadow-xl shadow-blue-900/40">
+                {initials}
+              </div>
+              <div>
+                <h2 className="text-xl font-black tracking-tight">{displayName}</h2>
+                <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">{user?.role ?? '—'}</p>
+              </div>
+            </div>
+            <div className="mt-8 grid grid-cols-2 gap-4 relative z-10">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee ID</p>
+                <p className="text-sm font-bold font-mono mt-1 text-white">{user?.employeeId ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Department</p>
+                <p className="text-sm font-bold mt-1 text-white">{user?.department ?? '—'}</p>
+              </div>
+            </div>
+            <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-between relative z-10">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full animate-pulse ${
+                  status === 'Clocked In' ? 'bg-emerald-500' :
+                  status === 'On Lunch'   ? 'bg-amber-500'   : 'bg-slate-500'
+                }`} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{status}</span>
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* ── Right: History Table ──────────────────────────────────────── */}
         <div className="lg:col-span-8">
-          <Card className="border-none bg-white shadow-sm flex flex-col">
+          <Card className="border-none bg-card shadow-sm flex flex-col">
 
             {/* Table toolbar */}
-            <div className="p-6 border-b border-slate-50 flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+            <div className="p-6 border-b border-border flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
+                <div className="p-2 bg-muted rounded-lg text-muted-foreground">
                   <History size={18} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Attendance History</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <h3 className="text-sm font-black text-foreground uppercase tracking-tight">Attendance History</h3>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                     {filtered.length} record{filtered.length !== 1 ? 's' : ''} found
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                <div className="flex rounded-lg border border-border overflow-hidden">
                   {(['week', 'month'] as const).map(m => (
                     <button
                       key={m}
                       onClick={() => { setViewMode(m); setOffset(0); }}
                       className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${
-                        viewMode === m ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 hover:bg-slate-50'
+                        viewMode === m ? 'bg-slate-900 text-white' : 'bg-card text-muted-foreground hover:bg-muted'
                       }`}
                     >
                       {m}
@@ -405,16 +405,16 @@ export const TimesheetView: React.FC = () => {
 
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" onClick={() => setOffset(p => p - 1)}
-                    className="h-9 w-9 p-0 rounded-lg border border-slate-100">
+                    className="h-9 w-9 p-0 rounded-lg border border-border">
                     <ChevronLeft size={16} />
                   </Button>
-                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide px-2 min-w-37 text-center">
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wide px-2 min-w-37 text-center">
                     {periodLabel(viewMode, offset)}
                   </span>
                   <Button variant="ghost"
                     onClick={() => setOffset(p => Math.min(p + 1, 0))}
                     disabled={offset >= 0}
-                    className="h-9 w-9 p-0 rounded-lg border border-slate-100 disabled:opacity-40">
+                    className="h-9 w-9 p-0 rounded-lg border border-border disabled:opacity-40">
                     <ChevronRight size={16} />
                   </Button>
                 </div>
@@ -424,54 +424,54 @@ export const TimesheetView: React.FC = () => {
             {/* Table */}
             <div className="overflow-x-auto flex-1 min-h-80">
               {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-slate-300">
+                <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
                   <Calendar size={48} className="mb-4" />
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">No records for this period</p>
-                  <p className="text-[10px] font-medium text-slate-300 mt-1">Navigate to a previous period to view history</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">No records for this period</p>
+                  <p className="text-[10px] font-medium text-slate-400 mt-1">Navigate to a previous period to view history</p>
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                    <tr className="bg-muted/50 border-b border-border">
                       {['Date','Shift','Lunch','Total','Status'].map((h, i) => (
-                        <th key={h} className={`px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest ${i === 4 ? 'text-right' : ''}`}>
+                        <th key={h} className={`px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest ${i === 4 ? 'text-right' : ''}`}>
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-border">
                     {filtered.map(log => {
                       const isToday = log.isoDate === todayIso;
                       return (
-                        <tr key={log.id} className="group hover:bg-slate-50/50 transition-colors">
+                        <tr key={log.id} className="group hover:bg-muted/50 transition-colors">
                           <td className="px-6 py-4">
-                            <span className="text-xs font-black text-slate-900 block">{log.date.split(',')[0]}</span>
-                            <span className="text-[10px] font-bold text-slate-400">{log.date.split(',').slice(1).join(',').trim()}</span>
+                            <span className="text-xs font-black text-foreground block">{log.date.split(',')[0]}</span>
+                            <span className="text-[10px] font-bold text-muted-foreground">{log.date.split(',').slice(1).join(',').trim()}</span>
                             {isToday && <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mt-0.5">Today</span>}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div>
-                                <span className="text-[10px] font-black text-slate-400 uppercase block">IN</span>
-                                <span className="text-xs font-bold font-mono text-slate-700">{log.clockIn}</span>
+                                <span className="text-[10px] font-black text-muted-foreground uppercase block">IN</span>
+                                <span className="text-xs font-bold font-mono text-foreground">{log.clockIn}</span>
                               </div>
-                              <div className="w-4 h-px bg-slate-200" />
+                              <div className="w-4 h-px bg-border" />
                               <div>
-                                <span className="text-[10px] font-black text-slate-400 uppercase block">OUT</span>
-                                <span className="text-xs font-bold font-mono text-slate-700">{log.clockOut}</span>
+                                <span className="text-[10px] font-black text-muted-foreground uppercase block">OUT</span>
+                                <span className="text-xs font-bold font-mono text-foreground">{log.clockOut}</span>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div>
-                                <span className="text-[10px] font-black text-slate-400 uppercase block">S</span>
-                                <span className="text-xs font-bold font-mono text-slate-700">{log.lunchStart}</span>
+                                <span className="text-[10px] font-black text-muted-foreground uppercase block">S</span>
+                                <span className="text-xs font-bold font-mono text-foreground">{log.lunchStart}</span>
                               </div>
-                              <div className="w-4 h-px bg-slate-200" />
+                              <div className="w-4 h-px bg-border" />
                               <div>
-                                <span className="text-[10px] font-black text-slate-400 uppercase block">E</span>
+                                <span className="text-[10px] font-black text-muted-foreground uppercase block">E</span>
                                 <span className="text-xs font-bold font-mono text-slate-700">{log.lunchEnd}</span>
                               </div>
                             </div>
@@ -498,15 +498,15 @@ export const TimesheetView: React.FC = () => {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-slate-50/80 border-t-2 border-slate-100">
-                      <td colSpan={3} className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <tr className="bg-muted/80 border-t-2 border-border">
+                      <td colSpan={3} className="px-6 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                         Period Total
                       </td>
                       <td className="px-6 py-3">
-                        <span className="text-sm font-black text-slate-900 font-mono">{periodTotals.hrs} hrs</span>
+                        <span className="text-sm font-black text-foreground font-mono">{periodTotals.hrs} hrs</span>
                       </td>
                       <td className="px-6 py-3 text-right">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                           {filtered.filter(l => l.status === 'Completed').length}/{filtered.length} Complete
                         </span>
                       </td>
@@ -516,9 +516,9 @@ export const TimesheetView: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-center gap-2">
-              <Info size={14} className="text-slate-400" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <div className="p-4 bg-muted/50 border-t border-border flex items-center justify-center gap-2">
+              <Info size={14} className="text-muted-foreground" />
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 All logs are synchronized with the central payroll server in real-time.
               </p>
             </div>

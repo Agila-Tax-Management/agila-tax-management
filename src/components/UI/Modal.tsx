@@ -45,13 +45,13 @@ export function Modal({ isOpen, onClose, title, size = 'md', contentClassName, c
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} mx-4 max-h-[90vh] overflow-hidden`}>
+      <div className={`relative bg-card rounded-2xl shadow-2xl w-full ${sizeClasses[size]} mx-4 max-h-[90vh] overflow-hidden`}>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-            <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="text-lg font-bold text-foreground">{title}</h2>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition"
             >
               <X size={18} />
             </button>
@@ -60,7 +60,7 @@ export function Modal({ isOpen, onClose, title, size = 'md', contentClassName, c
         {!title && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+            className="absolute top-4 right-4 z-10 p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition"
           >
             <X size={18} />
           </button>
