@@ -242,31 +242,46 @@ export const TimesheetView: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((s, i) => (
-          <Card key={i} className="p-6 border-none bg-card shadow-sm hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-2.5 rounded-xl ${s.bg} ${s.color}`}>{s.icon}</div>
-            </div>
-            <p className="text-3xl font-black text-foreground tracking-tight">{s.value}</p>
-            <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mt-1">{s.label}</p>
-            <p className="text-[10px] font-medium text-muted-foreground mt-2">{s.sub}</p>
-          </Card>
-        ))}
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* ── Left: Controls + Profile ───────────────────────────────────── */}
         <div className="lg:col-span-4 space-y-6">
 
+          {/* Profile */}
+          <Card className="p-6 border-none bg-slate-900 text-white overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full blur-3xl -mr-16 -mt-16" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl font-black shadow-xl shadow-blue-900/40">
+                {initials}
+              </div>
+              <div>
+                <h2 className="text-xl font-black tracking-tight">{displayName}</h2>
+                <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">{user?.role ?? '—'}</p>
+              </div>
+            </div>
+            <div className="mt-8 grid grid-cols-2 gap-4 relative z-10">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee ID</p>
+                <p className="text-sm font-bold font-mono mt-1 text-white">{user?.employeeId ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Department</p>
+                <p className="text-sm font-bold mt-1 text-white">{user?.department ?? '—'}</p>
+              </div>
+            </div>
+            <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-between relative z-10">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full animate-pulse ${
+                  status === 'Clocked In' ? 'bg-emerald-500' :
+                  status === 'On Lunch'   ? 'bg-amber-500'   : 'bg-slate-500'
+                }`} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{status}</span>
+              </div>
+            </div>
+          </Card>
+
           {/* Session Controls — first on mobile for quick clock in/out access */}
           <Card className="p-6 border-none bg-card shadow-sm space-y-3">
-            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-1">
-              <Activity size={14} className="text-blue-600" /> Session Controls
-            </h3>
-
             <button
               onClick={() => handleAction('IN')}
               disabled={status !== 'Clocked Out' || isSubmitting}
@@ -335,39 +350,6 @@ export const TimesheetView: React.FC = () => {
               </div>
             )}
           </Card>
-
-          {/* Profile */}
-          <Card className="p-6 border-none bg-slate-900 text-white overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full blur-3xl -mr-16 -mt-16" />
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl font-black shadow-xl shadow-blue-900/40">
-                {initials}
-              </div>
-              <div>
-                <h2 className="text-xl font-black tracking-tight">{displayName}</h2>
-                <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">{user?.role ?? '—'}</p>
-              </div>
-            </div>
-            <div className="mt-8 grid grid-cols-2 gap-4 relative z-10">
-              <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee ID</p>
-                <p className="text-sm font-bold font-mono mt-1 text-white">{user?.employeeId ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Department</p>
-                <p className="text-sm font-bold mt-1 text-white">{user?.department ?? '—'}</p>
-              </div>
-            </div>
-            <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-between relative z-10">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full animate-pulse ${
-                  status === 'Clocked In' ? 'bg-emerald-500' :
-                  status === 'On Lunch'   ? 'bg-amber-500'   : 'bg-slate-500'
-                }`} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{status}</span>
-              </div>
-            </div>
-          </Card>
         </div>
 
         {/* ── Right: History Table ──────────────────────────────────────── */}
@@ -420,6 +402,7 @@ export const TimesheetView: React.FC = () => {
                 </div>
               </div>
             </div>
+            
 
             {/* Table */}
             <div className="overflow-x-auto flex-1 min-h-80">
@@ -524,6 +507,20 @@ export const TimesheetView: React.FC = () => {
             </div>
           </Card>
         </div>
+      </div>
+
+      {/* ── Stats ──────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((s, i) => (
+          <Card key={i} className="p-6 border-none bg-card shadow-sm hover:shadow-md transition-all">
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-2.5 rounded-xl ${s.bg} ${s.color}`}>{s.icon}</div>
+            </div>
+            <p className="text-3xl font-black text-foreground tracking-tight">{s.value}</p>
+            <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mt-1">{s.label}</p>
+            <p className="text-[10px] font-medium text-muted-foreground mt-2">{s.sub}</p>
+          </Card>
+        ))}
       </div>
     </div>
   );
