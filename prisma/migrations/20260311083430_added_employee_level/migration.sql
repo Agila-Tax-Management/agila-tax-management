@@ -1,0 +1,2 @@
+-- CreateEnum
+CREATE TYPE "EmployeeLevel" AS ENUM ('STAFF', 'JUNIOR', 'MID', 'SENIOR', 'LEAD', 'MANAGER', 'DIRECTOR', 'SUPERVISOR', 'EXECUTIVE');
