@@ -22,7 +22,28 @@ const PORTAL_APPS = [
 ];
 
 async function main(): Promise<void> {
-  // ── 1. Seed Portal Apps ──────────────────────────────────────────
+  // ── 1. Seed Company (Agila) ──────────────────────────────────────
+  await prisma.client.upsert({
+    where: { companyCode: 'atms' },
+    update: {
+      active: true,
+      businessName: 'Agila Tax Management Services',
+      portalName: 'Agila Tax Management Services',
+      branchType: 'Main Branch',
+    },
+    create: {
+      companyCode: 'atms',
+      clientNo: '2023-1001',
+      active: true,
+      businessType: 'SOLE_PROPRIETORSHIP',
+      businessName: 'Agila Tax Management Services',
+      portalName: 'Agila Tax Management Services',
+      branchType: 'Main Branch',
+    },
+  });
+  console.log('  ✓ Company (Agila Tax Management Services) seeded');
+
+  // ── 2. Seed Portal Apps ──────────────────────────────────────────
   for (const app of PORTAL_APPS) {
     await prisma.app.upsert({
       where: { name: app.name },
@@ -32,7 +53,7 @@ async function main(): Promise<void> {
   }
   console.log(`  ✓ ${PORTAL_APPS.length} portal apps seeded`);
 
-  // ── 2. Seed Super Admin ──────────────────────────────────────────
+  // ── 3. Seed Super Admin ──────────────────────────────────────────
   const email = "admin@agila.com";
   const password = "agilapassword";
   const hashedPassword = await hashPassword(password);
@@ -81,6 +102,33 @@ async function main(): Promise<void> {
   console.log(`\n  Super Admin seeded successfully!`);
   console.log(`  Email:    ${email}`);
   console.log(`  Password: ${password}\n`);
+
+  // ── 4. Seed Employee record for Super Admin ──────────────────────
+  const existingEmployee = await prisma.employee.findUnique({
+    where: { userId: user.id },
+  });
+
+  if (!existingEmployee) {
+    await prisma.employee.create({
+      data: {
+        userId: user.id,
+        firstName: "Super",
+        lastName: "Admin",
+        employeeNo: "EMP-00001",
+        email,
+        birthDate: new Date("1990-01-01"),
+        gender: "Male",
+        phone: "09170000000",
+        address: "Cebu City, Philippines",
+        employmentType: "REGULAR",
+        startDate: new Date("2023-01-01"),
+        active: true,
+      },
+    });
+    console.log("  ✓ Employee record created for Super Admin");
+  } else {
+    console.log("  ✓ Employee record already exists for Super Admin");
+  }
 }
 
 main()

@@ -19,25 +19,21 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const PORTALS = [
-  { key: 'SALES', label: 'Sales Portal' },
-  { key: 'COMPLIANCE', label: 'Compliance Portal' },
-  { key: 'LIAISON', label: 'Liaison Portal' },
-  { key: 'ACCOUNTING', label: 'Accounting Portal' },
-  { key: 'ACCOUNT_OFFICER', label: 'Account Officer Portal' },
-  { key: 'HR', label: 'HR Portal' },
+  { key: 'SALES',          label: 'Sales Portal'           },
+  { key: 'COMPLIANCE',     label: 'Compliance Portal'       },
+  { key: 'LIAISON',        label: 'Liaison Portal'          },
+  { key: 'ACCOUNTING',     label: 'Accounting Portal'       },
+  { key: 'ACCOUNT_OFFICER',label: 'Account Officer Portal'  },
+  { key: 'HR',             label: 'HR Portal'               },
 ] as const;
 
 const PERMISSIONS = ['canRead', 'canWrite', 'canEdit', 'canDelete'] as const;
 
 const PERM_LABELS: Record<string, string> = {
-  canRead: 'Read',
-  canWrite: 'Write',
-  canEdit: 'Edit',
-  canDelete: 'Delete',
+  canRead: 'Read', canWrite: 'Write', canEdit: 'Edit', canDelete: 'Delete',
 };
 
 /* ─── Types ───────────────────────────────────────────────────────── */
-
 interface FormPortalAccess {
   enabled: boolean;
   canRead: boolean;
@@ -45,7 +41,6 @@ interface FormPortalAccess {
   canEdit: boolean;
   canDelete: boolean;
 }
-
 interface UserFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -53,7 +48,7 @@ interface UserFormModalProps {
   editingUser?: UserRecord | null;
 }
 
-/* ─── Helpers ─────────────────────────────────────────────────────── */
+/* ─── Helpers ───────────────────────────────────────────────────── */
 
 function buildInitialPortals(
   existing?: PortalAccessEntry[]
@@ -62,13 +57,7 @@ function buildInitialPortals(
   for (const p of PORTALS) {
     const found = existing?.find((e) => e.portal === p.key);
     map[p.key] = found
-      ? {
-          enabled: true,
-          canRead: found.canRead,
-          canWrite: found.canWrite,
-          canEdit: found.canEdit,
-          canDelete: found.canDelete,
-        }
+      ? { enabled: true, canRead: found.canRead, canWrite: found.canWrite, canEdit: found.canEdit, canDelete: found.canDelete }
       : { enabled: false, canRead: false, canWrite: false, canEdit: false, canDelete: false };
   }
   return map;
@@ -91,9 +80,7 @@ export default function UserFormModal({
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<string>('EMPLOYEE');
   const [active, setActive] = useState(true);
-  const [portalAccess, setPortalAccess] = useState<Record<string, FormPortalAccess>>(
-    buildInitialPortals()
-  );
+  const [portalAccess, setPortalAccess] = useState<Record<string, FormPortalAccess>>(buildInitialPortals());
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -106,7 +93,7 @@ export default function UserFormModal({
         setPassword('');
         setRole(editingUser.role);
         setActive(editingUser.active);
-        setPortalAccess(buildInitialPortals(editingUser.portalAccess));
+        setPortalAccess(buildInitialPortals(editingUser.employee ? editingUser.portalAccess : []));
       } else {
         setName('');
         setEmail('');
@@ -133,11 +120,6 @@ export default function UserFormModal({
     if (password && password.length < 8)
       errors.password = 'Password must be at least 8 characters';
 
-    if (role === 'EMPLOYEE') {
-      const hasEnabledPortal = Object.values(portalAccess).some((p) => p.enabled);
-      if (!hasEnabledPortal) errors.portalAccess = 'Select at least one portal for employees';
-    }
-
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -150,20 +132,19 @@ export default function UserFormModal({
 
     setSubmitting(true);
 
-    const accessPayload: PortalAccessEntry[] = [];
-    if (role === 'EMPLOYEE') {
-      for (const [portal, flags] of Object.entries(portalAccess)) {
-        if (flags.enabled) {
-          accessPayload.push({
+    const hasEmployee = isEdit && !!editingUser?.employee;
+
+    const accessPayload: PortalAccessEntry[] = hasEmployee
+      ? Object.entries(portalAccess)
+          .filter(([, flags]) => flags.enabled)
+          .map(([portal, flags]) => ({
             portal,
             canRead: flags.canRead,
             canWrite: flags.canWrite,
             canEdit: flags.canEdit,
             canDelete: flags.canDelete,
-          });
-        }
-      }
-    }
+          }))
+      : [];
 
     const payload = {
       name: name.trim(),
@@ -171,7 +152,7 @@ export default function UserFormModal({
       ...(password ? { password } : {}),
       role,
       active,
-      portalAccess: role === 'EMPLOYEE' ? accessPayload : undefined,
+      ...(hasEmployee ? { portalAccess: accessPayload } : {}),
     };
 
     try {
@@ -212,7 +193,6 @@ export default function UserFormModal({
       [key]: {
         ...prev[key],
         enabled: !prev[key].enabled,
-        // Reset permissions when disabling
         ...(!prev[key].enabled ? {} : { canRead: false, canWrite: false, canEdit: false, canDelete: false }),
       },
     }));
@@ -313,64 +293,81 @@ export default function UserFormModal({
           <span className="text-sm text-foreground">Active</span>
         </label>
 
-        {/* Portal Access — only for EMPLOYEE */}
+        {/* Portal Access */}
         {role === 'EMPLOYEE' && (
           <div>
-            <label className="block text-sm font-medium text-foreground mb-3">
-              Portal Access <span className="text-rose-500">*</span>
-            </label>
-            {fieldErrors.portalAccess && (
-              <p className="text-xs text-rose-500 mb-2">{fieldErrors.portalAccess}</p>
+            <p className="text-sm font-medium text-foreground mb-3">Portal Access</p>
+
+            {/* State 1 — Creating a new user */}
+            {!isEdit && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-700/40 dark:bg-blue-950/20 p-4">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-400">Portal access not yet assigned</p>
+                <p className="text-xs text-blue-700 dark:text-blue-500 mt-1">
+                  After creating this user, HR must link them to an employee record.
+                  Once linked, portal access can be configured here by admins.
+                </p>
+              </div>
             )}
 
-            <div className="space-y-3">
-              {PORTALS.map((p) => {
-                const flags = portalAccess[p.key];
-                return (
-                  <div
-                    key={p.key}
-                    className={`rounded-xl border p-4 transition ${
-                      flags.enabled
-                        ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40 dark:bg-blue-950/30'
-                        : 'border-border hover:bg-muted/50'
-                    }`}
-                  >
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={flags.enabled}
-                        onChange={() => togglePortalEnabled(p.key)}
-                        className="w-4 h-4 rounded border-border text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-foreground">
-                        {p.label}
-                      </span>
-                    </label>
+            {/* State 2 — Editing, no employee linked */}
+            {isEdit && !editingUser?.employee && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-950/20 p-4">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-400">No employee record linked</p>
+                <p className="text-xs text-amber-700 dark:text-amber-500 mt-1">
+                  HR must link this user to an employee record before portal access can be managed.
+                </p>
+              </div>
+            )}
 
-                    {flags.enabled && (
-                      <div className="flex flex-wrap gap-4 mt-3 pl-6">
-                        {PERMISSIONS.map((perm) => (
-                          <label
-                            key={perm}
-                            className="flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={flags[perm]}
-                              onChange={() => togglePermission(p.key, perm)}
-                              className="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {PERM_LABELS[perm]}
-                            </span>
-                          </label>
-                        ))}
+            {/* State 3 — Editing, employee is linked */}
+            {isEdit && editingUser?.employee && (
+              <>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Linked employee: <span className="font-semibold text-foreground">{editingUser.employee.firstName} {editingUser.employee.lastName}</span>
+                  {editingUser.employee.employeeNo && <span className="ml-1 text-muted-foreground">({editingUser.employee.employeeNo})</span>}
+                </p>
+                <div className="space-y-3">
+                  {PORTALS.map((p) => {
+                    const flags = portalAccess[p.key];
+                    return (
+                      <div
+                        key={p.key}
+                        className={`rounded-xl border p-4 transition ${
+                          flags.enabled
+                            ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40 dark:bg-blue-950/30'
+                            : 'border-border hover:bg-muted/50'
+                        }`}
+                      >
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={flags.enabled}
+                            onChange={() => togglePortalEnabled(p.key)}
+                            className="w-4 h-4 rounded border-border text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-medium text-foreground">{p.label}</span>
+                        </label>
+                        {flags.enabled && (
+                          <div className="flex flex-wrap gap-4 mt-3 pl-6">
+                            {PERMISSIONS.map((perm) => (
+                              <label key={perm} className="flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={flags[perm]}
+                                  onChange={() => togglePermission(p.key, perm)}
+                                  className="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-muted-foreground">{PERM_LABELS[perm]}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 

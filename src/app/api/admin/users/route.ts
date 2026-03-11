@@ -109,7 +109,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: firstError }, { status: 400 });
   }
 
-  const { name, email, password, role, active, portalAccess } = parsed.data;
+  const { name, email, password, role, active } = parsed.data;
 
   // Check for duplicate email
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -145,48 +145,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           password: hashedPassword,
         },
       });
-
-      // 3. If EMPLOYEE, create Employee + app access
-      if (role === "EMPLOYEE" && portalAccess && portalAccess.length > 0) {
-        const nameParts = name.trim().split(/\s+/);
-        const firstName = nameParts[0] ?? name;
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-
-        const employee = await tx.employee.create({
-          data: {
-            userId: newUser.id,
-            firstName,
-            lastName,
-            email,
-            birthDate: new Date("2000-01-01"), // placeholder
-            gender: "Not specified",
-            phone: "",
-            address: "",
-          },
-        });
-
-        // Resolve app IDs for each portal
-        const apps = await tx.app.findMany({
-          where: { name: { in: portalAccess.map((p) => p.portal) } },
-        });
-
-        const appMap = new Map(apps.map((a) => [a.name, a.id]));
-
-        const accessData = portalAccess
-          .filter((p) => appMap.has(p.portal))
-          .map((p) => ({
-            employeeId: employee.id,
-            appId: appMap.get(p.portal)!,
-            canRead: p.canRead,
-            canWrite: p.canWrite,
-            canEdit: p.canEdit,
-            canDelete: p.canDelete,
-          }));
-
-        if (accessData.length > 0) {
-          await tx.employeeAppAccess.createMany({ data: accessData });
-        }
-      }
 
       return newUser;
     });

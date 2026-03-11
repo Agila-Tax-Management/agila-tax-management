@@ -20,61 +20,30 @@ const portalAccessEntrySchema = z.object({
 
 /* ─── Create user ──────────────────────────────────────────────────── */
 
-export const createUserSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    email: z.string().email("Invalid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    role: z.enum(["SUPER_ADMIN", "ADMIN", "EMPLOYEE"]),
-    active: z.boolean().default(true),
-    portalAccess: z.array(portalAccessEntrySchema).optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.role === "EMPLOYEE") {
-        return (
-          data.portalAccess !== undefined && data.portalAccess.length > 0
-        );
-      }
-      return true;
-    },
-    {
-      message: "Portal access is required for employees",
-      path: ["portalAccess"],
-    }
-  );
+export const createUserSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "EMPLOYEE"]),
+  active: z.boolean().default(true),
+});
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
 /* ─── Update user ──────────────────────────────────────────────────── */
 
-export const updateUserSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    email: z.string().email("Invalid email address"),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .optional()
-      .or(z.literal("")),
-    role: z.enum(["SUPER_ADMIN", "ADMIN", "EMPLOYEE"]),
-    active: z.boolean().default(true),
-    portalAccess: z.array(portalAccessEntrySchema).optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.role === "EMPLOYEE") {
-        return (
-          data.portalAccess !== undefined && data.portalAccess.length > 0
-        );
-      }
-      return true;
-    },
-    {
-      message: "Portal access is required for employees",
-      path: ["portalAccess"],
-    }
-  );
+export const updateUserSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .optional()
+    .or(z.literal("")),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "EMPLOYEE"]),
+  active: z.boolean().default(true),
+  portalAccess: z.array(portalAccessEntrySchema).optional(),
+});
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 

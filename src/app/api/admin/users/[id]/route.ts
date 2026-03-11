@@ -159,77 +159,53 @@ export async function PUT(
         }
       }
 
-      // 3. Handle Employee + portal access
-      if (role === "EMPLOYEE") {
-        let employee = await tx.employee.findUnique({
-          where: { userId: id },
-        });
+      // 3. Handle portal access — only if employee is already linked
+      const employee = await tx.employee.findUnique({
+        where: { userId: id },
+        select: { id: true },
+      });
 
-        if (!employee) {
-          const nameParts = name.trim().split(/\s+/);
-          const firstName = nameParts[0] ?? name;
-          const lastName =
-            nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-
-          employee = await tx.employee.create({
-            data: {
-              userId: id,
-              firstName,
-              lastName,
-              email,
-              birthDate: new Date("2000-01-01"),
-              gender: "Not specified",
-              phone: "",
-              address: "",
-            },
-          });
-        } else {
-          // Update employee name to stay in sync
+      if (employee) {
+        if (role === "EMPLOYEE" && portalAccess !== undefined) {
+          // Sync employee name with user name
           const nameParts = name.trim().split(/\s+/);
           await tx.employee.update({
             where: { id: employee.id },
             data: {
               firstName: nameParts[0] ?? name,
-              lastName:
-                nameParts.length > 1 ? nameParts.slice(1).join(" ") : "",
+              lastName: nameParts.length > 1 ? nameParts.slice(1).join(" ") : "",
               email,
             },
           });
-        }
 
-        // Replace portal access: delete all, then re-create
-        await tx.employeeAppAccess.deleteMany({
-          where: { employeeId: employee.id },
-        });
-
-        if (portalAccess && portalAccess.length > 0) {
-          const apps = await tx.app.findMany({
-            where: { name: { in: portalAccess.map((p) => p.portal) } },
+          // Replace portal access: delete all, then re-create
+          await tx.employeeAppAccess.deleteMany({
+            where: { employeeId: employee.id },
           });
-          const appMap = new Map(apps.map((a) => [a.name, a.id]));
 
-          const accessData = portalAccess
-            .filter((p) => appMap.has(p.portal))
-            .map((p) => ({
-              employeeId: employee!.id,
-              appId: appMap.get(p.portal)!,
-              canRead: p.canRead,
-              canWrite: p.canWrite,
-              canEdit: p.canEdit,
-              canDelete: p.canDelete,
-            }));
+          if (portalAccess.length > 0) {
+            const apps = await tx.app.findMany({
+              where: { name: { in: portalAccess.map((p) => p.portal) } },
+            });
+            const appMap = new Map(apps.map((a) => [a.name, a.id]));
 
-          if (accessData.length > 0) {
-            await tx.employeeAppAccess.createMany({ data: accessData });
+            const accessData = portalAccess
+              .filter((p) => appMap.has(p.portal))
+              .map((p) => ({
+                employeeId: employee.id,
+                appId: appMap.get(p.portal)!,
+                canRead: p.canRead,
+                canWrite: p.canWrite,
+                canEdit: p.canEdit,
+                canDelete: p.canDelete,
+              }));
+
+            if (accessData.length > 0) {
+              await tx.employeeAppAccess.createMany({ data: accessData });
+            }
           }
-        }
-      } else {
-        // Non-employee role — clear any existing portal access
-        const employee = await tx.employee.findUnique({
-          where: { userId: id },
-          select: { id: true },
-        });
-        if (employee) {
+        } else if (role !== "EMPLOYEE") {
+          // Non-employee role — clear any existing portal access
           await tx.employeeAppAccess.deleteMany({
             where: { employeeId: employee.id },
           });
