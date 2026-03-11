@@ -91,7 +91,16 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
   if (!currentSession) return null;
 
   const { user, session } = currentSession;
-  const role = (user as Record<string, unknown>).role as string;
+
+  // Fetch user from DB to reliably get role & active status
+  // (BetterAuth may strip undeclared fields from session response)
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, active: true },
+  });
+  if (!dbUser) return null;
+
+  const role = dbUser.role;
 
   // Build portal access map — start with all portals denied
   const portalAccess = Object.fromEntries(

@@ -55,7 +55,7 @@ This applies to all feature work, refactors, bug fixes, and schema changes. Triv
 | Auth         | BetterAuth with Prisma adapter                  |
 | Validation   | Zod                                            |
 | Charts       | Recharts                                       |
-| Icons        | `@heroicons/react`                              |
+| Icons        | `lucide-react`                                  |
 | Fonts        | Geist Sans + Geist Mono (Google Fonts)          |
 | Container    | Docker (Dockerfile + compose.yaml)              |
 
@@ -129,7 +129,7 @@ src/
   - `React.ReactElement` — when cloning or inspecting elements
 - Always explicitly define `children` prop when needed (do not rely on implicit children)
 - Use `next/image` `<Image />` — **never** `<img>`
-- Use `@heroicons/react` — **not** Lucide icons
+- Use `lucide-react` — **not** Heroicons
 
 ### State Management
 

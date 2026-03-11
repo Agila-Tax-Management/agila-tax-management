@@ -1,13 +1,16 @@
 // src/components/dashboard/UserManagement.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
-import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
+import UserFormModal from '@/components/user-management/UserFormModal';
+import UserViewModal from '@/components/user-management/UserViewModal';
+import UserDeleteModal from '@/components/user-management/UserDeleteModal';
+import type { UserRecord } from '@/lib/schemas/user-management';
 import {
   Search,
   Plus,
@@ -21,206 +24,68 @@ import {
   Eye,
 } from 'lucide-react';
 
-/* ─── Types ───────────────────────────────────────────────────────── */
+/* ─── Constants ───────────────────────────────────────────────────── */
 
-type UserStatus = 'Active' | 'Inactive' | 'Suspended';
-
-interface PortalAccess {
-  sales: boolean;
-  compliance: boolean;
-  liaison: boolean;
-  accounting: boolean;
-  accountOfficer: boolean;
-  hr: boolean;
-}
-
-interface ManagedUser {
-  id: string;
-  name: string;
-  login: string;
-  language: string;
-  latestAuthentication: string;
-  company: string;
-  status: UserStatus;
-  portalAccess: PortalAccess;
-}
-
-const PORTAL_LABELS: Record<keyof PortalAccess, string> = {
-  sales: 'Sales Portal',
-  compliance: 'Compliance Portal',
-  liaison: 'Liaison Portal',
-  accounting: 'Accounting Portal',
-  accountOfficer: 'Account Officer Portal',
-  hr: 'HR Portal',
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN: 'Admin',
+  EMPLOYEE: 'Employee',
 };
 
-const STATUS_VARIANT: Record<UserStatus, 'success' | 'neutral' | 'danger'> = {
-  Active: 'success',
-  Inactive: 'neutral',
-  Suspended: 'danger',
+const ROLE_VARIANT: Record<string, 'info' | 'warning' | 'neutral'> = {
+  SUPER_ADMIN: 'info',
+  ADMIN: 'warning',
+  EMPLOYEE: 'neutral',
 };
-
-/* ─── Mock Data ───────────────────────────────────────────────────── */
-
-const INITIAL_USERS: ManagedUser[] = [
-  {
-    id: 'usr-1',
-    name: 'Roberto Villanueva',
-    login: 'roberto.v',
-    language: 'English',
-    latestAuthentication: '2026-03-11 08:24 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: true, compliance: false, liaison: false, accounting: false, accountOfficer: false, hr: false },
-  },
-  {
-    id: 'usr-2',
-    name: 'Maria Santos',
-    login: 'maria.s',
-    language: 'English',
-    latestAuthentication: '2026-03-11 07:50 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: false, compliance: false, liaison: false, accounting: true, accountOfficer: false, hr: false },
-  },
-  {
-    id: 'usr-3',
-    name: 'Juan Dela Cruz',
-    login: 'juan.dc',
-    language: 'Filipino',
-    latestAuthentication: '2026-03-10 05:12 PM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: false, compliance: true, liaison: true, accounting: false, accountOfficer: false, hr: false },
-  },
-  {
-    id: 'usr-4',
-    name: 'Patricia Lim',
-    login: 'patricia.l',
-    language: 'English',
-    latestAuthentication: '2026-03-11 09:01 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: false, compliance: false, liaison: false, accounting: false, accountOfficer: false, hr: true },
-  },
-  {
-    id: 'usr-5',
-    name: 'Carlos Reyes',
-    login: 'carlos.r',
-    language: 'English',
-    latestAuthentication: '2026-03-09 03:45 PM',
-    company: 'Agila Tax Management Services',
-    status: 'Inactive',
-    portalAccess: { sales: true, compliance: false, liaison: false, accounting: false, accountOfficer: true, hr: false },
-  },
-  {
-    id: 'usr-6',
-    name: 'Elena Fernandez',
-    login: 'elena.f',
-    language: 'English',
-    latestAuthentication: '2026-03-11 08:00 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: true, compliance: true, liaison: false, accounting: false, accountOfficer: false, hr: false },
-  },
-  {
-    id: 'usr-7',
-    name: 'Miguel Torres',
-    login: 'miguel.t',
-    language: 'Filipino',
-    latestAuthentication: '2026-03-08 11:30 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Suspended',
-    portalAccess: { sales: false, compliance: false, liaison: true, accounting: false, accountOfficer: false, hr: false },
-  },
-  {
-    id: 'usr-8',
-    name: 'Angela Cruz',
-    login: 'angela.c',
-    language: 'English',
-    latestAuthentication: '2026-03-11 07:30 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: false, compliance: false, liaison: false, accounting: true, accountOfficer: true, hr: false },
-  },
-  {
-    id: 'usr-9',
-    name: 'Ricardo Garcia',
-    login: 'ricardo.g',
-    language: 'English',
-    latestAuthentication: '2026-03-10 02:15 PM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: true, compliance: true, liaison: true, accounting: true, accountOfficer: true, hr: true },
-  },
-  {
-    id: 'usr-10',
-    name: 'Sofia Mendoza',
-    login: 'sofia.m',
-    language: 'Filipino',
-    latestAuthentication: '2026-03-07 04:00 PM',
-    company: 'Agila Tax Management Services',
-    status: 'Inactive',
-    portalAccess: { sales: false, compliance: false, liaison: false, accounting: false, accountOfficer: false, hr: false },
-  },
-  {
-    id: 'usr-11',
-    name: 'Daniel Aquino',
-    login: 'daniel.a',
-    language: 'English',
-    latestAuthentication: '2026-03-11 09:15 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: false, compliance: true, liaison: false, accounting: false, accountOfficer: true, hr: false },
-  },
-  {
-    id: 'usr-12',
-    name: 'Beatriz Navarro',
-    login: 'beatriz.n',
-    language: 'English',
-    latestAuthentication: '2026-03-10 10:45 AM',
-    company: 'Agila Tax Management Services',
-    status: 'Active',
-    portalAccess: { sales: false, compliance: false, liaison: true, accounting: true, accountOfficer: false, hr: true },
-  },
-];
 
 const ITEMS_PER_PAGE = 10;
 
-const DEFAULT_PORTAL_ACCESS: PortalAccess = {
-  sales: false,
-  compliance: false,
-  liaison: false,
-  accounting: false,
-  accountOfficer: false,
-  hr: false,
-};
+type StatusFilter = 'All' | 'Active' | 'Inactive';
 
 /* ─── Component ───────────────────────────────────────────────────── */
 
 export default function UserManagement(): React.ReactNode {
-  const { success, error: toastError } = useToast();
+  const { error: toastError } = useToast();
 
-  const [users, setUsers] = useState<ManagedUser[]>(INITIAL_USERS);
+  // Data
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<UserStatus | 'All'>('All');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [page, setPage] = useState(1);
 
   // Modals
-  const [formModalOpen, setFormModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
-  const [viewingUser, setViewingUser] = useState<ManagedUser | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
+  const [viewingUser, setViewingUser] = useState<UserRecord | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserRecord | null>(null);
 
-  // Form state
-  const [formName, setFormName] = useState('');
-  const [formLogin, setFormLogin] = useState('');
-  const [formLanguage, setFormLanguage] = useState('English');
-  const [formCompany, setFormCompany] = useState('Agila Tax Management Services');
-  const [formStatus, setFormStatus] = useState<UserStatus>('Active');
-  const [formPortalAccess, setFormPortalAccess] = useState<PortalAccess>(DEFAULT_PORTAL_ACCESS);
+  /* ─── Fetch ──────────────────────────────────────────────── */
 
-  /* ─── Derived ─────────────────────────────────────────────── */
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/users');
+      const json = await res.json();
+      if (!res.ok) {
+        toastError('Failed to load users', json.error ?? 'Something went wrong');
+        return;
+      }
+      setUsers(json.data ?? []);
+    } catch {
+      toastError('Network error', 'Could not reach the server.');
+    } finally {
+      setLoading(false);
+    }
+  }, [toastError]);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
+
+  /* ─── Derived ────────────────────────────────────────────── */
 
   const filtered = useMemo(() => {
     let result = users;
@@ -229,122 +94,45 @@ export default function UserManagement(): React.ReactNode {
       result = result.filter(
         (u) =>
           u.name.toLowerCase().includes(q) ||
-          u.login.toLowerCase().includes(q) ||
-          u.company.toLowerCase().includes(q)
+          u.email.toLowerCase().includes(q)
       );
     }
-    if (statusFilter !== 'All') {
-      result = result.filter((u) => u.status === statusFilter);
-    }
+    if (statusFilter === 'Active') result = result.filter((u) => u.active);
+    if (statusFilter === 'Inactive') result = result.filter((u) => !u.active);
     return result;
   }, [users, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE
+  );
 
-  const activeCount = users.filter((u) => u.status === 'Active').length;
-  const inactiveCount = users.filter((u) => u.status === 'Inactive').length;
-  const suspendedCount = users.filter((u) => u.status === 'Suspended').length;
+  const activeCount = users.filter((u) => u.active).length;
+  const inactiveCount = users.filter((u) => !u.active).length;
 
-  /* ─── Handlers ────────────────────────────────────────────── */
+  /* ─── Handlers ───────────────────────────────────────────── */
 
-  function resetForm() {
-    setFormName('');
-    setFormLogin('');
-    setFormLanguage('English');
-    setFormCompany('Agila Tax Management Services');
-    setFormStatus('Active');
-    setFormPortalAccess({ ...DEFAULT_PORTAL_ACCESS });
+  function openAdd(): void {
     setEditingUser(null);
+    setFormOpen(true);
   }
 
-  function openAdd() {
-    resetForm();
-    setFormModalOpen(true);
-  }
-
-  function openEdit(user: ManagedUser) {
+  function openEdit(user: UserRecord): void {
     setEditingUser(user);
-    setFormName(user.name);
-    setFormLogin(user.login);
-    setFormLanguage(user.language);
-    setFormCompany(user.company);
-    setFormStatus(user.status);
-    setFormPortalAccess({ ...user.portalAccess });
-    setFormModalOpen(true);
+    setFormOpen(true);
   }
 
-  function handleSave() {
-    if (!formName.trim() || !formLogin.trim()) {
-      toastError('Validation Error', 'Name and Login are required.');
-      return;
-    }
-
-    if (editingUser) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === editingUser.id
-            ? {
-                ...u,
-                name: formName.trim(),
-                login: formLogin.trim(),
-                language: formLanguage,
-                company: formCompany.trim(),
-                status: formStatus,
-                portalAccess: { ...formPortalAccess },
-              }
-            : u
-        )
-      );
-      success('User Updated', `${formName} has been updated successfully.`);
-    } else {
-      const newUser: ManagedUser = {
-        id: `usr-${Date.now()}`,
-        name: formName.trim(),
-        login: formLogin.trim(),
-        language: formLanguage,
-        latestAuthentication: 'Never',
-        company: formCompany.trim(),
-        status: formStatus,
-        portalAccess: { ...formPortalAccess },
-      };
-      setUsers((prev) => [newUser, ...prev]);
-      success('User Created', `${formName} has been added successfully.`);
-    }
-
-    setFormModalOpen(false);
-    resetForm();
-  }
-
-  function handleDelete(id: string) {
-    const user = users.find((u) => u.id === id);
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    setDeleteConfirmId(null);
-    success('User Deleted', `${user?.name ?? 'User'} has been removed.`);
-  }
-
-  function togglePortal(key: keyof PortalAccess) {
-    setFormPortalAccess((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  function handlePortalToggleInView(key: keyof PortalAccess) {
-    if (!viewingUser) return;
-    const updatedAccess = { ...viewingUser.portalAccess, [key]: !viewingUser.portalAccess[key] };
-    const updatedUser = { ...viewingUser, portalAccess: updatedAccess };
-    setViewingUser(updatedUser);
-    setUsers((prev) =>
-      prev.map((u) => (u.id === viewingUser.id ? updatedUser : u))
-    );
-  }
-
-  /* ─── Stats ───────────────────────────────────────────────── */
+  /* ─── Stats ──────────────────────────────────────────────── */
 
   const stats = [
-    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 bg-blue-50' },
-    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50' },
-    { label: 'Inactive', value: inactiveCount, icon: Users, color: 'text-slate-500 bg-slate-100' },
-    { label: 'Suspended', value: suspendedCount, icon: ShieldCheck, color: 'text-rose-600 bg-rose-50' },
+    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400' },
+    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    { label: 'Inactive', value: inactiveCount, icon: Users, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' },
+    { label: 'Admins', value: users.filter((u) => u.role === 'SUPER_ADMIN' || u.role === 'ADMIN').length, icon: ShieldCheck, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400' },
   ];
+
+  /* ─── Render ─────────────────────────────────────────────── */
 
   return (
     <div className="space-y-6">
@@ -353,7 +141,7 @@ export default function UserManagement(): React.ReactNode {
         <div>
           <h1 className="text-2xl font-bold text-foreground">User Management</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage user accounts, portal access, and permissions
+            Manage user accounts, roles, and portal access
           </p>
         </div>
         <Button onClick={openAdd}>
@@ -388,14 +176,14 @@ export default function UserManagement(): React.ReactNode {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search by name, login, or company..."
+              placeholder="Search by name or email..."
               className="pl-9"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => {
-              setStatusFilter(e.target.value as UserStatus | 'All');
+              setStatusFilter(e.target.value as StatusFilter);
               setPage(1);
             }}
             className="rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -403,7 +191,6 @@ export default function UserManagement(): React.ReactNode {
             <option value="All">All Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
-            <option value="Suspended">Suspended</option>
           </select>
         </div>
       </Card>
@@ -415,82 +202,99 @@ export default function UserManagement(): React.ReactNode {
             <thead>
               <tr className="border-b border-border bg-muted/50">
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Name</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Login</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Language</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Latest Authentication</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">Company</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Email</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Role</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Created</th>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                    Loading users...
+                  </td>
+                </tr>
+              ) : paginated.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
                     No users found.
                   </td>
                 </tr>
               ) : (
-                paginated.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setViewingUser(user)}
-                        className="flex items-center gap-3 hover:opacity-80 transition text-left"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
-                          {user.name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')
-                            .slice(0, 2)}
-                        </div>
-                        <span className="font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap underline-offset-2 hover:underline">
-                          {user.name}
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{user.login}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{user.language}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">
-                      {user.latestAuthentication}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell whitespace-nowrap">
-                      {user.company}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={STATUS_VARIANT[user.status]}>{user.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                paginated.map((user) => {
+                  const initials = user.name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase();
+
+                  return (
+                    <tr
+                      key={user.id}
+                      className="border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">
                         <button
                           onClick={() => setViewingUser(user)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition"
-                          title="View details"
+                          className="flex items-center gap-3 hover:opacity-80 transition text-left"
                         >
-                          <Eye size={15} />
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                            {initials}
+                          </div>
+                          <span className="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap underline-offset-2 hover:underline">
+                            {user.name}
+                          </span>
                         </button>
-                        <button
-                          onClick={() => openEdit(user)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition"
-                          title="Edit user"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(user.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition"
-                          title="Delete user"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">{user.email}</td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <Badge variant={ROLE_VARIANT[user.role] ?? 'neutral'}>
+                          {ROLE_LABELS[user.role] ?? user.role}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">
+                        {new Date(user.createdAt).toLocaleDateString('en-PH', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={user.active ? 'success' : 'danger'}>
+                          {user.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setViewingUser(user)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                            title="View details"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            onClick={() => openEdit(user)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                            title="Edit user"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingUser(user)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition"
+                            title="Delete user"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -534,206 +338,30 @@ export default function UserManagement(): React.ReactNode {
         )}
       </Card>
 
-      {/* ─── View User Details Modal ──────────────────────────── */}
-      <Modal
+      {/* ─── Modals ───────────────────────────────────────────── */}
+
+      <UserFormModal
+        isOpen={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingUser(null);
+        }}
+        onSaved={fetchUsers}
+        editingUser={editingUser}
+      />
+
+      <UserViewModal
         isOpen={!!viewingUser}
         onClose={() => setViewingUser(null)}
-        title="User Details"
-        size="lg"
-      >
-        {viewingUser && (
-          <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg font-bold shrink-0">
-                {viewingUser.name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .slice(0, 2)}
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-foreground">{viewingUser.name}</h3>
-                <p className="text-sm text-muted-foreground font-mono">{viewingUser.login}</p>
-              </div>
-              <div className="ml-auto">
-                <Badge variant={STATUS_VARIANT[viewingUser.status]}>{viewingUser.status}</Badge>
-              </div>
-            </div>
+        user={viewingUser}
+      />
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Language</p>
-                <p className="text-sm text-foreground">{viewingUser.language}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Company</p>
-                <p className="text-sm text-foreground">{viewingUser.company}</p>
-              </div>
-              <div className="space-y-1 col-span-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Latest Authentication</p>
-                <p className="text-sm text-foreground">{viewingUser.latestAuthentication}</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-3">Portal Access</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {(Object.keys(PORTAL_LABELS) as Array<keyof PortalAccess>).map((key) => (
-                  <label
-                    key={key}
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border transition cursor-pointer ${
-                      viewingUser.portalAccess[key]
-                        ? 'border-blue-300 bg-blue-50/50'
-                        : 'border-border hover:bg-muted/50'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={viewingUser.portalAccess[key]}
-                      onChange={() => handlePortalToggleInView(key)}
-                      className="w-4 h-4 rounded border-border text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-foreground">{PORTAL_LABELS[key]}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setViewingUser(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* ─── Add / Edit Modal ─────────────────────────────────── */}
-      <Modal
-        isOpen={formModalOpen}
-        onClose={() => {
-          setFormModalOpen(false);
-          resetForm();
-        }}
-        title={editingUser ? 'Edit User' : 'Add User'}
-        size="lg"
-      >
-        <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Name</label>
-              <Input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Full name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Login (Username)</label>
-              <Input
-                value={formLogin}
-                onChange={(e) => setFormLogin(e.target.value)}
-                placeholder="Username"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Language</label>
-              <select
-                value={formLanguage}
-                onChange={(e) => setFormLanguage(e.target.value)}
-                className="w-full rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="English">English</option>
-                <option value="Filipino">Filipino</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Company</label>
-              <Input
-                value={formCompany}
-                onChange={(e) => setFormCompany(e.target.value)}
-                placeholder="Company name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Status</label>
-              <select
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as UserStatus)}
-                className="w-full rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Suspended">Suspended</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-3">Portal Access</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {(Object.keys(PORTAL_LABELS) as Array<keyof PortalAccess>).map((key) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-2.5 p-3 rounded-xl border border-border hover:bg-muted/50 transition cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formPortalAccess[key]}
-                    onChange={() => togglePortal(key)}
-                    className="w-4 h-4 rounded border-border text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-foreground">{PORTAL_LABELS[key]}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setFormModalOpen(false);
-                resetForm();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>
-              {editingUser ? 'Save Changes' : 'Create User'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete Confirmation */}
-      <Modal
-        isOpen={!!deleteConfirmId}
-        onClose={() => setDeleteConfirmId(null)}
-        title="Delete User"
-        size="sm"
-      >
-        <div className="p-6 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete{' '}
-            <span className="font-semibold text-foreground">
-              {users.find((u) => u.id === deleteConfirmId)?.name}
-            </span>
-            ? This action cannot be undone.
-          </p>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-rose-600 hover:bg-rose-700"
-              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
-            >
-              Delete
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <UserDeleteModal
+        isOpen={!!deletingUser}
+        onClose={() => setDeletingUser(null)}
+        onDeleted={fetchUsers}
+        user={deletingUser}
+      />
     </div>
   );
 }
