@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, ChevronRight, ExternalLink, ArrowRight,
-  Calendar, ShieldCheck, Star, Settings, Clock, FileText,
+  ShieldCheck, Star, Settings, Clock, FileText,
   BarChart3, Briefcase, DollarSign, UserCheck, Building2,
-  Globe, BookOpen, Megaphone, Zap,
+  Globe, BookOpen, Megaphone, Zap, Receipt, Layers, Target, 
+  Calculator, CalendarDays
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -34,12 +35,11 @@ const APP_SYSTEMS = [
 ];
 
 const QUICK_LINKS = [
-  { title: 'Calendar',      icon: <Calendar />,   href: '/dashboard/calendar' },
-  { title: 'Announcements',  icon: <Megaphone />,  href: '/dashboard/announcements' },
-  { title: 'Directory',      icon: <Users />,      href: '/dashboard/directory' },
-  { title: 'Agila Website',  icon: <Globe />,      href: 'https://agilaworkspace.com', external: true },
-  { title: 'Help Center',    icon: <BookOpen />,   href: '/dashboard/help' },
-  { title: 'Settings',       icon: <Settings />,   href: '/dashboard/settings' },
+  { title: 'Quick Books', icon: <Receipt size={18} />, external: true, url: 'https://quickbooks.intuit.com/' },
+  { title: 'Pancake', icon: <Layers size={18} />, external: true, url: 'https://pancake.io/' },
+  { title: 'Clickup', icon: <Target size={18} />, external: true, url: 'https://clickup.com/' },
+  { title: 'Salary Computation', icon: <Calculator size={18} />, external: false, href: '/dashboard/quick-links/salary-computation' },
+  { title: 'Book Appointment', icon: <CalendarDays size={18} />, external: false, href: '/dashboard/quick-links/book-appointment' },
 ];
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
