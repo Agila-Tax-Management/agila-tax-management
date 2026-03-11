@@ -78,3 +78,59 @@ export interface Client {
   upsellAmount: number;
   createdAt: string;
 }
+
+// ── Account Officer Types ─────────────────────────────────
+export type AOTaskStatus = 'To Do' | 'In Progress' | 'Review' | 'Done';
+export type AOTaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+export interface AOTeamMember {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string; // initials
+  department: string;
+}
+
+export interface AOTaskComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface AOTask {
+  id: string;
+  title: string;
+  description: string;
+  status: AOTaskStatus;
+  priority: AOTaskPriority;
+  clientId: string;
+  assigneeId: string;
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string;
+  comments: AOTaskComment[];
+  tags: string[];
+}
+
+export interface AONotification {
+  id: string;
+  type: 'status_change' | 'comment' | 'assignment' | 'message';
+  title: string;
+  message: string;
+  taskId?: string;
+  clientId?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface AODiscussionMessage {
+  id: string;
+  clientId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'account-officer' | 'client';
+  content: string;
+  createdAt: string;
+}
