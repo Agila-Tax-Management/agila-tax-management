@@ -7,6 +7,18 @@ enum EmploymentType {
     INTERN
 }
 
+enum EmployeeLevel {
+    STAFF
+    JUNIOR
+    MID
+    SENIOR
+    LEAD
+    MANAGER
+    DIRECTOR
+    SUPERVISOR
+    EXECUTIVE
+}
+
 enum DisbursedMethod {
     CASH_SALARY
     FUND_TRANSFER

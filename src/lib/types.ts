@@ -17,6 +17,42 @@ export interface Lead {
   clientNo?: string;          // Generated client number after account creation
 }
 
+// ── Portal Access Types ───────────────────────────────────
+export type AppPortalName =
+  | 'SALES'
+  | 'COMPLIANCE'
+  | 'LIAISON'
+  | 'ACCOUNTING'
+  | 'ACCOUNT_OFFICER'
+  | 'HR';
+
+export interface PortalPermissions {
+  canRead: boolean;
+  canWrite: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface SessionEmployee {
+  id: number;
+  firstName: string;
+  lastName: string;
+  employeeNo: string | null;
+}
+
+export interface SessionWithAccessResponse {
+  user: SessionUser;
+  employee: SessionEmployee | null;
+  portalAccess: Record<AppPortalName, PortalPermissions>;
+}
+
 export interface Agent {
   id: string;
   name: string;

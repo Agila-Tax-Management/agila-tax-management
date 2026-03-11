@@ -187,7 +187,7 @@ src/
 
 - Server: `src/lib/auth.ts` — `betterAuth()` with `prismaAdapter` on PostgreSQL
 - Client: `src/lib/auth-client.ts` — `createAuthClient()` with `nextCookies()` plugin
-- API route: `src/app/app/api/auth/[...all]/route.ts` — catch-all handler
+- API route: `src/app/api/auth/[...all]/route.ts` — catch-all handler
 - Auth models: `User`, `Session`, `Account`, `Verification` in `prisma/models/users.prisma`
 - Roles enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`, `CLIENT`
 
@@ -243,13 +243,77 @@ src/
 
 ## API Routes
 
-- Place API routes under `src/app/app/api/` following Next.js App Router conventions
+- Place API routes under `src/app/api/` following Next.js App Router conventions
 - Use Route Handlers (`route.ts`) with named exports: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
 - Always validate request body with Zod before processing
 - Always check authentication via `auth.api.getSession({ headers })`
 - Return consistent JSON responses:
   - Success: `NextResponse.json({ data: ... })`
   - Error: `NextResponse.json({ error: "..." }, { status: 4xx/5xx })`
+
+---
+
+## Activity Logging
+
+- Utility: `src/lib/activity-log.ts` — fire-and-forget logger using `logActivity()` 
+- Model: `ActivityLog` in `prisma/models/activity-logs.prisma`
+- **Every mutating API route** (create, update, delete, status change, permission change) must log the action
+- Call with `void` so it never blocks the response:
+  ```typescript
+  // src/app/api/clients/route.ts
+  import { logActivity, getRequestMeta } from '@/lib/activity-log';
+
+  // After a successful create/update/delete:
+  void logActivity({
+    userId: session.user.id,
+    action: "CREATED",
+    entity: "Client",
+    entityId: client.id,
+    description: `Created client ${client.companyName}`,
+    ...getRequestMeta(request),
+  });
+  ```
+- Use `getRequestMeta(request)` to automatically extract IP and user-agent from the request headers
+- Available `LogAction` values: `CREATED`, `UPDATED`, `DELETED`, `VIEWED`, `EXPORTED`, `IMPORTED`, `LOGIN`, `LOGOUT`, `STATUS_CHANGE`, `PERMISSION_CHANGE`, `ASSIGNED`, `UNASSIGNED`, `APPROVED`, `REJECTED`, `SUBMITTED`, `CANCELLED`, `ARCHIVED`, `RESTORED`
+- `description` should be human-readable (e.g. "Created client Acme Corp", "Updated employee #42 salary")
+- Use `metadata` (JSON) for structured before/after values when logging updates
+
+---
+
+## Internal Notifications
+
+- Utility: `src/lib/notification.ts` — fire-and-forget notification creator
+- Model: `InternalNotification` in `prisma/models/internal-notif.prisma`
+- Use `notify()` for single-recipient and `notifyMany()` for multi-recipient notifications
+- Call with `void` so it never blocks the response:
+  ```typescript
+  // src/app/api/clients/route.ts
+  import { notify, notifyMany } from '@/lib/notification';
+
+  // Single recipient
+  void notify({
+    recipientId: managerId,
+    actorId: session.user.id,
+    type: "SUCCESS",
+    title: "New client created",
+    message: `${client.companyName} was added by ${session.user.name}.`,
+    entity: "Client",
+    entityId: client.id,
+    actionUrl: `/portal/sales/clients/${client.id}`,
+  });
+
+  // Multiple recipients
+  void notifyMany({
+    recipientIds: [userId1, userId2],
+    title: "Monthly report ready",
+    message: "The March compliance report is now available.",
+    type: "INFO",
+  });
+  ```
+- Available `NotificationType` values: `INFO`, `SUCCESS`, `WARNING`, `ERROR`, `ACTION_REQUIRED`
+- Available `NotificationPriority` values: `LOW`, `NORMAL`, `HIGH`, `URGENT`
+- Always set `entity` and `entityId` when the notification relates to a specific record
+- Always set `actionUrl` when the user should be able to click through to a relevant page
 
 ---
 
