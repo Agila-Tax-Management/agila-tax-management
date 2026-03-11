@@ -35,6 +35,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 2500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2025-10-15T09:00:00Z',
   },
   {
     id: 'client-2',
@@ -78,6 +79,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 6500,
     hasUpsell: true,
     upsellAmount: 5000,
+    createdAt: '2025-08-22T14:30:00Z',
   },
   {
     id: 'client-3',
@@ -111,6 +113,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 4500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2025-11-05T11:00:00Z',
   },
   {
     id: 'client-4',
@@ -153,6 +156,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 5000,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2026-01-10T08:00:00Z',
   },
   {
     id: 'client-5',
@@ -196,6 +200,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 15000,
     hasUpsell: true,
     upsellAmount: 8000,
+    createdAt: '2025-06-01T10:00:00Z',
   },
   {
     id: 'client-6',
@@ -229,6 +234,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 1500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2025-12-20T09:00:00Z',
   },
   {
     id: 'client-7',
@@ -264,6 +270,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 2500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2026-02-01T10:00:00Z',
   },
   {
     id: 'client-8',
@@ -297,6 +304,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 1500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2025-09-15T13:00:00Z',
   },
   {
     id: 'client-9',
@@ -340,6 +348,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 6500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2025-07-10T08:00:00Z',
   },
   {
     id: 'client-10',
@@ -358,6 +367,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 0,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2026-03-01T11:00:00Z',
   },
   {
     id: 'client-11',
@@ -393,6 +403,7 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 4500,
     hasUpsell: true,
     upsellAmount: 3000,
+    createdAt: '2025-05-18T08:00:00Z',
   },
   {
     id: 'client-12',
@@ -428,5 +439,6 @@ export const INITIAL_CLIENTS: Client[] = [
     finalAmount: 1500,
     hasUpsell: false,
     upsellAmount: 0,
+    createdAt: '2025-11-25T09:00:00Z',
   },
 ];

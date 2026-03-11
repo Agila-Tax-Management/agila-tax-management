@@ -76,4 +76,5 @@ export interface Client {
   finalAmount: number;
   hasUpsell: boolean;
   upsellAmount: number;
+  createdAt: string;
 }
