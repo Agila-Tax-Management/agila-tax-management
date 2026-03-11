@@ -1,21 +1,41 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, List, Wallet,
-  ShoppingBag, BarChart3, HelpCircle
+  ShoppingBag, BarChart3, ChevronDown, ChevronUp,
+  CalendarClock, FileText
 } from 'lucide-react';
 
-const ASP_NAV_ITEMS = [
+interface NavItem {
+  id: string;
+  label: string;
+  icon?: typeof LayoutDashboard;
+  href?: string;
+  isSection?: boolean;
+  isDropdown?: boolean;
+  children?: { id: string; label: string; icon: typeof LayoutDashboard; href: string }[];
+}
+
+const ASP_NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/sales' },
   {
     id: 'management',
     label: 'MANAGEMENT',
-    isSection: true
+    isSection: true,
   },
   { id: 'leads', label: 'Leads Center', icon: Users, href: '/portal/sales/lead-center' },
-  { id: 'service-plans', label: 'Service Plans', icon: Briefcase, href: '/portal/sales/service-plan' },
+  {
+    id: 'services',
+    label: 'Services',
+    icon: Briefcase,
+    isDropdown: true,
+    children: [
+      { id: 'monthly-services', label: 'Monthly Service Plans', icon: CalendarClock, href: '/portal/sales/services/monthly' },
+      { id: 'one-time-services', label: 'One-Time Service Plans', icon: FileText, href: '/portal/sales/services/one-time' },
+    ],
+  },
   { id: 'client-list', label: 'Client List', icon: List, href: '/portal/sales/client-list' },
   { id: 'commissions', label: 'Commissions', icon: Wallet, href: '/portal/sales/commissions' },
   { id: 'after-sales', label: 'After Sales', icon: ShoppingBag, href: '/portal/sales/after-sales' },
@@ -30,6 +50,7 @@ interface ASPSidebarProps {
 export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [servicesOpen, setServicesOpen] = useState(pathname.startsWith('/portal/sales/services'));
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -83,8 +104,57 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
               );
             }
 
+            // Dropdown item (Services)
+            if (item.isDropdown && item.children) {
+              const Icon = item.icon!;
+              const isChildActive = item.children.some(c => pathname === c.href);
+
+              return (
+                <div key={item.id}>
+                  <button
+                    onClick={() => setServicesOpen(prev => !prev)}
+                    className={`
+                      w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+                      ${isChildActive
+                        ? 'bg-blue-50 text-blue-700 font-bold'
+                        : 'text-slate-600 hover:bg-slate-50 font-medium'
+                      }
+                    `}
+                  >
+                    <Icon size={18} />
+                    <span className="text-sm flex-1 text-left">{item.label}</span>
+                    {servicesOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  {servicesOpen && (
+                    <div className="ml-7 mt-1 space-y-1">
+                      {item.children.map(child => {
+                        const ChildIcon = child.icon;
+                        const isActive = pathname === child.href;
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => handleNavigation(child.href)}
+                            className={`
+                              w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left
+                              ${isActive
+                                ? 'bg-blue-50 text-blue-700 font-bold'
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700 font-medium'
+                              }
+                            `}
+                          >
+                            <ChildIcon size={16} />
+                            <span className="text-xs">{child.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             const isActive = pathname === item.href;
-            const Icon = item.icon;
+            const Icon = item.icon!;
 
             return (
               <button
@@ -98,7 +168,7 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
                   }
                 `}
               >
-                {Icon && <Icon size={18} />}
+                <Icon size={18} />
                 <span className="text-sm">{item.label}</span>
               </button>
             );
