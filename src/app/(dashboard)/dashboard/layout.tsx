@@ -230,7 +230,10 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
         <div className="p-3 border-t border-sidebar-border shrink-0 space-y-1">
           <button
             onClick={() => navigate('/dashboard/settings')}
-            className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition`}
+            className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl transition
+              ${pathname.startsWith('/dashboard/settings')
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             title={!isExpanded ? 'Settings' : undefined}
           >
             <Settings size={20} className="shrink-0" />
