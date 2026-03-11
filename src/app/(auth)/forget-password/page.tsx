@@ -53,7 +53,7 @@ export default function ForgetPasswordPage() {
               </div>
               <button
                 type="button"
-                onClick={() => router.push('/login')}
+                onClick={() => router.push('/sign-in')}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md text-sm transition-colors shadow-sm"
               >
                 Back to Log In
@@ -97,7 +97,7 @@ export default function ForgetPasswordPage() {
               Back
             </button>
             <a
-              href="/login"
+              href="/sign-in"
               className="text-sm text-slate-500 hover:text-slate-700 transition"
             >
               Log In

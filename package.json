@@ -8,9 +8,13 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
+    "better-auth": "^1.5.4",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "pg": "^8.20.0",
@@ -29,6 +33,7 @@
     "eslint-config-next": "16.1.6",
     "prisma": "^7.4.2",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

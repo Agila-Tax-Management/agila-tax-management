@@ -56,7 +56,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/login"
+            href="/sign-in"
             className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-md transition-colors shadow-sm"
           >
             Log In
@@ -89,7 +89,7 @@ export default function HomePage() {
 
             <div className="flex flex-col sm:flex-row items-center md:items-start gap-3">
               <Link
-                href="/login"
+                href="/sign-in"
                 className="px-7 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md text-sm transition-colors shadow-md"
               >
                 One Portal →
@@ -177,7 +177,7 @@ export default function HomePage() {
             Log in to One Portal and manage your business from a single, secure dashboard.
           </p>
           <Link
-            href="/login"
+            href="/sign-in"
             className="inline-block px-8 py-3.5 bg-white text-blue-600 font-bold rounded-md text-sm hover:bg-blue-50 transition-colors shadow-md"
           >
             Access One Portal
