@@ -5,6 +5,7 @@ enum AppPortal {
     ACCOUNTING
     ACCOUNT_OFFICER
     HR
+    TASK_MANAGEMENT
 }
 
 model App {

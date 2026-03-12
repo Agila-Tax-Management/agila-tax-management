@@ -11,7 +11,7 @@ import type { UserRecord } from "@/lib/schemas/user-management";
  * GET /api/admin/users
  *
  * Returns all users (excluding CLIENT role) with their employee
- * profile and portal access entries.
+ * profile, employment details, and portal access entries.
  * Restricted to SUPER_ADMIN and ADMIN.
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
@@ -32,8 +32,13 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
         select: {
           id: true,
           firstName: true,
+          middleName: true,
           lastName: true,
           employeeNo: true,
+          phone: true,
+          address: true,
+          birthDate: true,
+          gender: true,
           appAccess: {
             select: {
               canRead: true,
@@ -43,38 +48,71 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
               app: { select: { name: true } },
             },
           },
+          employments: {
+            where: { employmentStatus: "ACTIVE" },
+            take: 1,
+            orderBy: { createdAt: "desc" },
+            select: {
+              employmentType: true,
+              employmentStatus: true,
+              employeeLevel: true,
+              hireDate: true,
+              department: { select: { name: true } },
+              position: { select: { title: true } },
+            },
+          },
         },
       },
     },
   });
 
-  const data: UserRecord[] = users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    active: u.active,
-    emailVerified: u.emailVerified,
-    createdAt: u.createdAt.toISOString(),
-    updatedAt: u.updatedAt.toISOString(),
-    employee: u.employee
-      ? {
-          id: u.employee.id,
-          firstName: u.employee.firstName,
-          lastName: u.employee.lastName,
-          employeeNo: u.employee.employeeNo,
-        }
-      : null,
-    portalAccess: u.employee
-      ? u.employee.appAccess.map((a) => ({
-          portal: a.app.name,
-          canRead: a.canRead,
-          canWrite: a.canWrite,
-          canEdit: a.canEdit,
-          canDelete: a.canDelete,
-        }))
-      : [],
-  }));
+  const data: UserRecord[] = users.map((u) => {
+    const emp = u.employee;
+    const employment = emp?.employments?.[0] ?? null;
+
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      active: u.active,
+      emailVerified: u.emailVerified,
+      createdAt: u.createdAt.toISOString(),
+      updatedAt: u.updatedAt.toISOString(),
+      employee: emp
+        ? {
+            id: emp.id,
+            firstName: emp.firstName,
+            middleName: emp.middleName,
+            lastName: emp.lastName,
+            employeeNo: emp.employeeNo,
+            phone: emp.phone,
+            address: emp.address,
+            birthDate: emp.birthDate.toISOString(),
+            gender: emp.gender,
+            employment: employment
+              ? {
+                  department: employment.department?.name ?? null,
+                  position: employment.position?.title ?? null,
+                  employmentType: employment.employmentType,
+                  employmentStatus: employment.employmentStatus,
+                  employeeLevel: employment.employeeLevel,
+                  hireDate: employment.hireDate?.toISOString() ?? null,
+                }
+              : null,
+          }
+        : null,
+      portalAccess: emp
+        ? emp.appAccess.map((a) => ({
+            portal: a.app.name,
+            canRead: a.canRead,
+            canWrite: a.canWrite,
+            canEdit: a.canEdit,
+            canDelete: a.canDelete,
+          }))
+        : [],
+    };
+  });
 
   return NextResponse.json({ data });
 }
@@ -82,9 +120,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 /**
  * POST /api/admin/users
  *
- * Creates a new User + Account (credential).
- * If role is EMPLOYEE, also creates an Employee record and
- * EmployeeAppAccess entries for each portal in the payload.
+ * Creates a new User + Account (BetterAuth credential) + Employee +
+ * EmployeeEmployment (linked to ATMS client) + EmployeeAppAccess.
+ * All internal users are employees of the ATMS company.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -109,7 +147,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: firstError }, { status: 400 });
   }
 
-  const { name, email, password, role, active } = parsed.data;
+  const {
+    name, email, password, role, active,
+    firstName, middleName, lastName, phone, address, birthDate, gender,
+    portalAccess,
+  } = parsed.data;
 
   // Check for duplicate email
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -117,6 +159,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { error: "A user with this email already exists" },
       { status: 409 }
+    );
+  }
+
+  // Find the ATMS client (internal company)
+  const atmsClient = await prisma.client.findUnique({
+    where: { companyCode: "atms" },
+  });
+  if (!atmsClient) {
+    return NextResponse.json(
+      { error: "ATMS company client not found. Please run the seed." },
+      { status: 500 }
     );
   }
 
@@ -135,7 +188,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       });
 
-      // 2. Create credential Account
+      // 2. Create credential Account (BetterAuth pattern)
       await tx.account.create({
         data: {
           id: `credential:${newUser.id}`,
@@ -145,6 +198,71 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           password: hashedPassword,
         },
       });
+
+      // 3. Generate employee number
+      const lastEmployee = await tx.employee.findFirst({
+        orderBy: { id: "desc" },
+        select: { id: true },
+      });
+      const nextNo = (lastEmployee?.id ?? 0) + 1;
+      const employeeNo = `EMP-${String(nextNo).padStart(5, "0")}`;
+
+      // 4. Create Employee record linked to user
+      const employee = await tx.employee.create({
+        data: {
+          userId: newUser.id,
+          firstName,
+          middleName: middleName || null,
+          lastName,
+          employeeNo,
+          email,
+          birthDate: new Date(birthDate),
+          gender,
+          phone,
+          address: address || "N/A",
+          active: true,
+        },
+      });
+
+      // 5. Create EmployeeEmployment (linked to ATMS client)
+      await tx.employeeEmployment.create({
+        data: {
+          employeeId: employee.id,
+          clientId: atmsClient.id,
+          employmentType: "REGULAR",
+          employmentStatus: "ACTIVE",
+          employeeLevel: "STAFF",
+          hireDate: new Date(),
+        },
+      });
+
+      // 6. Create EmployeeGovernmentIds placeholder
+      await tx.employeeGovernmentIds.create({
+        data: { employeeId: employee.id },
+      });
+
+      // 7. Create EmployeeAppAccess entries
+      if (portalAccess && portalAccess.length > 0) {
+        const apps = await tx.app.findMany({
+          where: { name: { in: portalAccess.map((p) => p.portal) } },
+        });
+        const appMap = new Map(apps.map((a) => [a.name, a.id]));
+
+        const accessData = portalAccess
+          .filter((p) => appMap.has(p.portal))
+          .map((p) => ({
+            employeeId: employee.id,
+            appId: appMap.get(p.portal)!,
+            canRead: p.canRead,
+            canWrite: p.canWrite,
+            canEdit: p.canEdit,
+            canDelete: p.canDelete,
+          }));
+
+        if (accessData.length > 0) {
+          await tx.employeeAppAccess.createMany({ data: accessData });
+        }
+      }
 
       return newUser;
     });

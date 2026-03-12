@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileText, Upload, Eye, Trash2, Image, File, ShieldCheck } from 'lucide-react';
+import { FileText, Upload, Eye, Trash2, Image as ImageIcon, File, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Badge } from '@/components/UI/Badge';
@@ -101,7 +101,7 @@ export function PersonalDocumentsTab() {
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
                     isImage ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'
                   }`}>
-                    {isImage ? <Image size={16} /> : <Icon size={16} />}
+                    {isImage ? <ImageIcon size={16} /> : <Icon size={16} />}
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{doc.name}</p>

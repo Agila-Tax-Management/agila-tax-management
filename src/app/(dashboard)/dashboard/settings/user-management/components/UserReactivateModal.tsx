@@ -1,4 +1,4 @@
-// src/components/user-management/UserDeleteModal.tsx
+// src/app/(dashboard)/dashboard/settings/user-management/components/UserReactivateModal.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -9,70 +9,70 @@ import type { UserRecord } from '@/lib/schemas/user-management';
 
 /* ─── Props ───────────────────────────────────────────────────────── */
 
-interface UserDeleteModalProps {
+interface UserReactivateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDeleted: () => void;
+  onReactivated: () => void;
   user: UserRecord | null;
 }
 
 /* ─── Component ───────────────────────────────────────────────────── */
 
-export default function UserDeleteModal({
+export default function UserReactivateModal({
   isOpen,
   onClose,
-  onDeleted,
+  onReactivated,
   user,
-}: UserDeleteModalProps): React.ReactNode {
+}: UserReactivateModalProps): React.ReactNode {
   const { success, error: toastError } = useToast();
-  const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   if (!user) return null;
 
-  async function handleDelete(): Promise<void> {
+  async function handleReactivate(): Promise<void> {
     if (!user) return;
-    setDeleting(true);
+    setLoading(true);
 
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/admin/users/${user.id}/reactivate`, {
+        method: 'PATCH',
       });
 
       const json = await res.json();
 
       if (!res.ok) {
-        toastError('Delete failed', json.error ?? 'Something went wrong');
+        toastError('Reactivation failed', json.error ?? 'Something went wrong');
         return;
       }
 
-      success('User deactivated', `${user.name} has been deactivated.`);
-      onDeleted();
+      success('User reactivated', `${user.name} has been reactivated.`);
+      onReactivated();
       onClose();
     } catch {
       toastError('Network error', 'Could not reach the server. Please try again.');
     } finally {
-      setDeleting(false);
+      setLoading(false);
     }
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Delete User" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title="Reactivate User" size="sm">
       <div className="p-6 space-y-4">
         <p className="text-sm text-muted-foreground">
-          Are you sure you want to deactivate{' '}
+          Are you sure you want to reactivate{' '}
           <span className="font-semibold text-foreground">{user.name}</span>?
-          This will disable their account and revoke access.
+          This will restore their account access.
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose} disabled={deleting}>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
           <Button
-            className="bg-rose-600 hover:bg-rose-700"
-            onClick={handleDelete}
-            disabled={deleting}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            onClick={handleReactivate}
+            disabled={loading}
           >
-            {deleting ? 'Deleting...' : 'Delete'}
+            {loading ? 'Reactivating...' : 'Reactivate'}
           </Button>
         </div>
       </div>

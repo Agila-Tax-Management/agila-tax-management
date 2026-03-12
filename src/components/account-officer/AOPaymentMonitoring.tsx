@@ -8,7 +8,7 @@ import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import {
   Search, DollarSign, AlertTriangle, CheckCircle2,
-  Clock, TrendingUp, Eye, Filter, CreditCard, Users, Download,
+  Clock, TrendingUp, Eye, Filter, Users, Download,
 } from 'lucide-react';
 import {
   INITIAL_PAYMENTS,

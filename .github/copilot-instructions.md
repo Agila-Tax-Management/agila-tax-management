@@ -398,7 +398,7 @@ useEffect(() => {
 ## Role-Based Access Control
 
 - Roles defined in Prisma enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`, `CLIENT`
-- App-level permissions: `EmployeeAppAccess` model with `canView`, `canCreate`, `canEdit`, `canDelete` per app module
+- App-level permissions: `EmployeeAppAccess` model with `canRead`, `canWrite`, `canEdit`, `canDelete` per app module
 - Client context roles: `Employee`, `HR`, `Admin` (in `src/lib/role-context.tsx`)
 - Permissions map in `src/lib/constants.ts` (`ROLE_PERMISSIONS`)
 - Enforce access checks both client-side (conditional rendering) and server-side (API route guards)
@@ -421,6 +421,55 @@ Always check `src/components/UI/` before creating new generic components — ext
 
 ---
 
+## Component Structure Convention
+
+### Page-Specific vs Global Components
+
+Components that are **only used by a single page** must live in a `components/` folder co-located with that page, not in `src/components/`.
+
+```
+src/app/(dashboard)/dashboard/settings/user-management/
+  page.tsx                     # Thin page wrapper — imports from ./components/
+  components/
+    UserManagement.tsx          # Main page component (data fetching, layout)
+    UserFormModal.tsx            # Add/Edit modal
+    UserViewModal.tsx            # View modal
+    UserDeleteModal.tsx          # Delete confirmation modal
+```
+
+**Rules:**
+- Page-specific components go in `<page-folder>/components/`
+- Global/shared components stay in `src/components/UI/` or `src/components/<module>/`
+- When a component is used by 2+ unrelated pages, promote it to `src/components/UI/` or the appropriate module folder
+- The `page.tsx` file itself should be a thin wrapper that imports and renders the main component
+
+### Data Fetching — API-First
+
+- **Every page and component must use real API routes** for data (GET, POST, PUT, DELETE)
+- **Do NOT use mock data** in components — mock files (`src/lib/mock-*.ts`) are reference-only during transition
+- Before building a new page, check if API routes already exist under `src/app/api/` — if they do, use them
+- If a page currently uses mock data, refactor it to call the real API as part of the work
+
+---
+
+## Portal Apps (AppPortal Enum)
+
+All portal apps are defined in `prisma/models/app-access.prisma` and seeded in `prisma/seed.ts`:
+
+| Portal Key         | Label                    |
+| ------------------ | ------------------------ |
+| `SALES`            | Sales Portal             |
+| `COMPLIANCE`       | Compliance Portal        |
+| `LIAISON`          | Liaison Portal           |
+| `ACCOUNTING`       | Accounting Portal        |
+| `ACCOUNT_OFFICER`  | Account Officer Portal   |
+| `HR`               | HR Portal                |
+| `TASK_MANAGEMENT`  | Task Management Portal   |
+
+When adding portal-related UI (checkboxes, labels), always include **all** portals from this list.
+
+---
+
 ## Key Patterns
 
 ### Module Sidebar Pattern
@@ -433,9 +482,10 @@ All module sidebars follow the same structure:
 
 ### Mock Data (Transitional)
 
-- Mock data files in `src/lib/mock-*.ts` power the current UI
-- When building new features, wire them to real API routes and Prisma queries
-- Keep mock files as reference for data shapes during transition
+- Mock data files in `src/lib/mock-*.ts` exist as reference for data shapes only
+- **All new features must use real API routes** — never introduce new mock data
+- When touching a page that still uses mock data, refactor it to call the real API
+- Keep mock files around until all pages have been migrated
 
 ### Theme System
 

@@ -70,6 +70,7 @@ const ALL_PORTALS: AppPortal[] = [
   "ACCOUNTING",
   "ACCOUNT_OFFICER",
   "HR",
+  "TASK_MANAGEMENT",
 ];
 
 /**

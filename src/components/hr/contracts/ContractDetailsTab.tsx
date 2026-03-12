@@ -19,7 +19,6 @@ const MOCK_DOCUMENTS: ContractDocument[] = [
   { id: 'doc-2', name: 'New_Hire_Contract_2025.pdf', type: 'New Contract Document', uploadedDate: '2025-03-01', size: '312 KB' },
 ];
 
-const inputClass = 'w-full rounded-lg border border-border px-3 py-2.5 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500';
 const selectClass = 'w-full rounded-lg border border-border px-3 py-2.5 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none';
 
 export function ContractDetailsTab() {

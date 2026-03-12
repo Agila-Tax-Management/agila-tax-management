@@ -19,6 +19,7 @@ const PORTAL_APPS = [
   { name: "ACCOUNTING" as const, label: "Accounting Portal" },
   { name: "ACCOUNT_OFFICER" as const, label: "Account Officer Portal" },
   { name: "HR" as const, label: "HR Portal" },
+  { name: "TASK_MANAGEMENT" as const, label: "Task Management Portal" },
 ];
 
 async function main(): Promise<void> {

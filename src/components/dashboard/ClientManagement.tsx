@@ -18,7 +18,6 @@ import {
   Ban,
   UserX,
   Power,
-  Users,
 } from 'lucide-react';
 
 /* ─── Types (matching Prisma ClientUser + Client models) ──────────── */
@@ -381,7 +380,7 @@ export default function ClientManagement(): React.ReactNode {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <a
-                            href={`/dashboard/clients/${user.client?.id ?? user.clientId}/users`}
+                            href={`/dashboard/clients/${user.client?.id ?? user.client}/users`}
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
                             title="Manage client users"
                           >

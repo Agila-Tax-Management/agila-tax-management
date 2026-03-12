@@ -99,7 +99,7 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
     tinNo: employee.tinNo,
   });
 
-  const updateField = <K extends keyof ContractFormData>(key: K, value: ContractFormData[K]) => {
+  const _updateField = <K extends keyof ContractFormData>(key: K, value: ContractFormData[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 

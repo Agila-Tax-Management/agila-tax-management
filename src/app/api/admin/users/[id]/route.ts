@@ -9,13 +9,136 @@ import type { UserRecord } from "@/lib/schemas/user-management";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** Shared include shape for user + employee + employment + access */
+const USER_INCLUDE = {
+  employee: {
+    select: {
+      id: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      employeeNo: true,
+      phone: true,
+      address: true,
+      birthDate: true,
+      gender: true,
+      appAccess: {
+        select: {
+          canRead: true,
+          canWrite: true,
+          canEdit: true,
+          canDelete: true,
+          app: { select: { name: true } },
+        },
+      },
+      employments: {
+        where: { employmentStatus: "ACTIVE" as const },
+        take: 1,
+        orderBy: { createdAt: "desc" as const },
+        select: {
+          employmentType: true,
+          employmentStatus: true,
+          employeeLevel: true,
+          hireDate: true,
+          department: { select: { name: true } },
+          position: { select: { title: true } },
+        },
+      },
+    },
+  },
+} as const;
+
+/** Maps raw DB user to API UserRecord shape */
+function toUserRecord(u: {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  employee: {
+    id: number;
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    employeeNo: string | null;
+    phone: string;
+    address: string;
+    birthDate: Date;
+    gender: string;
+    appAccess: {
+      canRead: boolean;
+      canWrite: boolean;
+      canEdit: boolean;
+      canDelete: boolean;
+      app: { name: string };
+    }[];
+    employments: {
+      employmentType: string | null;
+      employmentStatus: string;
+      employeeLevel: string | null;
+      hireDate: Date | null;
+      department: { name: string } | null;
+      position: { title: string } | null;
+    }[];
+  } | null;
+}): UserRecord {
+  const emp = u.employee;
+  const employment = emp?.employments?.[0] ?? null;
+
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    active: u.active,
+    emailVerified: u.emailVerified,
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
+    employee: emp
+      ? {
+          id: emp.id,
+          firstName: emp.firstName,
+          middleName: emp.middleName,
+          lastName: emp.lastName,
+          employeeNo: emp.employeeNo,
+          phone: emp.phone,
+          address: emp.address,
+          birthDate: emp.birthDate.toISOString(),
+          gender: emp.gender,
+          employment: employment
+            ? {
+                department: employment.department?.name ?? null,
+                position: employment.position?.title ?? null,
+                employmentType: employment.employmentType,
+                employmentStatus: employment.employmentStatus,
+                employeeLevel: employment.employeeLevel,
+                hireDate: employment.hireDate?.toISOString() ?? null,
+              }
+            : null,
+        }
+      : null,
+    portalAccess: emp
+      ? emp.appAccess.map((a) => ({
+          portal: a.app.name,
+          canRead: a.canRead,
+          canWrite: a.canWrite,
+          canEdit: a.canEdit,
+          canDelete: a.canDelete,
+        }))
+      : [],
+  };
+}
+
 /**
  * GET /api/admin/users/[id]
  *
- * Returns a single user with employee profile and portal access.
+ * Returns a single user with employee profile, employment, and portal access.
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -30,67 +153,21 @@ export async function GET(
 
   const user = await prisma.user.findUnique({
     where: { id },
-    include: {
-      employee: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          employeeNo: true,
-          appAccess: {
-            select: {
-              canRead: true,
-              canWrite: true,
-              canEdit: true,
-              canDelete: true,
-              app: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
+    include: USER_INCLUDE,
   });
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const data: UserRecord = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    active: user.active,
-    emailVerified: user.emailVerified,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
-    employee: user.employee
-      ? {
-          id: user.employee.id,
-          firstName: user.employee.firstName,
-          lastName: user.employee.lastName,
-          employeeNo: user.employee.employeeNo,
-        }
-      : null,
-    portalAccess: user.employee
-      ? user.employee.appAccess.map((a) => ({
-          portal: a.app.name,
-          canRead: a.canRead,
-          canWrite: a.canWrite,
-          canEdit: a.canEdit,
-          canDelete: a.canDelete,
-        }))
-      : [],
-  };
-
-  return NextResponse.json({ data });
+  return NextResponse.json({ data: toUserRecord(user) });
 }
 
 /**
  * PUT /api/admin/users/[id]
  *
- * Updates a user's profile, password (optional), role, and
- * portal access entries.
+ * Updates a user's profile, employee details, password (optional),
+ * role, and portal access entries.
  */
 export async function PUT(
   request: NextRequest,
@@ -119,7 +196,11 @@ export async function PUT(
     return NextResponse.json({ error: firstError }, { status: 400 });
   }
 
-  const { name, email, password, role, active, portalAccess } = parsed.data;
+  const {
+    name, email, password, role, active,
+    firstName, middleName, lastName, phone, address, birthDate, gender,
+    portalAccess,
+  } = parsed.data;
 
   const existingUser = await prisma.user.findUnique({ where: { id } });
   if (!existingUser) {
@@ -145,7 +226,7 @@ export async function PUT(
         data: { name, email, role, active },
       });
 
-      // 2. Update password if provided
+      // 2. Update password if provided (BetterAuth credential account)
       if (password && password.length > 0) {
         const hashedPassword = await hashPassword(password);
         const account = await tx.account.findFirst({
@@ -159,26 +240,29 @@ export async function PUT(
         }
       }
 
-      // 3. Handle portal access — only if employee is already linked
+      // 3. Update employee profile
       const employee = await tx.employee.findUnique({
         where: { userId: id },
         select: { id: true },
       });
 
       if (employee) {
-        if (role === "EMPLOYEE" && portalAccess !== undefined) {
-          // Sync employee name with user name
-          const nameParts = name.trim().split(/\s+/);
-          await tx.employee.update({
-            where: { id: employee.id },
-            data: {
-              firstName: nameParts[0] ?? name,
-              lastName: nameParts.length > 1 ? nameParts.slice(1).join(" ") : "",
-              email,
-            },
-          });
+        await tx.employee.update({
+          where: { id: employee.id },
+          data: {
+            firstName,
+            middleName: middleName || null,
+            lastName,
+            email,
+            phone,
+            address: address || "N/A",
+            birthDate: new Date(birthDate),
+            gender,
+          },
+        });
 
-          // Replace portal access: delete all, then re-create
+        // 4. Sync portal access
+        if (portalAccess !== undefined) {
           await tx.employeeAppAccess.deleteMany({
             where: { employeeId: employee.id },
           });
@@ -204,11 +288,6 @@ export async function PUT(
               await tx.employeeAppAccess.createMany({ data: accessData });
             }
           }
-        } else if (role !== "EMPLOYEE") {
-          // Non-employee role — clear any existing portal access
-          await tx.employeeAppAccess.deleteMany({
-            where: { employeeId: employee.id },
-          });
         }
       }
     });
@@ -236,7 +315,6 @@ export async function PUT(
  * DELETE /api/admin/users/[id]
  *
  * Soft-deletes a user by setting active = false.
- * Hard-deletes the User record if the caller is SUPER_ADMIN.
  */
 export async function DELETE(
   request: NextRequest,
@@ -266,7 +344,6 @@ export async function DELETE(
   }
 
   try {
-    // Soft-delete: deactivate user
     await prisma.user.update({
       where: { id },
       data: { active: false },
