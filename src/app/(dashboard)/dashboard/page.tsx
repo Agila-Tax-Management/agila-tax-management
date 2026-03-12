@@ -29,7 +29,7 @@ const PORTALS = [
 
 const APP_SYSTEMS = [
   { id: 'crm',     title: 'CRM System',        description: 'Customer relationship management',        href: '/dashboard/crm',       icon: <Users />,    color: 'bg-blue-500'   },
-  { id: 'docs',    title: 'Document Manager',   description: 'Company document storage',                href: '/dashboard/docs',      icon: <BookOpen />, color: 'bg-emerald-500' },
+  { id: 'sop',    title: 'Standard Operating Procedures (SOPPs)',   description: 'Company document storage',                href: '/dashboard/sop',      icon: <BookOpen />, color: 'bg-emerald-500' },
   { id: 'reports', title: 'Reports Engine',      description: 'Generate and export business reports',    href: '/dashboard/reports',   icon: <BarChart3 />,color: 'bg-purple-500' },
   { id: 'web',     title: 'Company Website',     description: 'Manage the public website',               href: 'https://agilaworkspace.com', icon: <Globe />, color: 'bg-slate-700', external: true },
 ];

@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Filter, Eye, Users, UserPlus, Building2, Network, Briefcase, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
-import { Modal } from '@/components/UI/Modal';
 import {
-  EMPLOYEES, Employee, Department, EmployeeStatus,
+  EMPLOYEES, Department, EmployeeStatus,
 } from '@/lib/mock-hr-data';
 
 const STATUS_VARIANT: Record<EmployeeStatus, 'success' | 'info' | 'warning' | 'danger'> = {
@@ -96,11 +96,11 @@ const MOCK_POSITIONS: MockPosition[] = [
 ];
 
 export function EmployeeManagement() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ManagementTab>('employees');
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   const filtered = useMemo(() => {
     return EMPLOYEES.filter(emp => {
@@ -252,7 +252,7 @@ export function EmployeeManagement() {
                         <Badge variant={STATUS_VARIANT[emp.status]}>{emp.status}</Badge>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Button variant="ghost" onClick={() => setSelectedEmployee(emp)}>
+                        <Button variant="ghost" onClick={() => router.push(`/portal/hr/employee-management/${emp.id}`)}>
                           <Eye size={16} />
                         </Button>
                       </td>
@@ -415,46 +415,6 @@ export function EmployeeManagement() {
         </>
       )}
 
-      {/* Detail Modal */}
-      <Modal isOpen={!!selectedEmployee} onClose={() => setSelectedEmployee(null)} title="Employee Details" size="lg">
-        {selectedEmployee && (
-          <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-4rem)]">
-            {/* Header */}
-            <div className="flex items-center gap-4 p-4 bg-rose-50 rounded-xl">
-              <div className="w-14 h-14 bg-rose-600 text-white rounded-full flex items-center justify-center text-lg font-black">
-                {selectedEmployee.avatar}
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-foreground">{selectedEmployee.fullName}</h3>
-                <p className="text-sm text-muted-foreground">{selectedEmployee.position} — {selectedEmployee.department}</p>
-                <Badge variant={STATUS_VARIANT[selectedEmployee.status]} className="mt-1">
-                  {selectedEmployee.status}
-                </Badge>
-              </div>
-            </div>
-
-            {/* Info Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: 'Employee No.', value: selectedEmployee.employeeNo },
-                { label: 'Email', value: selectedEmployee.email },
-                { label: 'Phone', value: selectedEmployee.phone },
-                { label: 'Date Hired', value: selectedEmployee.dateHired },
-                { label: 'Salary', value: `₱${selectedEmployee.salary.toLocaleString()}` },
-                { label: 'SSS No.', value: selectedEmployee.sssNo },
-                { label: 'PhilHealth No.', value: selectedEmployee.philHealthNo },
-                { label: 'Pag-IBIG No.', value: selectedEmployee.pagIbigNo },
-                { label: 'TIN', value: selectedEmployee.tinNo },
-              ].map(field => (
-                <div key={field.label}>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">{field.label}</p>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{field.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
