@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ClipboardList, Users, MessageSquare,
-  Bell, UserCircle
+  Bell, UserCircle, DollarSign
 } from 'lucide-react';
 import { INITIAL_AO_TASKS, INITIAL_AO_NOTIFICATIONS, INITIAL_AO_DISCUSSIONS } from '@/lib/mock-ao-data';
 
@@ -38,6 +38,7 @@ const AO_NAV_ITEMS = [
   },
   { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/account-officer/tasks', badge: TASK_BADGE_COUNT },
   { id: 'clients', label: 'Clients', icon: Users, href: '/portal/account-officer/clients', badge: 0 },
+  { id: 'payment-monitoring', label: 'Payment Monitoring', icon: DollarSign, href: '/portal/account-officer/payment-monitoring', badge: 0 },
   {
     id: 'communication',
     label: 'COMMUNICATION',

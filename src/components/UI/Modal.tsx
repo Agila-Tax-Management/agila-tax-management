@@ -45,9 +45,9 @@ export function Modal({ isOpen, onClose, title, size = 'md', contentClassName, c
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-card rounded-2xl shadow-2xl w-full ${sizeClasses[size]} mx-4 max-h-[90vh] overflow-hidden`}>
+      <div className={`relative bg-card rounded-2xl shadow-2xl w-full ${sizeClasses[size]} mx-4 max-h-[90vh] flex flex-col overflow-hidden`}>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <h2 className="text-lg font-bold text-foreground">{title}</h2>
             <button
               onClick={onClose}
@@ -65,7 +65,7 @@ export function Modal({ isOpen, onClose, title, size = 'md', contentClassName, c
             <X size={18} />
           </button>
         )}
-        <div className={contentClassName}>
+        <div className={`overflow-y-auto min-h-0${contentClassName ? ` ${contentClassName}` : ''}`}>
           {children}
         </div>
       </div>

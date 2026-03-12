@@ -3,7 +3,7 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Users, FolderOpen, BarChart3, UserCircle
+  LayoutDashboard, ClipboardList, Users, FolderOpen, BarChart3, UserCircle, DollarSign
 } from 'lucide-react';
 
 const COMPLIANCE_NAV_ITEMS = [
@@ -16,6 +16,7 @@ const COMPLIANCE_NAV_ITEMS = [
   { id: 'tasks', label: 'Task Board System', icon: ClipboardList, href: '/portal/compliance/tasks' },
   { id: 'client-compliances', label: 'Client Compliances', icon: Users, href: '/portal/compliance/client-compliances' },
   { id: 'open-cases', label: 'Open Cases', icon: FolderOpen, href: '/portal/compliance/open-case' },
+  { id: 'payment-monitoring', label: 'Payment Monitoring', icon: DollarSign, href: '/portal/compliance/payment-monitoring' },
   {
     id: 'analytics',
     label: 'ANALYTICS',

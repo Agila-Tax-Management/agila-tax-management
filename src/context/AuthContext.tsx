@@ -52,10 +52,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>({
-    name: 'Genesis Esdrilon',
-    role: 'Jr. Website Developer',
+    name: 'Genesis Esdrilon Jr.',
+    role: 'System Developer',
     employeeId: 'EMP-10002',
-    department: 'IT Operations',
+    department: 'Technology Department',
     isClockedIn: false,
     isOnLunch: false,
     clockInTime: null,
