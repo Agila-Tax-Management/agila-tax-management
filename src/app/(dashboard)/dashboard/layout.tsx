@@ -30,6 +30,7 @@ const PORTAL_ITEMS = [
   { href: '/portal/accounting', label: 'Agila Accounting Portal', icon: BarChart3 },
   { href: '/portal/account-officer', label: 'Agila Account Officer Portal', icon: Briefcase },
   { href: '/portal/hr', label: 'Agila HR Portal', icon: UserCheck },
+  { href: '/portal/task-management', label: 'Agila Task Management Portal', icon: UserCheck },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

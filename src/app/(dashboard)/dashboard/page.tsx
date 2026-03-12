@@ -25,6 +25,7 @@ const PORTALS = [
   { id: 'liaison',    title: 'Liaison Portal',        description: 'Coordinate government agency tasks and schedules.',  href: '/portal/liaison',    icon: <Building2 />,   color: 'bg-amber-600',   stats: { label: 'Active Tasks', value: '15' } },
   { id: 'hr',         title: 'HR Portal',             description: 'Manage employees, onboarding, and company policies.',href: '/portal/hr',         icon: <UserCheck />,   color: 'bg-teal-600',    stats: { label: 'Employees', value: '52' } },
   { id: 'ao',         title: 'Account Officer Portal', description: 'Oversee client accounts and service delivery.',     href: '/portal/account-officer', icon: <Briefcase />, color: 'bg-violet-600', stats: { label: 'Clients Managed', value: '86' } },
+  { id: 'task-mgmt',   title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
 ];
 
 const APP_SYSTEMS = [
@@ -198,7 +199,7 @@ export default function DashboardPage() {
             {QUICK_LINKS.map(link => (
               <button
                 key={link.title}
-                onClick={() => handleNav(link.href)}
+                onClick={() => handleNav(link.external ? link.url : link.href!)}
                 className="flex items-center gap-3 p-3.5 rounded-xl hover:bg-muted transition group text-left"
               >
                 <div className="w-9 h-9 bg-muted text-muted-foreground group-hover:bg-blue-600 group-hover:text-white rounded-lg flex items-center justify-center transition-all shrink-0">
