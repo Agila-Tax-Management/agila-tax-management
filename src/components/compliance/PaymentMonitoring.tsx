@@ -8,7 +8,7 @@ import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import {
   Search, DollarSign, AlertTriangle, CheckCircle2,
-  Clock, TrendingUp, Eye, Filter, CreditCard,
+  Clock, TrendingUp, Eye, Filter, CreditCard, Download,
 } from 'lucide-react';
 import {
   INITIAL_PAYMENTS,
@@ -32,6 +32,34 @@ const formatDate = (dateStr: string | null): string => {
   return new Date(dateStr).toLocaleDateString('en-PH', {
     year: 'numeric', month: 'short', day: 'numeric',
   });
+};
+
+const exportPaymentsCSV = (data: PaymentRecord[]) => {
+  const label = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const header = 'Client No,Client Name,Description,Amount,Amount Paid,Balance,Status,Source,Payment Method,Due Date,Paid Date,Reference No,Notes';
+  const rows = data.map(p => [
+    p.clientNo,
+    `"${p.clientName}"`,
+    `"${p.description}"`,
+    p.amount,
+    p.amountPaid,
+    p.amount - p.amountPaid,
+    p.status,
+    p.source,
+    p.method ?? '',
+    p.dueDate,
+    p.paidDate ?? '',
+    p.referenceNo ?? '',
+    `"${p.notes.replace(/"/g, '""')}"`,
+  ].join(','));
+  const content = [header, ...rows].join('\n');
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Payment Report - ${label}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 };
 
 export function PaymentMonitoring() {
@@ -74,9 +102,19 @@ export function PaymentMonitoring() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Payment Monitoring</h2>
-        <p className="text-sm text-slate-500 font-medium">Track and monitor all client payment statuses across the system.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Payment Monitoring</h2>
+          <p className="text-sm text-slate-500 font-medium">Track and monitor all client payment statuses across the system.</p>
+        </div>
+        <Button
+          variant="outline"
+          className="text-xs h-9 gap-1.5 shrink-0"
+          onClick={() => exportPaymentsCSV(filtered)}
+        >
+          <Download size={14} />
+          Export Report
+        </Button>
       </div>
 
       {/* Stat Cards */}
