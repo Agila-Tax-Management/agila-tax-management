@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, Save, FileText, DollarSign, FolderOpen, Paperclip } from 'lucide-react';
+import { ArrowLeft, Save, User, FileText, DollarSign, FolderOpen, Paperclip } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -13,9 +13,10 @@ import { SalaryInformationTab } from './SalaryInformationTab';
 import { PersonalDocumentsTab } from './PersonalDocumentsTab';
 import { SalaryAttachmentTab } from './SalaryAttachmentTab';
 
-type ContractTab = 'details' | 'salary' | 'documents' | 'attachment';
+type ContractTab = 'info' | 'details' | 'salary' | 'documents' | 'attachment';
 
 const TABS: { key: ContractTab; label: string; icon: typeof FileText }[] = [
+  { key: 'info', label: 'Employee Information', icon: User },
   { key: 'details', label: 'Contract Details', icon: FileText },
   { key: 'salary', label: 'Salary Information', icon: DollarSign },
   { key: 'documents', label: 'Personal Documents', icon: FolderOpen },
@@ -35,6 +36,21 @@ interface ContractFormData {
   workingSchedule: WorkingSchedule;
   hrResponsible: string;
   analyticAccount: string;
+}
+
+interface EmployeeInfoFormData {
+  fullName: string;
+  employeeNo: string;
+  email: string;
+  phone: string;
+  department: string;
+  position: string;
+  dateHired: string;
+  status: string;
+  sssNo: string;
+  philHealthNo: string;
+  pagIbigNo: string;
+  tinNo: string;
 }
 
 function getContractDefaults(employee: Employee): ContractFormData {
@@ -66,11 +82,29 @@ interface EmployeeContractViewProps {
 
 export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<ContractTab>('details');
+  const [activeTab, setActiveTab] = useState<ContractTab>('info');
   const [form, setForm] = useState<ContractFormData>(() => getContractDefaults(employee));
+  const [empInfo, setEmpInfo] = useState<EmployeeInfoFormData>({
+    fullName: employee.fullName,
+    employeeNo: employee.employeeNo,
+    email: employee.email,
+    phone: employee.phone,
+    department: employee.department,
+    position: employee.position,
+    dateHired: employee.dateHired,
+    status: employee.status,
+    sssNo: employee.sssNo,
+    philHealthNo: employee.philHealthNo,
+    pagIbigNo: employee.pagIbigNo,
+    tinNo: employee.tinNo,
+  });
 
   const updateField = <K extends keyof ContractFormData>(key: K, value: ContractFormData[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const updateEmpInfo = <K extends keyof EmployeeInfoFormData>(key: K, value: EmployeeInfoFormData[K]) => {
+    setEmpInfo(prev => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -98,44 +132,34 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
         </div>
       </div>
 
-      {/* Header Form — Two-Column */}
+      {/* Header Form — Two-Column (Read-Only) */}
       <Card className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column */}
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee</label>
-              <input type="text" className={inputClass} value={employee.fullName} readOnly />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={employee.fullName} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department</label>
-              <input type="text" className={inputClass} value={employee.department} readOnly />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={employee.department} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Job Position</label>
-              <input type="text" className={inputClass} value={employee.position} readOnly />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={employee.position} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Company</label>
-              <input type="text" className={inputClass} value="Agila Tax Consulting" readOnly />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value="Agila Tax Consulting" readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Contract Type</label>
-              <select className={selectClass} value={form.contractType} onChange={e => updateField('contractType', e.target.value as ContractType)}>
-                <option>Permanent</option>
-                <option>Probationary</option>
-                <option>Project-Based</option>
-                <option>Contractual</option>
-              </select>
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.contractType} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Salary Structure Type</label>
-              <select className={selectClass} value={form.salaryStructureType} onChange={e => updateField('salaryStructureType', e.target.value as SalaryStructureType)}>
-                <option>Regular Employee</option>
-                <option>Managerial</option>
-                <option>Supervisory</option>
-                <option>Contractual</option>
-              </select>
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.salaryStructureType} readOnly />
             </div>
           </div>
 
@@ -143,36 +167,27 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Start Date</label>
-              <input type="date" className={inputClass} value={form.startDate} onChange={e => updateField('startDate', e.target.value)} />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.startDate} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">First Contract Date</label>
-              <input type="date" className={inputClass} value={form.firstContractDate} onChange={e => updateField('firstContractDate', e.target.value)} />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.firstContractDate} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">End Date</label>
-              <input type="date" className={inputClass} value={form.endDate} onChange={e => updateField('endDate', e.target.value)} placeholder="No end date (permanent)" />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.endDate || 'No end date (permanent)'} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Working Schedule</label>
-              <select className={selectClass} value={form.workingSchedule} onChange={e => updateField('workingSchedule', e.target.value as WorkingSchedule)}>
-                <option>Standard (Mon-Fri)</option>
-                <option>Shifting</option>
-                <option>Flexible</option>
-                <option>Compressed</option>
-              </select>
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.workingSchedule} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">HR Responsible</label>
-              <select className={selectClass} value={form.hrResponsible} onChange={e => updateField('hrResponsible', e.target.value)}>
-                <option>Rosa Mendoza</option>
-                <option>Elena Torres</option>
-                <option>Patricia Lim</option>
-              </select>
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.hrResponsible} readOnly />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Analytic Account</label>
-              <input type="text" className={inputClass} value={form.analyticAccount} onChange={e => updateField('analyticAccount', e.target.value)} />
+              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.analyticAccount} readOnly />
             </div>
           </div>
         </div>
@@ -197,6 +212,65 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'info' && (
+        <Card className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Full Name</label>
+              <input type="text" className={inputClass} value={empInfo.fullName} onChange={e => updateEmpInfo('fullName', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee No.</label>
+              <input type="text" className={inputClass} value={empInfo.employeeNo} onChange={e => updateEmpInfo('employeeNo', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+              <input type="email" className={inputClass} value={empInfo.email} onChange={e => updateEmpInfo('email', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+              <input type="tel" className={inputClass} value={empInfo.phone} onChange={e => updateEmpInfo('phone', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department</label>
+              <input type="text" className={inputClass} value={empInfo.department} onChange={e => updateEmpInfo('department', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Position</label>
+              <input type="text" className={inputClass} value={empInfo.position} onChange={e => updateEmpInfo('position', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Date Hired</label>
+              <input type="date" className={inputClass} value={empInfo.dateHired} onChange={e => updateEmpInfo('dateHired', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Status</label>
+              <select className={selectClass} value={empInfo.status} onChange={e => updateEmpInfo('status', e.target.value)}>
+                <option>Active</option>
+                <option>On Leave</option>
+                <option>Probationary</option>
+                <option>Resigned</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">SSS No.</label>
+              <input type="text" className={inputClass} value={empInfo.sssNo} onChange={e => updateEmpInfo('sssNo', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">PhilHealth No.</label>
+              <input type="text" className={inputClass} value={empInfo.philHealthNo} onChange={e => updateEmpInfo('philHealthNo', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Pag-IBIG No.</label>
+              <input type="text" className={inputClass} value={empInfo.pagIbigNo} onChange={e => updateEmpInfo('pagIbigNo', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">TIN No.</label>
+              <input type="text" className={inputClass} value={empInfo.tinNo} onChange={e => updateEmpInfo('tinNo', e.target.value)} />
+            </div>
+          </div>
+        </Card>
+      )}
       {activeTab === 'details' && <ContractDetailsTab />}
       {activeTab === 'salary' && <SalaryInformationTab baseSalary={employee.salary} />}
       {activeTab === 'documents' && <PersonalDocumentsTab />}
