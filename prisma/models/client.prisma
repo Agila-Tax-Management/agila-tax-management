@@ -42,6 +42,10 @@ model Client {
   professionalProfiles ProfessionalClient[]
   soleProprietorships  SoleProprietorship[]
 
+  departments  Department[]
+  teams        EmployeeTeam[]
+  employments  EmployeeEmployment[]
+
   createdAt DateTime? @map("created_at")
 
   @@map("atms_clients")
