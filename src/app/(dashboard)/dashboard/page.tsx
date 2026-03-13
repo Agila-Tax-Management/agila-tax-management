@@ -199,7 +199,7 @@ export default function DashboardPage() {
             {QUICK_LINKS.map(link => (
               <button
                 key={link.title}
-                onClick={() => handleNav(link.external ? link.url : link.href!)}
+                onClick={() => handleNav((link.external ? link.url : link.href) ?? '#')}
                 className="flex items-center gap-3 p-3.5 rounded-xl hover:bg-muted transition group text-left"
               >
                 <div className="w-9 h-9 bg-muted text-muted-foreground group-hover:bg-blue-600 group-hover:text-white rounded-lg flex items-center justify-center transition-all shrink-0">
