@@ -23,6 +23,20 @@ const PORTAL_APPS = [
   { name: "TASK_MANAGEMENT" as const, label: "Task Management Portal" },
 ];
 
+/* ─── Employee Level definitions (position 1 = highest) ─────────── */
+
+const EMPLOYEE_LEVELS = [
+  { name: "Executive",  position: 1, description: "C-suite and executive leadership" },
+  { name: "Director",   position: 2, description: "Department directors" },
+  { name: "Manager",    position: 3, description: "Team and function managers" },
+  { name: "Supervisor", position: 4, description: "Front-line supervisors" },
+  { name: "Lead",       position: 5, description: "Technical or team leads" },
+  { name: "Senior",     position: 6, description: "Senior individual contributors" },
+  { name: "Mid",        position: 7, description: "Mid-level individual contributors" },
+  { name: "Junior",     position: 8, description: "Junior individual contributors" },
+  { name: "Staff",      position: 9, description: "Entry-level staff" },
+];
+
 /* ─── Internal user definitions ──────────────────────────────────────
  *
  *  ALL internal users (SUPER_ADMIN, ADMIN, EMPLOYEE) are employees of
@@ -47,7 +61,8 @@ interface InternalUserSeed {
   departmentDescription: string;
   positionTitle: string;
   positionDescription: string;
-  employeeLevel: "STAFF" | "JUNIOR" | "MID" | "SENIOR" | "LEAD" | "MANAGER" | "DIRECTOR" | "SUPERVISOR" | "EXECUTIVE";
+  /** Name matching an EmployeeLevel record (e.g. "Executive", "Junior"). */
+  employeeLevel: string;
   hireDate: Date;
   /** Portal access granted only for EMPLOYEE role (SUPER_ADMIN/ADMIN get access by role). */
   appAccess?: Partial<Record<AppPortal, { canRead: boolean; canWrite: boolean; canEdit: boolean; canDelete: boolean }>>;
@@ -69,7 +84,7 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     departmentDescription: "Executive administration and system management",
     positionTitle: "System Administrator",
     positionDescription: "Full system access and management",
-    employeeLevel: "EXECUTIVE",
+    employeeLevel: "Executive",
     hireDate: new Date("2023-01-01"),
   },
   {
@@ -87,7 +102,7 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     departmentDescription: "HR operations and employee management",
     positionTitle: "HR Manager",
     positionDescription: "Manages employee relations and compliance",
-    employeeLevel: "MANAGER",
+    employeeLevel: "Manager",
     hireDate: new Date("2023-03-01"),
   },
   {
@@ -105,7 +120,7 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     departmentDescription: "Bookkeeping, payroll, and financial reporting",
     positionTitle: "Accountant",
     positionDescription: "Handles client accounting and tax filings",
-    employeeLevel: "JUNIOR",
+    employeeLevel: "Junior",
     hireDate: new Date("2024-01-15"),
     appAccess: {
       COMPLIANCE: { canRead: true, canWrite: true, canEdit: true, canDelete: false },
@@ -124,6 +139,7 @@ async function seedInternalUser(
   agilaClientId: number,
   departmentId: number,
   positionId: number,
+  employeeLevelId: number | null,
 ): Promise<void> {
   const hashedPassword = await hashPassword(seed.password);
 
@@ -217,7 +233,7 @@ async function seedInternalUser(
         positionId,
         employmentType: "REGULAR",
         employmentStatus: "ACTIVE",
-        employeeLevel: seed.employeeLevel,
+        employeeLevelId: employeeLevelId ?? undefined,
         hireDate: seed.hireDate,
         regularizationDate: seed.hireDate,
       },
@@ -281,9 +297,21 @@ async function main(): Promise<void> {
   });
   if (!agilaClient) throw new Error("ATMS client not found — step 1 failed");
 
-  // ── 4. Seed Departments & Positions ─────────────────────────────
+  // ── 4. Seed Employee Levels ──────────────────────────────────────
+  for (const level of EMPLOYEE_LEVELS) {
+    await prisma.employeeLevel.upsert({
+      where: { name: level.name },
+      update: { position: level.position, description: level.description },
+      create: level,
+    });
+  }
+  const allLevels = await prisma.employeeLevel.findMany();
+  const levelsByName = new Map(allLevels.map((l) => [l.name, l.id]));
+  console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded`);
+
+  // ── 5. Seed Departments, Positions & Internal Users ─────────────
   //  Each internal user's department is upserted before creating the user
-  //  so that we can pass the correct departmentId / positionId.
+  //  so that we can pass the correct departmentId, positionId, and levelId.
 
   console.log("\n  Seeding internal users (all linked to ATMS client):\n");
 
@@ -314,7 +342,8 @@ async function main(): Promise<void> {
       });
     }
 
-    await seedInternalUser(seed, agilaClient.id, dept.id, position.id);
+    const employeeLevelId = levelsByName.get(seed.employeeLevel) ?? null;
+    await seedInternalUser(seed, agilaClient.id, dept.id, position.id, employeeLevelId);
   }
 
   console.log("\n  Internal user credentials:");

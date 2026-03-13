@@ -54,7 +54,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
             select: {
               employmentType: true,
               employmentStatus: true,
-              employeeLevel: true,
+              employeeLevel: { select: { id: true, name: true, position: true } },
               hireDate: true,
               department: { select: { name: true } },
               position: { select: { title: true } },
@@ -95,7 +95,8 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
                   position: employment.position?.title ?? null,
                   employmentType: employment.employmentType,
                   employmentStatus: employment.employmentStatus,
-                  employeeLevel: employment.employeeLevel,
+                  employeeLevel: employment.employeeLevel?.name ?? null,
+                  employeeLevelId: employment.employeeLevel?.id ?? null,
                   hireDate: employment.hireDate?.toISOString() ?? null,
                 }
               : null,
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const {
     name, email, password, role, active,
     firstName, middleName, lastName, phone, address, birthDate, gender,
-    portalAccess,
+    portalAccess, employeeLevelId,
   } = parsed.data;
 
   // Check for duplicate email
@@ -230,7 +231,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           clientId: atmsClient.id,
           employmentType: "REGULAR",
           employmentStatus: "ACTIVE",
-          employeeLevel: "STAFF",
+          employeeLevelId: employeeLevelId ?? undefined,
           hireDate: new Date(),
         },
       });

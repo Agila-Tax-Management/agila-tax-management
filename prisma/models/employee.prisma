@@ -7,18 +7,6 @@ enum EmploymentType {
     INTERN
 }
 
-enum EmployeeLevel {
-    STAFF
-    JUNIOR
-    MID
-    SENIOR
-    LEAD
-    MANAGER
-    DIRECTOR
-    SUPERVISOR
-    EXECUTIVE
-}
-
 enum EmploymentStatus {
     ACTIVE
     RESIGNED
@@ -111,7 +99,8 @@ model EmployeeEmployment {
 
     employmentType   EmploymentType?
     employmentStatus EmploymentStatus @default(ACTIVE)
-    employeeLevel    EmployeeLevel?
+    employeeLevelId  Int?
+    employeeLevel    EmployeeLevel?   @relation(fields: [employeeLevelId], references: [id])
 
     hireDate            DateTime?
     regularizationDate  DateTime?
@@ -207,4 +196,19 @@ model EmployeeTeam {
     createdAt DateTime @default(now())
 
     @@unique([clientId, name])
+}
+
+// ─── Employee Levels (Dynamic — position 1 = highest) ────────────
+model EmployeeLevel {
+    id Int @id @default(autoincrement())
+
+    name        String  @unique
+    position    Int     @unique  // 1 = highest seniority (Executive = 1, Staff = 9)
+    description String?
+
+    employments EmployeeEmployment[]
+
+    createdAt DateTime @default(now())
+
+    @@map("employee_level")
 }

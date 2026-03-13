@@ -40,6 +40,7 @@ export const createUserSchema = z.object({
 
   // Portal access (assigned on create)
   portalAccess: z.array(portalAccessEntrySchema).optional().default([]),
+  employeeLevelId: z.number().int().positive().optional().nullable(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
@@ -69,6 +70,7 @@ export const updateUserSchema = z.object({
 
   // Portal access
   portalAccess: z.array(portalAccessEntrySchema).optional(),
+  employeeLevelId: z.number().int().positive().optional().nullable(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
@@ -108,6 +110,7 @@ export interface UserRecord {
       employmentType: string | null;
       employmentStatus: string;
       employeeLevel: string | null;
+      employeeLevelId: number | null;
       hireDate: string | null;
     } | null;
   } | null;

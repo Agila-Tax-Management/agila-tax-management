@@ -38,7 +38,7 @@ const USER_INCLUDE = {
         select: {
           employmentType: true,
           employmentStatus: true,
-          employeeLevel: true,
+          employeeLevel: { select: { id: true, name: true, position: true } },
           hireDate: true,
           department: { select: { name: true } },
           position: { select: { title: true } },
@@ -78,7 +78,7 @@ function toUserRecord(u: {
     employments: {
       employmentType: string | null;
       employmentStatus: string;
-      employeeLevel: string | null;
+      employeeLevel: { id: number; name: string; position: number } | null;
       hireDate: Date | null;
       department: { name: string } | null;
       position: { title: string } | null;
@@ -114,7 +114,8 @@ function toUserRecord(u: {
                 position: employment.position?.title ?? null,
                 employmentType: employment.employmentType,
                 employmentStatus: employment.employmentStatus,
-                employeeLevel: employment.employeeLevel,
+                employeeLevel: employment.employeeLevel?.name ?? null,
+                employeeLevelId: employment.employeeLevel?.id ?? null,
                 hireDate: employment.hireDate?.toISOString() ?? null,
               }
             : null,
@@ -199,7 +200,7 @@ export async function PUT(
   const {
     name, email, password, role, active,
     firstName, middleName, lastName, phone, address, birthDate, gender,
-    portalAccess,
+    portalAccess, employeeLevelId,
   } = parsed.data;
 
   const existingUser = await prisma.user.findUnique({ where: { id } });
@@ -260,6 +261,14 @@ export async function PUT(
             gender,
           },
         });
+
+        // Update active employment level if provided
+        if (employeeLevelId !== undefined) {
+          await tx.employeeEmployment.updateMany({
+            where: { employeeId: employee.id, employmentStatus: "ACTIVE" },
+            data: { employeeLevelId: employeeLevelId ?? null },
+          });
+        }
 
         // 4. Sync portal access
         if (portalAccess !== undefined) {

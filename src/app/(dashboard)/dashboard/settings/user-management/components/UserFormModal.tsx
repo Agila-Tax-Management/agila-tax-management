@@ -8,6 +8,15 @@ import { Input } from '@/components/UI/Input';
 import { useToast } from '@/context/ToastContext';
 import type { UserRecord, PortalAccessEntry } from '@/lib/schemas/user-management';
 
+/* ─── Types ──────────────────────────────────────────────────── */
+
+interface EmployeeLevel {
+  id: number;
+  name: string;
+  position: number;
+  description: string | null;
+}
+
 /* ─── Constants ───────────────────────────────────────────────────── */
 
 const ROLES = ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'] as const;
@@ -94,6 +103,16 @@ export default function UserFormModal({
   const { success, error: toastError } = useToast();
   const isEdit = !!editingUser;
 
+  // Employee levels fetched from API
+  const [levels, setLevels] = useState<EmployeeLevel[]>([]);
+
+  useEffect(() => {
+    fetch('/api/admin/employee-levels')
+      .then((r) => r.json())
+      .then((json: { data?: EmployeeLevel[] }) => setLevels(json.data ?? []))
+      .catch(() => { /* non-critical — dropdown will be empty */ });
+  }, []);
+
   // User fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -114,6 +133,9 @@ export default function UserFormModal({
   const [portalAccess, setPortalAccess] = useState<Record<string, FormPortalAccess>>(
     buildInitialPortals()
   );
+
+  // Employee level
+  const [employeeLevelId, setEmployeeLevelId] = useState<number | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -138,6 +160,7 @@ export default function UserFormModal({
             : ''
         );
         setGender(editingUser.employee?.gender ?? 'Male');
+        setEmployeeLevelId(editingUser.employee?.employment?.employeeLevelId ?? null);
         setPortalAccess(buildInitialPortals(editingUser.portalAccess));
       } else {
         setName('');
@@ -152,6 +175,7 @@ export default function UserFormModal({
         setAddress('');
         setBirthDate('');
         setGender('Male');
+        setEmployeeLevelId(null);
         setPortalAccess(buildInitialPortals());
       }
       setFieldErrors({});
@@ -216,6 +240,7 @@ export default function UserFormModal({
       address: address.trim(),
       birthDate,
       gender,
+      employeeLevelId,
       portalAccess: accessPayload,
     };
 
@@ -400,6 +425,24 @@ export default function UserFormModal({
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Complete address"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Employee Level
+              </label>
+              <select
+                value={employeeLevelId ?? ''}
+                onChange={(e) => setEmployeeLevelId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— None —</option>
+                {levels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}{l.description ? ` — ${l.description}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
