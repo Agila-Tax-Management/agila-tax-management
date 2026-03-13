@@ -164,7 +164,7 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
       }
     }
   }
-  // CLIENT role — all portals remain denied (default)
+  // EMPLOYEE with no app access records — all portals remain denied (default)
 
   // For SUPER_ADMIN / ADMIN, still try to load employee profile if linked
   if ((role === "SUPER_ADMIN" || role === "ADMIN") && !employeeData) {

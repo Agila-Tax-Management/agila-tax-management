@@ -59,8 +59,10 @@ export default function SignInForm(): React.ReactNode {
     setSubmitting(true);
     setErrors({});
 
+    const INTERNAL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'] as const;
+
     try {
-      const { error: authError } = await authClient.signIn.email({
+      const { data: signInData, error: authError } = await authClient.signIn.email({
         email: result.data.email,
         password: result.data.password,
       });
@@ -68,6 +70,16 @@ export default function SignInForm(): React.ReactNode {
       if (authError) {
         setSubmitting(false);
         showError('Sign-in failed', authError.message ?? 'Invalid email or password.');
+        return;
+      }
+
+      // Ensure only internal users (SUPER_ADMIN, ADMIN, EMPLOYEE) can access this portal.
+      // ClientUser accounts authenticate through a separate portal.
+      const role = (signInData?.user as { role?: string } | undefined)?.role;
+      if (!role || !(INTERNAL_ROLES as readonly string[]).includes(role)) {
+        await authClient.signOut();
+        setSubmitting(false);
+        showError('Access denied', 'This portal is for internal staff only.');
         return;
       }
 

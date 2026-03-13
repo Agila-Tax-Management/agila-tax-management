@@ -25,7 +25,6 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   }
 
   const users = await prisma.user.findMany({
-    where: { role: { not: "CLIENT" } },
     orderBy: { createdAt: "desc" },
     include: {
       employee: {

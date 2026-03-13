@@ -64,13 +64,11 @@ model BusinessCategory {
 model ClientUser {
   id String @id @default(cuid())
 
-  email    String @unique
-  password String
-
-  role   Role    @default(CLIENT)
-  active Boolean @default(true)
-
-  name String?
+  name          String?
+  email         String  @unique
+  emailVerified Boolean @default(false)
+  image         String?
+  active        Boolean @default(true)
 
   clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])

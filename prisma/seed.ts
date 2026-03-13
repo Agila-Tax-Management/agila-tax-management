@@ -1,6 +1,7 @@
 // prisma/seed.ts
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
+import type { AppPortal } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 
@@ -22,67 +23,132 @@ const PORTAL_APPS = [
   { name: "TASK_MANAGEMENT" as const, label: "Task Management Portal" },
 ];
 
-async function main(): Promise<void> {
-  // ── 1. Seed Company (Agila) ──────────────────────────────────────
-  await prisma.client.upsert({
-    where: { companyCode: 'atms' },
-    update: {
-      active: true,
-      businessName: 'Agila Tax Management Services',
-      portalName: 'Agila Tax Management Services',
-      branchType: 'Main Branch',
+/* ─── Internal user definitions ──────────────────────────────────────
+ *
+ *  ALL internal users (SUPER_ADMIN, ADMIN, EMPLOYEE) are employees of
+ *  Agila Tax Management Services (companyCode: 'atms'). Every seeded
+ *  employee must have an EmployeeEmployment record with clientId pointing
+ *  to the ATMS client — this is what grants them access to the portal.
+ *
+ * ─────────────────────────────────────────────────────────────────── */
+
+interface InternalUserSeed {
+  employeeNo: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  role: "SUPER_ADMIN" | "ADMIN" | "EMPLOYEE";
+  gender: string;
+  birthDate: Date;
+  phone: string;
+  address: string;
+  department: string;
+  departmentDescription: string;
+  positionTitle: string;
+  positionDescription: string;
+  employeeLevel: "STAFF" | "JUNIOR" | "MID" | "SENIOR" | "LEAD" | "MANAGER" | "DIRECTOR" | "SUPERVISOR" | "EXECUTIVE";
+  hireDate: Date;
+  /** Portal access granted only for EMPLOYEE role (SUPER_ADMIN/ADMIN get access by role). */
+  appAccess?: Partial<Record<AppPortal, { canRead: boolean; canWrite: boolean; canEdit: boolean; canDelete: boolean }>>;
+}
+
+const INTERNAL_USERS: InternalUserSeed[] = [
+  {
+    employeeNo: "EMP-00001",
+    firstName: "Super",
+    lastName: "Admin",
+    email: "admin@agila.com",
+    password: "agilapassword",
+    role: "SUPER_ADMIN",
+    gender: "Male",
+    birthDate: new Date("1990-01-01"),
+    phone: "09170000000",
+    address: "Cebu City, Philippines",
+    department: "Administration",
+    departmentDescription: "Executive administration and system management",
+    positionTitle: "System Administrator",
+    positionDescription: "Full system access and management",
+    employeeLevel: "EXECUTIVE",
+    hireDate: new Date("2023-01-01"),
+  },
+  {
+    employeeNo: "EMP-00002",
+    firstName: "Admin",
+    lastName: "User",
+    email: "manager@agila.com",
+    password: "agilapassword",
+    role: "ADMIN",
+    gender: "Female",
+    birthDate: new Date("1992-06-15"),
+    phone: "09180000000",
+    address: "Cebu City, Philippines",
+    department: "Human Resources",
+    departmentDescription: "HR operations and employee management",
+    positionTitle: "HR Manager",
+    positionDescription: "Manages employee relations and compliance",
+    employeeLevel: "MANAGER",
+    hireDate: new Date("2023-03-01"),
+  },
+  {
+    employeeNo: "EMP-00003",
+    firstName: "Juan",
+    lastName: "Dela Cruz",
+    email: "employee@agila.com",
+    password: "agilapassword",
+    role: "EMPLOYEE",
+    gender: "Male",
+    birthDate: new Date("1998-09-20"),
+    phone: "09190000000",
+    address: "Mandaue City, Philippines",
+    department: "Accounting",
+    departmentDescription: "Bookkeeping, payroll, and financial reporting",
+    positionTitle: "Accountant",
+    positionDescription: "Handles client accounting and tax filings",
+    employeeLevel: "JUNIOR",
+    hireDate: new Date("2024-01-15"),
+    appAccess: {
+      COMPLIANCE: { canRead: true, canWrite: true, canEdit: true, canDelete: false },
+      ACCOUNTING: { canRead: true, canWrite: true, canEdit: false, canDelete: false },
+      ACCOUNT_OFFICER: { canRead: true, canWrite: false, canEdit: false, canDelete: false },
     },
-    create: {
-      companyCode: 'atms',
-      clientNo: '2023-1001',
-      active: true,
-      businessType: 'SOLE_PROPRIETORSHIP',
-      businessName: 'Agila Tax Management Services',
-      portalName: 'Agila Tax Management Services',
-      branchType: 'Main Branch',
-    },
-  });
-  console.log('  ✓ Company (Agila Tax Management Services) seeded');
+  },
+];
 
-  // ── 2. Seed Portal Apps ──────────────────────────────────────────
-  for (const app of PORTAL_APPS) {
-    await prisma.app.upsert({
-      where: { name: app.name },
-      update: { label: app.label },
-      create: { name: app.name, label: app.label },
-    });
-  }
-  console.log(`  ✓ ${PORTAL_APPS.length} portal apps seeded`);
+/**
+ * Seeds a single internal user (User + BetterAuth Account + Employee +
+ * Government IDs + EmployeeEmployment linked to the ATMS client).
+ */
+async function seedInternalUser(
+  seed: InternalUserSeed,
+  agilaClientId: number,
+  departmentId: number,
+  positionId: number,
+): Promise<void> {
+  const hashedPassword = await hashPassword(seed.password);
 
-  // ── 3. Seed Super Admin ──────────────────────────────────────────
-  const email = "admin@agila.com";
-  const password = "agilapassword";
-  const hashedPassword = await hashPassword(password);
-
-  // Upsert super admin user
+  // 1. Upsert User
   const user = await prisma.user.upsert({
-    where: { email },
+    where: { email: seed.email },
     update: {
-      name: "Super Admin",
-      role: "SUPER_ADMIN",
+      name: `${seed.firstName} ${seed.lastName}`,
+      role: seed.role,
       active: true,
       emailVerified: true,
     },
     create: {
-      name: "Super Admin",
-      email,
-      role: "SUPER_ADMIN",
+      name: `${seed.firstName} ${seed.lastName}`,
+      email: seed.email,
+      role: seed.role,
       active: true,
       emailVerified: true,
     },
   });
 
-  // Upsert credential account linked to the user
-  const accountId = `credential:${user.id}`;
+  // 2. Upsert BetterAuth credential account
   const existingAccount = await prisma.account.findFirst({
     where: { userId: user.id, providerId: "credential" },
   });
-
   if (existingAccount) {
     await prisma.account.update({
       where: { id: existingAccount.id },
@@ -91,7 +157,7 @@ async function main(): Promise<void> {
   } else {
     await prisma.account.create({
       data: {
-        id: accountId,
+        id: `credential:${user.id}`,
         accountId: user.id,
         providerId: "credential",
         userId: user.id,
@@ -100,72 +166,32 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`\n  Super Admin seeded successfully!`);
-  console.log(`  Email:    ${email}`);
-  console.log(`  Password: ${password}\n`);
-
-  // ── 4. Seed Department for Agila ─────────────────────────────────
-  const agilaClient = await prisma.client.findUnique({
-    where: { companyCode: "atms" },
-  });
-
-  if (!agilaClient) {
-    throw new Error("Agila client not found — seed step 1 failed");
-  }
-
-  const adminDept = await prisma.department.upsert({
-    where: {
-      clientId_name: { clientId: agilaClient.id, name: "Administration" },
-    },
-    update: {},
-    create: {
-      clientId: agilaClient.id,
-      name: "Administration",
-      description: "Executive administration and system management",
-    },
-  });
-
-  const adminPosition = await prisma.position.upsert({
-    where: { id: 1 }, // will create if not exists
-    update: { title: "System Administrator", departmentId: adminDept.id },
-    create: {
-      title: "System Administrator",
-      description: "Full system access and management",
-      departmentId: adminDept.id,
-    },
-  });
-  console.log("  ✓ Administration department & position seeded");
-
-  // ── 5. Seed Employee record for Super Admin ──────────────────────
+  // 3. Upsert Employee record
   const existingEmployee = await prisma.employee.findUnique({
     where: { userId: user.id },
   });
-
   let employeeId: number;
-
-  if (!existingEmployee) {
+  if (existingEmployee) {
+    employeeId = existingEmployee.id;
+  } else {
     const employee = await prisma.employee.create({
       data: {
         userId: user.id,
-        firstName: "Super",
-        lastName: "Admin",
-        employeeNo: "EMP-00001",
-        email,
-        birthDate: new Date("1990-01-01"),
-        gender: "Male",
-        phone: "09170000000",
-        address: "Cebu City, Philippines",
+        firstName: seed.firstName,
+        lastName: seed.lastName,
+        employeeNo: seed.employeeNo,
+        email: seed.email,
+        birthDate: seed.birthDate,
+        gender: seed.gender,
+        phone: seed.phone,
+        address: seed.address,
         active: true,
       },
     });
     employeeId = employee.id;
-    console.log("  ✓ Employee record created for Super Admin");
-  } else {
-    employeeId = existingEmployee.id;
-    console.log("  ✓ Employee record already exists for Super Admin");
   }
 
-  // ── 6. Seed Government IDs for Super Admin ───────────────────────
+  // 4. Upsert Government IDs (placeholder values)
   await prisma.employeeGovernmentIds.upsert({
     where: { employeeId },
     update: {},
@@ -177,35 +203,126 @@ async function main(): Promise<void> {
       tin: "000-000-000-000",
     },
   });
-  console.log("  ✓ Government IDs seeded for Super Admin");
 
-  // ── 7. Seed Employment record (Agila → Super Admin) ──────────────
+  // 5. Upsert EmployeeEmployment → ATMS client (ensures internal user is linked)
   const existingEmployment = await prisma.employeeEmployment.findFirst({
-    where: {
-      employeeId,
-      clientId: agilaClient.id,
-      employmentStatus: "ACTIVE",
-    },
+    where: { employeeId, clientId: agilaClientId, employmentStatus: "ACTIVE" },
   });
-
   if (!existingEmployment) {
     await prisma.employeeEmployment.create({
       data: {
         employeeId,
-        clientId: agilaClient.id,
-        departmentId: adminDept.id,
-        positionId: adminPosition.id,
+        clientId: agilaClientId,
+        departmentId,
+        positionId,
         employmentType: "REGULAR",
         employmentStatus: "ACTIVE",
-        employeeLevel: "EXECUTIVE",
-        hireDate: new Date("2023-01-01"),
-        regularizationDate: new Date("2023-01-01"),
+        employeeLevel: seed.employeeLevel,
+        hireDate: seed.hireDate,
+        regularizationDate: seed.hireDate,
       },
     });
-    console.log("  ✓ Employment record created (Agila → Super Admin)");
-  } else {
-    console.log("  ✓ Employment record already exists (Agila → Super Admin)");
   }
+
+  // 6. Seed EmployeeAppAccess for EMPLOYEE role users
+  if (seed.role === "EMPLOYEE" && seed.appAccess) {
+    const apps = await prisma.app.findMany();
+    for (const [portalName, perms] of Object.entries(seed.appAccess)) {
+      const app = apps.find((a) => a.name === portalName);
+      if (!app) continue;
+      await prisma.employeeAppAccess.upsert({
+        where: { employeeId_appId: { employeeId, appId: app.id } },
+        update: perms,
+        create: { employeeId, appId: app.id, ...perms },
+      });
+    }
+  }
+
+  console.log(
+    `  ✓ [${seed.role}] ${seed.firstName} ${seed.lastName} (${seed.email}) — linked to ATMS`,
+  );
+}
+
+async function main(): Promise<void> {
+  // ── 1. Seed Company (Agila — the internal company) ───────────────
+  await prisma.client.upsert({
+    where: { companyCode: "atms" },
+    update: {
+      active: true,
+      businessName: "Agila Tax Management Services",
+      portalName: "Agila Tax Management Services",
+      branchType: "Main Branch",
+    },
+    create: {
+      companyCode: "atms",
+      clientNo: "2023-1001",
+      active: true,
+      businessType: "SOLE_PROPRIETORSHIP",
+      businessName: "Agila Tax Management Services",
+      portalName: "Agila Tax Management Services",
+      branchType: "Main Branch",
+    },
+  });
+  console.log("  ✓ Company (Agila Tax Management Services) seeded");
+
+  // ── 2. Seed Portal Apps ──────────────────────────────────────────
+  for (const app of PORTAL_APPS) {
+    await prisma.app.upsert({
+      where: { name: app.name },
+      update: { label: app.label },
+      create: { name: app.name, label: app.label },
+    });
+  }
+  console.log(`  ✓ ${PORTAL_APPS.length} portal apps seeded`);
+
+  // ── 3. Resolve ATMS client ID ────────────────────────────────────
+  const agilaClient = await prisma.client.findUnique({
+    where: { companyCode: "atms" },
+  });
+  if (!agilaClient) throw new Error("ATMS client not found — step 1 failed");
+
+  // ── 4. Seed Departments & Positions ─────────────────────────────
+  //  Each internal user's department is upserted before creating the user
+  //  so that we can pass the correct departmentId / positionId.
+
+  console.log("\n  Seeding internal users (all linked to ATMS client):\n");
+
+  for (const seed of INTERNAL_USERS) {
+    const dept = await prisma.department.upsert({
+      where: {
+        clientId_name: { clientId: agilaClient.id, name: seed.department },
+      },
+      update: {},
+      create: {
+        clientId: agilaClient.id,
+        name: seed.department,
+        description: seed.departmentDescription,
+      },
+    });
+
+    // Find existing position by title + department, or create it
+    let position = await prisma.position.findFirst({
+      where: { departmentId: dept.id, title: seed.positionTitle },
+    });
+    if (!position) {
+      position = await prisma.position.create({
+        data: {
+          title: seed.positionTitle,
+          description: seed.positionDescription,
+          departmentId: dept.id,
+        },
+      });
+    }
+
+    await seedInternalUser(seed, agilaClient.id, dept.id, position.id);
+  }
+
+  console.log("\n  Internal user credentials:");
+  console.log("  ─────────────────────────────────────────────────────");
+  for (const u of INTERNAL_USERS) {
+    console.log(`  [${u.role.padEnd(11)}]  ${u.email.padEnd(28)}  ${u.password}`);
+  }
+  console.log("  ─────────────────────────────────────────────────────\n");
 }
 
 main()

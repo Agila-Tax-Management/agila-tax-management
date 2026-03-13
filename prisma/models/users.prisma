@@ -2,7 +2,6 @@ enum Role {
     SUPER_ADMIN
     ADMIN
     EMPLOYEE
-    CLIENT
 }
 
 model User {

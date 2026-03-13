@@ -1,2 +1,0 @@
--- AlterEnum
-ALTER TYPE "AppPortal" ADD VALUE 'TASK_MANAGEMENT';
