@@ -3,11 +3,12 @@
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, Building2, Settings } from 'lucide-react';
+import { Users, Building2, Settings, UserRoundCog } from 'lucide-react';
 
 const SETTINGS_TABS = [
   { href: '/dashboard/settings/user-management', label: 'User Management', icon: Users },
   { href: '/dashboard/settings/client-management', label: 'Client Management', icon: Building2 },
+  { href: '/dashboard/settings/user-client-management', label: 'User Client Management', icon: UserRoundCog },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }): React.ReactNode {
