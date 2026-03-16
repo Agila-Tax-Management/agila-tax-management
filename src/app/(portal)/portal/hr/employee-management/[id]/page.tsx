@@ -3,9 +3,9 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { EMPLOYEES } from '@/lib/mock-hr-data';
-import { EmployeeContractView } from '@/components/hr/contracts/EmployeeContractView';
+import { EmployeeProfileView } from '@/components/hr/profile/EmployeeProfileView';
 
-export default function EmployeeContractPage() {
+export default function EmployeeProfilePage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -27,5 +27,5 @@ export default function EmployeeContractPage() {
     );
   }
 
-  return <EmployeeContractView employee={employee} />;
+  return <EmployeeProfileView employee={employee} />;
 }

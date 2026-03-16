@@ -6,6 +6,8 @@ import { Search, Filter, Eye, Users, UserPlus, Building2, Network, Briefcase, Pl
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
+import { Modal } from '@/components/UI/Modal';
+import { useToast } from '@/context/ToastContext';
 import {
   EMPLOYEES, Department, EmployeeStatus,
 } from '@/lib/mock-hr-data';
@@ -54,6 +56,18 @@ interface MockPosition {
   employeeCount: number;
 }
 
+interface AddEmployeeFormData {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  birthDate: string;
+  gender: string;
+  phone: string;
+  address: string;
+  email: string;
+  employeeNo: string;
+}
+
 const MOCK_DEPARTMENTS: MockDepartment[] = [
   { id: 1, name: 'Sales', head: 'Maria Santos', employeeCount: 5, description: 'Handles client acquisition and service plans' },
   { id: 2, name: 'Accounting', head: 'Juan Cruz', employeeCount: 4, description: 'Financial reporting, billing, and invoicing' },
@@ -95,12 +109,27 @@ const MOCK_POSITIONS: MockPosition[] = [
   { id: 16, title: 'Admin Assistant', department: 'Admin', level: 'Staff', employeeCount: 2 },
 ];
 
+const EMPTY_ADD_EMPLOYEE_FORM: AddEmployeeFormData = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  birthDate: '',
+  gender: '',
+  phone: '',
+  address: '',
+  email: '',
+  employeeNo: '',
+};
+
 export function EmployeeManagement() {
   const router = useRouter();
+  const { success, error } = useToast();
   const [activeTab, setActiveTab] = useState<ManagementTab>('employees');
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+  const [addEmployeeForm, setAddEmployeeForm] = useState<AddEmployeeFormData>(EMPTY_ADD_EMPLOYEE_FORM);
 
   const filtered = useMemo(() => {
     return EMPLOYEES.filter(emp => {
@@ -116,6 +145,38 @@ export function EmployeeManagement() {
   const activeCount = EMPLOYEES.filter(e => e.status === 'Active').length;
   const onLeaveCount = EMPLOYEES.filter(e => e.status === 'On Leave').length;
   const probCount = EMPLOYEES.filter(e => e.status === 'Probationary').length;
+
+  const updateAddEmployeeForm = <K extends keyof AddEmployeeFormData>(key: K, value: AddEmployeeFormData[K]) => {
+    setAddEmployeeForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const closeAddEmployeeModal = () => {
+    setIsAddEmployeeOpen(false);
+    setAddEmployeeForm(EMPTY_ADD_EMPLOYEE_FORM);
+  };
+
+  const handleAddEmployee = () => {
+    const requiredFields: Array<keyof AddEmployeeFormData> = [
+      'firstName',
+      'lastName',
+      'birthDate',
+      'gender',
+      'phone',
+      'address',
+      'email',
+      'employeeNo',
+    ];
+
+    const hasMissingRequiredField = requiredFields.some((field) => !addEmployeeForm[field].trim());
+
+    if (hasMissingRequiredField) {
+      error('Failed to add employee', 'Please complete all required employee fields.');
+      return;
+    }
+
+    success('Employee created', 'The new employee has been added successfully.');
+    closeAddEmployeeModal();
+  };
 
   return (
     <div className="space-y-6">
@@ -212,7 +273,7 @@ export function EmployeeManagement() {
 
           {/* Add Employee Button */}
           <div className="flex justify-end">
-            <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2">
+            <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => setIsAddEmployeeOpen(true)}>
               <UserPlus size={16} /> Add Employee
             </Button>
           </div>
@@ -269,6 +330,105 @@ export function EmployeeManagement() {
           </Card>
         </>
       )}
+
+      <Modal isOpen={isAddEmployeeOpen} onClose={closeAddEmployeeModal} title="Add Employee" size="xl">
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">First Name</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.firstName}
+                onChange={e => updateAddEmployeeForm('firstName', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Middle Name</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.middleName}
+                onChange={e => updateAddEmployeeForm('middleName', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Last Name</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.lastName}
+                onChange={e => updateAddEmployeeForm('lastName', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Birth Date</label>
+              <input
+                type="date"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.birthDate}
+                onChange={e => updateAddEmployeeForm('birthDate', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Gender</label>
+              <select
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none"
+                value={addEmployeeForm.gender}
+                onChange={e => updateAddEmployeeForm('gender', e.target.value)}
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+              <input
+                type="tel"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.phone}
+                onChange={e => updateAddEmployeeForm('phone', e.target.value)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Address</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.address}
+                onChange={e => updateAddEmployeeForm('address', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+              <input
+                type="email"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.email}
+                onChange={e => updateAddEmployeeForm('email', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee No</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                value={addEmployeeForm.employeeNo}
+                onChange={e => updateAddEmployeeForm('employeeNo', e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={closeAddEmployeeModal}>Cancel</Button>
+            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleAddEmployee}>
+              Save Employee
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Departments Tab ────────────────────────────────────── */}
       {activeTab === 'departments' && (
