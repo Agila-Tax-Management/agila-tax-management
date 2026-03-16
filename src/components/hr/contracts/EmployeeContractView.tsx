@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, Save, User, FileText, DollarSign, FolderOpen, Paperclip } from 'lucide-react';
+import { ArrowLeft, Save, User, FileText, DollarSign, FolderOpen, Paperclip, Landmark } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -13,11 +13,13 @@ import { ContractDetailsTab } from './ContractDetailsTab';
 import { SalaryInformationTab } from './SalaryInformationTab';
 import { PersonalDocumentsTab } from './PersonalDocumentsTab';
 import { SalaryAttachmentTab } from './SalaryAttachmentTab';
+import { GovernmentComplianceTab } from './GovernmentComplianceTab';
 
-type ContractTab = 'info' | 'details' | 'salary' | 'documents' | 'attachment';
+type ContractTab = 'info' | 'details' | 'salary' | 'documents' | 'attachment' | 'government-compliance';
 
 const TABS: { key: ContractTab; label: string; icon: typeof FileText }[] = [
   { key: 'info', label: 'Employee Information', icon: User },
+  { key: 'government-compliance', label: 'Government Compliance', icon: Landmark },
   { key: 'details', label: 'Contract Details', icon: FileText },
   { key: 'salary', label: 'Salary Information', icon: DollarSign },
   { key: 'documents', label: 'Personal Documents', icon: FolderOpen },
@@ -238,6 +240,7 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
         </Card>
       )}
       {activeTab === 'details' && <ContractDetailsTab />}
+      {activeTab === 'government-compliance' && <GovernmentComplianceTab employee={employee} />}
       {activeTab === 'salary' && <SalaryInformationTab baseSalary={employee.salary} />}
       {activeTab === 'documents' && <PersonalDocumentsTab />}
       {activeTab === 'attachment' && <SalaryAttachmentTab />}
