@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, CalendarDays, Star,
-  Clock, Wallet, Landmark, FileQuestion, Heart,
+  Clock, Wallet, Landmark, FileQuestion, Heart, Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 import { getPendingLeaves, getOpenRequests } from '@/lib/mock-hr-data';
@@ -46,6 +46,7 @@ interface HRSidebarProps {
 export function HRSidebar({ isOpen, onClose }: HRSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const isSettingsActive = pathname.startsWith('/portal/hr/settings');
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -118,6 +119,25 @@ export function HRSidebar({ isOpen, onClose }: HRSidebarProps) {
             );
           })}
         </nav>
+
+        <div className="p-4 border-t border-slate-100 shrink-0">
+          <div className="px-3 pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Settings
+          </div>
+          <button
+            onClick={() => handleNavigation('/portal/hr/settings')}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+              ${isSettingsActive
+                ? 'bg-rose-600/10 text-rose-700 shadow-sm font-bold'
+                : 'text-slate-600 hover:bg-slate-50 font-medium'
+              }
+            `}
+          >
+            <Settings size={18} />
+            <span className="text-sm flex-1 text-left">Settings</span>
+          </button>
+        </div>
       </aside>
     </>
   );
