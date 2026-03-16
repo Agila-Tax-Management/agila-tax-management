@@ -1,278 +1,364 @@
+// src/components/hr/settings/WorkingSchedulesSettingsTab.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { Star, Plus } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Loader2, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 
-interface WorkingTimeTemplate {
-  id: string;
-  workingTime: string;
-  workingTimeRate: string;
-  company: string;
-  contractsUsingIt: number;
-  isFavorite: boolean;
+/* ─── Types ──────────────────────────────────────────────────────── */
+
+interface ScheduleDay {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  isWorkingDay: boolean;
 }
 
-const MOCK_WORKING_TIME_DATA: WorkingTimeTemplate[] = [
-  {
-    id: 'wt-001',
-    workingTime: '08:00 AM - 05:00 PM',
-    workingTimeRate: 'Regular Day Rate',
-    company: 'Agila Tax Management',
-    contractsUsingIt: 18,
-    isFavorite: true,
-  },
-  {
-    id: 'wt-002',
-    workingTime: '09:00 AM - 06:00 PM',
-    workingTimeRate: 'Flexi Day Rate',
-    company: 'Agila Tax Management',
-    contractsUsingIt: 9,
-    isFavorite: false,
-  },
-  {
-    id: 'wt-003',
-    workingTime: '10:00 PM - 07:00 AM',
-    workingTimeRate: 'Night Shift Rate',
-    company: 'Agila Business Support',
-    contractsUsingIt: 6,
-    isFavorite: true,
-  },
-  {
-    id: 'wt-004',
-    workingTime: '07:00 AM - 04:00 PM',
-    workingTimeRate: 'Field Operations Rate',
-    company: 'Agila Business Support',
-    contractsUsingIt: 11,
-    isFavorite: false,
-  },
-  {
-    id: 'wt-005',
-    workingTime: '08:30 AM - 05:30 PM',
-    workingTimeRate: 'Admin Operations Rate',
-    company: 'Agila Corporate Services',
-    contractsUsingIt: 7,
-    isFavorite: false,
-  },
-];
+interface WorkSchedule {
+  id: number;
+  name: string;
+  timezone: string;
+  days: ScheduleDay[];
+}
+
+const DAY_LABELS: Record<number, string> = {
+  0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday',
+  4: 'Thursday', 5: 'Friday', 6: 'Saturday',
+};
+
+const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 0];
+
+const DEFAULT_DAYS = WEEK_DAYS.map((d) => ({
+  dayOfWeek: d,
+  label: DAY_LABELS[d],
+  enabled: d >= 1 && d <= 5,
+  startTime: '08:00',
+  endTime: '17:00',
+  breakStart: '12:00',
+  breakEnd: '13:00',
+}));
+
+const inputCls =
+  'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500';
+const labelCls = 'block text-xs font-semibold text-muted-foreground mb-1.5';
+
+/* ─── Component ─────────────────────────────────────────────────── */
 
 export function WorkingSchedulesSettingsTab(): React.ReactNode {
-  const { success } = useToast();
-  const [rows, setRows] = useState<WorkingTimeTemplate[]>(MOCK_WORKING_TIME_DATA);
-  const [filterByCompany, setFilterByCompany] = useState('all');
+  const { success, error } = useToast();
+
+  const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [filterText, setFilterText] = useState('');
   const [groupBy, setGroupBy] = useState('none');
-  const [favoritesFilter, setFavoritesFilter] = useState('all');
-  const [selectedTemplate, setSelectedTemplate] = useState<WorkingTimeTemplate | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const companies = Array.from(new Set(rows.map((item) => item.company)));
+  // Add modal state
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDays, setNewDays] = useState(DEFAULT_DAYS);
 
-  const filteredData = rows
-    .filter((item) => (filterByCompany === 'all' ? true : item.company === filterByCompany))
-    .filter((item) => {
-      if (favoritesFilter === 'favorites') return item.isFavorite;
-      if (favoritesFilter === 'non-favorites') return !item.isFavorite;
-      return true;
-    })
+  /* ─── Fetch ─────────────────────────────────────────────────────── */
+
+  const fetchSchedules = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/hr/work-schedules');
+      const data = (await res.json()) as { data?: WorkSchedule[]; error?: string };
+      if (!res.ok) {
+        error('Failed to load schedules', data.error ?? 'An error occurred.');
+        return;
+      }
+      setSchedules(data.data ?? []);
+    } catch {
+      error('Network error', 'Could not load work schedules.');
+    } finally {
+      setLoading(false);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    void fetchSchedules();
+  }, [fetchSchedules]);
+
+  /* ─── Filter / sort ─────────────────────────────────────────────── */
+
+  const filteredSchedules = schedules
+    .filter((s) => s.name.toLowerCase().includes(filterText.toLowerCase()))
     .sort((a, b) => {
-      if (groupBy === 'company') {
-        return a.company.localeCompare(b.company) || a.workingTime.localeCompare(b.workingTime);
+      if (groupBy === 'name') return a.name.localeCompare(b.name);
+      if (groupBy === 'days') {
+        const aWorking = a.days.filter((d) => d.isWorkingDay).length;
+        const bWorking = b.days.filter((d) => d.isWorkingDay).length;
+        return bWorking - aWorking;
       }
-      if (groupBy === 'rate') {
-        return a.workingTimeRate.localeCompare(b.workingTimeRate) || a.workingTime.localeCompare(b.workingTime);
-      }
-      if (groupBy === 'usage') {
-        return b.contractsUsingIt - a.contractsUsingIt;
-      }
-      return a.workingTime.localeCompare(b.workingTime);
+      return a.id - b.id;
     });
 
-  const handleView = (row: WorkingTimeTemplate) => {
-    setSelectedTemplate(row);
+  /* ─── Add schedule ─────────────────────────────────────────────── */
+
+  const openAdd = () => {
+    setNewName('');
+    setNewDays(DEFAULT_DAYS);
+    setIsAddOpen(true);
   };
 
-  const handleEditFromModal = () => {
-    if (!selectedTemplate) return;
-    success('Edit action', `Edit flow for ${selectedTemplate.workingTime} can be connected here.`);
+  const handleAdd = async () => {
+    if (!newName.trim()) {
+      error('Missing name', 'Please enter a schedule name.');
+      return;
+    }
+    const workingDays = newDays.filter((d) => d.enabled);
+    if (workingDays.length === 0) {
+      error('No working days', 'Please enable at least one working day.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/hr/work-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName.trim(),
+          timezone: 'Asia/Manila',
+          days: workingDays.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            startTime: d.startTime,
+            endTime: d.endTime,
+            breakStart: d.breakStart || null,
+            breakEnd: d.breakEnd || null,
+            isWorkingDay: true,
+          })),
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        error('Failed to save', data.error ?? 'An error occurred.');
+        return;
+      }
+      success('Schedule created', `"${newName.trim()}" has been saved successfully.`);
+      setIsAddOpen(false);
+      void fetchSchedules();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  /* ─── Helpers ───────────────────────────────────────────────────── */
+
+  const formatTime = (t: string) => {
+    const [h, m] = t.split(':');
+    const hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const display = hour % 12 === 0 ? 12 : hour % 12;
+    return `${display}:${m} ${ampm}`;
+  };
+
+  const workingDaysLabel = (days: ScheduleDay[]) => {
+    const working = days.filter((d) => d.isWorkingDay).map((d) => DAY_LABELS[d.dayOfWeek].slice(0, 3));
+    return working.length > 0 ? working.join(', ') : 'No working days';
+  };
+
+  /* ─── Render ────────────────────────────────────────────────────── */
 
   return (
     <Card className="p-6 sm:p-7 space-y-6">
       <div>
         <h2 className="text-lg font-black text-foreground">Working Schedules</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Manage working time templates assigned to employee contracts.
+          Manage work schedule templates assigned to employee contracts.
         </p>
       </div>
 
+      {/* Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="inline-flex items-center rounded-xl bg-muted p-1">
-          <button
-            type="button"
-            className="rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider bg-card text-foreground shadow-sm"
+        <div className="flex flex-col sm:flex-row gap-2 flex-1">
+          <input
+            type="text"
+            placeholder="Search schedules..."
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 sm:w-60"
+          />
+          <select
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
           >
-            Working Time Templates
-          </button>
+            <option value="none">Sort: Default</option>
+            <option value="name">Sort: Name A–Z</option>
+            <option value="days">Sort: Most Working Days</option>
+          </select>
         </div>
-
-        <Button
-          className="bg-rose-600 hover:bg-rose-700 text-white"
-          onClick={() => success('Template action', 'Add working time form can be connected here.')}
-        >
-          <Plus size={15} className="mr-2" /> Add Working Time
+        <Button className="bg-rose-600 hover:bg-rose-700 text-white shrink-0" onClick={openAdd}>
+          <Plus size={15} className="mr-2" /> Add Schedule
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-          Filters
-          <select
-            value={filterByCompany}
-            onChange={(event) => setFilterByCompany(event.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-          >
-            <option value="all">All Companies</option>
-            {companies.map((company) => (
-              <option key={company} value={company}>{company}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-          Group By
-          <select
-            value={groupBy}
-            onChange={(event) => setGroupBy(event.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-          >
-            <option value="none">No Grouping</option>
-            <option value="company">Company</option>
-            <option value="rate">Working Time Rate</option>
-            <option value="usage">Contracts Using It</option>
-          </select>
-        </label>
-
-        <label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-          Favorites
-          <select
-            value={favoritesFilter}
-            onChange={(event) => setFavoritesFilter(event.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-          >
-            <option value="all">All</option>
-            <option value="favorites">Favorites Only</option>
-            <option value="non-favorites">Non-Favorites</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="rounded-xl border border-border overflow-x-auto">
-        <table className="w-full min-w-180 text-sm">
-          <thead className="bg-muted/60 text-muted-foreground">
-            <tr>
-              <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider">Working Time</th>
-              <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider">Working Time Rate</th>
-              <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider">Company</th>
-              <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider">Contracts Using It</th>
-              <th className="text-right px-4 py-3 font-black uppercase text-xs tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredData.map((item) => (
-              <tr key={item.id} className="border-t border-border/70 hover:bg-muted/20 transition-colors">
-                <td className="px-4 py-3 font-semibold text-foreground">
-                  <div className="flex items-center gap-2">
-                    <span>{item.workingTime}</span>
-                    {item.isFavorite && <Star size={14} className="text-amber-500 fill-amber-500" />}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{item.workingTimeRate}</td>
-                <td className="px-4 py-3 text-muted-foreground">{item.company}</td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-700 px-2.5 py-1 text-xs font-bold">
-                    {item.contractsUsingIt}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => handleView(item)}
-                    className="inline-flex items-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filteredData.length === 0 && (
+      {/* Table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
+          <Loader2 size={18} className="animate-spin" /> Loading schedules...
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60 text-muted-foreground">
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No working time templates match the selected controls.
-                </td>
+                <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider">Schedule Name</th>
+                <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider hidden sm:table-cell">Working Days</th>
+                <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider hidden md:table-cell">Hours</th>
+                <th className="text-right px-4 py-3 font-black uppercase text-xs tracking-wider">Details</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filteredSchedules.map((sched) => {
+                const workDay = sched.days.find((d) => d.isWorkingDay);
+                return (
+                  <React.Fragment key={sched.id}>
+                    <tr className="border-t border-border/70 hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-foreground">{sched.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
+                        {workingDaysLabel(sched.days)}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">
+                        {workDay ? `${formatTime(workDay.startTime)} – ${formatTime(workDay.endTime)}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expandedId === sched.id ? null : sched.id)}
+                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-muted px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-foreground hover:bg-slate-200 dark:hover:bg-muted/80"
+                        >
+                          {expandedId === sched.id ? <><ChevronUp size={13} /> Hide</> : <><ChevronDown size={13} /> View</>}
+                        </button>
+                      </td>
+                    </tr>
 
-      <div className="text-xs text-muted-foreground">
-        Showing <span className="font-bold text-foreground">{filteredData.length}</span> template(s)
-        from <span className="font-bold text-foreground">{rows.length}</span> mock records.
-      </div>
+                    {/* Expanded day details */}
+                    {expandedId === sched.id && (
+                      <tr className="border-t border-border/40 bg-muted/10">
+                        <td colSpan={4} className="px-4 py-3">
+                          <div className="space-y-1.5">
+                            {sched.days
+                              .filter((d) => d.isWorkingDay)
+                              .map((d) => (
+                                <div key={d.dayOfWeek} className="flex items-center gap-4 text-xs">
+                                  <span className="w-24 font-semibold text-foreground">{DAY_LABELS[d.dayOfWeek]}</span>
+                                  <span className="text-muted-foreground">
+                                    {formatTime(d.startTime)} – {formatTime(d.endTime)}
+                                  </span>
+                                  {d.breakStart && d.breakEnd && (
+                                    <span className="text-muted-foreground/70">
+                                      Break: {formatTime(d.breakStart)} – {formatTime(d.breakEnd)}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            {sched.days.filter((d) => d.isWorkingDay).length === 0 && (
+                              <p className="text-xs text-muted-foreground">No working days configured.</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              {filteredSchedules.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    {filterText ? 'No schedules match your search.' : 'No work schedules found. Add one to get started.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <Modal
-        isOpen={selectedTemplate !== null}
-        onClose={() => setSelectedTemplate(null)}
-        title="Working Time Details"
-        size="lg"
-      >
-        {selectedTemplate && (
-          <div className="p-6 space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Working Time</p>
-                <p className="mt-2 text-sm font-bold text-foreground">{selectedTemplate.workingTime}</p>
-              </div>
+      <p className="text-xs text-muted-foreground">
+        Showing <span className="font-bold text-foreground">{filteredSchedules.length}</span> of{' '}
+        <span className="font-bold text-foreground">{schedules.length}</span> schedule(s)
+      </p>
 
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Working Time Rate</p>
-                <p className="mt-2 text-sm font-bold text-foreground">{selectedTemplate.workingTimeRate}</p>
-              </div>
-
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Company</p>
-                <p className="mt-2 text-sm font-bold text-foreground">{selectedTemplate.company}</p>
-              </div>
-
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Contracts Using It</p>
-                <p className="mt-2 text-sm font-bold text-foreground">{selectedTemplate.contractsUsingIt}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-4">
-              <p className="text-sm font-medium text-foreground">Favorite Template</p>
-              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
-                selectedTemplate.isFavorite
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-slate-100 text-slate-600'
-              }`}>
-                {selectedTemplate.isFavorite ? 'Yes' : 'No'}
-              </span>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setSelectedTemplate(null)}>
-                Close
-              </Button>
-              <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleEditFromModal}>
-                Edit
-              </Button>
-            </div>
+      {/* Add Schedule Modal */}
+      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Add Work Schedule" size="lg">
+        <div className="p-6 space-y-5">
+          <div>
+            <label className={labelCls}>Schedule Name <span className="text-red-500">*</span></label>
+            <input
+              className={inputCls}
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Standard Office Hours"
+            />
           </div>
-        )}
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weekly Schedule</p>
+            {newDays.map((day, idx) => (
+              <div key={day.dayOfWeek} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                <div className="flex items-center gap-2 w-28 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={day.enabled}
+                    onChange={(e) => {
+                      const updated = [...newDays];
+                      updated[idx] = { ...day, enabled: e.target.checked };
+                      setNewDays(updated);
+                    }}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <span className={`text-xs font-medium ${day.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {day.label}
+                  </span>
+                </div>
+                {day.enabled && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input type="time" value={day.startTime}
+                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, startTime: e.target.value }; setNewDays(u); }}
+                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <input type="time" value={day.endTime}
+                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, endTime: e.target.value }; setNewDays(u); }}
+                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                    <span className="text-xs text-muted-foreground ml-2">Break:</span>
+                    <input type="time" value={day.breakStart ?? ''}
+                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, breakStart: e.target.value }; setNewDays(u); }}
+                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                    <span className="text-xs text-muted-foreground">–</span>
+                    <input type="time" value={day.breakEnd ?? ''}
+                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, breakEnd: e.target.value }; setNewDays(u); }}
+                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                  </div>
+                )}
+                {!day.enabled && (
+                  <span className="text-xs text-muted-foreground italic">Day off</span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => setIsAddOpen(false)} disabled={saving}>
+              <X size={14} className="mr-1.5" /> Cancel
+            </Button>
+            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleAdd} disabled={saving}>
+              {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Plus size={14} className="mr-1.5" />}
+              Save Schedule
+            </Button>
+          </div>
+        </div>
       </Modal>
     </Card>
   );

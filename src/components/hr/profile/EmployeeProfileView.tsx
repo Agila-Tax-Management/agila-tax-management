@@ -1,30 +1,24 @@
 // src/components/hr/profile/EmployeeProfileView.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Briefcase, FileText, FolderOpen, IdCard, Shield, User } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { ArrowLeft, Briefcase, FileText, FolderOpen, IdCard, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import type { Employee } from '@/lib/mock-hr-data';
-import { AppAccessTab } from './components/AppAccessTab';
 import { ContractsTab } from './components/ContractsTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import { EmploymentTab } from './components/EmploymentTab';
 import { GovernmentIdsTab } from './components/GovernmentIdsTab';
 import { PersonalInfoTab } from './components/PersonalInfoTab';
 import type {
-  AppAccessKey,
-  AppAccessState,
-  ContractFormState,
   ContractRecord,
   DocumentLabel,
   DocumentState,
-  EmploymentFormState,
   EmploymentRecord,
-  EmploymentTypeOption,
   GovernmentIdsState,
   PersonalInfoFormState,
   ProfileTab,
@@ -36,14 +30,69 @@ const TABS: { key: ProfileTab; label: string; icon: typeof User }[] = [
   { key: 'documents', label: 'Documents', icon: FolderOpen },
   { key: 'employment', label: 'Employment', icon: Briefcase },
   { key: 'contracts', label: 'Contracts', icon: FileText },
-  { key: 'app-access', label: 'App Access', icon: Shield },
 ];
 
-const DEPARTMENT_OPTIONS = ['Accounting', 'Sales', 'Compliance', 'Liaison', 'Account Officer', 'HR', 'IT', 'Admin'];
-const TEAM_OPTIONS = ['Tax Team', 'Payroll Team', 'Client Services', 'Field Ops', 'Finance Team', 'Recruitment Team'];
-const LEVEL_OPTIONS = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7'];
-const REPORTING_MANAGER_OPTIONS = ['Maria Santos', 'Juan Dela Cruz', 'Patricia Lim', 'Ana Reyes', 'Carlos Garcia'];
-const CLIENT_OPTIONS = ['Internal Company', 'Agila Tax Management', 'Agila Business Support', 'Agila Corporate Services'];
+/* API response types */
+interface ApiEmployment {
+  id: number;
+  employmentStatus: string;
+  employmentType: string | null;
+  hireDate: string | null;
+  regularizationDate: string | null;
+  endDate: string | null;
+  employeeLevelId: number | null;
+  client: { id: number; businessName: string | null } | null;
+  department: { id: number; name: string } | null;
+  position: { id: number; title: string } | null;
+  reportingManager: { id: number; firstName: string; lastName: string } | null;
+}
+
+interface ApiContract {
+  id: number;
+  employmentId: number;
+  contractType: string;
+  status: string;
+  contractStart: string;
+  contractEnd: string | null;
+  monthlyRate: string | null;
+  dailyRate: string | null;
+  hourlyRate: string | null;
+  disbursedMethod: string | null;
+  scheduleId: number | null;
+  workingHoursPerWeek: number | null;
+  bankDetails: string | null;
+  notes: string | null;
+  employment: {
+    department: { name: string } | null;
+    position: { title: string } | null;
+  };
+}
+
+interface ApiEmployeeDetail {
+  id: number;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  nameExtension: string | null;
+  birthDate: string | null;
+  placeOfBirth: string | null;
+  gender: string;
+  civilStatus: string | null;
+  phone: string;
+  personalEmail: string | null;
+  email: string | null;
+  address: string;
+  employeeNo: string | null;
+  educationalBackground: string | null;
+  school: string | null;
+  course: string | null;
+  yearGraduated: string | null;
+  certifications: string | null;
+  employments: ApiEmployment[];
+}
+
+interface IdNameOption { id: number; name: string; }
+interface ManagerOption { id: number; fullName: string; }
 
 const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
   Active: 'success',
@@ -70,108 +119,233 @@ interface EmployeeProfileViewProps {
 export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): React.ReactNode {
   const router = useRouter();
   const { success, error } = useToast();
+  const employeeId = parseInt(employee.id, 10);
+
   const [activeTab, setActiveTab] = useState<ProfileTab>('personal');
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
+  const [personalSaving, setPersonalSaving] = useState(false);
+  const personalDataSnapshot = useRef<PersonalInfoFormState | null>(null);
+
+  /* ── Personal info ───────────────────────────────────────────── */
   const [personalInfoForm, setPersonalInfoForm] = useState<PersonalInfoFormState>({
     employeeNo: employee.employeeNo,
     firstName: employee.firstName,
+    middleName: '',
     lastName: employee.lastName,
+    nameExtension: '',
     department: employee.department,
     position: employee.position,
     phone: employee.phone,
     hireDate: employee.dateHired,
     employmentType: employee.status === 'Probationary' ? 'Probationary' : 'Regular',
     employmentStatus: employee.status,
-    birthDate: '1998-04-16',
-    gender: 'Male',
-    address: 'Cebu City, Philippines',
+    birthDate: '',
+    placeOfBirth: '',
+    gender: '',
+    civilStatus: '',
+    personalEmail: '',
+    address: '',
     email: employee.email,
+    educationalBackground: '',
+    school: '',
+    course: '',
+    yearGraduated: '',
+    certifications: '',
   });
+
+  /* ── Government IDs ──────────────────────────────────────────── */
   const [governmentIds, setGovernmentIds] = useState<GovernmentIdsState>({
     sss: employee.sssNo,
     pagibig: employee.pagIbigNo,
     philhealth: employee.philHealthNo,
     tin: employee.tinNo,
   });
+  const [govIdsSaving, setGovIdsSaving] = useState(false);
+
+  /* ── Documents (mock — left as-is) ──────────────────────────── */
   const [documents, setDocuments] = useState<DocumentState>({
-    Resume: 'resume_roberto_villanueva.pdf',
-    'Birth Certificate': 'birth_certificate_roberto.pdf',
-    'Valid ID': 'drivers_license_roberto.jpg',
-    'NBI Clearance': null,
-    'Barangay Clearance': null,
-    'Medical Results': 'medical_results_2026.pdf',
-    'Bank QR': 'bank_qr_bdo.png',
+    Resume: null, 'Birth Certificate': null, 'Valid ID': null,
+    'NBI Clearance': null, 'Barangay Clearance': null, 'Medical Results': null, 'Bank QR': null,
   });
-  const [employmentForm, setEmploymentForm] = useState<EmploymentFormState>({
-    client: 'Internal Company',
-    department: employee.department,
-    position: employee.position,
-    team: 'Tax Team',
-    employeeLevel: 'Level 7',
-    employmentType: employee.status === 'Probationary' ? 'Probationary' : 'Regular',
-    hireDate: employee.dateHired,
-    regularizationDate: '2026-07-15',
-    reportingManager: 'Maria Santos',
-  });
-  const [employmentRecords, setEmploymentRecords] = useState<EmploymentRecord[]>([
-    {
-      id: 'employment-1',
-      client: 'Internal Company',
-      department: employee.department,
-      position: employee.position,
-      team: 'Tax Team',
-      employeeLevel: 'Level 7',
-      employmentType: employee.status === 'Probationary' ? 'Probationary' : 'Regular',
-      hireDate: employee.dateHired,
-      regularizationDate: '2026-07-15',
-      reportingManager: 'Maria Santos',
-      status: 'Active',
-    },
-  ]);
-  const [contractForm, setContractForm] = useState<ContractFormState>({
-    employmentId: 'employment-1',
-    contractType: 'Probationary',
-    startDate: employee.dateHired,
-    endDate: '2026-07-15',
-    salary: String(employee.salary),
-    payMethod: 'Fund Transfer',
-    workHours: '40 per week',
-    notes: 'Probationary period for 6 months.',
-  });
-  const [contracts, setContracts] = useState<ContractRecord[]>([
-    {
-      id: 'contract-1',
-      employmentId: 'employment-1',
-      contractType: 'Probationary',
-      startDate: employee.dateHired,
-      endDate: '2026-07-15',
-      salary: String(employee.salary),
-      payMethod: 'Fund Transfer',
-      workHours: '40 per week',
-      notes: 'Probationary period for 6 months.',
-      status: 'Active',
-    },
-  ]);
-  const [appAccess, setAppAccess] = useState<AppAccessState>({
-    sales: false,
-    compliance: false,
-    liaison: false,
-    accounting: employee.department === 'Accounting',
-    accountOfficer: employee.department === 'Account Officer',
-    hr: employee.department === 'HR',
-    taskManagement: true,
-  });
+
+  /* ── Employment ──────────────────────────────────────────────── */
+  const [employmentRecords, setEmploymentRecords] = useState<EmploymentRecord[]>([]);
+  /* ── Contracts ───────────────────────────────────────────────── */
+  const [contracts, setContracts] = useState<ContractRecord[]>([]);
+
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  /* ── Option state ────────────────────────────────────────────── */
+  const [deptOptions, setDeptOptions] = useState<IdNameOption[]>([]);
+  const [positionOptions, setPositionOptions] = useState<{ id: number; title: string }[]>([]);
+  const [levelOptions, setLevelOptions] = useState<IdNameOption[]>([]);
+
+  const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
+  const [scheduleOptions, setScheduleOptions] = useState<IdNameOption[]>([]);
+
+  /* ── Fetch helpers ───────────────────────────────────────────── */
+
+  const fetchPersonalData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}`);
+      if (!res.ok) return;
+      const json = (await res.json()) as { data: ApiEmployeeDetail };
+      const emp = json.data;
+      const activeEmp = emp.employments.find((e) => e.employmentStatus === 'ACTIVE') ?? emp.employments[0];
+      const formatEnum = (val: string) =>
+        val.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const snapshot: PersonalInfoFormState = {
+        employeeNo: emp.employeeNo ?? '',
+        firstName: emp.firstName,
+        middleName: emp.middleName ?? '',
+        lastName: emp.lastName,
+        nameExtension: emp.nameExtension ?? '',
+        department: activeEmp?.department?.name ?? '',
+        position: activeEmp?.position?.title ?? '',
+        phone: emp.phone,
+        hireDate: activeEmp?.hireDate ?? '',
+        employmentType: activeEmp?.employmentType ? formatEnum(activeEmp.employmentType) : '',
+        employmentStatus: activeEmp?.employmentStatus ? formatEnum(activeEmp.employmentStatus) : '',
+        birthDate: emp.birthDate ? emp.birthDate.slice(0, 10) : '',
+        placeOfBirth: emp.placeOfBirth ?? '',
+        gender: emp.gender,
+        civilStatus: emp.civilStatus ?? '',
+        personalEmail: emp.personalEmail ?? '',
+        address: emp.address,
+        email: emp.email ?? '',
+        educationalBackground: emp.educationalBackground ?? '',
+        school: emp.school ?? '',
+        course: emp.course ?? '',
+        yearGraduated: emp.yearGraduated ?? '',
+        certifications: emp.certifications ?? '',
+      };
+      personalDataSnapshot.current = snapshot;
+      setPersonalInfoForm(snapshot);
+    } catch { /* keep initial values */ }
+  }, [employeeId]);
+
+  const fetchGovIds = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}/gov-ids`);
+      if (!res.ok) return;
+      const json = (await res.json()) as { data: { sss: string | null; pagibig: string | null; philhealth: string | null; tin: string | null } };
+      setGovernmentIds({
+        sss: json.data.sss ?? '',
+        pagibig: json.data.pagibig ?? '',
+        philhealth: json.data.philhealth ?? '',
+        tin: json.data.tin ?? '',
+      });
+    } catch { /* keep initial values from mapped employee */ }
+  }, [employeeId]);
+
+  const fetchEmployments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}/employment`);
+      if (!res.ok) return;
+      const json = (await res.json()) as { data: ApiEmployment[] };
+      setEmploymentRecords((json.data ?? []).map((e) => ({
+        id: e.id,
+        clientId: e.client?.id ?? 1,
+        clientName: e.client?.businessName ?? `Client #${e.client?.id ?? '?'}`,
+        departmentId: e.department?.id ?? null,
+        department: e.department?.name ?? '',
+        positionId: e.position?.id ?? null,
+        position: e.position?.title ?? '',
+        employmentType: e.employmentType ?? '',
+        employeeLevelId: e.employeeLevelId ?? null,
+        reportingManagerId: e.reportingManager?.id ?? null,
+        hireDate: e.hireDate ?? '',
+        regularizationDate: e.regularizationDate ?? null,
+        endDate: e.endDate ?? null,
+        status: e.employmentStatus,
+      })));
+    } catch { /* ignore */ }
+  }, [employeeId]);
+
+  const fetchContracts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}/contract`);
+      if (!res.ok) return;
+      const json = (await res.json()) as { data: ApiContract[] };
+      setContracts((json.data ?? []).map((c) => ({
+        id: c.id,
+        employmentId: c.employmentId,
+        departmentName: c.employment?.department?.name ?? '—',
+        positionTitle: c.employment?.position?.title ?? '—',
+        contractType: c.contractType,
+        startDate: c.contractStart,
+        endDate: c.contractEnd,
+        monthlyRate: c.monthlyRate,
+        dailyRate: c.dailyRate,
+        hourlyRate: c.hourlyRate,
+        disbursedMethod: c.disbursedMethod,
+        status: c.status,
+        scheduleId: c.scheduleId,
+        workingHoursPerWeek: c.workingHoursPerWeek,
+        bankDetails: c.bankDetails,
+        notes: c.notes,
+      })));
+    } catch { /* ignore */ }
+  }, [employeeId]);
+
+  const fetchOptions = useCallback(async () => {
+    try {
+      const [deptRes, levelRes, empRes, schedRes] = await Promise.all([
+        fetch('/api/hr/departments'),
+        fetch('/api/admin/employee-levels'),
+        fetch('/api/hr/employees'),
+        fetch('/api/hr/work-schedules'),
+      ]);
+
+      if (deptRes.ok) {
+        const deptData = (await deptRes.json()) as { data: { id: number; name: string }[] };
+        setDeptOptions((deptData.data ?? []).map((d) => ({ id: d.id, name: d.name })));
+      } else {
+        error('Departments unavailable', 'Could not load department list. Check that the ATMS client is set up correctly.');
+      }
+
+      if (levelRes.ok) {
+        const levelData = (await levelRes.json()) as { data: { id: number; name: string }[] };
+        setLevelOptions((levelData.data ?? []).map((l) => ({ id: l.id, name: l.name })));
+      }
+
+      if (empRes.ok) {
+        const empData = (await empRes.json()) as { data: { id: number; fullName: string }[] };
+        setManagerOptions(
+          empData.data
+            .filter((e) => e.id !== employeeId)
+            .map((e) => ({ id: e.id, fullName: e.fullName })),
+        );
+      }
+      if (schedRes.ok) {
+        const schedData = (await schedRes.json()) as { data: { id: number; name: string }[] };
+        setScheduleOptions((schedData.data ?? []).map((s) => ({ id: s.id, name: s.name })));
+      }
+    } catch {
+      error('Network error', 'Failed to load form options. Please refresh the page.');
+    }
+  }, [employeeId, error]);
+
+  const fetchPositionsForDept = useCallback(async (deptId: string) => {
+    if (!deptId) { setPositionOptions([]); return; }
+    try {
+      const res = await fetch(`/api/hr/positions?departmentId=${deptId}`);
+      const data = (await res.json()) as { data: { id: number; title: string }[] };
+      setPositionOptions(data.data ?? []);
+    } catch { setPositionOptions([]); }
+  }, []);
+
+  useEffect(() => {
+    void fetchPersonalData();
+    void fetchGovIds();
+    void fetchOptions();
+    void Promise.all([fetchEmployments(), fetchContracts()]).then(() => { setDataLoaded(true); });
+  }, [fetchPersonalData, fetchGovIds, fetchEmployments, fetchContracts, fetchOptions]);
+
+  /* ── Handlers ─────────────────────────────────────────────────── */
 
   const updateGovernmentId = <K extends keyof GovernmentIdsState>(key: K, value: GovernmentIdsState[K]) => {
     setGovernmentIds((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const updateEmploymentForm = <K extends keyof EmploymentFormState>(key: K, value: EmploymentFormState[K]) => {
-    setEmploymentForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const updateContractForm = <K extends keyof ContractFormState>(key: K, value: ContractFormState[K]) => {
-    setContractForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const updatePersonalInfoForm = <K extends keyof PersonalInfoFormState>(key: K, value: PersonalInfoFormState[K]) => {
@@ -179,31 +353,80 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
   };
 
   const resetPersonalInfoForm = () => {
-    setPersonalInfoForm({
-      employeeNo: employee.employeeNo,
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      department: employee.department,
-      position: employee.position,
-      phone: employee.phone,
-      hireDate: employee.dateHired,
-      employmentType: employee.status === 'Probationary' ? 'Probationary' : 'Regular',
-      employmentStatus: employee.status,
-      birthDate: '1998-04-16',
-      gender: 'Male',
-      address: 'Cebu City, Philippines',
-      email: employee.email,
-    });
+    if (personalDataSnapshot.current) {
+      setPersonalInfoForm(personalDataSnapshot.current);
+    } else {
+      setPersonalInfoForm({
+        employeeNo: employee.employeeNo,
+        firstName: employee.firstName,
+        middleName: '',
+        lastName: employee.lastName,
+        nameExtension: '',
+        department: employee.department,
+        position: employee.position,
+        phone: employee.phone,
+        hireDate: employee.dateHired,
+        employmentType: employee.status === 'Probationary' ? 'Probationary' : 'Regular',
+        employmentStatus: employee.status,
+        birthDate: '',
+        placeOfBirth: '',
+        gender: '',
+        civilStatus: '',
+        personalEmail: '',
+        address: '',
+        email: employee.email,
+        educationalBackground: '',
+        school: '',
+        course: '',
+        yearGraduated: '',
+        certifications: '',
+      });
+    }
   };
 
-  const handleSavePersonalInfo = () => {
-    if (!personalInfoForm.firstName || !personalInfoForm.lastName || !personalInfoForm.employeeNo) {
-      error('Failed to save employee information', 'Please complete all required employee fields.');
+  const handleSavePersonalInfo = async () => {
+    if (!personalInfoForm.firstName || !personalInfoForm.lastName) {
+      error('Validation error', 'First name and last name are required.');
       return;
     }
-
-    success('Employee updated', `${personalInfoForm.firstName} ${personalInfoForm.lastName}'s information has been saved.`);
-    setIsEditingPersonal(false);
+    setPersonalSaving(true);
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: personalInfoForm.firstName,
+          middleName: personalInfoForm.middleName || null,
+          lastName: personalInfoForm.lastName,
+          nameExtension: personalInfoForm.nameExtension || null,
+          phone: personalInfoForm.phone || null,
+          birthDate: personalInfoForm.birthDate || undefined,
+          placeOfBirth: personalInfoForm.placeOfBirth || null,
+          gender: personalInfoForm.gender || undefined,
+          civilStatus: personalInfoForm.civilStatus || null,
+          personalEmail: personalInfoForm.personalEmail || null,
+          address: personalInfoForm.address || undefined,
+          employeeNo: personalInfoForm.employeeNo || null,
+          educationalBackground: personalInfoForm.educationalBackground || null,
+          school: personalInfoForm.school || null,
+          course: personalInfoForm.course || null,
+          yearGraduated: personalInfoForm.yearGraduated || null,
+          certifications: personalInfoForm.certifications || null,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        error('Failed to save', data.error ?? 'Could not update employee information.');
+        return;
+      }
+      success('Employee updated', `${personalInfoForm.firstName} ${personalInfoForm.lastName}'s information has been saved.`);
+      personalDataSnapshot.current = { ...personalInfoForm };
+      setIsEditingPersonal(false);
+    } catch {
+      error('Network error', 'Could not connect to the server. Please try again.');
+    } finally {
+      setPersonalSaving(false);
+    }
   };
 
   const handleCancelPersonalInfoEdit = () => {
@@ -211,8 +434,27 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
     setIsEditingPersonal(false);
   };
 
-  const handleSaveGovernmentIds = () => {
-    success('Government IDs saved', 'Government ID information has been updated.');
+  const handleSaveGovernmentIds = async () => {
+    setGovIdsSaving(true);
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}/gov-ids`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sss: governmentIds.sss || null,
+          pagibig: governmentIds.pagibig || null,
+          philhealth: governmentIds.philhealth || null,
+          tin: governmentIds.tin || null,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) { error('Failed to save', data.error ?? 'Could not save government IDs.'); return; }
+      success('Government IDs saved', 'Government ID information has been updated.');
+    } catch {
+      error('Network error', 'Could not connect to the server. Please try again.');
+    } finally {
+      setGovIdsSaving(false);
+    }
   };
 
   const handleDocumentUpload = (label: DocumentLabel, fileName?: string) => {
@@ -223,52 +465,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
     success('Document uploaded', `${label} has been uploaded.`);
   };
 
-  const handleAddEmployment = () => {
-    if (!employmentForm.client || !employmentForm.department || !employmentForm.position || !employmentForm.hireDate) {
-      error('Failed to save employment', 'Please complete the employment form.');
-      return;
-    }
-
-    const nextRecord: EmploymentRecord = {
-      id: crypto.randomUUID(),
-      ...employmentForm,
-      status: 'Active',
-    };
-
-    setEmploymentRecords((prev) => [nextRecord, ...prev]);
-    setContractForm((prev) => ({ ...prev, employmentId: nextRecord.id }));
-    success('Employment added', 'Employment history has been updated.');
-  };
-
-  const handleSaveContract = () => {
-    if (!contractForm.employmentId || !contractForm.contractType || !contractForm.startDate || !contractForm.salary) {
-      error('Failed to save contract', 'Please complete the contract form.');
-      return;
-    }
-
-    const nextContract: ContractRecord = {
-      id: crypto.randomUUID(),
-      ...contractForm,
-      status: 'Active',
-    };
-
-    setContracts((prev) => [nextContract, ...prev]);
-    success('Contract saved', 'Employee contract has been added.');
-  };
-
-  const toggleAppAccess = (key: AppAccessKey) => {
-    setAppAccess((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const accessItems: Array<{ key: AppAccessKey; label: string; description: string }> = [
-    { key: 'sales', label: 'Sales Portal', description: 'Leads, plans, and commission workflows.' },
-    { key: 'compliance', label: 'Compliance Portal', description: 'Tax and regulatory task management.' },
-    { key: 'liaison', label: 'Liaison Portal', description: 'Agency schedules and field assignments.' },
-    { key: 'accounting', label: 'Accounting Portal', description: 'Billing, invoices, and payments.' },
-    { key: 'accountOfficer', label: 'Account Officer Portal', description: 'Client relationship workflows.' },
-    { key: 'hr', label: 'HR Portal', description: 'Employee administration and internal HR tasks.' },
-    { key: 'taskManagement', label: 'Task Management Portal', description: 'Cross-team task visibility and updates.' },
-  ];
+  /* ── Render ───────────────────────────────────────────────────── */
 
   return (
     <div className="space-y-6">
@@ -312,18 +509,27 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
       </Card>
 
       <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-              activeTab === key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Icon size={16} />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
+        {TABS.map(({ key, label, icon: Icon }) => {
+          const hasAlert = dataLoaded && (
+            (key === 'employment' && employmentRecords.length === 0) ||
+            (key === 'contracts' && contracts.length === 0)
+          );
+          return (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Icon size={16} />
+              <span className="hidden sm:inline">{label}</span>
+              {hasAlert && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === 'personal' && (
@@ -332,10 +538,11 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
           personalInfoForm={personalInfoForm}
           onStartEdit={() => setIsEditingPersonal(true)}
           onCancelEdit={handleCancelPersonalInfoEdit}
-          onSave={handleSavePersonalInfo}
+          onSave={() => { void handleSavePersonalInfo(); }}
           onFieldChange={updatePersonalInfoForm}
           personalInputClass={personalInputClass}
           personalSelectClass={personalSelectClass}
+          disabled={personalSaving}
         />
       )}
 
@@ -343,8 +550,9 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         <GovernmentIdsTab
           governmentIds={governmentIds}
           inputClass={inputClass}
+          disabled={govIdsSaving}
           onFieldChange={updateGovernmentId}
-          onSave={handleSaveGovernmentIds}
+          onSave={() => { void handleSaveGovernmentIds(); }}
         />
       )}
 
@@ -352,40 +560,23 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
 
       {activeTab === 'employment' && (
         <EmploymentTab
-          employmentForm={employmentForm}
           employmentRecords={employmentRecords}
-          selectClass={selectClass}
-          inputClass={inputClass}
-          statusVariant={STATUS_VARIANT}
-          departmentOptions={DEPARTMENT_OPTIONS}
-          teamOptions={TEAM_OPTIONS}
-          levelOptions={LEVEL_OPTIONS}
-          reportingManagerOptions={REPORTING_MANAGER_OPTIONS}
-          clientOptions={CLIENT_OPTIONS}
-          onFieldChange={updateEmploymentForm}
-          onSave={handleAddEmployment}
+          contracts={contracts}
+          employeeId={employeeId}
+          departmentOptions={deptOptions}
+          levelOptions={levelOptions}
+          managerOptions={managerOptions}
+          onEmploymentSaved={() => { void fetchEmployments(); }}
         />
       )}
 
       {activeTab === 'contracts' && (
         <ContractsTab
-          contractForm={contractForm}
           contracts={contracts}
           employmentRecords={employmentRecords}
-          selectClass={selectClass}
-          inputClass={inputClass}
-          statusVariant={STATUS_VARIANT}
-          onFieldChange={updateContractForm}
-          onSave={handleSaveContract}
-        />
-      )}
-
-      {activeTab === 'app-access' && (
-        <AppAccessTab
-          appAccess={appAccess}
-          accessItems={accessItems}
-          onToggleAccess={toggleAppAccess}
-          onSave={() => success('App access updated', 'Application access settings have been saved.')}
+          scheduleOptions={scheduleOptions}
+          employeeId={employeeId}
+          onContractSaved={() => { void fetchContracts(); }}
         />
       )}
     </div>

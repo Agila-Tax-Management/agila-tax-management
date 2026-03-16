@@ -1,132 +1,219 @@
 // src/components/hr/profile/components/ContractsTab.tsx
 'use client';
 
-import React from 'react';
-import { Save } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
-import type { ContractFormState, ContractRecord, ContractTypeOption, EmploymentRecord, PayMethodOption } from '../profile-types';
+import { Modal } from '@/components/UI/Modal';
+import { ContractFormModal } from './ContractFormModal';
+import { useToast } from '@/context/ToastContext';
+import type { ContractRecord, EmploymentRecord } from '../profile-types';
+
+const CONTRACT_STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  ACTIVE: 'success', DRAFT: 'warning', EXPIRED: 'neutral', TERMINATED: 'danger',
+};
 
 interface ContractsTabProps {
-  contractForm: ContractFormState;
   contracts: ContractRecord[];
   employmentRecords: EmploymentRecord[];
-  selectClass: string;
-  inputClass: string;
-  statusVariant: Record<string, 'success' | 'info' | 'warning' | 'danger'>;
-  onFieldChange: <K extends keyof ContractFormState>(key: K, value: ContractFormState[K]) => void;
-  onSave: () => void;
+  scheduleOptions: { id: number; name: string }[];
+  employeeId: number;
+  onContractSaved: () => void;
 }
 
 export function ContractsTab({
-  contractForm,
-  contracts,
-  employmentRecords,
-  selectClass,
-  inputClass,
-  statusVariant,
-  onFieldChange,
-  onSave,
+  contracts, employmentRecords, scheduleOptions, employeeId, onContractSaved,
 }: ContractsTabProps): React.ReactNode {
+  const { success, error } = useToast();
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editContract, setEditContract] = useState<ContractRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ContractRecord | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const hasActiveContract = contracts.some((c) => c.status === 'ACTIVE');
+
+  const handleSaved = () => {
+    onContractSaved();
+    setAddModalOpen(false);
+    setEditContract(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(
+        `/api/hr/employees/${employeeId}/contract?contractId=${deleteTarget.id}`,
+        { method: 'DELETE' },
+      );
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        error('Failed to delete', data.error ?? 'Could not delete contract.');
+        return;
+      }
+      success('Contract deleted', 'The contract has been removed.');
+      setDeleteTarget(null);
+      onContractSaved();
+    } catch {
+      error('Network error', 'Could not connect to the server. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <Card className="p-6 space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-black text-foreground">Contracts</h2>
-            <p className="text-sm text-muted-foreground mt-1">Maintain legal agreement records for the selected employment.</p>
-          </div>
-          <Badge variant="warning">Add Contract</Badge>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employment Record</label>
-            <select className={selectClass} value={contractForm.employmentId} onChange={(event) => onFieldChange('employmentId', event.target.value)}>
-              {employmentRecords.map((record) => (
-                <option key={record.id} value={record.id}>
-                  {record.position} · {record.department}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Contract Type</label>
-            <select
-              className={selectClass}
-              value={contractForm.contractType}
-              onChange={(event) => onFieldChange('contractType', event.target.value as ContractTypeOption)}
-            >
-              <option>Probationary</option>
-              <option>Regular</option>
-              <option>Contractual</option>
-              <option>Project Based</option>
-              <option>Consultant</option>
-              <option>Intern</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Start Date</label>
-            <input type="date" className={inputClass} value={contractForm.startDate} onChange={(event) => onFieldChange('startDate', event.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">End Date</label>
-            <input type="date" className={inputClass} value={contractForm.endDate} onChange={(event) => onFieldChange('endDate', event.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Salary (Monthly)</label>
-            <input type="text" className={inputClass} value={contractForm.salary} onChange={(event) => onFieldChange('salary', event.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Pay Method</label>
-            <select
-              className={selectClass}
-              value={contractForm.payMethod}
-              onChange={(event) => onFieldChange('payMethod', event.target.value as PayMethodOption)}
-            >
-              <option>Cash Salary</option>
-              <option>Fund Transfer</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Working Hours</label>
-            <input type="text" className={inputClass} value={contractForm.workHours} onChange={(event) => onFieldChange('workHours', event.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Notes</label>
-            <textarea className={`${inputClass} min-h-28 resize-none`} value={contractForm.notes} onChange={(event) => onFieldChange('notes', event.target.value)} />
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={onSave}>
-            <Save size={16} /> Save Contract
-          </Button>
-        </div>
-      </Card>
-
-      <Card className="p-6 space-y-4">
-        <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Contract Records</h3>
-        <div className="space-y-3">
-          {contracts.map((contract) => (
-            <div key={contract.id} className="rounded-xl border border-border p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-foreground">{contract.contractType}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {contract.startDate} - {contract.endDate || 'Open-ended'}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Salary: {contract.salary} · {contract.payMethod} · {contract.workHours}
-                  </p>
-                </div>
-                <Badge variant={statusVariant[contract.status] ?? 'neutral'}>{contract.status}</Badge>
-              </div>
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <Card className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-foreground">Contracts</h2>
+              <p className="text-sm text-muted-foreground mt-1">Legal agreement records for each employment period.</p>
             </div>
-          ))}
+            <Button className="gap-2 shrink-0" onClick={() => setAddModalOpen(true)}>
+              <Plus size={16} /> Add Contract
+            </Button>
+          </div>
+
+          {hasActiveContract && (
+            <div className="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3">
+              <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                There is already an <span className="font-semibold">Active</span> contract on record.
+                Adding a new active contract may conflict with the existing one.
+              </p>
+            </div>
+          )}
+        </Card>
+
+        {/* Contract Records */}
+        <Card className="p-6 space-y-4">
+          <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Contract Records</h3>
+
+          {contracts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No contracts on record. Click &ldquo;Add Contract&rdquo; to create one.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {contracts.map((contract) => (
+                <div
+                  key={contract.id}
+                  className="rounded-xl border border-border p-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-foreground">
+                        {contract.contractType.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {contract.positionTitle} · {contract.departmentName}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-PH') : '—'}{' '}–{' '}
+                        {contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-PH') : 'Open-ended'}
+                      </p>
+                      {(contract.monthlyRate ?? contract.dailyRate ?? contract.hourlyRate) && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {[
+                            contract.monthlyRate ? `₱${parseFloat(contract.monthlyRate).toLocaleString('en-PH')}/mo` : null,
+                            contract.dailyRate ? `₱${parseFloat(contract.dailyRate).toLocaleString('en-PH')}/day` : null,
+                            contract.hourlyRate ? `₱${parseFloat(contract.hourlyRate).toLocaleString('en-PH')}/hr` : null,
+                            contract.disbursedMethod
+                              ? (contract.disbursedMethod === 'FUND_TRANSFER' ? 'Fund Transfer' : 'Cash Salary')
+                              : null,
+                          ].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={CONTRACT_STATUS_VARIANT[contract.status] ?? 'neutral'}>
+                        {contract.status}
+                      </Badge>
+                      <button
+                        type="button"
+                        title="Edit contract"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        onClick={() => setEditContract(contract)}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Delete contract"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        onClick={() => setDeleteTarget(contract)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Add Contract Modal */}
+      <ContractFormModal
+        isOpen={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onSaved={handleSaved}
+        employeeId={employeeId}
+        employmentRecords={employmentRecords}
+        scheduleOptions={scheduleOptions}
+        contract={null}
+      />
+
+      {/* Edit Contract Modal */}
+      <ContractFormModal
+        isOpen={editContract !== null}
+        onClose={() => setEditContract(null)}
+        onSaved={handleSaved}
+        employeeId={employeeId}
+        employmentRecords={employmentRecords}
+        scheduleOptions={scheduleOptions}
+        contract={editContract}
+      />
+
+      {/* Delete confirmation modal */}
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => { if (!deleteLoading) setDeleteTarget(null); }}
+        title="Delete Contract"
+        size="sm"
+      >
+        <div className="space-y-4">
+          {deleteTarget?.status === 'ACTIVE' && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <p className="text-xs font-medium">This is an <strong>Active</strong> contract. Deleting it will immediately remove the employee&apos;s current contractual agreement.</p>
+            </div>
+          )}
+          <p className="text-sm text-foreground">
+            Are you sure you want to delete the{' '}
+            <span className="font-semibold">{deleteTarget?.contractType.replace(/_/g, ' ')}</span>{' '}
+            contract? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteLoading}>
+              No, keep it
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => { void handleDelete(); }}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Yes, delete'}
+            </Button>
+          </div>
         </div>
-      </Card>
-    </div>
+      </Modal>
+    </>
   );
 }
+

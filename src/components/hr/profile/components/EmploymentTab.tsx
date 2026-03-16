@@ -1,152 +1,241 @@
 // src/components/hr/profile/components/EmploymentTab.tsx
 'use client';
 
-import React from 'react';
-import { Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
-import type { EmploymentFormState, EmploymentRecord, EmploymentTypeOption } from '../profile-types';
+import { Modal } from '@/components/UI/Modal';
+import { EmploymentFormModal } from './EmploymentFormModal';
+import type { ContractRecord, EmploymentRecord } from '../profile-types';
+import { useToast } from '@/context/ToastContext';
+
+interface IdNameOption { id: number; name: string; }
+interface ManagerOption { id: number; fullName: string; }
 
 interface EmploymentTabProps {
-  employmentForm: EmploymentFormState;
   employmentRecords: EmploymentRecord[];
-  selectClass: string;
-  inputClass: string;
-  statusVariant: Record<string, 'success' | 'info' | 'warning' | 'danger'>;
-  departmentOptions: string[];
-  teamOptions: string[];
-  levelOptions: string[];
-  reportingManagerOptions: string[];
-  clientOptions: string[];
-  onFieldChange: <K extends keyof EmploymentFormState>(key: K, value: EmploymentFormState[K]) => void;
-  onSave: () => void;
+  contracts: ContractRecord[];
+  employeeId: number;
+  departmentOptions: IdNameOption[];
+  levelOptions: IdNameOption[];
+  managerOptions: ManagerOption[];
+  onEmploymentSaved: () => void;
 }
 
+const EMP_TYPE_LABEL: Record<string, string> = {
+  REGULAR: 'Regular', PROBATIONARY: 'Probationary', CONTRACTUAL: 'Contractual',
+  PROJECT_BASED: 'Project-Based', PART_TIME: 'Part-Time', INTERN: 'Intern',
+};
+
+const EMP_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: 'Active', ON_LEAVE: 'On Leave', RESIGNED: 'Resigned',
+  TERMINATED: 'Terminated', SUSPENDED: 'Suspended', RETIRED: 'Retired',
+};
+
+const EMP_STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  ACTIVE: 'success', ON_LEAVE: 'info', RESIGNED: 'danger',
+  TERMINATED: 'danger', SUSPENDED: 'warning', RETIRED: 'neutral',
+};
+
 export function EmploymentTab({
-  employmentForm,
-  employmentRecords,
-  selectClass,
-  inputClass,
-  statusVariant,
-  departmentOptions,
-  teamOptions,
-  levelOptions,
-  reportingManagerOptions,
-  clientOptions,
-  onFieldChange,
-  onSave,
+  employmentRecords, contracts, employeeId, departmentOptions, levelOptions, managerOptions, onEmploymentSaved,
 }: EmploymentTabProps): React.ReactNode {
+  const { success, error } = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editRecord, setEditRecord] = useState<EmploymentRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EmploymentRecord | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const hasActiveEmployment = employmentRecords.some((r) => r.status === 'ACTIVE');
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(
+        `/api/hr/employees/${employeeId}/employment?employmentId=${deleteTarget.id}`,
+        { method: 'DELETE' },
+      );
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        error('Failed to delete', data.error ?? 'Could not delete employment record.');
+        return;
+      }
+      success('Employment deleted', 'The employment record has been removed.');
+      setDeleteTarget(null);
+      onEmploymentSaved();
+    } catch {
+      error('Network error', 'Could not connect to the server. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const deleteTargetHasActiveContract = deleteTarget
+    ? contracts.some((c) => c.employmentId === deleteTarget.id && c.status === 'ACTIVE')
+    : false;
+
   return (
     <div className="space-y-6">
-      <Card className="p-6 space-y-5">
+      {/* Header card */}
+      <Card className="p-6">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-black text-foreground">Employment</h2>
-            <p className="text-sm text-muted-foreground mt-1">Create and maintain employee job assignments.</p>
+            <p className="text-sm text-muted-foreground mt-1">Manage employee job assignments and employment history.</p>
           </div>
-          <Badge variant="info">Add Employment</Badge>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Client</label>
-            <select className={selectClass} value={employmentForm.client} onChange={(event) => onFieldChange('client', event.target.value)}>
-              {clientOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department</label>
-            <select className={selectClass} value={employmentForm.department} onChange={(event) => onFieldChange('department', event.target.value)}>
-              {departmentOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Position</label>
-            <input type="text" className={inputClass} value={employmentForm.position} onChange={(event) => onFieldChange('position', event.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Team</label>
-            <select className={selectClass} value={employmentForm.team} onChange={(event) => onFieldChange('team', event.target.value)}>
-              {teamOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee Level</label>
-            <select className={selectClass} value={employmentForm.employeeLevel} onChange={(event) => onFieldChange('employeeLevel', event.target.value)}>
-              {levelOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employment Type</label>
-            <select
-              className={selectClass}
-              value={employmentForm.employmentType}
-              onChange={(event) => onFieldChange('employmentType', event.target.value as EmploymentTypeOption)}
-            >
-              <option>Regular</option>
-              <option>Probationary</option>
-              <option>Contractual</option>
-              <option>Project Based</option>
-              <option>Part Time</option>
-              <option>Intern</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hire Date</label>
-            <input type="date" className={inputClass} value={employmentForm.hireDate} onChange={(event) => onFieldChange('hireDate', event.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Regularization Date</label>
-            <input
-              type="date"
-              className={inputClass}
-              value={employmentForm.regularizationDate}
-              onChange={(event) => onFieldChange('regularizationDate', event.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Reporting Manager</label>
-            <select className={selectClass} value={employmentForm.reportingManager} onChange={(event) => onFieldChange('reportingManager', event.target.value)}>
-              {reportingManagerOptions.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={onSave}>
-            <Plus size={16} /> Save
+          <Button
+            className="bg-rose-600 hover:bg-rose-700 text-white gap-2"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus size={16} /> Add Employment
           </Button>
         </div>
+        {hasActiveEmployment && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <p className="text-xs font-medium">
+              This employee has an active employment record. Adding a new one will create a parallel record — ensure this is intentional.
+            </p>
+          </div>
+        )}
       </Card>
 
+      {/* Employment history */}
       <Card className="p-6 space-y-4">
         <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Employment History</h3>
         <div className="space-y-3">
-          {employmentRecords.map((record) => (
-            <div key={record.id} className="rounded-xl border border-border p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-foreground">{record.position}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{record.department} Department</p>
-                  <p className="text-xs text-muted-foreground mt-1">{record.hireDate} - Present</p>
+          {employmentRecords.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No employment records yet.</p>
+          )}
+          {employmentRecords.map((record) => {
+            const hasActiveContract = contracts.some(
+              (c) => c.employmentId === record.id && c.status === 'ACTIVE',
+            );
+            return (
+              <div
+                key={record.id}
+                className="rounded-xl border border-border p-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground">{record.position || '—'}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {record.department ? `${record.department} Department` : record.clientName}
+                      {record.employmentType && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          · {EMP_TYPE_LABEL[record.employmentType] ?? record.employmentType}
+                        </span>
+                      )}
+                    </p>
+                    {record.hireDate && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(record.hireDate).toLocaleDateString('en-PH')}
+                        {record.endDate
+                          ? ` – ${new Date(record.endDate).toLocaleDateString('en-PH')}`
+                          : ' – Present'}
+                      </p>
+                    )}
+                    {hasActiveContract && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
+                        ⚠ Has an active contract
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant={EMP_STATUS_VARIANT[record.status] ?? 'neutral'}>
+                      {EMP_STATUS_LABEL[record.status] ?? record.status}
+                    </Badge>
+                    <button
+                      type="button"
+                      title="Edit employment"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      onClick={() => setEditRecord(record)}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete employment"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      onClick={() => setDeleteTarget(record)}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
-                <Badge variant={statusVariant[record.status] ?? 'neutral'}>{record.status}</Badge>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
+
+      {/* Add modal */}
+      <EmploymentFormModal
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSaved={() => { onEmploymentSaved(); }}
+        employeeId={employeeId}
+        departmentOptions={departmentOptions}
+        levelOptions={levelOptions}
+        managerOptions={managerOptions}
+        employment={null}
+      />
+
+      {/* Edit modal */}
+      <EmploymentFormModal
+        isOpen={editRecord !== null}
+        onClose={() => setEditRecord(null)}
+        onSaved={() => { onEmploymentSaved(); }}
+        employeeId={employeeId}
+        departmentOptions={departmentOptions}
+        levelOptions={levelOptions}
+        managerOptions={managerOptions}
+        employment={editRecord}
+      />
+
+      {/* Delete confirmation modal */}
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => { if (!deleteLoading) setDeleteTarget(null); }}
+        title="Delete Employment Record"
+        size="sm"
+      >
+        <div className="space-y-4 p-4">
+          {deleteTarget?.status === 'ACTIVE' && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <p className="text-xs font-medium">This is an <strong>Active</strong> employment record. Deleting it may affect payroll and compliance workflows.</p>
+            </div>
+          )}
+          {deleteTargetHasActiveContract && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <p className="text-xs font-medium">This employment has an <strong>active contract</strong> on record. The contract will also be removed.</p>
+            </div>
+          )}
+          <p className="text-sm text-foreground">
+            Are you sure you want to delete the employment record for{' '}
+            <span className="font-semibold">{deleteTarget?.position || deleteTarget?.department || 'this position'}</span>?
+            This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteLoading}>
+              No, keep it
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => { void handleDelete(); }}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Yes, delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
+

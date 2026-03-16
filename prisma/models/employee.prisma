@@ -45,20 +45,31 @@ model Employee {
     userId String? @unique
     user   User?   @relation(fields: [userId], references: [id])
 
-    firstName  String
-    middleName String?
-    lastName   String
+    firstName     String
+    middleName    String?
+    lastName      String
+    nameExtension String?
 
     username   String?
     employeeNo String? @unique
 
-    email String?
+    email         String?
+    personalEmail String?
 
-    birthDate DateTime
-    gender    String
+    birthDate    DateTime
+    placeOfBirth String?
+    gender       String
+    civilStatus  String?
+    citizenship  String?
 
     phone   String
     address String
+
+    educationalBackground String?
+    school                String?
+    course                String?
+    yearGraduated         String?
+    certifications        String?
 
     active     Boolean @default(true)
     softDelete Boolean @default(false)

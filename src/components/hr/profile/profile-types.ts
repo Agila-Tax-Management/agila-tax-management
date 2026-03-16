@@ -1,8 +1,6 @@
 // src/components/hr/profile/profile-types.ts
 
-export type ProfileTab = 'personal' | 'government-ids' | 'documents' | 'employment' | 'contracts' | 'app-access';
-
-export type AppAccessKey = 'sales' | 'compliance' | 'liaison' | 'accounting' | 'accountOfficer' | 'hr' | 'taskManagement';
+export type ProfileTab = 'personal' | 'government-ids' | 'documents' | 'employment' | 'contracts';
 
 export type EmploymentTypeOption = 'Regular' | 'Probationary' | 'Contractual' | 'Project Based' | 'Part Time' | 'Intern';
 export type ContractTypeOption = 'Probationary' | 'Regular' | 'Contractual' | 'Project Based' | 'Consultant' | 'Intern';
@@ -15,80 +13,103 @@ export interface GovernmentIdsState {
   tin: string;
 }
 
+// ─── Employment ──────────────────────────────────────────────────
+
 export interface EmploymentRecord {
-  id: string;
-  client: string;
+  id: number;
+  clientId: number;
+  clientName: string;
+  departmentId: number | null;
   department: string;
+  positionId: number | null;
   position: string;
-  team: string;
-  employeeLevel: string;
-  employmentType: EmploymentTypeOption;
+  employmentType: string;
+  employeeLevelId: number | null;
+  reportingManagerId: number | null;
   hireDate: string;
-  regularizationDate: string;
-  reportingManager: string;
-  status: 'Active' | 'Completed';
+  regularizationDate: string | null;
+  endDate: string | null;
+  status: string;
 }
 
 export interface EmploymentFormState {
-  client: string;
-  department: string;
-  position: string;
-  team: string;
-  employeeLevel: string;
-  employmentType: EmploymentTypeOption;
+  clientId: string;
+  departmentId: string;
+  positionId: string;
+  employeeLevelId: string;
+  employmentType: string;
+  employmentStatus: string;
   hireDate: string;
   regularizationDate: string;
-  reportingManager: string;
+  endDate: string;
+  reportingManagerId: string;
 }
 
+// ─── Contracts ───────────────────────────────────────────────────
+
 export interface ContractRecord {
-  id: string;
-  employmentId: string;
-  contractType: ContractTypeOption;
+  id: number;
+  employmentId: number;
+  departmentName: string;
+  positionTitle: string;
+  contractType: string;
   startDate: string;
-  endDate: string;
-  salary: string;
-  payMethod: PayMethodOption;
-  workHours: string;
-  notes: string;
-  status: 'Active' | 'Draft';
+  endDate: string | null;
+  monthlyRate: string | null;
+  dailyRate: string | null;
+  hourlyRate: string | null;
+  disbursedMethod: string | null;
+  status: string;
+  scheduleId: number | null;
+  workingHoursPerWeek: number | null;
+  bankDetails: string | null;
+  notes: string | null;
 }
 
 export interface ContractFormState {
   employmentId: string;
-  contractType: ContractTypeOption;
+  contractType: string;
   startDate: string;
   endDate: string;
-  salary: string;
-  payMethod: PayMethodOption;
-  workHours: string;
+  monthlyRate: string;
+  dailyRate: string;
+  hourlyRate: string;
+  disbursedMethod: string;
+  workingHoursPerWeek: string;
+  scheduleId: string;
+  bankDetails: string;
   notes: string;
 }
 
-export interface AppAccessState {
-  sales: boolean;
-  compliance: boolean;
-  liaison: boolean;
-  accounting: boolean;
-  accountOfficer: boolean;
-  hr: boolean;
-  taskManagement: boolean;
-}
-
 export interface PersonalInfoFormState {
+  // Name
   employeeNo: string;
   firstName: string;
+  middleName: string;
   lastName: string;
+  nameExtension: string;
+  // Personal
+  birthDate: string;
+  placeOfBirth: string;
+  gender: string;
+  civilStatus: string;
+  phone: string;
+  personalEmail: string;
+  email: string;
+  // Employment (display only)
   department: string;
   position: string;
-  phone: string;
   hireDate: string;
-  employmentType: EmploymentTypeOption;
+  employmentType: string;
   employmentStatus: string;
-  birthDate: string;
-  gender: string;
+  // Address
   address: string;
-  email: string;
+  // Education
+  educationalBackground: string;
+  school: string;
+  course: string;
+  yearGraduated: string;
+  certifications: string;
 }
 
 export const DOCUMENT_LABELS = [

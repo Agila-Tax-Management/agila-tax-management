@@ -1,25 +1,55 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Filter, Eye, Users, UserPlus, Building2, Network, Briefcase } from 'lucide-react';
+import { Search, Filter, Eye, Users, UserPlus, Building2, Network, Briefcase, Loader2 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
-import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
-import { EMPLOYEES, EmployeeStatus } from '@/lib/mock-hr-data';
-import { HR_DEPARTMENTS } from './management/data';
 import { DepartmentsTab } from './management/DepartmentsTab';
 import { TeamsTab } from './management/TeamsTab';
 import { PositionsTab } from './management/PositionsTab';
 
-const STATUS_VARIANT: Record<EmployeeStatus, 'success' | 'info' | 'warning' | 'danger'> = {
-  Active: 'success',
-  'On Leave': 'info',
-  Probationary: 'warning',
-  Resigned: 'danger',
+type EmploymentStatus = 'ACTIVE' | 'RESIGNED' | 'TERMINATED' | 'ON_LEAVE' | 'SUSPENDED' | 'RETIRED';
+
+const STATUS_LABEL: Record<EmploymentStatus, string> = {
+  ACTIVE: 'Active',
+  RESIGNED: 'Resigned',
+  TERMINATED: 'Terminated',
+  ON_LEAVE: 'On Leave',
+  SUSPENDED: 'Suspended',
+  RETIRED: 'Retired',
 };
+
+const STATUS_VARIANT: Record<EmploymentStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  ACTIVE: 'success',
+  ON_LEAVE: 'info',
+  SUSPENDED: 'warning',
+  RESIGNED: 'danger',
+  TERMINATED: 'danger',
+  RETIRED: 'neutral',
+};
+
+interface EmployeeRecord {
+  id: string;
+  employeeNo: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  employment: {
+    employmentStatus: EmploymentStatus;
+    department: { name: string } | null;
+    position: { title: string } | null;
+    hireDate: string | null;
+  } | null;
+}
+
+interface Department {
+  id: string;
+  name: string;
+}
 
 type ManagementTab = 'employees' | 'departments' | 'teams' | 'positions';
 
@@ -30,86 +60,66 @@ const TABS: { key: ManagementTab; label: string; icon: typeof Users }[] = [
   { key: 'positions', label: 'Positions', icon: Briefcase },
 ];
 
-interface AddEmployeeFormData {
-  firstName: string;
-  middleName: string;
-  lastName: string;
-  birthDate: string;
-  gender: string;
-  phone: string;
-  address: string;
-  email: string;
-  employeeNo: string;
-}
-
-const EMPTY_ADD_EMPLOYEE_FORM: AddEmployeeFormData = {
-  firstName: '',
-  middleName: '',
-  lastName: '',
-  birthDate: '',
-  gender: '',
-  phone: '',
-  address: '',
-  email: '',
-  employeeNo: '',
-};
-
 export function EmployeeManagement() {
   const router = useRouter();
-  const { success, error } = useToast();
+  const { error: showError } = useToast();
   const [activeTab, setActiveTab] = useState<ManagementTab>('employees');
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
-  const [addEmployeeForm, setAddEmployeeForm] = useState<AddEmployeeFormData>(EMPTY_ADD_EMPLOYEE_FORM);
+
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/hr/employees');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const json = (await res.json()) as { data: EmployeeRecord[] };
+      setEmployees(json.data ?? []);
+    } catch {
+      showError('Error', 'Failed to load employees.');
+    } finally {
+      setLoading(false);
+    }
+  }, [showError]);
+
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const res = await fetch('/api/hr/departments');
+      if (!res.ok) return;
+      const json = (await res.json()) as { data: Department[] };
+      setDepartments(json.data ?? []);
+    } catch {
+      // silently fail — departments are only used for filter
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchEmployees();
+    void fetchDepartments();
+  }, [fetchEmployees, fetchDepartments]);
 
   const filtered = useMemo(() => {
-    return EMPLOYEES.filter(emp => {
-      const matchSearch = emp.fullName.toLowerCase().includes(search.toLowerCase()) ||
+    return employees.filter(emp => {
+      const matchSearch =
+        emp.fullName.toLowerCase().includes(search.toLowerCase()) ||
         emp.employeeNo.toLowerCase().includes(search.toLowerCase()) ||
-        emp.email.toLowerCase().includes(search.toLowerCase());
-      const matchDept = deptFilter === 'All' || emp.department === deptFilter;
-      const matchStatus = statusFilter === 'All' || emp.status === statusFilter;
+        (emp.email ?? '').toLowerCase().includes(search.toLowerCase());
+      const matchDept =
+        deptFilter === 'All' ||
+        (emp.employment?.department?.name ?? '') === deptFilter;
+      const matchStatus =
+        statusFilter === 'All' ||
+        (emp.employment?.employmentStatus ?? '') === statusFilter;
       return matchSearch && matchDept && matchStatus;
     });
-  }, [search, deptFilter, statusFilter]);
+  }, [employees, search, deptFilter, statusFilter]);
 
-  const activeCount = EMPLOYEES.filter(e => e.status === 'Active').length;
-  const onLeaveCount = EMPLOYEES.filter(e => e.status === 'On Leave').length;
-  const probCount = EMPLOYEES.filter(e => e.status === 'Probationary').length;
-
-  const updateAddEmployeeForm = <K extends keyof AddEmployeeFormData>(key: K, value: AddEmployeeFormData[K]) => {
-    setAddEmployeeForm(prev => ({ ...prev, [key]: value }));
-  };
-
-  const closeAddEmployeeModal = () => {
-    setIsAddEmployeeOpen(false);
-    setAddEmployeeForm(EMPTY_ADD_EMPLOYEE_FORM);
-  };
-
-  const handleAddEmployee = () => {
-    const requiredFields: Array<keyof AddEmployeeFormData> = [
-      'firstName',
-      'lastName',
-      'birthDate',
-      'gender',
-      'phone',
-      'address',
-      'email',
-      'employeeNo',
-    ];
-
-    const hasMissingRequiredField = requiredFields.some((field) => !addEmployeeForm[field].trim());
-
-    if (hasMissingRequiredField) {
-      error('Failed to add employee', 'Please complete all required employee fields.');
-      return;
-    }
-
-    success('Employee created', 'The new employee has been added successfully.');
-    closeAddEmployeeModal();
-  };
+  const activeCount = employees.filter(e => e.employment?.employmentStatus === 'ACTIVE').length;
+  const onLeaveCount = employees.filter(e => e.employment?.employmentStatus === 'ON_LEAVE').length;
+  const suspendedCount = employees.filter(e => e.employment?.employmentStatus === 'SUSPENDED').length;
 
   return (
     <div className="space-y-6">
@@ -144,10 +154,10 @@ export function EmployeeManagement() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Total', value: EMPLOYEES.length, icon: Users, color: 'text-slate-600 bg-slate-50' },
+              { label: 'Total', value: employees.length, icon: Users, color: 'text-slate-600 bg-slate-50' },
               { label: 'Active', value: activeCount, icon: Users, color: 'text-emerald-600 bg-emerald-50' },
               { label: 'On Leave', value: onLeaveCount, icon: Users, color: 'text-blue-600 bg-blue-50' },
-              { label: 'Probationary', value: probCount, icon: Users, color: 'text-amber-600 bg-amber-50' },
+              { label: 'Suspended', value: suspendedCount, icon: Users, color: 'text-amber-600 bg-amber-50' },
             ].map(stat => (
               <Card key={stat.label} className="p-4 flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${stat.color}`}>
@@ -183,7 +193,7 @@ export function EmployeeManagement() {
                     onChange={e => setDeptFilter(e.target.value)}
                   >
                     <option value="All">All Departments</option>
-                    {HR_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                    {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
                   </select>
                 </div>
                 <div className="relative">
@@ -194,10 +204,12 @@ export function EmployeeManagement() {
                     onChange={e => setStatusFilter(e.target.value)}
                   >
                     <option value="All">All Statuses</option>
-                    <option value="Active">Active</option>
-                    <option value="On Leave">On Leave</option>
-                    <option value="Probationary">Probationary</option>
-                    <option value="Resigned">Resigned</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="ON_LEAVE">On Leave</option>
+                    <option value="SUSPENDED">Suspended</option>
+                    <option value="RESIGNED">Resigned</option>
+                    <option value="TERMINATED">Terminated</option>
+                    <option value="RETIRED">Retired</option>
                   </select>
                 </div>
               </div>
@@ -206,7 +218,7 @@ export function EmployeeManagement() {
 
           {/* Add Employee Button */}
           <div className="flex justify-end">
-            <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => setIsAddEmployeeOpen(true)}>
+            <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => router.push('/portal/hr/add-new-employee')}>
               <UserPlus size={16} /> Add Employee
             </Button>
           </div>
@@ -226,33 +238,57 @@ export function EmployeeManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(emp => (
-                    <tr key={emp.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-black shrink-0">
-                            {emp.avatar}
-                          </div>
-                          <div>
-                            <p className="font-bold text-foreground text-sm">{emp.fullName}</p>
-                            <p className="text-[11px] text-muted-foreground">{emp.employeeNo}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.department}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.position}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{emp.dateHired}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[emp.status]}>{emp.status}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <Button variant="ghost" onClick={() => router.push(`/portal/hr/employee-management/${emp.id}`)}>
-                          <Eye size={16} />
-                        </Button>
+                  {loading && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                        <Loader2 size={20} className="animate-spin mx-auto" />
                       </td>
                     </tr>
-                  ))}
-                  {filtered.length === 0 && (
+                  )}
+                  {!loading && filtered.map(emp => {
+                    const initials = `${emp.firstName[0] ?? ''}${emp.lastName[0] ?? ''}`.toUpperCase();
+                    const status = emp.employment?.employmentStatus;
+                    return (
+                      <tr key={emp.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => router.push(`/portal/hr/employee-management/${emp.id}`)}
+                            className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
+                          >
+                            <div className="w-9 h-9 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-black shrink-0">
+                              {initials}
+                            </div>
+                            <div>
+                              <p className="font-bold text-foreground text-sm hover:text-rose-600 transition-colors">{emp.fullName}</p>
+                              <p className="text-[11px] text-muted-foreground">{emp.employeeNo}</p>
+                            </div>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                          {emp.employment?.department?.name ?? <span className="text-muted-foreground/50 italic">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
+                          {emp.employment?.position?.title ?? <span className="text-muted-foreground/50 italic">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                          {emp.employment?.hireDate
+                            ? new Date(emp.employment.hireDate).toLocaleDateString('en-PH')
+                            : <span className="text-muted-foreground/50 italic">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {status
+                            ? <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
+                            : <Badge variant="neutral">No Employment</Badge>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Button variant="ghost" onClick={() => router.push(`/portal/hr/employee-management/${emp.id}`)}>
+                            <Eye size={16} />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!loading && filtered.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No employees found</td>
                     </tr>
@@ -263,105 +299,6 @@ export function EmployeeManagement() {
           </Card>
         </>
       )}
-
-      <Modal isOpen={isAddEmployeeOpen} onClose={closeAddEmployeeModal} title="Add Employee" size="xl">
-        <div className="p-6 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">First Name</label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.firstName}
-                onChange={e => updateAddEmployeeForm('firstName', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Middle Name</label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.middleName}
-                onChange={e => updateAddEmployeeForm('middleName', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Last Name</label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.lastName}
-                onChange={e => updateAddEmployeeForm('lastName', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Birth Date</label>
-              <input
-                type="date"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.birthDate}
-                onChange={e => updateAddEmployeeForm('birthDate', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Gender</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none"
-                value={addEmployeeForm.gender}
-                onChange={e => updateAddEmployeeForm('gender', e.target.value)}
-              >
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Prefer not to say">Prefer not to say</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
-              <input
-                type="tel"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.phone}
-                onChange={e => updateAddEmployeeForm('phone', e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Address</label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.address}
-                onChange={e => updateAddEmployeeForm('address', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
-              <input
-                type="email"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.email}
-                onChange={e => updateAddEmployeeForm('email', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee No</label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-                value={addEmployeeForm.employeeNo}
-                onChange={e => updateAddEmployeeForm('employeeNo', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={closeAddEmployeeModal}>Cancel</Button>
-            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleAddEmployee}>
-              Save Employee
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* ── Departments Tab ────────────────────────────────────── */}
       {activeTab === 'departments' && <DepartmentsTab />}

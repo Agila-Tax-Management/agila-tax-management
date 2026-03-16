@@ -10,11 +10,12 @@ import type { GovernmentIdsState } from '../profile-types';
 interface GovernmentIdsTabProps {
   governmentIds: GovernmentIdsState;
   inputClass: string;
+  disabled?: boolean;
   onFieldChange: <K extends keyof GovernmentIdsState>(key: K, value: GovernmentIdsState[K]) => void;
   onSave: () => void;
 }
 
-export function GovernmentIdsTab({ governmentIds, inputClass, onFieldChange, onSave }: GovernmentIdsTabProps): React.ReactNode {
+export function GovernmentIdsTab({ governmentIds, inputClass, disabled, onFieldChange, onSave }: GovernmentIdsTabProps): React.ReactNode {
   return (
     <Card className="p-6 space-y-5">
       <div>
@@ -42,7 +43,7 @@ export function GovernmentIdsTab({ governmentIds, inputClass, onFieldChange, onS
       </div>
 
       <div className="flex justify-end">
-        <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={onSave}>
+        <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={onSave} disabled={disabled}>
           <Save size={16} /> Save
         </Button>
       </div>
