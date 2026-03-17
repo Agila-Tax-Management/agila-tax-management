@@ -3,13 +3,15 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  ClipboardList, Calendar, UserCircle
+  ClipboardList, Calendar, UserCircle, CheckCircle
 } from 'lucide-react';
-import { INITIAL_LIAISON_TASKS } from '@/lib/mock-liaison-data';
+import { INITIAL_LIAISON_TASKS, CURRENT_LIAISON } from '@/lib/mock-liaison-data';
 
 const TASK_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.status !== 'Done').length;
+const MY_TASK_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.assigneeId === CURRENT_LIAISON.id && t.status !== 'Done').length;
 
 const LIAISON_NAV_ITEMS = [
+  { id: 'myTasks', label: 'My Tasks', icon: CheckCircle, href: '/portal/liaison/my-task', badge: MY_TASK_BADGE_COUNT },
   {
     id: 'management',
     label: 'MANAGEMENT',
