@@ -32,7 +32,16 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
   Urgent: { variant: 'danger' },
 };
 
+const PRIORITY_RANK: Record<AOTaskPriority, number> = {
+  Urgent: 1,
+  High: 2,
+  Medium: 3,
+  Low: 4,
+};
+
 type ViewMode = 'list' | 'kanban';
+type GroupBy = 'none' | 'assignee' | 'company';
+type SortBy = 'name' | 'dueDate' | 'priority';
 
 export function LiaisonTaskBoard() {
   const router = useRouter();
@@ -41,6 +50,8 @@ export function LiaisonTaskBoard() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<AOTaskStatus | 'all'>('all');
   const [filterPriority, setFilterPriority] = useState<AOTaskPriority | 'all'>('all');
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
+  const [sortBy, setSortBy] = useState<SortBy>('dueDate');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
@@ -73,6 +84,54 @@ export function LiaisonTaskBoard() {
       return matchSearch && matchStatus && matchPriority;
     });
   }, [tasks, search, filterStatus, filterPriority]);
+
+  const sortedTasks = useMemo(() => {
+    const sorted = [...filteredTasks].sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.title.localeCompare(b.title);
+      }
+
+      if (sortBy === 'dueDate') {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+
+      return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    });
+
+    return sorted;
+  }, [filteredTasks, sortBy]);
+
+  const getGroupLabel = (task: AOTask) => {
+    if (groupBy === 'assignee') {
+      return getAssignee(task.assigneeId)?.name ?? 'Unassigned';
+    }
+
+    if (groupBy === 'company') {
+      return getClientName(task.clientId);
+    }
+
+    return 'All Tasks';
+  };
+
+  const groupedTasks = useMemo(() => {
+    if (groupBy === 'none') {
+      return [] as Array<{ label: string; tasks: AOTask[] }>;
+    }
+
+    const map = new Map<string, AOTask[]>();
+
+    sortedTasks.forEach(task => {
+      const label = getGroupLabel(task);
+      const existing = map.get(label) ?? [];
+      existing.push(task);
+      map.set(label, existing);
+    });
+
+    return Array.from(map.entries()).map(([label, tasksInGroup]) => ({
+      label,
+      tasks: tasksInGroup,
+    }));
+  }, [sortedTasks, groupBy]);
 
   const handleCreateTask = () => {
     if (!newTitle.trim() || !newDueDate) return;
@@ -174,6 +233,24 @@ export function LiaisonTaskBoard() {
               <option value="all">All Priority</option>
               {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
+            <select
+              value={groupBy}
+              onChange={e => setGroupBy(e.target.value as GroupBy)}
+              className="h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="none">Group: None</option>
+              <option value="assignee">Group: Assignee</option>
+              <option value="company">Group: Company</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as SortBy)}
+              className="h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="name">Sort: Name</option>
+              <option value="dueDate">Sort: Due Date</option>
+              <option value="priority">Sort: Priority</option>
+            </select>
           </div>
         </div>
       </Card>
@@ -190,10 +267,10 @@ export function LiaisonTaskBoard() {
             <span>Priority</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {filteredTasks.length === 0 && (
+            {sortedTasks.length === 0 && (
               <div className="py-12 text-center text-sm text-slate-400 font-medium">No tasks match your search.</div>
             )}
-            {filteredTasks.map(task => {
+            {groupBy === 'none' && sortedTasks.map(task => {
               const assignee = getAssignee(task.assigneeId);
               const overdue = isOverdue(task);
               return (
@@ -232,6 +309,55 @@ export function LiaisonTaskBoard() {
                 </div>
               );
             })}
+
+            {groupBy !== 'none' && groupedTasks.map(group => (
+              <div key={group.label} className="border-t border-slate-200 first:border-t-0">
+                <div className="px-6 py-2.5 bg-slate-50/70 border-b border-slate-100 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  {groupBy === 'assignee' ? 'Assignee' : 'Company'}: {group.label} ({group.tasks.length})
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {group.tasks.map(task => {
+                    const assignee = getAssignee(task.assigneeId);
+                    const overdue = isOverdue(task);
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)}
+                        className="grid grid-cols-[1fr_140px_100px_100px_120px_80px] gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 truncate">{task.title}</p>
+                          {task.tags.length > 0 && (
+                            <div className="flex gap-1 mt-1">
+                              {task.tags.slice(0, 2).map(tag => (
+                                <span key={tag} className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{tag}</span>
+                              ))}
+                              {task.tags.length > 2 && <span className="text-[9px] text-slate-400">+{task.tags.length - 2}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-xs text-slate-600 font-medium truncate">{getClientName(task.clientId)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 bg-violet-600 rounded-full flex items-center justify-center shrink-0">
+                            <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
+                          </div>
+                          <span className="text-xs text-slate-600 truncate">{assignee?.name.split(' ')[0] ?? 'N/A'}</span>
+                        </div>
+                        <Badge variant={STATUS_CONFIG[task.status].variant} className="text-[9px] w-fit">
+                          {task.status}
+                        </Badge>
+                        <span className={`text-xs font-bold flex items-center gap-1 ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>
+                          <Calendar size={12} /> {formatDate(task.dueDate)}
+                        </span>
+                        <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[9px] w-fit">
+                          {task.priority}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}
@@ -240,7 +366,18 @@ export function LiaisonTaskBoard() {
       {viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {STATUS_ORDER.map(status => {
-            const columnTasks = filteredTasks.filter(t => t.status === status);
+            const columnTasks = sortedTasks.filter(t => t.status === status);
+            const columnGroups = groupBy === 'none'
+              ? [{ label: '', tasks: columnTasks }]
+              : Array.from(
+                  columnTasks.reduce((map, task) => {
+                    const label = getGroupLabel(task);
+                    const existing = map.get(label) ?? [];
+                    existing.push(task);
+                    map.set(label, existing);
+                    return map;
+                  }, new Map<string, AOTask[]>())
+                ).map(([label, tasksInGroup]) => ({ label, tasks: tasksInGroup }));
             return (
               <div
                 key={status}
@@ -257,50 +394,59 @@ export function LiaisonTaskBoard() {
                 </div>
 
                 <div className="space-y-2">
-                  {columnTasks.map(task => {
-                    const assignee = getAssignee(task.assigneeId);
-                    const overdue = isOverdue(task);
-                    return (
-                      <div
-                        key={task.id}
-                        draggable
-                        onDragStart={() => setDraggedTaskId(task.id)}
-                        onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)}
-                        className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 hover:shadow-md cursor-pointer transition-all group"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <p className="text-sm font-bold text-slate-800 line-clamp-2 flex-1">{task.title}</p>
-                          <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 shrink-0 mt-0.5 ml-1" />
-                        </div>
-                        <p className="text-[10px] text-slate-500 font-medium mb-2 truncate">{getClientName(task.clientId)}</p>
-                        {task.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {task.tags.slice(0, 2).map(tag => (
-                              <span key={tag} className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                <Tag size={8} /> {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-5 h-5 bg-violet-600 rounded-full flex items-center justify-center">
-                              <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
+                  {columnGroups.map(group => (
+                    <div key={`${status}-${group.label}`} className="space-y-2">
+                      {groupBy !== 'none' && (
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1 pt-1">
+                          {group.label} ({group.tasks.length})
+                        </p>
+                      )}
+                      {group.tasks.map(task => {
+                        const assignee = getAssignee(task.assigneeId);
+                        const overdue = isOverdue(task);
+                        return (
+                          <div
+                            key={task.id}
+                            draggable
+                            onDragStart={() => setDraggedTaskId(task.id)}
+                            onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)}
+                            className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 hover:shadow-md cursor-pointer transition-all group"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <p className="text-sm font-bold text-slate-800 line-clamp-2 flex-1">{task.title}</p>
+                              <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 shrink-0 mt-0.5 ml-1" />
                             </div>
-                            <span className="text-[10px] text-slate-500">{assignee?.name.split(' ')[0]}</span>
+                            <p className="text-[10px] text-slate-500 font-medium mb-2 truncate">{getClientName(task.clientId)}</p>
+                            {task.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                {task.tags.slice(0, 2).map(tag => (
+                                  <span key={tag} className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                    <Tag size={8} /> {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-5 h-5 bg-violet-600 rounded-full flex items-center justify-center">
+                                  <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
+                                </div>
+                                <span className="text-[10px] text-slate-500">{assignee?.name.split(' ')[0]}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
+                                  <Calendar size={10} /> {formatDate(task.dueDate)}
+                                </span>
+                                <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">
+                                  {task.priority}
+                                </Badge>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
-                              <Calendar size={10} /> {formatDate(task.dueDate)}
-                            </span>
-                            <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">
-                              {task.priority}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
