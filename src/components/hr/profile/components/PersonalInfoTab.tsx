@@ -23,6 +23,16 @@ interface PersonalInfoTabProps {
 const GENDER_OPTIONS = ['Male', 'Female'];
 const CIVIL_STATUS_OPTIONS = ['Single', 'Married', 'Widowed', 'Legally Separated'];
 
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 export function PersonalInfoTab({
   isEditingPersonal,
   personalInfoForm,
@@ -46,7 +56,7 @@ export function PersonalInfoTab({
           { label: 'Employee No.', value: personalInfoForm.employeeNo || '—' },
           { label: 'Department', value: personalInfoForm.department || '—' },
           { label: 'Position', value: personalInfoForm.position || '—' },
-          { label: 'Hire Date', value: personalInfoForm.hireDate || '—' },
+          { label: 'Hire Date', value: formatDate(personalInfoForm.hireDate) },
           { label: 'Employment Type', value: personalInfoForm.employmentType || '—' },
         ].map((field) => (
           <div key={field.label}>
