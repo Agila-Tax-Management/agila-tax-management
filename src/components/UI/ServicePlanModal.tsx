@@ -106,7 +106,7 @@ export default function ServicePlanModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size={size}>
-      <div className="overflow-y-auto max-h-[75vh]">
+      <div className="overflow-y-auto max-h-[75vh] app-scrollbar">
         {/* ── Step 1: Plan Details ──────────────────────────────── */}
         {step === 'details' && (
           <>
@@ -301,7 +301,7 @@ export default function ServicePlanModal({
 
               {/* Services List */}
               <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                <div className="max-h-80 overflow-y-auto app-scrollbar divide-y divide-slate-100">
                   {filteredServices.length > 0 ? (
                     filteredServices.map((service) => {
                       const isSelected = selectedServiceIds.has(service.id);
@@ -311,20 +311,27 @@ export default function ServicePlanModal({
                           type="button"
                           onClick={() => toggleService(service.id)}
                           className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                            isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-slate-50'
+                            isSelected ? 'bg-blue-50 hover:bg-blue-100 ring-1 ring-blue-200' : 'bg-white hover:bg-slate-50'
                           }`}
                         >
                           <div
                             className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
-                              isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300'
+                              isSelected ? 'bg-blue-600 border-blue-600 shadow-sm' : 'border-slate-300'
                             }`}
                           >
                             {isSelected && <Check size={12} className="text-white" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 truncate">
-                              {service.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-slate-900 truncate">
+                                {service.name}
+                              </p>
+                              {isSelected && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full border border-blue-200">
+                                  Included
+                                </span>
+                              )}
+                            </div>
                             <div className="flex gap-2 mt-0.5">
                               <span className="text-[10px] text-slate-400">{service.teamInCharge}</span>
                               <span className="text-[10px] text-slate-300">&bull;</span>

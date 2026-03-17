@@ -2,21 +2,24 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, Save, User, FileText, DollarSign, FolderOpen, Paperclip } from 'lucide-react';
+import { ArrowLeft, Save, User, FileText, DollarSign, FolderOpen, Paperclip, Landmark } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
+import { useToast } from '@/context/ToastContext';
 import { Employee } from '@/lib/mock-hr-data';
 import { ContractDetailsTab } from './ContractDetailsTab';
 import { SalaryInformationTab } from './SalaryInformationTab';
 import { PersonalDocumentsTab } from './PersonalDocumentsTab';
 import { SalaryAttachmentTab } from './SalaryAttachmentTab';
+import { GovernmentComplianceTab } from './GovernmentComplianceTab';
 
-type ContractTab = 'info' | 'details' | 'salary' | 'documents' | 'attachment';
+type ContractTab = 'info' | 'details' | 'salary' | 'documents' | 'attachment' | 'government-compliance';
 
 const TABS: { key: ContractTab; label: string; icon: typeof FileText }[] = [
   { key: 'info', label: 'Employee Information', icon: User },
+  { key: 'government-compliance', label: 'Government Compliance', icon: Landmark },
   { key: 'details', label: 'Contract Details', icon: FileText },
   { key: 'salary', label: 'Salary Information', icon: DollarSign },
   { key: 'documents', label: 'Personal Documents', icon: FolderOpen },
@@ -82,9 +85,11 @@ interface EmployeeContractViewProps {
 
 export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
   const router = useRouter();
+  const { success } = useToast();
   const [activeTab, setActiveTab] = useState<ContractTab>('info');
+  const [isInfoEditing, setIsInfoEditing] = useState(false);
   const [form, setForm] = useState<ContractFormData>(() => getContractDefaults(employee));
-  const [empInfo, setEmpInfo] = useState<EmployeeInfoFormData>({
+  const [savedEmpInfo, setSavedEmpInfo] = useState<EmployeeInfoFormData>({
     fullName: employee.fullName,
     employeeNo: employee.employeeNo,
     email: employee.email,
@@ -98,6 +103,7 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
     pagIbigNo: employee.pagIbigNo,
     tinNo: employee.tinNo,
   });
+  const [empInfo, setEmpInfo] = useState<EmployeeInfoFormData>(savedEmpInfo);
 
   const _updateField = <K extends keyof ContractFormData>(key: K, value: ContractFormData[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -105,6 +111,17 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
 
   const updateEmpInfo = <K extends keyof EmployeeInfoFormData>(key: K, value: EmployeeInfoFormData[K]) => {
     setEmpInfo(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleInfoSave = () => {
+    setSavedEmpInfo(empInfo);
+    setIsInfoEditing(false);
+    success('Employee information updated', 'Employee information has been saved successfully.');
+  };
+
+  const handleInfoCancel = () => {
+    setEmpInfo(savedEmpInfo);
+    setIsInfoEditing(false);
   };
 
   return (
@@ -116,7 +133,7 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
             <ArrowLeft size={18} />
           </Button>
           <div>
-            <h1 className="text-2xl font-black text-foreground">Employee Contract</h1>
+            <h1 className="text-2xl font-black text-foreground">Employee Information</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {employee.fullName} — {employee.employeeNo}
             </p>
@@ -126,72 +143,8 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
           <Badge variant={STATUS_VARIANT[employee.status] ?? 'neutral'} className="text-xs">
             {employee.status}
           </Badge>
-          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2">
-            <Save size={16} /> Save Changes
-          </Button>
         </div>
       </div>
-
-      {/* Header Form — Two-Column (Read-Only) */}
-      <Card className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={employee.fullName} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={employee.department} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Job Position</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={employee.position} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Company</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value="Agila Tax Consulting" readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Contract Type</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.contractType} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Salary Structure Type</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.salaryStructureType} readOnly />
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Start Date</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.startDate} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">First Contract Date</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.firstContractDate} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">End Date</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.endDate || 'No end date (permanent)'} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Working Schedule</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.workingSchedule} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">HR Responsible</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.hrResponsible} readOnly />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Analytic Account</label>
-              <input type="text" className={`${inputClass} bg-muted cursor-not-allowed`} value={form.analyticAccount} readOnly />
-            </div>
-          </div>
-        </div>
-      </Card>
 
       {/* Tab Navigation */}
       <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
@@ -214,38 +167,53 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
       {/* Tab Content */}
       {activeTab === 'info' && (
         <Card className="p-6">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+              Employee Information
+            </p>
+            {!isInfoEditing ? (
+              <Button variant="outline" onClick={() => setIsInfoEditing(true)}>
+                Edit
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={handleInfoCancel}>
+                Cancel
+              </Button>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Full Name</label>
-              <input type="text" className={inputClass} value={empInfo.fullName} onChange={e => updateEmpInfo('fullName', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.fullName} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('fullName', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee No.</label>
-              <input type="text" className={inputClass} value={empInfo.employeeNo} onChange={e => updateEmpInfo('employeeNo', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.employeeNo} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('employeeNo', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
-              <input type="email" className={inputClass} value={empInfo.email} onChange={e => updateEmpInfo('email', e.target.value)} />
+              <input type="email" className={inputClass} value={empInfo.email} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('email', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
-              <input type="tel" className={inputClass} value={empInfo.phone} onChange={e => updateEmpInfo('phone', e.target.value)} />
+              <input type="tel" className={inputClass} value={empInfo.phone} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('phone', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department</label>
-              <input type="text" className={inputClass} value={empInfo.department} onChange={e => updateEmpInfo('department', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.department} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('department', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Position</label>
-              <input type="text" className={inputClass} value={empInfo.position} onChange={e => updateEmpInfo('position', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.position} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('position', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Date Hired</label>
-              <input type="date" className={inputClass} value={empInfo.dateHired} onChange={e => updateEmpInfo('dateHired', e.target.value)} />
+              <input type="date" className={inputClass} value={empInfo.dateHired} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('dateHired', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Status</label>
-              <select className={selectClass} value={empInfo.status} onChange={e => updateEmpInfo('status', e.target.value)}>
+              <select className={selectClass} value={empInfo.status} disabled={!isInfoEditing} onChange={e => updateEmpInfo('status', e.target.value)}>
                 <option>Active</option>
                 <option>On Leave</option>
                 <option>Probationary</option>
@@ -254,27 +222,36 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">SSS No.</label>
-              <input type="text" className={inputClass} value={empInfo.sssNo} onChange={e => updateEmpInfo('sssNo', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.sssNo} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('sssNo', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">PhilHealth No.</label>
-              <input type="text" className={inputClass} value={empInfo.philHealthNo} onChange={e => updateEmpInfo('philHealthNo', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.philHealthNo} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('philHealthNo', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Pag-IBIG No.</label>
-              <input type="text" className={inputClass} value={empInfo.pagIbigNo} onChange={e => updateEmpInfo('pagIbigNo', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.pagIbigNo} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('pagIbigNo', e.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">TIN No.</label>
-              <input type="text" className={inputClass} value={empInfo.tinNo} onChange={e => updateEmpInfo('tinNo', e.target.value)} />
+              <input type="text" className={inputClass} value={empInfo.tinNo} readOnly={!isInfoEditing} onChange={e => updateEmpInfo('tinNo', e.target.value)} />
             </div>
           </div>
         </Card>
       )}
       {activeTab === 'details' && <ContractDetailsTab />}
+      {activeTab === 'government-compliance' && <GovernmentComplianceTab employee={employee} />}
       {activeTab === 'salary' && <SalaryInformationTab baseSalary={employee.salary} />}
       {activeTab === 'documents' && <PersonalDocumentsTab />}
       {activeTab === 'attachment' && <SalaryAttachmentTab />}
+
+      {activeTab === 'info' && isInfoEditing && (
+        <div className="flex justify-end">
+          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={handleInfoSave}>
+            <Save size={16} /> Save Changes
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
