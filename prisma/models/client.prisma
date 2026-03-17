@@ -73,8 +73,13 @@ model ClientUser {
   clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])
 
+  sessions      ClientSession[]
+  accounts      ClientAccount[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("client_user")
 }
 
 model ProfessionalClient {
