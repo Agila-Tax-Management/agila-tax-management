@@ -130,6 +130,80 @@ const INTERNAL_USERS: InternalUserSeed[] = [
   },
 ];
 
+/* ─── Client user definitions ────────────────────────────────────────
+ *
+ *  External client portal users linked to a specific Client record.
+ *  Credentials are stored in ClientAccount (hashed) — never on ClientUser.
+ *
+ * ─────────────────────────────────────────────────────────────────── */
+
+interface ClientUserSeed {
+  name: string;
+  email: string;
+  password: string;
+  /** companyCode of the Client this user belongs to */
+  companyCode: string;
+}
+
+const CLIENT_USERS: ClientUserSeed[] = [
+  {
+    name: "Maria Santos",
+    email: "client@agila.com",
+    password: "clientpassword",
+    companyCode: "atms",
+  },
+];
+
+async function seedClientUser(
+  seed: ClientUserSeed,
+  clientId: number,
+): Promise<void> {
+  const hashedPassword = await hashPassword(seed.password);
+
+  // 1. Upsert ClientUser
+  const clientUser = await prisma.clientUser.upsert({
+    where: { email: seed.email },
+    update: {
+      name: seed.name,
+      active: true,
+      emailVerified: true,
+      clientId,
+    },
+    create: {
+      name: seed.name,
+      email: seed.email,
+      active: true,
+      emailVerified: true,
+      clientId,
+    },
+  });
+
+  // 2. Upsert ClientAccount (BetterAuth credential)
+  const existingAccount = await prisma.clientAccount.findFirst({
+    where: { userId: clientUser.id, providerId: "credential" },
+  });
+  if (existingAccount) {
+    await prisma.clientAccount.update({
+      where: { id: existingAccount.id },
+      data: { password: hashedPassword },
+    });
+  } else {
+    await prisma.clientAccount.create({
+      data: {
+        id: `credential:${clientUser.id}`,
+        accountId: clientUser.id,
+        providerId: "credential",
+        userId: clientUser.id,
+        password: hashedPassword,
+      },
+    });
+  }
+
+  console.log(
+    `  ✓ [CLIENT] ${seed.name} (${seed.email}) — linked to client #${clientId}`,
+  );
+}
+
 /**
  * Seeds a single internal user (User + BetterAuth Account + Employee +
  * Government IDs + EmployeeEmployment linked to the ATMS client).
@@ -350,6 +424,28 @@ async function main(): Promise<void> {
   console.log("  ─────────────────────────────────────────────────────");
   for (const u of INTERNAL_USERS) {
     console.log(`  [${u.role.padEnd(11)}]  ${u.email.padEnd(28)}  ${u.password}`);
+  }
+  console.log("  ─────────────────────────────────────────────────────\n");
+
+  // ── 6. Seed Client Users ─────────────────────────────────────────
+
+  console.log("  Seeding client portal users:\n");
+
+  for (const seed of CLIENT_USERS) {
+    const client = await prisma.client.findUnique({
+      where: { companyCode: seed.companyCode },
+    });
+    if (!client) {
+      console.warn(`  ⚠ Client with companyCode "${seed.companyCode}" not found — skipping ${seed.email}`);
+      continue;
+    }
+    await seedClientUser(seed, client.id);
+  }
+
+  console.log("\n  Client portal credentials:");
+  console.log("  ─────────────────────────────────────────────────────");
+  for (const u of CLIENT_USERS) {
+    console.log(`  [CLIENT     ]  ${u.email.padEnd(28)}  ${u.password}`);
   }
   console.log("  ─────────────────────────────────────────────────────\n");
 }
