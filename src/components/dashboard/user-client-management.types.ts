@@ -1,25 +1,46 @@
 export type AccountStatus = 'Active' | 'Inactive' | 'Suspended';
-
+export type ClientUserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 export type StatusFilter = 'All' | AccountStatus;
+
+export const STATUS_UI_MAP: Record<ClientUserStatus, AccountStatus> = {
+  ACTIVE: 'Active',
+  INACTIVE: 'Inactive',
+  SUSPENDED: 'Suspended',
+} as const;
+
+export const STATUS_DB_MAP: Record<AccountStatus, ClientUserStatus> = {
+  Active: 'ACTIVE',
+  Inactive: 'INACTIVE',
+  Suspended: 'SUSPENDED',
+} as const;
+
+export interface ApiAssignment {
+  clientId: number;
+  clientNo: string | null;
+  businessName: string | null;
+  companyCode: string | null;
+  portalName: string | null;
+  active: boolean;
+}
 
 export interface ClientOption {
   id: number;
-  clientNo: string;
-  businessName: string;
-  companyCode: string;
-  portalName: string;
-  active: boolean;
+  businessName: string | null;
+  companyCode: string | null;
+  portalName: string | null;
+  clientNo?: string | null;
 }
 
 export interface ClientUserRecord {
   id: string;
-  name: string;
+  name: string | null;
   email: string;
   active: boolean;
-  accountStatus: AccountStatus;
-  assignedClientIds: number[];
+  status: ClientUserStatus;
+  emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
+  assignments: ApiAssignment[];
 }
 
 export interface ClientUserFormValues {
@@ -27,4 +48,5 @@ export interface ClientUserFormValues {
   email: string;
   accountStatus: AccountStatus;
   assignedClientIds: number[];
+  password?: string;
 }
