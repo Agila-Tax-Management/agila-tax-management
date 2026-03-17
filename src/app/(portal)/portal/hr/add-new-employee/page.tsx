@@ -33,9 +33,19 @@ interface EmployeeLevelOption {
   position: number;
 }
 
+interface WorkScheduleDay {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  isWorkingDay: boolean;
+}
+
 interface WorkScheduleOption {
   id: number;
   name: string;
+  days: WorkScheduleDay[];
 }
 
 type UserLinkMode = 'none' | 'existing' | 'create';
@@ -569,7 +579,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
                   <option value="">Select gender</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
-                  <option value="Other">Other</option>
                 </select>
               </div>
               <div>
@@ -892,18 +901,58 @@ export default function AddNewEmployeePage(): React.ReactNode {
             </div>
 
             {s4.scheduleMode === 'existing' && (
-              <div>
-                <label className={labelCls}>Select Schedule Template</label>
-                <select className={selectCls} value={s4.existingScheduleId}
-                  onChange={(e) => setS4((p) => ({ ...p, existingScheduleId: e.target.value }))}>
-                  <option value="">Select template</option>
-                  {schedules.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                {schedules.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">No schedule templates found. Switch to &quot;Create new schedule&quot;.</p>
-                )}
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>Select Schedule Template</label>
+                  <select className={selectCls} value={s4.existingScheduleId}
+                    onChange={(e) => setS4((p) => ({ ...p, existingScheduleId: e.target.value }))}>
+                    <option value="">Select template</option>
+                    {schedules.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {schedules.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">No schedule templates found. Switch to &quot;Create new schedule&quot;.</p>
+                  )}
+                </div>
+
+                {s4.existingScheduleId && (() => {
+                  const DAY_LABELS: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+                  const selectedSchedule = schedules.find((s) => String(s.id) === s4.existingScheduleId);
+                  const workingDays = selectedSchedule?.days.filter((d) => d.isWorkingDay) ?? [];
+                  if (!selectedSchedule) return null;
+                  return (
+                    <div className="rounded-lg border border-border overflow-hidden">
+                      <div className="px-4 py-2.5 bg-muted/60 border-b border-border">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Working Days — {selectedSchedule.name}</p>
+                      </div>
+                      {workingDays.length === 0 ? (
+                        <p className="px-4 py-3 text-xs text-muted-foreground">No working days configured.</p>
+                      ) : (
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border">
+                              <th className="text-left px-4 py-2 font-semibold text-muted-foreground">Day</th>
+                              <th className="text-left px-4 py-2 font-semibold text-muted-foreground">Hours</th>
+                              <th className="text-left px-4 py-2 font-semibold text-muted-foreground hidden sm:table-cell">Break</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {workingDays.map((d) => (
+                              <tr key={d.dayOfWeek} className="border-b border-border/60 last:border-0">
+                                <td className="px-4 py-2 font-medium text-foreground">{DAY_LABELS[d.dayOfWeek] ?? `Day ${d.dayOfWeek}`}</td>
+                                <td className="px-4 py-2 text-muted-foreground">{d.startTime} – {d.endTime}</td>
+                                <td className="px-4 py-2 text-muted-foreground hidden sm:table-cell">
+                                  {d.breakStart && d.breakEnd ? `${d.breakStart} – ${d.breakEnd}` : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
