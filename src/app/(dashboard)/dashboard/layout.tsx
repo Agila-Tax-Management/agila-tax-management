@@ -14,6 +14,7 @@ import { NotificationDropdown } from '@/components/notifications/NotificationDro
 import { RoleProvider } from '@/lib/role-context';
 import { AuthProvider } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import { authClient } from '@/lib/auth-client';
 
 
 const NAV_ITEMS = [
@@ -242,7 +243,10 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
           </button>
 
           <button
-            onClick={() => router.push('/')}
+            onClick={async () => {
+              await authClient.signOut();
+              router.push('/sign-in');
+            }}
             className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl text-red-400 hover:bg-red-900/20 transition`}
             title={!isExpanded ? 'Sign Out' : undefined}
           >
