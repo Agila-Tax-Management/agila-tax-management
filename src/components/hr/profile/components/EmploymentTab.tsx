@@ -18,6 +18,7 @@ interface EmploymentTabProps {
   employmentRecords: EmploymentRecord[];
   contracts: ContractRecord[];
   employeeId: number;
+  employeeNo?: string | null;
   departmentOptions: IdNameOption[];
   levelOptions: IdNameOption[];
   managerOptions: ManagerOption[];
@@ -40,7 +41,7 @@ const EMP_STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'dange
 };
 
 export function EmploymentTab({
-  employmentRecords, contracts, employeeId, departmentOptions, levelOptions, managerOptions, onEmploymentSaved,
+  employmentRecords, contracts, employeeId, employeeNo, departmentOptions, levelOptions, managerOptions, onEmploymentSaved,
 }: EmploymentTabProps): React.ReactNode {
   const { success, error } = useToast();
   const [addOpen, setAddOpen] = useState(false);
@@ -178,6 +179,7 @@ export function EmploymentTab({
         onClose={() => setAddOpen(false)}
         onSaved={() => { onEmploymentSaved(); }}
         employeeId={employeeId}
+        employeeNo={employeeNo}
         departmentOptions={departmentOptions}
         levelOptions={levelOptions}
         managerOptions={managerOptions}
@@ -190,6 +192,7 @@ export function EmploymentTab({
         onClose={() => setEditRecord(null)}
         onSaved={() => { onEmploymentSaved(); }}
         employeeId={employeeId}
+        employeeNo={employeeNo}
         departmentOptions={departmentOptions}
         levelOptions={levelOptions}
         managerOptions={managerOptions}

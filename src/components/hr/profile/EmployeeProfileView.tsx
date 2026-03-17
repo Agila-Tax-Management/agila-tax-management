@@ -563,6 +563,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
           employmentRecords={employmentRecords}
           contracts={contracts}
           employeeId={employeeId}
+          employeeNo={personalInfoForm.employeeNo}
           departmentOptions={deptOptions}
           levelOptions={levelOptions}
           managerOptions={managerOptions}

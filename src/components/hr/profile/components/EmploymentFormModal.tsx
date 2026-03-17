@@ -15,6 +15,7 @@ interface EmploymentFormModalProps {
   onClose: () => void;
   onSaved: () => void;
   employeeId: number;
+  employeeNo?: string | null;
   departmentOptions: IdNameOption[];
   levelOptions: IdNameOption[];
   managerOptions: ManagerOption[];
@@ -22,6 +23,7 @@ interface EmploymentFormModalProps {
 }
 
 interface FormState {
+  employeeNo: string;
   clientId: string;
   departmentId: string;
   positionId: string;
@@ -35,6 +37,7 @@ interface FormState {
 }
 
 const DEFAULT_FORM: FormState = {
+  employeeNo: '',
   clientId: '1',
   departmentId: '',
   positionId: '',
@@ -47,8 +50,9 @@ const DEFAULT_FORM: FormState = {
   reportingManagerId: '',
 };
 
-function recordToForm(r: EmploymentRecord): FormState {
+function recordToForm(r: EmploymentRecord, employeeNo?: string | null): FormState {
   return {
+    employeeNo: employeeNo ?? '',
     clientId: String(r.clientId),
     departmentId: r.departmentId ? String(r.departmentId) : '',
     positionId: r.positionId ? String(r.positionId) : '',
@@ -84,7 +88,7 @@ const INPUT_CLASS = 'w-full rounded-lg border border-border bg-background px-3 p
 const SELECT_CLASS = 'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500';
 
 export function EmploymentFormModal({
-  isOpen, onClose, onSaved, employeeId,
+  isOpen, onClose, onSaved, employeeId, employeeNo,
   departmentOptions, levelOptions, managerOptions, employment,
 }: EmploymentFormModalProps): React.ReactNode {
   const { success, error } = useToast();
@@ -99,7 +103,7 @@ export function EmploymentFormModal({
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     if (isOpen) {
-      setForm(employment ? recordToForm(employment) : DEFAULT_FORM);
+      setForm(employment ? recordToForm(employment, employeeNo) : { ...DEFAULT_FORM, employeeNo: employeeNo ?? '' });
       setPositionOptions([]);
     }
   }
@@ -130,6 +134,21 @@ export function EmploymentFormModal({
   const handleSubmit = async () => {
     setSaving(true);
     try {
+      // Update employee number on the Employee record first
+      const employeeNoChanged = form.employeeNo.trim() !== (employeeNo ?? '');
+      if (employeeNoChanged) {
+        const empNoRes = await fetch(`/api/hr/employees/${employeeId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeNo: form.employeeNo.trim() || null }),
+        });
+        const empNoData = (await empNoRes.json()) as { error?: string };
+        if (!empNoRes.ok) {
+          error('Failed to update employee no.', empNoData.error ?? 'An error occurred.');
+          return;
+        }
+      }
+
       const payload = {
         clientId: parseInt(form.clientId, 10) || 1,
         departmentId: form.departmentId ? parseInt(form.departmentId, 10) : null,
@@ -186,7 +205,18 @@ export function EmploymentFormModal({
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Employee No.</label>
+            <input
+              type="text"
+              className={INPUT_CLASS}
+              placeholder="e.g. EMP-001"
+              value={form.employeeNo}
+              onChange={(e) => setForm((prev) => ({ ...prev, employeeNo: e.target.value }))}
+            />
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Client / Company</label>
             <div className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground select-none">
               Agila Tax Management Services (ATMS)
