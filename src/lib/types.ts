@@ -145,6 +145,13 @@ export interface AOTaskComment {
   createdAt: string;
 }
 
+export interface AOTaskSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: string;
+}
+
 export interface AOTask {
   id: string;
   title: string;
@@ -158,6 +165,7 @@ export interface AOTask {
   updatedAt: string;
   comments: AOTaskComment[];
   tags: string[];
+  subtasks?: AOTaskSubtask[];
 }
 
 export interface AONotification {

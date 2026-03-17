@@ -30,6 +30,12 @@ export const INITIAL_LIAISON_TASKS: AOTask[] = [
       { id: 'lc-1', authorId: 'lia-1', authorName: 'Bianca Torres', content: 'Queued at RDO 044. Estimated processing 2-3 hours.', createdAt: '2026-03-11T08:00:00Z' },
     ],
     tags: ['BIR', 'Filing', 'On-Site'],
+    subtasks: [
+      { id: 'sub-1', title: 'Prepare 3 copies of return', completed: true, createdAt: '2026-03-08T09:00:00Z' },
+      { id: 'sub-2', title: 'Prepare payment form', completed: true, createdAt: '2026-03-08T09:00:00Z' },
+      { id: 'sub-3', title: 'Photocopy COR', completed: false, createdAt: '2026-03-08T09:00:00Z' },
+      { id: 'sub-4', title: 'Submit at RDO 044', completed: false, createdAt: '2026-03-08T09:00:00Z' },
+    ],
   },
   {
     id: 'lia-task-2',

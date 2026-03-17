@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
-import { LiaisonTaskDetailsModal } from './LiaisonTaskDetailsModal';
 import {
   Search, Plus, LayoutList, Columns3,
   Calendar, GripVertical, Tag, Filter,
@@ -35,12 +35,12 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
 type ViewMode = 'list' | 'kanban';
 
 export function LiaisonTaskBoard() {
+  const router = useRouter();
   const [tasks, setTasks] = useState<AOTask[]>(INITIAL_LIAISON_TASKS);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<AOTaskStatus | 'all'>('all');
   const [filterPriority, setFilterPriority] = useState<AOTaskPriority | 'all'>('all');
-  const [selectedTask, setSelectedTask] = useState<AOTask | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
@@ -73,16 +73,6 @@ export function LiaisonTaskBoard() {
       return matchSearch && matchStatus && matchPriority;
     });
   }, [tasks, search, filterStatus, filterPriority]);
-
-  const handleUpdateTask = (updated: AOTask) => {
-    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-    setSelectedTask(updated);
-  };
-
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    setSelectedTask(null);
-  };
 
   const handleCreateTask = () => {
     if (!newTitle.trim() || !newDueDate) return;
@@ -209,7 +199,7 @@ export function LiaisonTaskBoard() {
               return (
                 <div
                   key={task.id}
-                  onClick={() => setSelectedTask(task)}
+                  onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)}
                   className="grid grid-cols-[1fr_140px_100px_100px_120px_80px] gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
                 >
                   <div className="min-w-0">
@@ -275,7 +265,7 @@ export function LiaisonTaskBoard() {
                         key={task.id}
                         draggable
                         onDragStart={() => setDraggedTaskId(task.id)}
-                        onClick={() => setSelectedTask(task)}
+                        onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)}
                         className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 hover:shadow-md cursor-pointer transition-all group"
                       >
                         <div className="flex items-start justify-between mb-2">
@@ -319,15 +309,7 @@ export function LiaisonTaskBoard() {
       )}
 
       {/* Task Details Modal */}
-      {selectedTask && (
-        <LiaisonTaskDetailsModal
-          task={selectedTask}
-          isOpen={!!selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onUpdate={handleUpdateTask}
-          onDelete={handleDeleteTask}
-        />
-      )}
+
 
       {/* Create Task Modal */}
       <Modal isOpen={isCreateModalOpen} onClose={() => { setIsCreateModalOpen(false); resetCreateForm(); }} title="Create New Task" size="lg">

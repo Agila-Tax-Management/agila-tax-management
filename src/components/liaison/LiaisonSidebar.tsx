@@ -17,7 +17,7 @@ const LIAISON_NAV_ITEMS = [
     label: 'MANAGEMENT',
     isSection: true,
   },
-  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison', badge: TASK_BADGE_COUNT },
+  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison/tasks', badge: TASK_BADGE_COUNT },
   { id: 'calendar', label: 'Schedule Calendar', icon: Calendar, href: '/portal/liaison/calendar', badge: 0 },
 ];
 
