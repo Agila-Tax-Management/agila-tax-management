@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, List, Wallet,
   ShoppingBag, BarChart3, ChevronDown, ChevronUp,
-  CalendarClock, FileText
+  CalendarClock, FileText, TicketPercent
 } from 'lucide-react';
 
 interface NavItem {
@@ -34,6 +34,7 @@ const ASP_NAV_ITEMS: NavItem[] = [
     children: [
       { id: 'monthly-services', label: 'Monthly Service Plans', icon: CalendarClock, href: '/portal/sales/services/monthly' },
       { id: 'one-time-services', label: 'One-Time Service Plans', icon: FileText, href: '/portal/sales/services/one-time' },
+      { id: 'promotions', label: 'Promotions', icon: TicketPercent, href: '/portal/sales/services/promotions' },
     ],
   },
   { id: 'client-list', label: 'Client List', icon: List, href: '/portal/sales/client-list' },
