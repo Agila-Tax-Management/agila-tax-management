@@ -15,6 +15,7 @@ import {
   Eye,
   FileText,
   CalendarClock,
+  Check,
   X,
 } from 'lucide-react';
 import type { ServiceItem } from '@/lib/types';
@@ -448,10 +449,32 @@ export function MonthlyServicePlans(): React.ReactNode {
 
                     return (
                       <div key={service.id} className="px-3 py-2.5 bg-white">
-                        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2">
+                        <div className={`flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2 rounded-lg p-2 transition-colors ${
+                          isIncluded ? 'bg-emerald-50 border border-emerald-200' : isExcluded ? 'bg-rose-50 border border-rose-200' : 'bg-white border border-transparent'
+                        }`}>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{service.name}</p>
+                            <div className="flex items-center gap-2">
+                              {isIncluded ? (
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-600 text-white">
+                                  <Check size={10} />
+                                </span>
+                              ) : isExcluded ? (
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white">
+                                  <X size={10} />
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-slate-300" />
+                              )}
+
+                              <p className="text-xs font-bold text-slate-800">{service.name}</p>
+                            </div>
                             <p className="text-[10px] text-slate-500 mt-0.5">{service.teamInCharge} • {service.government}</p>
+
+                            {(isIncluded || isExcluded) && (
+                              <p className={`text-[10px] font-bold mt-1 ${isIncluded ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                {isIncluded ? 'Included in plan' : 'Marked as not included'}
+                              </p>
+                            )}
                           </div>
 
                           <div className="flex gap-2 shrink-0">
