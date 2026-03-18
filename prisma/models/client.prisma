@@ -4,6 +4,13 @@ enum ClientUserStatus {
   SUSPENDED
 }
 
+enum ClientPortalRole {
+  OWNER
+  ADMIN
+  EMPLOYEE
+  VIEWER
+}
+
 enum BusinessType {
   INDIVIDUAL
   SOLE_PROPRIETORSHIP
@@ -44,14 +51,15 @@ model Client {
   timezone String? @default("Asia/Manila")
 
   clientUsers     ClientUser[]
-  userAssignments  ClientUserAssignment[]
+  userAssignments ClientUserAssignment[]
+  clientEmployees ClientEmployee[]
 
   professionalProfiles ProfessionalClient[]
   soleProprietorships  SoleProprietorship[]
 
-  departments  Department[]
-  teams        EmployeeTeam[]
-  employments  EmployeeEmployment[]
+  departments Department[]
+  teams       EmployeeTeam[]
+  employments EmployeeEmployment[]
 
   createdAt DateTime? @map("created_at")
 
@@ -82,9 +90,10 @@ model ClientUser {
   clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])
 
-  assignments ClientUserAssignment[]
-  sessions    ClientSession[]
-  accounts    ClientAccount[]
+  assignments     ClientUserAssignment[]
+  employeeProfile ClientEmployee[]
+  sessions        ClientSession[]
+  accounts        ClientAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -102,10 +111,40 @@ model ClientUserAssignment {
   clientId Int
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  role ClientPortalRole @default(EMPLOYEE)
+
   createdAt DateTime @default(now())
 
   @@unique([clientUserId, clientId])
   @@map("client_user_assignment")
+}
+
+// ─── Client Employee Profile ──────────────────────────────────────
+// Employment details for ClientUsers who are employees of a client.
+// Mirrors the internal User → Employee pattern.
+model ClientEmployee {
+  id Int @id @default(autoincrement())
+
+  clientUserId String
+  clientUser   ClientUser @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  positionTitle String?
+  departmentId  Int?
+  department    Department? @relation(fields: [departmentId], references: [id])
+
+  teamId Int?
+  team   EmployeeTeam? @relation(fields: [teamId], references: [id])
+
+  employmentType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientUserId, clientId])
+  @@map("client_employee")
 }
 
 model ProfessionalClient {
@@ -238,8 +277,8 @@ model SoleProprietorship {
 
   noRentReason String?
 
-  landlordOwnDocs     String?
-  landlordOwnReason   String?
+  landlordOwnDocs   String?
+  landlordOwnReason String?
 
   landlordLeaseDocs   String?
   landlordLeaseReason String?

@@ -143,6 +143,8 @@ interface ClientUserSeed {
   password: string;
   /** companyCode of the Client this user belongs to */
   companyCode: string;
+  /** Role within the client — defaults to OWNER for the primary contact */
+  role?: "OWNER" | "ADMIN" | "EMPLOYEE" | "VIEWER";
 }
 
 const CLIENT_USERS: ClientUserSeed[] = [
@@ -150,7 +152,8 @@ const CLIENT_USERS: ClientUserSeed[] = [
     name: "Maria Santos",
     email: "client@agila.com",
     password: "clientpassword",
-    companyCode: "atms",
+    companyCode: "comp",
+    role: "OWNER",
   },
 ];
 
@@ -178,7 +181,14 @@ async function seedClientUser(
     },
   });
 
-  // 2. Upsert ClientAccount (BetterAuth credential)
+  // 2. Upsert ClientUserAssignment with role
+  await prisma.clientUserAssignment.upsert({
+    where: { clientUserId_clientId: { clientUserId: clientUser.id, clientId } },
+    update: { role: seed.role ?? "OWNER" },
+    create: { clientUserId: clientUser.id, clientId, role: seed.role ?? "OWNER" },
+  });
+
+  // 3. Upsert ClientAccount (BetterAuth credential)
   const existingAccount = await prisma.clientAccount.findFirst({
     where: { userId: clientUser.id, providerId: "credential" },
   });
@@ -200,7 +210,7 @@ async function seedClientUser(
   }
 
   console.log(
-    `  ✓ [CLIENT] ${seed.name} (${seed.email}) — linked to client #${clientId}`,
+    `  ✓ [CLIENT/${seed.role ?? "OWNER"}] ${seed.name} (${seed.email}) — linked to client #${clientId}`,
   );
 }
 

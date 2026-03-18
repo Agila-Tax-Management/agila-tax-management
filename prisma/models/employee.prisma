@@ -78,8 +78,8 @@ model Employee {
     employments    EmployeeEmployment[]
     requirements   EmployeeRequirement[]
     appAccess      EmployeeAppAccess[]
-    ledTeams       EmployeeTeam[]          @relation("TeamLeader")
-    managedReports EmployeeEmployment[]    @relation("ReportingManager")
+    ledTeams       EmployeeTeam[]         @relation("TeamLeader")
+    managedReports EmployeeEmployment[]   @relation("ReportingManager")
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -129,9 +129,9 @@ model EmployeeEmployment {
     employeeLevelId  Int?
     employeeLevel    EmployeeLevel?   @relation(fields: [employeeLevelId], references: [id])
 
-    hireDate            DateTime?
-    regularizationDate  DateTime?
-    endDate             DateTime?
+    hireDate           DateTime?
+    regularizationDate DateTime?
+    endDate            DateTime?
 
     reportingManagerId Int?
     reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
@@ -165,12 +165,12 @@ model EmployeeContract {
     dailyRate   Decimal? @db.Decimal(10, 2)
     hourlyRate  Decimal? @db.Decimal(10, 2)
 
-    disbursedMethod     DisbursedMethod?
-    payType             String?          @default("Variable Pay")
-    bankDetails         String?
+    disbursedMethod DisbursedMethod?
+    payType         String?          @default("Variable Pay")
+    bankDetails     String?
 
-    scheduleId          Int?
-    schedule            WorkSchedule?    @relation(fields: [scheduleId], references: [id])
+    scheduleId Int?
+    schedule   WorkSchedule? @relation(fields: [scheduleId], references: [id])
 
     workingHoursPerWeek Int?
     signedDate          DateTime?
@@ -253,8 +253,9 @@ model Department {
     name        String
     description String?
 
-    positions   Position[]
-    employments EmployeeEmployment[]
+    positions       Position[]
+    employments     EmployeeEmployment[]
+    clientEmployees ClientEmployee[]
 
     createdAt DateTime @default(now())
 
@@ -288,7 +289,8 @@ model EmployeeTeam {
     leaderId Int?
     leader   Employee? @relation("TeamLeader", fields: [leaderId], references: [id])
 
-    employments EmployeeEmployment[]
+    employments     EmployeeEmployment[]
+    clientEmployees ClientEmployee[]
 
     createdAt DateTime @default(now())
 
@@ -300,7 +302,7 @@ model EmployeeLevel {
     id Int @id @default(autoincrement())
 
     name        String  @unique
-    position    Int     @unique  // 1 = highest seniority (Executive = 1, Staff = 9)
+    position    Int     @unique // 1 = highest seniority (Executive = 1, Staff = 9)
     description String?
 
     employments EmployeeEmployment[]
