@@ -23,6 +23,20 @@ const STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warni
   'Done': { variant: 'success', color: 'bg-emerald-500' },
 };
 
+const STATUS_SELECT_COLOR: Record<AOTaskStatus, string> = {
+  'To Do': 'bg-slate-100 text-slate-700',
+  'In Progress': 'bg-blue-100 text-blue-700',
+  'Review': 'bg-amber-100 text-amber-700',
+  'Done': 'bg-emerald-100 text-emerald-700',
+};
+
+const PRIORITY_SELECT_COLOR: Record<AOTaskPriority, string> = {
+  Low: 'bg-slate-100 text-slate-700',
+  Medium: 'bg-blue-100 text-blue-700',
+  High: 'bg-amber-100 text-amber-700',
+  Urgent: 'bg-red-100 text-red-700',
+};
+
 const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
   Low: { variant: 'neutral' },
   Medium: { variant: 'info' },
@@ -323,31 +337,55 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps) {
               </div>
               <div>
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Status</p>
-                <select
-                  value={editingTask.status}
-                  onChange={e => {
-                    const updated = { ...editingTask, status: e.target.value as AOTaskStatus };
-                    setEditingTask(updated);
-                    onUpdate(updated);
-                  }}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
-                >
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                  <div
+                    className={`rounded-lg border border-slate-200 px-2
+                    ${STATUS_SELECT_COLOR[editingTask.status]}`}
+                  >
+                    <select
+                      value={editingTask.status}
+                      onChange={e => {
+                        const updated = { ...editingTask, status: e.target.value as AOTaskStatus };
+                        setEditingTask(updated);
+                        onUpdate(updated);
+                      }}
+                      className="w-full bg-transparent py-2 text-sm font-bold outline-none"
+                    >
+                      {STATUS_OPTIONS.map(s => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
               </div>
               <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Priority</p>
-                <select
-                  value={editingTask.priority}
-                  onChange={e => {
-                    const updated = { ...editingTask, priority: e.target.value as AOTaskPriority };
-                    setEditingTask(updated);
-                    onUpdate(updated);
-                  }}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-violet-500"
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                  Priority
+                </p>
+
+                <div
+                  className={`rounded-lg border border-slate-200 px-2
+                  ${PRIORITY_SELECT_COLOR[editingTask.priority]}`}
                 >
-                  {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                  <select
+                    value={editingTask.priority}
+                    onChange={e => {
+                      const updated = {
+                        ...editingTask,
+                        priority: e.target.value as AOTaskPriority,
+                      };
+                      setEditingTask(updated);
+                      onUpdate(updated);
+                    }}
+                    className="w-full bg-transparent py-2 text-sm font-bold outline-none"
+                  >
+                    {PRIORITY_OPTIONS.map(p => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="border-t border-slate-200 pt-4 mt-4 space-y-2">
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Timeline</p>
