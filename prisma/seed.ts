@@ -130,6 +130,33 @@ const INTERNAL_USERS: InternalUserSeed[] = [
   },
 ];
 
+/* ─── Client company definitions ────────────────────────────────────
+ *
+ *  Real external clients managed by ATMS. These are separate from the
+ *  internal ATMS company record. Client users are assigned to these.
+ *
+ * ─────────────────────────────────────────────────────────────────── */
+
+interface ClientSeed {
+  companyCode: string;
+  clientNo: string;
+  businessName: string;
+  portalName: string;
+  businessType: "INDIVIDUAL" | "SOLE_PROPRIETORSHIP" | "PARTNERSHIP" | "CORPORATION" | "COOPERATIVE";
+  branchType?: string;
+}
+
+const CLIENT_COMPANIES: ClientSeed[] = [
+  {
+    companyCode: "comp-001",
+    clientNo: "2024-0001",
+    businessName: "Santos General Merchandise",
+    portalName: "Santos General Merchandise",
+    businessType: "SOLE_PROPRIETORSHIP",
+    branchType: "Main Branch",
+  },
+];
+
 /* ─── Client user definitions ────────────────────────────────────────
  *
  *  External client portal users linked to a specific Client record.
@@ -152,7 +179,7 @@ const CLIENT_USERS: ClientUserSeed[] = [
     name: "Maria Santos",
     email: "client@agila.com",
     password: "clientpassword",
-    companyCode: "comp",
+    companyCode: "comp-001",
     role: "OWNER",
   },
 ];
@@ -437,7 +464,30 @@ async function main(): Promise<void> {
   }
   console.log("  ─────────────────────────────────────────────────────\n");
 
-  // ── 6. Seed Client Users ─────────────────────────────────────────
+  // ── 6. Seed External Client Companies ─────────────────────────────
+  for (const c of CLIENT_COMPANIES) {
+    await prisma.client.upsert({
+      where: { companyCode: c.companyCode },
+      update: {
+        active: true,
+        businessName: c.businessName,
+        portalName: c.portalName,
+        branchType: c.branchType ?? "Main Branch",
+      },
+      create: {
+        companyCode: c.companyCode,
+        clientNo: c.clientNo,
+        active: true,
+        businessType: c.businessType,
+        businessName: c.businessName,
+        portalName: c.portalName,
+        branchType: c.branchType ?? "Main Branch",
+      },
+    });
+  }
+  console.log(`  ✓ ${CLIENT_COMPANIES.length} client company/companies seeded`);
+
+  // ── 7. Seed Client Users ─────────────────────────────────────────
 
   console.log("  Seeding client portal users:\n");
 

@@ -52,7 +52,6 @@ model Client {
 
   clientUsers     ClientUser[]
   userAssignments ClientUserAssignment[]
-  clientEmployees ClientEmployee[]
 
   professionalProfiles ProfessionalClient[]
   soleProprietorships  SoleProprietorship[]
@@ -90,10 +89,10 @@ model ClientUser {
   clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])
 
-  assignments     ClientUserAssignment[]
-  employeeProfile ClientEmployee[]
-  sessions        ClientSession[]
-  accounts        ClientAccount[]
+  assignments ClientUserAssignment[]
+  employee    Employee?
+  sessions    ClientSession[]
+  accounts    ClientAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -117,34 +116,6 @@ model ClientUserAssignment {
 
   @@unique([clientUserId, clientId])
   @@map("client_user_assignment")
-}
-
-// ─── Client Employee Profile ──────────────────────────────────────
-// Employment details for ClientUsers who are employees of a client.
-// Mirrors the internal User → Employee pattern.
-model ClientEmployee {
-  id Int @id @default(autoincrement())
-
-  clientUserId String
-  clientUser   ClientUser @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
-
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  positionTitle String?
-  departmentId  Int?
-  department    Department? @relation(fields: [departmentId], references: [id])
-
-  teamId Int?
-  team   EmployeeTeam? @relation(fields: [teamId], references: [id])
-
-  employmentType String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([clientUserId, clientId])
-  @@map("client_employee")
 }
 
 model ProfessionalClient {

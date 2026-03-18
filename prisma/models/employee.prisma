@@ -45,6 +45,10 @@ model Employee {
     userId String? @unique
     user   User?   @relation(fields: [userId], references: [id])
 
+    // External client portal user — set when this Employee profile belongs to a client employee
+    clientUserId String?     @unique
+    clientUser   ClientUser? @relation(fields: [clientUserId], references: [id])
+
     firstName     String
     middleName    String?
     lastName      String
@@ -253,9 +257,8 @@ model Department {
     name        String
     description String?
 
-    positions       Position[]
-    employments     EmployeeEmployment[]
-    clientEmployees ClientEmployee[]
+    positions   Position[]
+    employments EmployeeEmployment[]
 
     createdAt DateTime @default(now())
 
@@ -289,8 +292,7 @@ model EmployeeTeam {
     leaderId Int?
     leader   Employee? @relation("TeamLeader", fields: [leaderId], references: [id])
 
-    employments     EmployeeEmployment[]
-    clientEmployees ClientEmployee[]
+    employments EmployeeEmployment[]
 
     createdAt DateTime @default(now())
 
