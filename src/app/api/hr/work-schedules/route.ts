@@ -1,7 +1,7 @@
 // src/app/api/hr/work-schedules/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { getSessionWithAccess } from "@/lib/session";
+import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { createWorkScheduleSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 
@@ -13,7 +13,11 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
   const schedules = await prisma.workSchedule.findMany({
+    where: { clientId },
     orderBy: { name: "asc" },
     include: { days: { orderBy: { dayOfWeek: "asc" } } },
   });
@@ -45,8 +49,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
   const schedule = await prisma.workSchedule.create({
     data: {
+      clientId,
       name: parsed.data.name,
       timezone: parsed.data.timezone,
       days: {
