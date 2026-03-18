@@ -192,6 +192,9 @@ model EmployeeContract {
 model WorkSchedule {
     id Int @id @default(autoincrement())
 
+    clientId Int
+    client   Client @relation(fields: [clientId], references: [id])
+
     name     String
     timezone String @default("Asia/Manila")
 
@@ -200,6 +203,8 @@ model WorkSchedule {
 
     createdAt DateTime @default(now())
 
+    @@unique([clientId, name])
+    @@index([clientId])
     @@map("work_schedule")
 }
 
@@ -303,13 +308,19 @@ model EmployeeTeam {
 model EmployeeLevel {
     id Int @id @default(autoincrement())
 
-    name        String  @unique
-    position    Int     @unique // 1 = highest seniority (Executive = 1, Staff = 9)
+    clientId Int
+    client   Client @relation(fields: [clientId], references: [id])
+
+    name        String
+    position    Int // 1 = highest seniority (Executive = 1, Staff = 9)
     description String?
 
     employments EmployeeEmployment[]
 
     createdAt DateTime @default(now())
 
+    @@unique([clientId, name])
+    @@unique([clientId, position])
+    @@index([clientId])
     @@map("employee_level")
 }

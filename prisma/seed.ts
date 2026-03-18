@@ -503,17 +503,19 @@ async function main(): Promise<void> {
   });
   if (!agilaClient) throw new Error("ATMS client not found — step 1 failed");
 
-  // ── 4. Seed Employee Levels ──────────────────────────────────────
+  // ── 4. Seed Employee Levels (scoped to ATMS client) ───────────────
   for (const level of EMPLOYEE_LEVELS) {
     await prisma.employeeLevel.upsert({
-      where: { name: level.name },
+      where: { clientId_name: { clientId: agilaClient.id, name: level.name } },
       update: { position: level.position, description: level.description },
-      create: level,
+      create: { clientId: agilaClient.id, ...level },
     });
   }
-  const allLevels = await prisma.employeeLevel.findMany();
+  const allLevels = await prisma.employeeLevel.findMany({
+    where: { clientId: agilaClient.id },
+  });
   const levelsByName = new Map(allLevels.map((l) => [l.name, l.id]));
-  console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded`);
+  console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded (ATMS client)`);
 
   // ── 5. Seed Departments, Positions & Internal Users ─────────────
   //  Each internal user's department is upserted before creating the user
