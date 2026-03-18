@@ -34,24 +34,28 @@ const CLIENT_USER_INCLUDE = {
   },
 } as const;
 
-/**
- * GET /api/admin/settings/client-users
- * Returns all client portal users with their assigned clients.
- */
-export async function GET(_request: NextRequest): Promise<NextResponse> {
-  const session = await getSessionWithAccess();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const users = await prisma.clientUser.findMany({
-    orderBy: { createdAt: "desc" },
-    include: CLIENT_USER_INCLUDE,
-  });
-
-  const data = users.map((u) => ({
+function mapUser(u: {
+  id: string;
+  name: string | null;
+  email: string;
+  active: boolean;
+  status: string;
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  assignments: Array<{
+    role: string;
+    client: {
+      id: number;
+      clientNo: string | null;
+      businessName: string | null;
+      companyCode: string | null;
+      portalName: string | null;
+      active: boolean;
+    };
+  }>;
+}) {
+  return {
     id: u.id,
     name: u.name,
     email: u.email,
@@ -67,10 +71,34 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       companyCode: a.client.companyCode,
       portalName: a.client.portalName,
       active: a.client.active,
+      role: a.role,
     })),
-  }));
+  };
+}
 
-  return NextResponse.json({ data });
+/**
+ * GET /api/admin/settings/client-users
+ * Returns client portal users. Pass ?role=OWNER to filter to owners only.
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const role = request.nextUrl.searchParams.get("role");
+
+  const users = await prisma.clientUser.findMany({
+    where: role
+      ? { assignments: { some: { role: role as "OWNER" | "ADMIN" | "EMPLOYEE" | "VIEWER" } } }
+      : undefined,
+    orderBy: { createdAt: "desc" },
+    include: CLIENT_USER_INCLUDE,
+  });
+
+  return NextResponse.json({ data: users.map(mapUser) });
 }
 
 /**
@@ -128,7 +156,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       },
       assignments: {
-        create: clientIds.map((clientId) => ({ clientId })),
+        create: clientIds.map((clientId) => ({ clientId, role: "OWNER" as const })),
       },
     },
     include: CLIENT_USER_INCLUDE,
@@ -143,27 +171,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ...getRequestMeta(request),
   });
 
-  return NextResponse.json(
-    {
-      data: {
-        id: clientUser.id,
-        name: clientUser.name,
-        email: clientUser.email,
-        active: clientUser.active,
-        status: clientUser.status,
-        emailVerified: clientUser.emailVerified,
-        createdAt: clientUser.createdAt.toISOString(),
-        updatedAt: clientUser.updatedAt.toISOString(),
-        assignments: clientUser.assignments.map((a) => ({
-          clientId: a.client.id,
-          clientNo: a.client.clientNo,
-          businessName: a.client.businessName,
-          companyCode: a.client.companyCode,
-          portalName: a.client.portalName,
-          active: a.client.active,
-        })),
-      },
-    },
-    { status: 201 }
-  );
+  return NextResponse.json({ data: mapUser(clientUser) }, { status: 201 });
 }

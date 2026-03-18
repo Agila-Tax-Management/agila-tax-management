@@ -28,8 +28,8 @@ import type {
   ClientUserRecord,
   ClientUserStatus,
   StatusFilter,
-} from './user-client-management.types';
-import { STATUS_DB_MAP, STATUS_UI_MAP } from './user-client-management.types';
+} from '@/types/client-user-management.types';
+import { STATUS_DB_MAP, STATUS_UI_MAP } from '@/types/client-user-management.types';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -65,7 +65,7 @@ export default function UserClientManagement(): React.ReactNode {
   const fetchUsers = useCallback(async (): Promise<void> => {
     setLoadingUsers(true);
     try {
-      const response = await fetch('/api/admin/settings/client-users');
+      const response = await fetch('/api/admin/settings/client-users?role=OWNER');
       if (!response.ok) {
         toastError('Failed to load users', 'Could not fetch client portal users.');
         return;
@@ -238,8 +238,8 @@ export default function UserClientManagement(): React.ReactNode {
             <h1 className="text-2xl font-bold text-foreground">User Client Management</h1>
           </div>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manage external users who can access client-facing records only. Each user can be assigned to multiple clients,
-            and only active clients are available for assignment.
+            Manage external users who are the primary owners of their client business. Each owner can be
+            assigned to one or more clients and gains full access to the client portal.
           </p>
         </div>
         <Button onClick={openAdd} disabled={loadingClients}>

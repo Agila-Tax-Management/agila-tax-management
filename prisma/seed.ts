@@ -172,6 +172,18 @@ interface ClientUserSeed {
   companyCode: string;
   /** Role within the client — defaults to OWNER for the primary contact */
   role?: "OWNER" | "ADMIN" | "EMPLOYEE" | "VIEWER";
+  /** When provided, an Employee profile is created and linked via clientUserId */
+  employee?: {
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    gender: string;
+    birthDate: Date;
+    phone: string;
+    address: string;
+    positionTitle: string;
+    hireDate: Date;
+  };
 }
 
 const CLIENT_USERS: ClientUserSeed[] = [
@@ -181,6 +193,16 @@ const CLIENT_USERS: ClientUserSeed[] = [
     password: "clientpassword",
     companyCode: "comp-001",
     role: "OWNER",
+    employee: {
+      firstName: "Maria",
+      lastName: "Santos",
+      gender: "Female",
+      birthDate: new Date("1985-03-22"),
+      phone: "09270000000",
+      address: "Cebu City, Philippines",
+      positionTitle: "Business Owner",
+      hireDate: new Date("2024-01-01"),
+    },
   },
 ];
 
@@ -215,7 +237,80 @@ async function seedClientUser(
     create: { clientUserId: clientUser.id, clientId, role: seed.role ?? "OWNER" },
   });
 
-  // 3. Upsert ClientAccount (BetterAuth credential)
+  // 3. Optionally create Employee profile linked via clientUserId
+  if (seed.employee) {
+    const emp = seed.employee;
+    const existingEmployee = await prisma.employee.findUnique({
+      where: { clientUserId: clientUser.id },
+    });
+    let employeeId: number;
+    if (existingEmployee) {
+      employeeId = existingEmployee.id;
+    } else {
+      const employee = await prisma.employee.create({
+        data: {
+          clientUserId: clientUser.id,
+          firstName: emp.firstName,
+          middleName: emp.middleName,
+          lastName: emp.lastName,
+          gender: emp.gender,
+          birthDate: emp.birthDate,
+          phone: emp.phone,
+          address: emp.address,
+          active: true,
+        },
+      });
+      employeeId = employee.id;
+    }
+
+    // Upsert placeholder government IDs
+    await prisma.employeeGovernmentIds.upsert({
+      where: { employeeId },
+      update: {},
+      create: {
+        employeeId,
+        sss: "00-0000000-0",
+        pagibig: "0000-0000-0000",
+        philhealth: "00-000000000-0",
+        tin: "000-000-000-000",
+      },
+    });
+
+    // Upsert EmployeeEmployment → the client they belong to
+    const existingEmployment = await prisma.employeeEmployment.findFirst({
+      where: { employeeId, clientId, employmentStatus: "ACTIVE" },
+    });
+    if (!existingEmployment) {
+      // Upsert a default department for this client
+      const dept = await prisma.department.upsert({
+        where: { clientId_name: { clientId, name: "Management" } },
+        update: {},
+        create: { clientId, name: "Management", description: "Business management" },
+      });
+      // Find or create position
+      let position = await prisma.position.findFirst({
+        where: { departmentId: dept.id, title: emp.positionTitle },
+      });
+      if (!position) {
+        position = await prisma.position.create({
+          data: { title: emp.positionTitle, departmentId: dept.id },
+        });
+      }
+      await prisma.employeeEmployment.create({
+        data: {
+          employeeId,
+          clientId,
+          departmentId: dept.id,
+          positionId: position.id,
+          employmentType: "REGULAR",
+          employmentStatus: "ACTIVE",
+          hireDate: emp.hireDate,
+        },
+      });
+    }
+  }
+
+  // 4. Upsert ClientAccount (BetterAuth credential)
   const existingAccount = await prisma.clientAccount.findFirst({
     where: { userId: clientUser.id, providerId: "credential" },
   });

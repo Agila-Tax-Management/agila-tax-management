@@ -21,6 +21,7 @@ export interface ApiAssignment {
   companyCode: string | null;
   portalName: string | null;
   active: boolean;
+  role: string;
 }
 
 export interface ClientOption {

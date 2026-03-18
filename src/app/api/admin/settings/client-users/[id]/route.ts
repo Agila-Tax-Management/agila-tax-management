@@ -40,6 +40,48 @@ const CLIENT_USER_INCLUDE = {
   },
 } as const;
 
+function mapUser(u: {
+  id: string;
+  name: string | null;
+  email: string;
+  active: boolean;
+  status: string;
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  assignments: Array<{
+    role: string;
+    client: {
+      id: number;
+      clientNo: string | null;
+      businessName: string | null;
+      companyCode: string | null;
+      portalName: string | null;
+      active: boolean;
+    };
+  }>;
+}) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    active: u.active,
+    status: u.status,
+    emailVerified: u.emailVerified,
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
+    assignments: u.assignments.map((a) => ({
+      clientId: a.client.id,
+      clientNo: a.client.clientNo,
+      businessName: a.client.businessName,
+      companyCode: a.client.companyCode,
+      portalName: a.client.portalName,
+      active: a.client.active,
+      role: a.role,
+    })),
+  };
+}
+
 /**
  * PUT /api/admin/settings/client-users/[id]
  * Full update: name, email, optional password, status, and client assignments.
@@ -104,7 +146,7 @@ export async function PUT(
     }
   }
 
-  // Replace all assignments atomically
+  // Replace all assignments atomically (always OWNER for this management page)
   await prisma.clientUserAssignment.deleteMany({ where: { clientUserId: id } });
 
   const updated = await prisma.clientUser.update({
@@ -115,7 +157,7 @@ export async function PUT(
       active: status === "ACTIVE",
       status,
       assignments: {
-        create: clientIds.map((clientId) => ({ clientId })),
+        create: clientIds.map((clientId) => ({ clientId, role: "OWNER" as const })),
       },
     },
     include: CLIENT_USER_INCLUDE,
@@ -134,26 +176,7 @@ export async function PUT(
     ...getRequestMeta(request),
   });
 
-  return NextResponse.json({
-    data: {
-      id: updated.id,
-      name: updated.name,
-      email: updated.email,
-      active: updated.active,
-      status: updated.status,
-      emailVerified: updated.emailVerified,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-      assignments: updated.assignments.map((a) => ({
-        clientId: a.client.id,
-        clientNo: a.client.clientNo,
-        businessName: a.client.businessName,
-        companyCode: a.client.companyCode,
-        portalName: a.client.portalName,
-        active: a.client.active,
-      })),
-    },
-  });
+  return NextResponse.json({ data: mapUser(updated) });
 }
 
 /**

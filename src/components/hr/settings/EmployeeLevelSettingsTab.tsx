@@ -47,11 +47,9 @@ export function EmployeeLevelSettingsTab(): React.ReactNode {
     }
   }, [error]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- initial data fetch on mount */
   useEffect(() => {
     void fetchLevels();
   }, [fetchLevels]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const updateRow = (id: number, field: keyof EmployeeLevelItem, value: string | number) => {
     setLevels((prev) =>

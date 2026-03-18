@@ -21,7 +21,6 @@ const MODEL_MAP: Record<string, string> = {
   verification: "clientVerification",
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- proxy requires any
 const clientPrismaProxy = new Proxy(prisma, {
   get(target, prop: string) {
     const mapped = MODEL_MAP[prop];

@@ -5,8 +5,8 @@ import { CalendarClock, Mail, Pencil, Users } from 'lucide-react';
 import { Modal } from '@/components/UI/Modal';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
-import type { ClientUserRecord, ClientUserStatus } from './user-client-management.types';
-import { STATUS_UI_MAP } from './user-client-management.types';
+import type { ClientUserRecord, ClientUserStatus } from '@/types/client-user-management.types';
+import { STATUS_UI_MAP } from '@/types/client-user-management.types';
 
 const STATUS_VARIANT = {
   Active: 'success',

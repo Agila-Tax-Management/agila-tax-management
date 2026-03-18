@@ -11,8 +11,8 @@ import type {
   ClientOption,
   ClientUserFormValues,
   ClientUserRecord,
-} from './user-client-management.types';
-import { STATUS_UI_MAP } from './user-client-management.types';
+} from '@/types/client-user-management.types';
+import { STATUS_UI_MAP } from '@/types/client-user-management.types';
 
 interface UserClientFormModalProps {
   isOpen: boolean;
