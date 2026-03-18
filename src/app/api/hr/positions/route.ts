@@ -4,21 +4,27 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createPositionSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getClientIdFromSession } from "@/lib/session";
 
 /**
  * GET /api/hr/positions?departmentId=
- * Returns all positions, optionally filtered by departmentId.
+ * Returns positions scoped to the session user's client, optionally filtered by departmentId.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const departmentIdParam = searchParams.get("departmentId");
   const departmentId = departmentIdParam ? parseInt(departmentIdParam, 10) : undefined;
 
   const positions = await prisma.position.findMany({
-    where: departmentId ? { departmentId } : undefined,
+    where: departmentId
+      ? { departmentId, department: { clientId } }
+      : { department: { clientId } },
     orderBy: { title: "asc" },
     include: {
       department: { select: { id: true, name: true } },

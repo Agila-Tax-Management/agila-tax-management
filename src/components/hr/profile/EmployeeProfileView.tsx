@@ -81,6 +81,7 @@ interface ApiEmployeeDetail {
   phone: string;
   personalEmail: string | null;
   email: string | null;
+  user: { email: string } | null;
   address: string;
   employeeNo: string | null;
   educationalBackground: string | null;
@@ -212,7 +213,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         civilStatus: emp.civilStatus ?? '',
         personalEmail: emp.personalEmail ?? '',
         address: emp.address,
-        email: emp.email ?? '',
+        email: emp.email ?? emp.user?.email ?? '',
         educationalBackground: emp.educationalBackground ?? '',
         school: emp.school ?? '',
         course: emp.course ?? '',
