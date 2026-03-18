@@ -6,12 +6,11 @@ import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
-import { Modal } from '@/components/UI/Modal';
 import {
-  Search, Plus, LayoutList, Columns3,
-  Calendar, GripVertical, Tag, Filter,
+  Search, LayoutList, Columns3,
+  Tag, Filter, Calendar, GripVertical,
 } from 'lucide-react';
-import { INITIAL_LIAISON_TASKS, LIAISON_TEAM } from '@/lib/mock-liaison-data';
+import { INITIAL_LIAISON_TASKS, CURRENT_LIAISON } from '@/lib/mock-liaison-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
 import type { AOTask, AOTaskStatus, AOTaskPriority } from '@/lib/types';
 
@@ -43,7 +42,7 @@ type ViewMode = 'list' | 'kanban';
 type GroupBy = 'none' | 'assignee' | 'company';
 type SortBy = 'name' | 'dueDate' | 'priority';
 
-export function LiaisonTaskBoard() {
+export function MyTask() {
   const router = useRouter();
   const [tasks, setTasks] = useState<AOTask[]>(INITIAL_LIAISON_TASKS);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -52,29 +51,25 @@ export function LiaisonTaskBoard() {
   const [filterPriority, setFilterPriority] = useState<AOTaskPriority | 'all'>('all');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [sortBy, setSortBy] = useState<SortBy>('dueDate');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-
-  // New task form
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newClientId, setNewClientId] = useState(INITIAL_CLIENTS[0]?.id ?? '');
-  const [newAssigneeId, setNewAssigneeId] = useState(LIAISON_TEAM[0]?.id ?? '');
-  const [newPriority, setNewPriority] = useState<AOTaskPriority>('Medium');
-  const [newDueDate, setNewDueDate] = useState('');
-  const [newTags, setNewTags] = useState('');
 
   const getClientName = (clientId: string) =>
     INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName ?? 'Unknown';
 
-  const getAssignee = (assigneeId: string) =>
-    LIAISON_TEAM.find(m => m.id === assigneeId);
+  const getAssignee = (assigneeId: string) => {
+    return { name: CURRENT_LIAISON.name, avatar: CURRENT_LIAISON.avatar };
+  };
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 
+  // Filter tasks assigned only to the current user
+  const userTasks = useMemo(() => {
+    return tasks.filter(t => t.assigneeId === CURRENT_LIAISON.id);
+  }, [tasks]);
+
   const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
+    return userTasks.filter(t => {
       const matchSearch = search === '' ||
         t.title.toLowerCase().includes(search.toLowerCase()) ||
         getClientName(t.clientId).toLowerCase().includes(search.toLowerCase()) ||
@@ -83,7 +78,7 @@ export function LiaisonTaskBoard() {
       const matchPriority = filterPriority === 'all' || t.priority === filterPriority;
       return matchSearch && matchStatus && matchPriority;
     });
-  }, [tasks, search, filterStatus, filterPriority]);
+  }, [userTasks, search, filterStatus, filterPriority]);
 
   const sortedTasks = useMemo(() => {
     const sorted = [...filteredTasks].sort((a, b) => {
@@ -103,7 +98,7 @@ export function LiaisonTaskBoard() {
 
   const getGroupLabel = (task: AOTask) => {
     if (groupBy === 'assignee') {
-      return getAssignee(task.assigneeId)?.name ?? 'Unassigned';
+      return getAssignee(task.assigneeId).name;
     }
 
     if (groupBy === 'company') {
@@ -133,45 +128,6 @@ export function LiaisonTaskBoard() {
     }));
   }, [sortedTasks, groupBy]);
 
-  const handleCreateTask = () => {
-    if (!newTitle.trim() || !newDueDate) return;
-    const task: AOTask = {
-      id: `lia-task-${crypto.randomUUID()}`,
-      title: newTitle.trim(),
-      description: newDescription.trim(),
-      status: 'To Do',
-      priority: newPriority,
-      clientId: newClientId,
-      assigneeId: newAssigneeId,
-      dueDate: newDueDate,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      comments: [],
-      tags: newTags.split(',').map(t => t.trim()).filter(Boolean),
-    };
-    setTasks(prev => [task, ...prev]);
-    resetCreateForm();
-    setIsCreateModalOpen(false);
-  };
-
-  const resetCreateForm = () => {
-    setNewTitle('');
-    setNewDescription('');
-    setNewClientId(INITIAL_CLIENTS[0]?.id ?? '');
-    setNewAssigneeId(LIAISON_TEAM[0]?.id ?? '');
-    setNewPriority('Medium');
-    setNewDueDate('');
-    setNewTags('');
-  };
-
-  const handleDrop = (targetStatus: AOTaskStatus) => {
-    if (!draggedTaskId) return;
-    setTasks(prev => prev.map(t =>
-      t.id === draggedTaskId ? { ...t, status: targetStatus, updatedAt: new Date().toISOString() } : t
-    ));
-    setDraggedTaskId(null);
-  };
-
   const isOverdue = (t: AOTask) => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-11');
 
   return (
@@ -179,8 +135,8 @@ export function LiaisonTaskBoard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Task Board</h2>
-          <p className="text-sm text-slate-500 font-medium">Manage and track liaison tasks assigned by AO and Compliance.</p>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">My Tasks</h2>
+          <p className="text-sm text-slate-500 font-medium">Tasks assigned to you in the Liaison department.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-100 rounded-lg p-0.5">
@@ -197,9 +153,6 @@ export function LiaisonTaskBoard() {
               <Columns3 size={14} className="inline mr-1" /> Kanban
             </button>
           </div>
-          <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => setIsCreateModalOpen(true)}>
-            <Plus size={16} /> New Task
-          </Button>
         </div>
       </div>
 
@@ -261,17 +214,16 @@ export function LiaisonTaskBoard() {
           <div className="grid grid-cols-[1fr_140px_100px_100px_120px_80px] gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
             <span>Task</span>
             <span>Client</span>
-            <span>Assignee</span>
             <span>Status</span>
             <span>Due Date</span>
             <span>Priority</span>
+            <span>Overdue</span>
           </div>
           <div className="divide-y divide-slate-100">
             {sortedTasks.length === 0 && (
               <div className="py-12 text-center text-sm text-slate-400 font-medium">No tasks match your search.</div>
             )}
             {groupBy === 'none' && sortedTasks.map(task => {
-              const assignee = getAssignee(task.assigneeId);
               const overdue = isOverdue(task);
               return (
                 <div
@@ -291,12 +243,6 @@ export function LiaisonTaskBoard() {
                     )}
                   </div>
                   <span className="text-xs text-slate-600 font-medium truncate">{getClientName(task.clientId)}</span>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 bg-violet-600 rounded-full flex items-center justify-center shrink-0">
-                      <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
-                    </div>
-                    <span className="text-xs text-slate-600 truncate">{assignee?.name.split(' ')[0] ?? 'N/A'}</span>
-                  </div>
                   <Badge variant={STATUS_CONFIG[task.status].variant} className="text-[9px] w-fit">
                     {task.status}
                   </Badge>
@@ -306,6 +252,9 @@ export function LiaisonTaskBoard() {
                   <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[9px] w-fit">
                     {task.priority}
                   </Badge>
+                  <span className={`text-[9px] font-bold ${overdue ? 'text-rose-600' : 'text-slate-400'}`}>
+                    {overdue ? 'Yes' : 'No'}
+                  </span>
                 </div>
               );
             })}
@@ -317,7 +266,6 @@ export function LiaisonTaskBoard() {
                 </div>
                 <div className="divide-y divide-slate-100">
                   {group.tasks.map(task => {
-                    const assignee = getAssignee(task.assigneeId);
                     const overdue = isOverdue(task);
                     return (
                       <div
@@ -337,12 +285,6 @@ export function LiaisonTaskBoard() {
                           )}
                         </div>
                         <span className="text-xs text-slate-600 font-medium truncate">{getClientName(task.clientId)}</span>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 bg-violet-600 rounded-full flex items-center justify-center shrink-0">
-                            <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
-                          </div>
-                          <span className="text-xs text-slate-600 truncate">{assignee?.name.split(' ')[0] ?? 'N/A'}</span>
-                        </div>
                         <Badge variant={STATUS_CONFIG[task.status].variant} className="text-[9px] w-fit">
                           {task.status}
                         </Badge>
@@ -352,6 +294,9 @@ export function LiaisonTaskBoard() {
                         <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[9px] w-fit">
                           {task.priority}
                         </Badge>
+                        <span className={`text-[9px] font-bold ${overdue ? 'text-rose-600' : 'text-slate-400'}`}>
+                          {overdue ? 'Yes' : 'No'}
+                        </span>
                       </div>
                     );
                   })}
@@ -383,7 +328,14 @@ export function LiaisonTaskBoard() {
                 key={status}
                 className="bg-slate-50 rounded-2xl p-3 min-h-100"
                 onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(status)}
+                onDrop={() => {
+                  if (draggedTaskId) {
+                    setTasks(prev => prev.map(t =>
+                      t.id === draggedTaskId ? { ...t, status, updatedAt: new Date().toISOString() } : t
+                    ));
+                    setDraggedTaskId(null);
+                  }
+                }}
               >
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="flex items-center gap-2">
@@ -402,7 +354,6 @@ export function LiaisonTaskBoard() {
                         </p>
                       )}
                       {group.tasks.map(task => {
-                        const assignee = getAssignee(task.assigneeId);
                         const overdue = isOverdue(task);
                         return (
                           <div
@@ -427,20 +378,21 @@ export function LiaisonTaskBoard() {
                               </div>
                             )}
                             <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-5 h-5 bg-violet-600 rounded-full flex items-center justify-center">
-                                  <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
-                                </div>
-                                <span className="text-[10px] text-slate-500">{assignee?.name.split(' ')[0]}</span>
+                              <div className="flex items-center gap-1">
+                                <Badge variant={STATUS_CONFIG[task.status].variant} className="text-[8px] px-1.5 py-0.5">
+                                  {task.status}
+                                </Badge>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
-                                  <Calendar size={10} /> {formatDate(task.dueDate)}
-                                </span>
-                                <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">
+                              <div className="flex items-center gap-1">
+                                <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0.5">
                                   {task.priority}
                                 </Badge>
                               </div>
+                              {overdue && <span className="text-[8px] font-bold text-rose-600">OVD</span>}
+                            </div>
+                            <div className="flex items-center gap-1 mt-2 text-[9px] text-slate-500">
+                              <Calendar size={10} />
+                              {formatDate(task.dueDate)}
                             </div>
                           </div>
                         );
@@ -454,81 +406,7 @@ export function LiaisonTaskBoard() {
         </div>
       )}
 
-      {/* Task Details Modal */}
 
-
-      {/* Create Task Modal */}
-      <Modal isOpen={isCreateModalOpen} onClose={() => { setIsCreateModalOpen(false); resetCreateForm(); }} title="Create New Task" size="lg">
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Title *</label>
-            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. BIR Filing Run at RDO 044" />
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Description</label>
-            <textarea
-              value={newDescription}
-              onChange={e => setNewDescription(e.target.value)}
-              placeholder="Task description..."
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 min-h-20 resize-none"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Client *</label>
-              <select
-                value={newClientId}
-                onChange={e => setNewClientId(e.target.value)}
-                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
-              >
-                {INITIAL_CLIENTS.map(c => <option key={c.id} value={c.id}>{c.businessName}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Assignee *</label>
-              <select
-                value={newAssigneeId}
-                onChange={e => setNewAssigneeId(e.target.value)}
-                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
-              >
-                {LIAISON_TEAM.map(m => <option key={m.id} value={m.id}>{m.name} ({m.department})</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Priority</label>
-              <select
-                value={newPriority}
-                onChange={e => setNewPriority(e.target.value as AOTaskPriority)}
-                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
-              >
-                {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Due Date *</label>
-              <Input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Tags (comma separated)</label>
-            <Input value={newTags} onChange={e => setNewTags(e.target.value)} placeholder="e.g. BIR, Filing, On-Site" />
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-slate-100">
-            <Button variant="outline" className="flex-1" onClick={() => { setIsCreateModalOpen(false); resetCreateForm(); }}>
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
-              onClick={handleCreateTask}
-              disabled={!newTitle.trim() || !newDueDate}
-            >
-              Create Task
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
