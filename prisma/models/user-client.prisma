@@ -1,0 +1,67 @@
+// prisma/models/user-client.prisma
+//
+// BetterAuth-compatible auth tables for external client portal users.
+// These mirror the internal User/Session/Account/Verification models
+// in users.prisma but are fully isolated for the client-facing auth instance.
+//
+// BetterAuth config (src/lib/auth-client-portal.ts) must override the schema
+// mapping to point to these models:
+//   schema: { user: "clientUser", session: "clientSession",
+//             account: "clientAccount", verification: "clientVerification" }
+
+// ─── Client Sessions ──────────────────────────────────────────────
+model ClientSession {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+
+  userId String
+  user   ClientUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("client_session")
+}
+
+// ─── Client Accounts (credential + OAuth) ─────────────────────────
+// BetterAuth stores the hashed password here — never on ClientUser directly.
+model ClientAccount {
+  id        String @id
+  accountId String
+  providerId String
+
+  userId String
+  user   ClientUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  password              String?
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("client_account")
+}
+
+// ─── Client Verification (email / password-reset tokens) ──────────
+model ClientVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("client_verification")
+}

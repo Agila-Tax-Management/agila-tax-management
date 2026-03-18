@@ -45,7 +45,6 @@ const INITIAL_LIST_DRAFTS = {
   customNotIncluded: '',
 };
 
-type ListFieldKey = keyof typeof INITIAL_LIST_DRAFTS;
 type PlanListFieldKey = 'highlights' | 'designedFor' | 'freebies';
 
 export function MonthlyServicePlans(): React.ReactNode {

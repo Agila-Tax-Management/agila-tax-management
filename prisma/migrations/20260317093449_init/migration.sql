@@ -11,13 +11,16 @@ CREATE TYPE "BusinessType" AS ENUM ('INDIVIDUAL', 'SOLE_PROPRIETORSHIP', 'PARTNE
 CREATE TYPE "EmploymentType" AS ENUM ('REGULAR', 'PROBATIONARY', 'CONTRACTUAL', 'PROJECT_BASED', 'PART_TIME', 'INTERN');
 
 -- CreateEnum
-CREATE TYPE "EmployeeLevel" AS ENUM ('STAFF', 'JUNIOR', 'MID', 'SENIOR', 'LEAD', 'MANAGER', 'DIRECTOR', 'SUPERVISOR', 'EXECUTIVE');
-
--- CreateEnum
 CREATE TYPE "EmploymentStatus" AS ENUM ('ACTIVE', 'RESIGNED', 'TERMINATED', 'ON_LEAVE', 'SUSPENDED', 'RETIRED');
 
 -- CreateEnum
 CREATE TYPE "DisbursedMethod" AS ENUM ('CASH_SALARY', 'FUND_TRANSFER');
+
+-- CreateEnum
+CREATE TYPE "ContractType" AS ENUM ('PROBATIONARY', 'REGULAR', 'CONTRACTUAL', 'PROJECT_BASED', 'CONSULTANT', 'INTERN');
+
+-- CreateEnum
+CREATE TYPE "ContractStatus" AS ENUM ('DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED');
 
 -- CreateEnum
 CREATE TYPE "NotificationType" AS ENUM ('INFO', 'SUCCESS', 'WARNING', 'ERROR', 'ACTION_REQUIRED');
@@ -100,7 +103,7 @@ CREATE TABLE "BusinessCategory" (
 );
 
 -- CreateTable
-CREATE TABLE "ClientUser" (
+CREATE TABLE "client_user" (
     "id" TEXT NOT NULL,
     "name" TEXT,
     "email" TEXT NOT NULL,
@@ -111,7 +114,7 @@ CREATE TABLE "ClientUser" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "ClientUser_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "client_user_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -224,13 +227,23 @@ CREATE TABLE "Employee" (
     "firstName" TEXT NOT NULL,
     "middleName" TEXT,
     "lastName" TEXT NOT NULL,
+    "nameExtension" TEXT,
     "username" TEXT,
     "employeeNo" TEXT,
     "email" TEXT,
+    "personalEmail" TEXT,
     "birthDate" TIMESTAMP(3) NOT NULL,
+    "placeOfBirth" TEXT,
     "gender" TEXT NOT NULL,
+    "civilStatus" TEXT,
+    "citizenship" TEXT,
     "phone" TEXT NOT NULL,
     "address" TEXT NOT NULL,
+    "educationalBackground" TEXT,
+    "school" TEXT,
+    "course" TEXT,
+    "yearGraduated" TEXT,
+    "certifications" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "softDelete" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -263,11 +276,25 @@ CREATE TABLE "employee_employment" (
     "teamId" INTEGER,
     "employmentType" "EmploymentType",
     "employmentStatus" "EmploymentStatus" NOT NULL DEFAULT 'ACTIVE',
-    "employeeLevel" "EmployeeLevel",
+    "employeeLevelId" INTEGER,
     "hireDate" TIMESTAMP(3),
     "regularizationDate" TIMESTAMP(3),
     "endDate" TIMESTAMP(3),
     "reportingManagerId" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "employee_employment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "employee_contract" (
+    "id" SERIAL NOT NULL,
+    "employmentId" INTEGER NOT NULL,
+    "contractType" "ContractType" NOT NULL,
+    "status" "ContractStatus" NOT NULL,
+    "contractStart" TIMESTAMP(3) NOT NULL,
+    "contractEnd" TIMESTAMP(3),
     "monthlyRate" DECIMAL(10,2),
     "weeklyRate" DECIMAL(10,2),
     "dailyRate" DECIMAL(10,2),
@@ -275,10 +302,39 @@ CREATE TABLE "employee_employment" (
     "disbursedMethod" "DisbursedMethod",
     "payType" TEXT DEFAULT 'Variable Pay',
     "bankDetails" TEXT,
+    "scheduleId" INTEGER,
+    "workingHoursPerWeek" INTEGER,
+    "signedDate" TIMESTAMP(3),
+    "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "employee_employment_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "employee_contract_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "work_schedule" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'Asia/Manila',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "work_schedule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "work_schedule_day" (
+    "id" SERIAL NOT NULL,
+    "scheduleId" INTEGER NOT NULL,
+    "dayOfWeek" INTEGER NOT NULL,
+    "startTime" TEXT NOT NULL,
+    "endTime" TEXT NOT NULL,
+    "breakStart" TEXT,
+    "breakEnd" TEXT,
+    "isWorkingDay" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "work_schedule_day_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -331,6 +387,17 @@ CREATE TABLE "EmployeeTeam" (
 );
 
 -- CreateTable
+CREATE TABLE "employee_level" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "employee_level_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "internal_notification" (
     "id" TEXT NOT NULL,
     "recipientId" TEXT NOT NULL,
@@ -347,6 +414,51 @@ CREATE TABLE "internal_notification" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "internal_notification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "client_session" (
+    "id" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "token" TEXT NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "client_session_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "client_account" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "password" TEXT,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "idToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMP(3),
+    "refreshTokenExpiresAt" TIMESTAMP(3),
+    "scope" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "client_account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "client_verification" (
+    "id" TEXT NOT NULL,
+    "identifier" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "client_verification_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -434,7 +546,7 @@ CREATE UNIQUE INDEX "atms_clients_companyCode_key" ON "atms_clients"("companyCod
 CREATE UNIQUE INDEX "BusinessCategory_name_key" ON "BusinessCategory"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ClientUser_email_key" ON "ClientUser"("email");
+CREATE UNIQUE INDEX "client_user_email_key" ON "client_user"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Employee_userId_key" ON "Employee"("userId");
@@ -452,10 +564,19 @@ CREATE INDEX "employee_employment_employeeId_employmentStatus_idx" ON "employee_
 CREATE INDEX "employee_employment_clientId_idx" ON "employee_employment"("clientId");
 
 -- CreateIndex
+CREATE INDEX "employee_contract_employmentId_idx" ON "employee_contract"("employmentId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Department_clientId_name_key" ON "Department"("clientId", "name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EmployeeTeam_clientId_name_key" ON "EmployeeTeam"("clientId", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "employee_level_name_key" ON "employee_level"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "employee_level_position_key" ON "employee_level"("position");
 
 -- CreateIndex
 CREATE INDEX "internal_notification_recipientId_isRead_idx" ON "internal_notification"("recipientId", "isRead");
@@ -465,6 +586,18 @@ CREATE INDEX "internal_notification_recipientId_createdAt_idx" ON "internal_noti
 
 -- CreateIndex
 CREATE INDEX "internal_notification_actorId_idx" ON "internal_notification"("actorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "client_session_token_key" ON "client_session"("token");
+
+-- CreateIndex
+CREATE INDEX "client_session_userId_idx" ON "client_session"("userId");
+
+-- CreateIndex
+CREATE INDEX "client_account_userId_idx" ON "client_account"("userId");
+
+-- CreateIndex
+CREATE INDEX "client_verification_identifier_idx" ON "client_verification"("identifier");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
@@ -497,7 +630,7 @@ ALTER TABLE "atms_clients" ADD CONSTRAINT "atms_clients_businessCategoryId_fkey"
 ALTER TABLE "atms_clients" ADD CONSTRAINT "atms_clients_mainBranchId_fkey" FOREIGN KEY ("mainBranchId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ClientUser" ADD CONSTRAINT "ClientUser_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "client_user" ADD CONSTRAINT "client_user_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "atms_professional" ADD CONSTRAINT "atms_professional_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -527,7 +660,19 @@ ALTER TABLE "employee_employment" ADD CONSTRAINT "employee_employment_positionId
 ALTER TABLE "employee_employment" ADD CONSTRAINT "employee_employment_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "EmployeeTeam"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "employee_employment" ADD CONSTRAINT "employee_employment_employeeLevelId_fkey" FOREIGN KEY ("employeeLevelId") REFERENCES "employee_level"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "employee_employment" ADD CONSTRAINT "employee_employment_reportingManagerId_fkey" FOREIGN KEY ("reportingManagerId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "employee_contract" ADD CONSTRAINT "employee_contract_employmentId_fkey" FOREIGN KEY ("employmentId") REFERENCES "employee_employment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "employee_contract" ADD CONSTRAINT "employee_contract_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "work_schedule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "work_schedule_day" ADD CONSTRAINT "work_schedule_day_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "work_schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "atms_submitted_documents" ADD CONSTRAINT "atms_submitted_documents_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -549,6 +694,12 @@ ALTER TABLE "internal_notification" ADD CONSTRAINT "internal_notification_recipi
 
 -- AddForeignKey
 ALTER TABLE "internal_notification" ADD CONSTRAINT "internal_notification_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_session" ADD CONSTRAINT "client_session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "client_user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_account" ADD CONSTRAINT "client_account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "client_user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
