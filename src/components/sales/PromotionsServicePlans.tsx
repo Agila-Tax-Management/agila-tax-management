@@ -12,10 +12,12 @@ import {
   Gift,
   Megaphone,
   PackagePlus,
+  Pencil,
   Plus,
   Search,
   Sparkles,
   Tag,
+  Trash2,
 } from 'lucide-react';
 
 type PromotionTab = 'discounted-services' | 'promo-bundles';
@@ -31,6 +33,8 @@ interface PromotionOffering {
 interface DiscountedService {
   id: string;
   serviceId: string;
+  promoName: string;
+  promoCode: string | null;
   serviceName: string;
   category: PromotionOffering['category'];
   teamInCharge: string;
@@ -46,6 +50,7 @@ interface DiscountedService {
 interface PromoBundle {
   id: string;
   name: string;
+  promoCode: string | null;
   headline: string;
   servicesIncluded: string[];
   categoriesIncluded: PromotionOffering['category'][];
@@ -59,6 +64,7 @@ interface PromoBundle {
 interface PromoApiItem {
   id: number;
   name: string;
+  code: string | null;
   description: string | null;
   promoFor: 'SERVICE_PLAN' | 'SERVICE_ONE_TIME' | 'BOTH';
   discountType: 'PERCENTAGE' | 'FIXED';
@@ -84,6 +90,36 @@ export function PromotionsServicePlans(): React.ReactNode {
   const [bundleCategoryFilter, setBundleCategoryFilter] = useState<'All' | PromotionOffering['category']>('All');
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+
+  const [editDiscountTarget, setEditDiscountTarget] = useState<DiscountedService | null>(null);
+  const [editDiscountForm, setEditDiscountForm] = useState({
+    name: '',
+    code: '',
+    discountType: 'percentage' as DiscountedService['discountType'],
+    discountValue: '',
+    validFrom: '',
+    validUntil: '',
+    maxUsage: '',
+    description: '',
+  });
+  const [isEditDiscountSubmitting, setIsEditDiscountSubmitting] = useState(false);
+
+  const [editBundleTarget, setEditBundleTarget] = useState<PromoBundle | null>(null);
+  const [editBundleForm, setEditBundleForm] = useState({
+    name: '',
+    code: '',
+    description: '',
+    promoPrice: '',
+    validFrom: '',
+    validUntil: '',
+    maxUsage: '',
+    audience: '',
+  });
+  const [isEditBundleSubmitting, setIsEditBundleSubmitting] = useState(false);
+
+  const [deletePromoTarget, setDeletePromoTarget] = useState<{ id: string; name: string; type: 'discount' | 'bundle' } | null>(null);
+  const [isDeletingPromo, setIsDeletingPromo] = useState(false);
+
   const { success, error } = useToast();
 
   const [offeringApiPlans, setOfferingApiPlans] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
@@ -147,6 +183,8 @@ export function PromotionsServicePlans(): React.ReactNode {
             discounted.push({
               id: String(promo.id),
               serviceId: firstSvc ? (isPlan ? `plan-${firstSvc.id}` : `svc-${firstSvc.id}`) : '',
+              promoName: promo.name,
+              promoCode: promo.code ?? null,
               serviceName: firstSvc?.name ?? promo.name,
               category: isPlan ? 'Monthly Plan' : 'One-Time Service',
               teamInCharge: isPlan ? 'Monthly Plan' : 'One-Time Service',
@@ -178,6 +216,7 @@ export function PromotionsServicePlans(): React.ReactNode {
             bundles.push({
               id: String(promo.id),
               name: promo.name,
+              promoCode: promo.code ?? null,
               headline: promo.description ?? '',
               servicesIncluded: allNames,
               categoriesIncluded: cats,
@@ -348,6 +387,8 @@ export function PromotionsServicePlans(): React.ReactNode {
       const created: DiscountedService = {
         id: String(promo.id),
         serviceId: selectedDiscountOffering.id,
+        promoName: promo.name,
+        promoCode: promo.code ?? null,
         serviceName: firstSvc?.name ?? promo.name,
         category: selectedDiscountOffering.category,
         teamInCharge: selectedDiscountOffering.category,
@@ -420,6 +461,7 @@ export function PromotionsServicePlans(): React.ReactNode {
       const created: PromoBundle = {
         id: String(promo.id),
         name: promo.name,
+        promoCode: promo.code ?? null,
         headline: promo.description ?? promoForm.description,
         servicesIncluded: allNames,
         categoriesIncluded: cats,
@@ -500,6 +542,164 @@ export function PromotionsServicePlans(): React.ReactNode {
       success('Promo bundle ended', 'The active promo bundle was ended and moved back to draft status.');
     } else {
       error('Action failed', 'Could not end the bundle. Please try again.');
+    }
+  };
+
+  const openEditDiscount = (p: DiscountedService) => {
+    setEditDiscountTarget(p);
+    setEditDiscountForm({
+      name: p.promoName,
+      code: p.promoCode ?? '',
+      discountType: p.discountType,
+      discountValue: String(p.discountValue),
+      validFrom: '',
+      validUntil: p.validUntil,
+      maxUsage: '',
+      description: p.notes,
+    });
+  };
+
+  const handleUpdateDiscount = async () => {
+    if (!editDiscountTarget || !editDiscountForm.name.trim() || !editDiscountForm.discountValue || !editDiscountForm.validUntil) {
+      error('Missing fields', 'Enter a promo name, discount value, and validity date.');
+      return;
+    }
+    setIsEditDiscountSubmitting(true);
+    try {
+      const res = await fetch(`/api/sales/promos/${editDiscountTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editDiscountForm.name.trim(),
+          code: editDiscountForm.code.trim() || null,
+          description: editDiscountForm.description.trim() || null,
+          discountType: editDiscountForm.discountType.toUpperCase(),
+          discountRate: Number(editDiscountForm.discountValue),
+          validFrom: editDiscountForm.validFrom ? `${editDiscountForm.validFrom}T00:00:00.000Z` : null,
+          validUntil: `${editDiscountForm.validUntil}T23:59:59.000Z`,
+          maxUsage: editDiscountForm.maxUsage ? parseInt(editDiscountForm.maxUsage, 10) : null,
+        }),
+      });
+      const data = await res.json() as { data?: PromoApiItem; error?: string };
+      if (!res.ok) {
+        error('Failed to update', data.error ?? 'An error occurred.');
+        return;
+      }
+      const updated = data.data!;
+      const discValue = parseFloat(updated.discountRate);
+      const origPrice = editDiscountTarget.originalPrice;
+      const discPrice =
+        updated.discountType === 'PERCENTAGE'
+          ? Math.max(Math.round(origPrice * (1 - discValue / 100)), 0)
+          : Math.max(origPrice - discValue, 0);
+      setDiscountedServices((prev) =>
+        prev.map((p) => {
+          if (p.id !== editDiscountTarget.id) return p;
+          return {
+            ...p,
+            promoName: updated.name,
+            promoCode: updated.code ?? null,
+            discountType: updated.discountType === 'PERCENTAGE' ? 'percentage' : 'fixed',
+            discountValue: discValue,
+            discountedPrice: discPrice,
+            validUntil: updated.validUntil ? updated.validUntil.slice(0, 10) : p.validUntil,
+            notes: updated.description ?? '',
+          };
+        }),
+      );
+      setEditDiscountTarget(null);
+      success('Discount updated', 'The discounted offer has been updated successfully.');
+    } catch {
+      error('Failed to update', 'An unexpected error occurred.');
+    } finally {
+      setIsEditDiscountSubmitting(false);
+    }
+  };
+
+  const openEditBundle = (b: PromoBundle) => {
+    setEditBundleTarget(b);
+    setEditBundleForm({
+      name: b.name,
+      code: b.promoCode ?? '',
+      description: b.headline,
+      promoPrice: String(b.promoPrice),
+      validFrom: '',
+      validUntil: b.validUntil,
+      maxUsage: '',
+      audience: b.audience,
+    });
+  };
+
+  const handleUpdateBundle = async () => {
+    if (!editBundleTarget || !editBundleForm.name.trim() || !editBundleForm.promoPrice || !editBundleForm.validUntil) {
+      error('Missing fields', 'Enter a bundle name, promo price, and validity date.');
+      return;
+    }
+    setIsEditBundleSubmitting(true);
+    try {
+      const discountAmount = Math.max(editBundleTarget.originalPrice - Number(editBundleForm.promoPrice), 0);
+      const res = await fetch(`/api/sales/promos/${editBundleTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editBundleForm.name.trim(),
+          code: editBundleForm.code.trim() || null,
+          description: editBundleForm.description.trim() || null,
+          discountRate: discountAmount,
+          validFrom: editBundleForm.validFrom ? `${editBundleForm.validFrom}T00:00:00.000Z` : null,
+          validUntil: `${editBundleForm.validUntil}T23:59:59.000Z`,
+          maxUsage: editBundleForm.maxUsage ? parseInt(editBundleForm.maxUsage, 10) : null,
+        }),
+      });
+      const data = await res.json() as { data?: PromoApiItem; error?: string };
+      if (!res.ok) {
+        error('Failed to update', data.error ?? 'An error occurred.');
+        return;
+      }
+      setPromoBundles((prev) =>
+        prev.map((b) => {
+          if (b.id !== editBundleTarget.id) return b;
+          return {
+            ...b,
+            name: editBundleForm.name.trim(),
+            promoCode: editBundleForm.code.trim() || null,
+            headline: editBundleForm.description.trim(),
+            promoPrice: Number(editBundleForm.promoPrice),
+            validUntil: editBundleForm.validUntil,
+            audience: editBundleForm.audience || b.audience,
+          };
+        }),
+      );
+      setEditBundleTarget(null);
+      success('Bundle updated', 'The promo bundle has been updated successfully.');
+    } catch {
+      error('Failed to update', 'An unexpected error occurred.');
+    } finally {
+      setIsEditBundleSubmitting(false);
+    }
+  };
+
+  const handleDeletePromo = async () => {
+    if (!deletePromoTarget) return;
+    setIsDeletingPromo(true);
+    try {
+      const res = await fetch(`/api/sales/promos/${deletePromoTarget.id}`, { method: 'DELETE' });
+      if (res.ok || res.status === 204) {
+        if (deletePromoTarget.type === 'discount') {
+          setDiscountedServices((prev) => prev.filter((p) => p.id !== deletePromoTarget.id));
+        } else {
+          setPromoBundles((prev) => prev.filter((b) => b.id !== deletePromoTarget.id));
+        }
+        setDeletePromoTarget(null);
+        success('Promotion deleted', `"${deletePromoTarget.name}" has been permanently removed.`);
+      } else {
+        const data = await res.json() as { error?: string };
+        error('Failed to delete', data.error ?? 'An error occurred.');
+      }
+    } catch {
+      error('Failed to delete', 'An unexpected error occurred.');
+    } finally {
+      setIsDeletingPromo(false);
     }
   };
 
@@ -709,7 +909,32 @@ export function PromotionsServicePlans(): React.ReactNode {
                       <span className="font-bold text-amber-700">Save ₱{Math.max(promotion.originalPrice - promotion.discountedPrice, 0).toLocaleString()}</span>
                     </div>
 
+                    {promotion.promoCode && (
+                      <div className="mt-2">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black tracking-widest uppercase">
+                          <Tag size={10} />
+                          {promotion.promoCode}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="mt-4 flex gap-2 pt-4 border-t border-amber-100">
+                      <button
+                        type="button"
+                        onClick={() => openEditDiscount(promotion)}
+                        className="p-2 text-slate-500 hover:bg-amber-100 rounded-lg transition-colors"
+                        title="Edit discount"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletePromoTarget({ id: promotion.id, name: promotion.promoName, type: 'discount' })}
+                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete discount"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                       {promotion.status === 'Draft' ? (
                         <Button
                           className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -842,7 +1067,32 @@ export function PromotionsServicePlans(): React.ReactNode {
                       Valid until {bundle.validUntil}
                     </div>
 
+                    {bundle.promoCode && (
+                      <div className="mt-2">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black tracking-widest uppercase">
+                          <Tag size={10} />
+                          {bundle.promoCode}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="mt-4 flex gap-2 pt-4 border-t border-rose-100">
+                      <button
+                        type="button"
+                        onClick={() => openEditBundle(bundle)}
+                        className="p-2 text-slate-500 hover:bg-rose-100 rounded-lg transition-colors"
+                        title="Edit bundle"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletePromoTarget({ id: bundle.id, name: bundle.name, type: 'bundle' })}
+                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete bundle"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                       {bundle.status === 'Draft' ? (
                         <Button
                           className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1199,6 +1449,268 @@ export function PromotionsServicePlans(): React.ReactNode {
             >
               <PackagePlus size={14} className="mr-1" />
               Save Promo
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Discounted Service Modal */}
+      <Modal isOpen={editDiscountTarget !== null} onClose={() => setEditDiscountTarget(null)} title="Edit Discounted Offer">
+        <div className="space-y-5 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-slate-700">Promo Name *</label>
+              <Input
+                value={editDiscountForm.name}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g. BIR Filing 15% Off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Promo Code</label>
+              <Input
+                value={editDiscountForm.code}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, code: e.target.value }))}
+                placeholder="e.g. BIR15 (optional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Description</label>
+              <Input
+                value={editDiscountForm.description}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Who should receive this offer?"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Discount Type *</label>
+              <select
+                className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                value={editDiscountForm.discountType}
+                onChange={(e) => setEditDiscountForm((prev) => ({
+                  ...prev,
+                  discountType: e.target.value as DiscountedService['discountType'],
+                }))}
+              >
+                <option value="percentage">Percentage</option>
+                <option value="fixed">Fixed Amount</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Discount Value *</label>
+              <Input
+                type="number"
+                min="1"
+                step="0.01"
+                value={editDiscountForm.discountValue}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, discountValue: e.target.value }))}
+                placeholder={editDiscountForm.discountType === 'percentage' ? '15' : '1000'}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid From</label>
+              <Input
+                type="date"
+                value={editDiscountForm.validFrom}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, validFrom: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid Until *</label>
+              <Input
+                type="date"
+                value={editDiscountForm.validUntil}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, validUntil: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Max Usage</label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={editDiscountForm.maxUsage}
+                onChange={(e) => setEditDiscountForm((prev) => ({ ...prev, maxUsage: e.target.value }))}
+                placeholder="Unlimited"
+              />
+            </div>
+          </div>
+
+          {editDiscountTarget && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-1">
+              <div className="flex items-center gap-2 text-amber-700">
+                <Tag size={14} />
+                <p className="text-xs font-black uppercase tracking-widest">Editing offer for</p>
+              </div>
+              <p className="text-sm font-bold text-slate-900">{editDiscountTarget.serviceName}</p>
+              <p className="text-xs text-slate-500">{editDiscountTarget.category}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4 border-t border-slate-200">
+            <Button variant="outline" className="flex-1" onClick={() => setEditDiscountTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleUpdateDiscount}
+              disabled={isEditDiscountSubmitting}
+            >
+              {isEditDiscountSubmitting ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Promo Bundle Modal */}
+      <Modal isOpen={editBundleTarget !== null} onClose={() => setEditBundleTarget(null)} title="Edit Promo Bundle">
+        <div className="space-y-5 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-slate-700">Bundle Name *</label>
+              <Input
+                value={editBundleForm.name}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Startup Launch Pack"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Promo Code</label>
+              <Input
+                value={editBundleForm.code}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, code: e.target.value }))}
+                placeholder="e.g. LAUNCH25 (optional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Audience</label>
+              <Input
+                value={editBundleForm.audience}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, audience: e.target.value }))}
+                placeholder="New business owners"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-slate-700">Description</label>
+              <Input
+                value={editBundleForm.description}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Short value proposition for the promo"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Promo Price *</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editBundleForm.promoPrice}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, promoPrice: e.target.value }))}
+                placeholder="14500"
+              />
+            </div>
+            {editBundleTarget && editBundleForm.promoPrice && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Bundle Savings</label>
+                <div className="h-11 flex items-center px-3 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-emerald-700">
+                  ₱{Math.max(editBundleTarget.originalPrice - Number(editBundleForm.promoPrice), 0).toLocaleString()}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid From</label>
+              <Input
+                type="date"
+                value={editBundleForm.validFrom}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, validFrom: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid Until *</label>
+              <Input
+                type="date"
+                value={editBundleForm.validUntil}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, validUntil: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Max Usage</label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={editBundleForm.maxUsage}
+                onChange={(e) => setEditBundleForm((prev) => ({ ...prev, maxUsage: e.target.value }))}
+                placeholder="Unlimited"
+              />
+            </div>
+          </div>
+
+          {editBundleTarget && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+              <div className="flex items-center gap-2 text-rose-700 mb-2">
+                <Gift size={14} />
+                <p className="text-xs font-black uppercase tracking-widest">Included services</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {editBundleTarget.servicesIncluded.map((svc) => (
+                  <span key={svc} className="px-2 py-0.5 rounded-full bg-white border border-rose-100 text-[10px] font-bold text-slate-600">
+                    {svc}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4 border-t border-slate-200">
+            <Button variant="outline" className="flex-1" onClick={() => setEditBundleTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={handleUpdateBundle}
+              disabled={isEditBundleSubmitting}
+            >
+              {isEditBundleSubmitting ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={deletePromoTarget !== null} onClose={() => setDeletePromoTarget(null)} title="Delete Promotion" size="sm">
+        <div className="space-y-5 p-6">
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-center space-y-2">
+            <Trash2 className="mx-auto text-red-500" size={28} />
+            <p className="text-sm font-bold text-slate-900">
+              Delete &ldquo;{deletePromoTarget?.name}&rdquo;?
+            </p>
+            <p className="text-xs text-slate-500">
+              This action is permanent and cannot be undone. The promotion will be removed from all campaigns.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setDeletePromoTarget(null)} disabled={isDeletingPromo}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeletePromo}
+              disabled={isDeletingPromo}
+            >
+              {isDeletingPromo ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         </div>
