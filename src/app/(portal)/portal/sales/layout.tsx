@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { ASPSidebar } from '@/components/sales/ASPSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { Button } from '@/components/UI/button';
@@ -11,6 +11,15 @@ import { Menu, User, ArrowLeft } from 'lucide-react';
 export default function SalesPortalLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  const moduleRoot = '/portal/sales';
+  const isRoot = pathname === moduleRoot;
+  const backHref = isRoot ? '/dashboard' : moduleRoot;
+  const backLabel = isRoot
+    ? 'Main Hub'
+    : pathname.split('/').filter(Boolean).at(-1)!
+        .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
     <RoleProvider>
@@ -29,10 +38,10 @@ export default function SalesPortalLayout({ children }: { children: React.ReactN
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push(backHref)}
                 className="hidden sm:inline-flex"
               >
-                <ArrowLeft size={16} className="mr-1" /> Dashboard
+                <ArrowLeft size={16} className="mr-1" /> {backLabel}
               </Button>
             </div>
 
