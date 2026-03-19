@@ -90,21 +90,30 @@ export function PromotionsServicePlans(): React.ReactNode {
   const [offeringApiOneTime, setOfferingApiOneTime] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
 
   const [discountForm, setDiscountForm] = useState({
+    name: '',
+    code: '',
     serviceId: '',
     discountType: 'percentage' as DiscountedService['discountType'],
     discountValue: '',
+    validFrom: '',
     validUntil: '',
-    notes: '',
+    maxUsage: '',
+    description: '',
   });
 
   const [promoForm, setPromoForm] = useState({
     name: '',
-    headline: '',
+    code: '',
+    description: '',
     serviceIds: [] as string[],
     promoPrice: '',
+    validFrom: '',
     validUntil: '',
+    maxUsage: '',
     audience: '',
   });
+  const [discountServiceSearch, setDiscountServiceSearch] = useState('');
+  const [promoServiceSearch, setPromoServiceSearch] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -256,6 +265,18 @@ export function PromotionsServicePlans(): React.ReactNode {
     };
   }, [offeringOptions, promoForm.promoPrice, promoForm.serviceIds]);
 
+  const filteredDiscountOfferings = useMemo(() => {
+    if (!discountServiceSearch.trim()) return offeringOptions;
+    const q = discountServiceSearch.toLowerCase();
+    return offeringOptions.filter((o) => o.name.toLowerCase().includes(q) || o.category.toLowerCase().includes(q));
+  }, [offeringOptions, discountServiceSearch]);
+
+  const filteredPromoOfferings = useMemo(() => {
+    if (!promoServiceSearch.trim()) return offeringOptions;
+    const q = promoServiceSearch.toLowerCase();
+    return offeringOptions.filter((o) => o.name.toLowerCase().includes(q) || o.category.toLowerCase().includes(q));
+  }, [offeringOptions, promoServiceSearch]);
+
   const filteredDiscountedServices = useMemo(() => {
     return discountedServices.filter((promotion) => {
       const matchesSearch =
@@ -285,28 +306,27 @@ export function PromotionsServicePlans(): React.ReactNode {
   }, [bundleCategoryFilter, bundleSearchTerm, bundleStatusFilter, promoBundles]);
 
   const handleAddDiscountedService = async () => {
-    if (!selectedDiscountOffering || !discountPreview || !discountForm.validUntil) {
-      error('Missing promotion details', 'Choose a monthly plan or service, enter a discount, and set a validity date.');
+    if (!discountForm.name.trim() || !selectedDiscountOffering || !discountPreview || !discountForm.validUntil) {
+      error('Missing promotion details', 'Enter a promo name, choose a service, add a discount, and set a validity date.');
       return;
     }
 
     const isPlan = selectedDiscountOffering.id.startsWith('plan-');
     const numericId = parseInt(selectedDiscountOffering.id.replace(/^(plan|svc)-/, ''), 10);
-    const discountLabel =
-      discountForm.discountType === 'percentage'
-        ? `${discountForm.discountValue}% off`
-        : `₱${Number(discountForm.discountValue).toLocaleString()} off`;
 
     try {
       const res = await fetch('/api/sales/promos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${selectedDiscountOffering.name} — ${discountLabel}`,
-          description: discountForm.notes.trim() || undefined,
+          name: discountForm.name.trim(),
+          code: discountForm.code.trim() || null,
+          description: discountForm.description.trim() || undefined,
           discountType: discountForm.discountType.toUpperCase(),
           discountRate: Number(discountForm.discountValue),
+          validFrom: discountForm.validFrom ? `${discountForm.validFrom}T00:00:00.000Z` : null,
           validUntil: `${discountForm.validUntil}T23:59:59.000Z`,
+          maxUsage: discountForm.maxUsage ? parseInt(discountForm.maxUsage, 10) : null,
           servicePlanIds: isPlan ? [numericId] : [],
           serviceOneTimePlanIds: isPlan ? [] : [numericId],
         }),
@@ -341,7 +361,8 @@ export function PromotionsServicePlans(): React.ReactNode {
       };
       setDiscountedServices((prev) => [created, ...prev]);
       setIsDiscountModalOpen(false);
-      setDiscountForm({ serviceId: '', discountType: 'percentage', discountValue: '', validUntil: '', notes: '' });
+      setDiscountForm({ name: '', code: '', serviceId: '', discountType: 'percentage', discountValue: '', validFrom: '', validUntil: '', maxUsage: '', description: '' });
+      setDiscountServiceSearch('');
       success('Discounted offer added', 'The discounted offer is now listed under active campaigns.');
     } catch {
       error('Failed to add discount', 'An unexpected error occurred.');
@@ -372,10 +393,13 @@ export function PromotionsServicePlans(): React.ReactNode {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: promoForm.name,
-          description: promoForm.headline.trim() || undefined,
+          code: promoForm.code.trim() || null,
+          description: promoForm.description.trim() || undefined,
           discountType: 'FIXED',
           discountRate: discountAmount,
+          validFrom: promoForm.validFrom ? `${promoForm.validFrom}T00:00:00.000Z` : null,
           validUntil: `${promoForm.validUntil}T23:59:59.000Z`,
+          maxUsage: promoForm.maxUsage ? parseInt(promoForm.maxUsage, 10) : null,
           servicePlanIds: planIds,
           serviceOneTimePlanIds: oneTimeIds,
         }),
@@ -396,7 +420,7 @@ export function PromotionsServicePlans(): React.ReactNode {
       const created: PromoBundle = {
         id: String(promo.id),
         name: promo.name,
-        headline: promo.description ?? promoForm.headline,
+        headline: promo.description ?? promoForm.description,
         servicesIncluded: allNames,
         categoriesIncluded: cats,
         originalPrice,
@@ -407,7 +431,8 @@ export function PromotionsServicePlans(): React.ReactNode {
       };
       setPromoBundles((prev) => [created, ...prev]);
       setIsPromoModalOpen(false);
-      setPromoForm({ name: '', headline: '', serviceIds: [], promoPrice: '', validUntil: '', audience: '' });
+      setPromoForm({ name: '', code: '', description: '', serviceIds: [], promoPrice: '', validFrom: '', validUntil: '', maxUsage: '', audience: '' });
+      setPromoServiceSearch('');
       success('Promo bundle created', 'The bundle can now mix monthly plans and one-time services for client pitching.');
     } catch {
       error('Failed to create promo', 'An unexpected error occurred.');
@@ -849,22 +874,76 @@ export function PromotionsServicePlans(): React.ReactNode {
         </div>
       </Card>
 
-      <Modal isOpen={isDiscountModalOpen} onClose={() => setIsDiscountModalOpen(false)} title="Add Discounted Service">
+      <Modal isOpen={isDiscountModalOpen} onClose={() => { setIsDiscountModalOpen(false); setDiscountServiceSearch(''); }} title="Add Discounted Service">
         <div className="space-y-5 p-6">
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-slate-700">Promo Name *</label>
+              <Input
+                value={discountForm.name}
+                onChange={(e) => setDiscountForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g. BIR Filing 15% Off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Promo Code</label>
+              <Input
+                value={discountForm.code}
+                onChange={(e) => setDiscountForm((prev) => ({ ...prev, code: e.target.value }))}
+                placeholder="e.g. BIR15 (optional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Description</label>
+              <Input
+                value={discountForm.description}
+                onChange={(e) => setDiscountForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Who should receive this offer?"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700">Service or Monthly Plan *</label>
-            <select
-              className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"
-              value={discountForm.serviceId}
-              onChange={(e) => setDiscountForm((prev) => ({ ...prev, serviceId: e.target.value }))}
-            >
-              <option value="">Select a plan or service</option>
-              {offeringOptions.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.category}: {service.name} - ₱{service.rate.toLocaleString()}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <Input
+                className="pl-9"
+                value={discountServiceSearch}
+                onChange={(e) => setDiscountServiceSearch(e.target.value)}
+                placeholder="Search plans or services..."
+              />
+            </div>
+            <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-100">
+              {filteredDiscountOfferings.length === 0 ? (
+                <p className="p-3 text-xs text-slate-400 text-center">No results found.</p>
+              ) : (
+                filteredDiscountOfferings.map((offering) => {
+                  const isSelected = discountForm.serviceId === offering.id;
+                  return (
+                    <button
+                      key={offering.id}
+                      type="button"
+                      onClick={() => setDiscountForm((prev) => ({ ...prev, serviceId: offering.id }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                        isSelected
+                          ? 'bg-amber-50 text-amber-800'
+                          : 'bg-white hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-bold">{offering.name}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{offering.category}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-slate-800">₱{offering.rate.toLocaleString()}</p>
+                        {isSelected && <span className="text-[10px] font-bold text-amber-600">Selected</span>}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -895,22 +974,34 @@ export function PromotionsServicePlans(): React.ReactNode {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Valid Until *</label>
-            <Input
-              type="date"
-              value={discountForm.validUntil}
-              onChange={(e) => setDiscountForm((prev) => ({ ...prev, validUntil: e.target.value }))}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Campaign Notes</label>
-            <Input
-              value={discountForm.notes}
-              onChange={(e) => setDiscountForm((prev) => ({ ...prev, notes: e.target.value }))}
-              placeholder="Who should receive this discounted offer?"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid From</label>
+              <Input
+                type="date"
+                value={discountForm.validFrom}
+                onChange={(e) => setDiscountForm((prev) => ({ ...prev, validFrom: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid Until *</label>
+              <Input
+                type="date"
+                value={discountForm.validUntil}
+                onChange={(e) => setDiscountForm((prev) => ({ ...prev, validUntil: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Max Usage</label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={discountForm.maxUsage}
+                onChange={(e) => setDiscountForm((prev) => ({ ...prev, maxUsage: e.target.value }))}
+                placeholder="Unlimited"
+              />
+            </div>
           </div>
 
           {selectedDiscountOffering && discountPreview && (
@@ -922,7 +1013,7 @@ export function PromotionsServicePlans(): React.ReactNode {
               <p className="text-sm font-bold text-slate-900">{selectedDiscountOffering.name}</p>
               <p className="text-xs text-slate-500">{selectedDiscountOffering.category}</p>
               <p className="text-xs text-slate-600">
-                ₱{discountPreview.originalPrice.toLocaleString()} to ₱{discountPreview.discountedPrice.toLocaleString()}
+                ₱{discountPreview.originalPrice.toLocaleString()} → ₱{discountPreview.discountedPrice.toLocaleString()}
               </p>
             </div>
           )}
@@ -931,7 +1022,7 @@ export function PromotionsServicePlans(): React.ReactNode {
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => setIsDiscountModalOpen(false)}
+              onClick={() => { setIsDiscountModalOpen(false); setDiscountServiceSearch(''); }}
             >
               Cancel
             </Button>
@@ -946,7 +1037,7 @@ export function PromotionsServicePlans(): React.ReactNode {
         </div>
       </Modal>
 
-      <Modal isOpen={isPromoModalOpen} onClose={() => setIsPromoModalOpen(false)} title="Create Promo Bundle">
+      <Modal isOpen={isPromoModalOpen} onClose={() => { setIsPromoModalOpen(false); setPromoServiceSearch(''); }} title="Create Promo Bundle">
         <div className="space-y-5 p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
@@ -957,11 +1048,19 @@ export function PromotionsServicePlans(): React.ReactNode {
                 placeholder="Startup Launch Pack"
               />
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-xs font-bold text-slate-700">Headline</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Promo Code</label>
               <Input
-                value={promoForm.headline}
-                onChange={(e) => setPromoForm((prev) => ({ ...prev, headline: e.target.value }))}
+                value={promoForm.code}
+                onChange={(e) => setPromoForm((prev) => ({ ...prev, code: e.target.value }))}
+                placeholder="e.g. LAUNCH25 (optional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Description</label>
+              <Input
+                value={promoForm.description}
+                onChange={(e) => setPromoForm((prev) => ({ ...prev, description: e.target.value }))}
                 placeholder="Short value proposition for the promo"
               />
             </div>
@@ -969,30 +1068,58 @@ export function PromotionsServicePlans(): React.ReactNode {
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700">Included Plans and Services *</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              {offeringOptions.map((service) => {
-                const isSelected = promoForm.serviceIds.includes(service.id);
-                return (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => togglePromoService(service.id)}
-                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                      isSelected
-                        ? 'border-rose-300 bg-white text-rose-700'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="text-xs font-bold">{service.name}</p>
-                    <p className="text-[11px] mt-1">{service.category} • ₱{service.rate.toLocaleString()}</p>
-                  </button>
-                );
-              })}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <Input
+                className="pl-9"
+                value={promoServiceSearch}
+                onChange={(e) => setPromoServiceSearch(e.target.value)}
+                placeholder="Search plans or services to add..."
+              />
             </div>
+            <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-100">
+              {filteredPromoOfferings.length === 0 ? (
+                <p className="p-3 text-xs text-slate-400 text-center">No results found.</p>
+              ) : (
+                filteredPromoOfferings.map((offering) => {
+                  const isSelected = promoForm.serviceIds.includes(offering.id);
+                  return (
+                    <button
+                      key={offering.id}
+                      type="button"
+                      onClick={() => togglePromoService(offering.id)}
+                      className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                        isSelected
+                          ? 'bg-rose-50 text-rose-800'
+                          : 'bg-white hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-rose-600 border-rose-600' : 'border-slate-300'
+                        }`}>
+                          {isSelected && <span className="text-white text-[8px] font-black">✓</span>}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">{offering.name}</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">{offering.category}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs font-black text-slate-800">₱{offering.rate.toLocaleString()}</p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            {promoForm.serviceIds.length > 0 && (
+              <p className="text-[11px] text-rose-600 font-bold px-1">
+                {promoForm.serviceIds.length} service{promoForm.serviceIds.length > 1 ? 's' : ''} selected
+              </p>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5 sm:col-span-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">Promo Price *</label>
               <Input
                 type="number"
@@ -1003,7 +1130,26 @@ export function PromotionsServicePlans(): React.ReactNode {
                 placeholder="14500"
               />
             </div>
-            <div className="space-y-1.5 sm:col-span-1">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Audience</label>
+              <Input
+                value={promoForm.audience}
+                onChange={(e) => setPromoForm((prev) => ({ ...prev, audience: e.target.value }))}
+                placeholder="New business owners"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Valid From</label>
+              <Input
+                type="date"
+                value={promoForm.validFrom}
+                onChange={(e) => setPromoForm((prev) => ({ ...prev, validFrom: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">Valid Until *</label>
               <Input
                 type="date"
@@ -1011,12 +1157,15 @@ export function PromotionsServicePlans(): React.ReactNode {
                 onChange={(e) => setPromoForm((prev) => ({ ...prev, validUntil: e.target.value }))}
               />
             </div>
-            <div className="space-y-1.5 sm:col-span-1">
-              <label className="text-xs font-bold text-slate-700">Audience</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Max Usage</label>
               <Input
-                value={promoForm.audience}
-                onChange={(e) => setPromoForm((prev) => ({ ...prev, audience: e.target.value }))}
-                placeholder="New business owners"
+                type="number"
+                min="1"
+                step="1"
+                value={promoForm.maxUsage}
+                onChange={(e) => setPromoForm((prev) => ({ ...prev, maxUsage: e.target.value }))}
+                placeholder="Unlimited"
               />
             </div>
           </div>
@@ -1040,7 +1189,7 @@ export function PromotionsServicePlans(): React.ReactNode {
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => setIsPromoModalOpen(false)}
+              onClick={() => { setIsPromoModalOpen(false); setPromoServiceSearch(''); }}
             >
               Cancel
             </Button>

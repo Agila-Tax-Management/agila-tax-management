@@ -34,8 +34,6 @@ interface ServiceOneTimeItem {
   updatedAt: string;
 }
 
-const INITIAL_NEW_SERVICE = { name: '', description: '', serviceRate: '', status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' };
-
 export function OneTimeServicePlans(): React.ReactNode {
   const router = useRouter();
   const { success, error } = useToast();
@@ -44,11 +42,6 @@ export function OneTimeServicePlans(): React.ReactNode {
   const [isLoading, setIsLoading] = useState(true);
   const [servicesPerPage, setServicesPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Edit Service Modal
-  const [editTarget, setEditTarget] = useState<ServiceOneTimeItem | null>(null);
-  const [editForm, setEditForm] = useState(INITIAL_NEW_SERVICE);
-  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   // Delete Confirmation Modal
   const [deleteTarget, setDeleteTarget] = useState<ServiceOneTimeItem | null>(null);
@@ -90,45 +83,6 @@ export function OneTimeServicePlans(): React.ReactNode {
     setPrevSearch(searchTerm);
     setCurrentPage(1);
   }
-
-  const openEdit = (svc: ServiceOneTimeItem) => {
-    setEditTarget(svc);
-    setEditForm({
-      name: svc.name,
-      description: svc.description ?? '',
-      serviceRate: String(parseFloat(svc.serviceRate)),
-      status: svc.status,
-    });
-  };
-
-  const handleUpdateService = async () => {
-    if (!editTarget || !editForm.name || !editForm.serviceRate) return;
-    setIsEditSubmitting(true);
-    try {
-      const res = await fetch(`/api/sales/service-one-time/${editTarget.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editForm.name.trim(),
-          description: editForm.description.trim() || null,
-          serviceRate: parseFloat(editForm.serviceRate),
-          status: editForm.status,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error('Failed to update service', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      setServices((prev) => prev.map((s) => (s.id === editTarget.id ? data.data : s)));
-      setEditTarget(null);
-      success('Service updated', `"${data.data.name}" was updated successfully.`);
-    } catch {
-      error('Failed to update service', 'An unexpected error occurred.');
-    } finally {
-      setIsEditSubmitting(false);
-    }
-  };
 
   const handleDeleteService = async () => {
     if (!deleteTarget) return;
@@ -323,7 +277,7 @@ export function OneTimeServicePlans(): React.ReactNode {
                       <td className="p-4 text-center">
                         <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => openEdit(service)}
+                            onClick={() => router.push(`/portal/sales/services/one-time/update-service/${service.id}`)}
                             className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-100"
                           >
                             <Pencil size={13} />
@@ -371,7 +325,7 @@ export function OneTimeServicePlans(): React.ReactNode {
                       </Badge>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => openEdit(service)}
+                          onClick={() => router.push(`/portal/sales/services/one-time/update-service/${service.id}`)}
                           className="p-1.5 text-blue-400 hover:bg-blue-50 rounded-md transition-colors"
                         >
                           <Pencil size={12} />
@@ -467,73 +421,6 @@ export function OneTimeServicePlans(): React.ReactNode {
           </div>
         )}
       </Card>
-
-      {/* Edit Service Modal */}
-      <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Service">
-        <div className="space-y-5 p-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Service Name *</label>
-            <Input
-              value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              placeholder="Enter service name"
-              className="bg-white border-slate-200"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Description</label>
-            <Input
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-              placeholder="Brief description"
-              className="bg-white border-slate-200"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Rate (PHP) *</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={editForm.serviceRate}
-                onChange={(e) => setEditForm({ ...editForm, serviceRate: e.target.value })}
-                placeholder="0.00"
-                className="bg-white border-slate-200"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Status</label>
-              <select
-                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={editForm.status}
-                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as typeof editForm.status })}
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-slate-200">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setEditTarget(null)}
-              disabled={isEditSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleUpdateService}
-              disabled={!editForm.name || !editForm.serviceRate || isEditSubmitting}
-            >
-              {isEditSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Service" size="sm">
