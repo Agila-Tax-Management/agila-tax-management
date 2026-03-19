@@ -130,6 +130,212 @@ const INTERNAL_USERS: InternalUserSeed[] = [
   },
 ];
 
+/* ─── Client company definitions ────────────────────────────────────
+ *
+ *  Real external clients managed by ATMS. These are separate from the
+ *  internal ATMS company record. Client users are assigned to these.
+ *
+ * ─────────────────────────────────────────────────────────────────── */
+
+interface ClientSeed {
+  companyCode: string;
+  clientNo: string;
+  businessName: string;
+  portalName: string;
+  businessType: "INDIVIDUAL" | "SOLE_PROPRIETORSHIP" | "PARTNERSHIP" | "CORPORATION" | "COOPERATIVE";
+  branchType?: string;
+}
+
+const CLIENT_COMPANIES: ClientSeed[] = [
+  {
+    companyCode: "comp-001",
+    clientNo: "2024-0001",
+    businessName: "Santos General Merchandise",
+    portalName: "Santos General Merchandise",
+    businessType: "SOLE_PROPRIETORSHIP",
+    branchType: "Main Branch",
+  },
+];
+
+/* ─── Client user definitions ────────────────────────────────────────
+ *
+ *  External client portal users linked to a specific Client record.
+ *  Credentials are stored in ClientAccount (hashed) — never on ClientUser.
+ *
+ * ─────────────────────────────────────────────────────────────────── */
+
+interface ClientUserSeed {
+  name: string;
+  email: string;
+  password: string;
+  /** companyCode of the Client this user belongs to */
+  companyCode: string;
+  /** Role within the client — defaults to OWNER for the primary contact */
+  role?: "OWNER" | "ADMIN" | "EMPLOYEE" | "VIEWER";
+  /** When provided, an Employee profile is created and linked via clientUserId */
+  employee?: {
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    gender: string;
+    birthDate: Date;
+    phone: string;
+    address: string;
+    positionTitle: string;
+    hireDate: Date;
+  };
+}
+
+const CLIENT_USERS: ClientUserSeed[] = [
+  {
+    name: "Maria Santos",
+    email: "client@agila.com",
+    password: "clientpassword",
+    companyCode: "comp-001",
+    role: "OWNER",
+    employee: {
+      firstName: "Maria",
+      lastName: "Santos",
+      gender: "Female",
+      birthDate: new Date("1985-03-22"),
+      phone: "09270000000",
+      address: "Cebu City, Philippines",
+      positionTitle: "Business Owner",
+      hireDate: new Date("2024-01-01"),
+    },
+  },
+];
+
+async function seedClientUser(
+  seed: ClientUserSeed,
+  clientId: number,
+): Promise<void> {
+  const hashedPassword = await hashPassword(seed.password);
+
+  // 1. Upsert ClientUser
+  const clientUser = await prisma.clientUser.upsert({
+    where: { email: seed.email },
+    update: {
+      name: seed.name,
+      active: true,
+      emailVerified: true,
+      clientId,
+    },
+    create: {
+      name: seed.name,
+      email: seed.email,
+      active: true,
+      emailVerified: true,
+      clientId,
+    },
+  });
+
+  // 2. Upsert ClientUserAssignment with role
+  await prisma.clientUserAssignment.upsert({
+    where: { clientUserId_clientId: { clientUserId: clientUser.id, clientId } },
+    update: { role: seed.role ?? "OWNER" },
+    create: { clientUserId: clientUser.id, clientId, role: seed.role ?? "OWNER" },
+  });
+
+  // 3. Optionally create Employee profile linked via clientUserId
+  if (seed.employee) {
+    const emp = seed.employee;
+    const existingEmployee = await prisma.employee.findUnique({
+      where: { clientUserId: clientUser.id },
+    });
+    let employeeId: number;
+    if (existingEmployee) {
+      employeeId = existingEmployee.id;
+    } else {
+      const employee = await prisma.employee.create({
+        data: {
+          clientUserId: clientUser.id,
+          firstName: emp.firstName,
+          middleName: emp.middleName,
+          lastName: emp.lastName,
+          gender: emp.gender,
+          birthDate: emp.birthDate,
+          phone: emp.phone,
+          address: emp.address,
+          active: true,
+        },
+      });
+      employeeId = employee.id;
+    }
+
+    // Upsert placeholder government IDs
+    await prisma.employeeGovernmentIds.upsert({
+      where: { employeeId },
+      update: {},
+      create: {
+        employeeId,
+        sss: "00-0000000-0",
+        pagibig: "0000-0000-0000",
+        philhealth: "00-000000000-0",
+        tin: "000-000-000-000",
+      },
+    });
+
+    // Upsert EmployeeEmployment → the client they belong to
+    const existingEmployment = await prisma.employeeEmployment.findFirst({
+      where: { employeeId, clientId, employmentStatus: "ACTIVE" },
+    });
+    if (!existingEmployment) {
+      // Upsert a default department for this client
+      const dept = await prisma.department.upsert({
+        where: { clientId_name: { clientId, name: "Management" } },
+        update: {},
+        create: { clientId, name: "Management", description: "Business management" },
+      });
+      // Find or create position
+      let position = await prisma.position.findFirst({
+        where: { departmentId: dept.id, title: emp.positionTitle },
+      });
+      if (!position) {
+        position = await prisma.position.create({
+          data: { title: emp.positionTitle, departmentId: dept.id },
+        });
+      }
+      await prisma.employeeEmployment.create({
+        data: {
+          employeeId,
+          clientId,
+          departmentId: dept.id,
+          positionId: position.id,
+          employmentType: "REGULAR",
+          employmentStatus: "ACTIVE",
+          hireDate: emp.hireDate,
+        },
+      });
+    }
+  }
+
+  // 4. Upsert ClientAccount (BetterAuth credential)
+  const existingAccount = await prisma.clientAccount.findFirst({
+    where: { userId: clientUser.id, providerId: "credential" },
+  });
+  if (existingAccount) {
+    await prisma.clientAccount.update({
+      where: { id: existingAccount.id },
+      data: { password: hashedPassword },
+    });
+  } else {
+    await prisma.clientAccount.create({
+      data: {
+        id: `credential:${clientUser.id}`,
+        accountId: clientUser.id,
+        providerId: "credential",
+        userId: clientUser.id,
+        password: hashedPassword,
+      },
+    });
+  }
+
+  console.log(
+    `  ✓ [CLIENT/${seed.role ?? "OWNER"}] ${seed.name} (${seed.email}) — linked to client #${clientId}`,
+  );
+}
+
 /**
  * Seeds a single internal user (User + BetterAuth Account + Employee +
  * Government IDs + EmployeeEmployment linked to the ATMS client).
@@ -259,6 +465,29 @@ async function seedInternalUser(
   );
 }
 
+/* ─── Government Offices ────────────────────────────────────────── */
+
+const GOVERNMENT_OFFICES = [
+  { code: "BIR",       name: "Bureau of Internal Revenue",                description: "National tax collection authority" },
+  { code: "SEC",       name: "Securities and Exchange Commission",         description: "Corporate registration and regulation" },
+  { code: "DTI",       name: "Department of Trade and Industry",           description: "Sole proprietorship registration and trade" },
+  { code: "SSS",       name: "Social Security System",                     description: "Social insurance for private sector employees" },
+  { code: "PHILHEALTH",name: "Philippine Health Insurance Corporation",    description: "National health insurance program" },
+  { code: "PAGIBIG",   name: "Pag-IBIG Fund (HDMF)",                      description: "National savings and housing fund" },
+  { code: "MAYOR",     name: "Local Government Unit / Mayor's Office",     description: "Business permit and licensing" },
+  { code: "CDA",       name: "Cooperative Development Authority",          description: "Cooperative registration and regulation" },
+  { code: "DOLE",      name: "Department of Labor and Employment",         description: "Labor standards and employment regulation" },
+  { code: "DICT",      name: "Department of Information and Communications Technology", description: "ICT registration and digital services" },
+];
+
+/* ─── Cities ─────────────────────────────────────────────────────── */
+
+const CITIES = [
+  { name: "Cebu City",        province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6000" },
+  { name: "Mandaue City",     province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6014" },
+  { name: "Lapu-Lapu City",   province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6015" },
+];
+
 async function main(): Promise<void> {
   // ── 1. Seed Company (Agila — the internal company) ───────────────
   await prisma.client.upsert({
@@ -297,17 +526,19 @@ async function main(): Promise<void> {
   });
   if (!agilaClient) throw new Error("ATMS client not found — step 1 failed");
 
-  // ── 4. Seed Employee Levels ──────────────────────────────────────
+  // ── 4. Seed Employee Levels (scoped to ATMS client) ───────────────
   for (const level of EMPLOYEE_LEVELS) {
     await prisma.employeeLevel.upsert({
-      where: { name: level.name },
+      where: { clientId_name: { clientId: agilaClient.id, name: level.name } },
       update: { position: level.position, description: level.description },
-      create: level,
+      create: { clientId: agilaClient.id, ...level },
     });
   }
-  const allLevels = await prisma.employeeLevel.findMany();
+  const allLevels = await prisma.employeeLevel.findMany({
+    where: { clientId: agilaClient.id },
+  });
   const levelsByName = new Map(allLevels.map((l) => [l.name, l.id]));
-  console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded`);
+  console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded (ATMS client)`);
 
   // ── 5. Seed Departments, Positions & Internal Users ─────────────
   //  Each internal user's department is upserted before creating the user
@@ -352,6 +583,71 @@ async function main(): Promise<void> {
     console.log(`  [${u.role.padEnd(11)}]  ${u.email.padEnd(28)}  ${u.password}`);
   }
   console.log("  ─────────────────────────────────────────────────────\n");
+
+  // ── 6. Seed External Client Companies ─────────────────────────────
+  for (const c of CLIENT_COMPANIES) {
+    await prisma.client.upsert({
+      where: { companyCode: c.companyCode },
+      update: {
+        active: true,
+        businessName: c.businessName,
+        portalName: c.portalName,
+        branchType: c.branchType ?? "Main Branch",
+      },
+      create: {
+        companyCode: c.companyCode,
+        clientNo: c.clientNo,
+        active: true,
+        businessType: c.businessType,
+        businessName: c.businessName,
+        portalName: c.portalName,
+        branchType: c.branchType ?? "Main Branch",
+      },
+    });
+  }
+  console.log(`  ✓ ${CLIENT_COMPANIES.length} client company/companies seeded`);
+
+  // ── 7. Seed Client Users ─────────────────────────────────────────
+
+  console.log("  Seeding client portal users:\n");
+
+  for (const seed of CLIENT_USERS) {
+    const client = await prisma.client.findUnique({
+      where: { companyCode: seed.companyCode },
+    });
+    if (!client) {
+      console.warn(`  ⚠ Client with companyCode "${seed.companyCode}" not found — skipping ${seed.email}`);
+      continue;
+    }
+    await seedClientUser(seed, client.id);
+  }
+
+  console.log("\n  Client portal credentials:");
+  console.log("  ─────────────────────────────────────────────────────");
+  for (const u of CLIENT_USERS) {
+    console.log(`  [CLIENT     ]  ${u.email.padEnd(28)}  ${u.password}`);
+  }
+  console.log("  ─────────────────────────────────────────────────────\n");
+
+  // ── 8. Seed Government Offices ────────────────────────────────────
+  for (const office of GOVERNMENT_OFFICES) {
+    await prisma.governmentOffice.upsert({
+      where: { code: office.code },
+      update: { name: office.name, description: office.description, isActive: true },
+      create: { ...office, isActive: true },
+    });
+  }
+  console.log(`  ✓ ${GOVERNMENT_OFFICES.length} government offices seeded`);
+
+  // ── 9. Seed Cities ────────────────────────────────────────────────
+  for (const city of CITIES) {
+    await prisma.city.upsert({
+      where: { name: city.name },
+      update: { province: city.province, region: city.region, zipCode: city.zipCode },
+      create: city,
+    });
+  }
+  console.log(`  ✓ ${CITIES.length} cities seeded`);
 }
 
 main()

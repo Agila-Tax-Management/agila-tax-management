@@ -81,6 +81,7 @@ interface ApiEmployeeDetail {
   phone: string;
   personalEmail: string | null;
   email: string | null;
+  user: { email: string } | null;
   address: string;
   employeeNo: string | null;
   educationalBackground: string | null;
@@ -105,7 +106,7 @@ const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger'> 
 
 const inputClass =
   'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30';
-const selectClass =
+const _selectClass =
   'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none';
 const personalInputClass =
   'w-full rounded-lg border border-border px-3 py-2.5 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500';
@@ -177,7 +178,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
 
   /* ── Option state ────────────────────────────────────────────── */
   const [deptOptions, setDeptOptions] = useState<IdNameOption[]>([]);
-  const [positionOptions, setPositionOptions] = useState<{ id: number; title: string }[]>([]);
+  const [_positionOptions, setPositionOptions] = useState<{ id: number; title: string }[]>([]);
   const [levelOptions, setLevelOptions] = useState<IdNameOption[]>([]);
 
   const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
@@ -212,7 +213,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         civilStatus: emp.civilStatus ?? '',
         personalEmail: emp.personalEmail ?? '',
         address: emp.address,
-        email: emp.email ?? '',
+        email: emp.email ?? emp.user?.email ?? '',
         educationalBackground: emp.educationalBackground ?? '',
         school: emp.school ?? '',
         course: emp.course ?? '',
@@ -326,7 +327,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
     }
   }, [employeeId, error]);
 
-  const fetchPositionsForDept = useCallback(async (deptId: string) => {
+  const _fetchPositionsForDept = useCallback(async (deptId: string) => {
     if (!deptId) { setPositionOptions([]); return; }
     try {
       const res = await fetch(`/api/hr/positions?departmentId=${deptId}`);

@@ -1,0 +1,164 @@
+// prisma/models/services.prisma
+
+// ─── Enums ────────────────────────────────────────────────────────
+
+enum ServiceRecurring {
+    DAILY
+    WEEKLY
+    MONTHLY
+}
+
+enum ServiceStatus {
+    ACTIVE
+    INACTIVE
+    ARCHIVED
+}
+
+enum DiscountType {
+    PERCENTAGE
+    FIXED
+}
+
+enum PromoFor {
+    SERVICE_PLAN
+    SERVICE_ONE_TIME
+    BOTH
+}
+
+// ─── Reference: Government Offices ───────────────────────────────
+// PH agency catalog (BIR, SEC, DTI, SSS, PhilHealth, PAGIBIG, etc.)
+
+model GovernmentOffice {
+    id          Int     @id @default(autoincrement())
+    code        String  @unique // e.g. "BIR", "SEC", "DTI"
+    name        String
+    description String?
+    isActive    Boolean @default(true)
+
+    servicePlans        ServicePlan[]    @relation("ServicePlanGovOffices")
+    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimeGovOffices")
+
+    createdAt DateTime @default(now())
+
+    @@map("government_office")
+}
+
+// ─── Reference: Cities ────────────────────────────────────────────
+// PH city/municipality catalog for service coverage areas
+
+model City {
+    id       Int     @id @default(autoincrement())
+    name     String  @unique
+    province String?
+    region   String?
+    zipCode  String?
+    isActive Boolean @default(true)
+
+    servicePlans        ServicePlan[]    @relation("ServicePlanCities")
+    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimeCities")
+
+    createdAt DateTime @default(now())
+
+    @@map("city")
+}
+
+// ─── Service Inclusion Catalog ────────────────────────────────────
+// Named deliverables bundled into service plans (e.g. "BIR Filing", "Payroll")
+
+model ServiceInclusion {
+    id          Int     @id @default(autoincrement())
+    name        String  @unique
+    description String?
+    category    String? // e.g. "Tax Filing", "Compliance", "Payroll"
+    isActive    Boolean @default(true)
+
+    servicePlans        ServicePlan[]    @relation("ServicePlanInclusions")
+    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimeInclusions")
+
+    createdAt DateTime @default(now())
+
+    @@map("service_inclusion")
+}
+
+// ─── Service Plan (Recurring) ─────────────────────────────────────
+
+model ServicePlan {
+    id Int @id @default(autoincrement())
+
+    name        String
+    description String?
+
+    recurring   ServiceRecurring @default(MONTHLY)
+    serviceRate Decimal          @db.Decimal(10, 2)
+    status      ServiceStatus    @default(ACTIVE)
+
+    governmentOffices GovernmentOffice[] @relation("ServicePlanGovOffices")
+    cities            City[]             @relation("ServicePlanCities")
+    inclusions        ServiceInclusion[] @relation("ServicePlanInclusions")
+    promos            Promo[]            @relation("ServicePlanPromos")
+
+    taskTemplateId Int?
+    taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("service_plan")
+}
+
+// ─── Service One-Time ─────────────────────────────────────────────
+
+model ServiceOneTime {
+    id Int @id @default(autoincrement())
+
+    name        String
+    description String?
+
+    serviceRate Decimal       @db.Decimal(10, 2)
+    status      ServiceStatus @default(ACTIVE)
+
+    governmentOffices GovernmentOffice[] @relation("ServiceOneTimeGovOffices")
+    cities            City[]             @relation("ServiceOneTimeCities")
+    inclusions        ServiceInclusion[] @relation("ServiceOneTimeInclusions")
+    promos            Promo[]            @relation("ServiceOneTimePromos")
+
+    taskTemplateId Int?
+    taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("service_one_time")
+}
+
+// ─── Promo ────────────────────────────────────────────────────────
+
+model Promo {
+    id Int @id @default(autoincrement())
+
+    name        String
+    description String?
+    code        String? @unique // optional promo code for client-entered discounts
+
+    promoFor PromoFor @default(BOTH)
+
+    discountType DiscountType
+    discountRate Decimal      @db.Decimal(10, 2) // percentage (0-100) or fixed amount
+    minimumRate  Decimal?     @db.Decimal(10, 2) // minimum service rate required to qualify
+
+    maxUsage   Int? // null = unlimited
+    usageCount Int  @default(0)
+
+    validFrom  DateTime?
+    validUntil DateTime?
+    isActive   Boolean   @default(true)
+
+    // Plan-specific targeting (used alongside promoFor for granular control)
+    servicePlans        ServicePlan[]    @relation("ServicePlanPromos")
+    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimePromos")
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("promo")
+}

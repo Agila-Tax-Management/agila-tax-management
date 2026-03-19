@@ -1,7 +1,14 @@
 'use client';
 
-import { LiaisonTaskBoard } from '@/components/liaison/LiaisonTaskBoard';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function LiaisonPage() {
-  return <LiaisonTaskBoard />;
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push('/portal/liaison/tasks');
+  }, [router]);
+
+  return null;
 }

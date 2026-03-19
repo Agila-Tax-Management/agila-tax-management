@@ -45,6 +45,10 @@ model Employee {
     userId String? @unique
     user   User?   @relation(fields: [userId], references: [id])
 
+    // External client portal user — set when this Employee profile belongs to a client employee
+    clientUserId String?     @unique
+    clientUser   ClientUser? @relation(fields: [clientUserId], references: [id])
+
     firstName     String
     middleName    String?
     lastName      String
@@ -78,8 +82,11 @@ model Employee {
     employments    EmployeeEmployment[]
     requirements   EmployeeRequirement[]
     appAccess      EmployeeAppAccess[]
-    ledTeams       EmployeeTeam[]          @relation("TeamLeader")
-    managedReports EmployeeEmployment[]    @relation("ReportingManager")
+    ledTeams       EmployeeTeam[]         @relation("TeamLeader")
+    managedReports EmployeeEmployment[]   @relation("ReportingManager")
+
+    assignedTasks    Task[]        @relation("TaskAssignee")
+    assignedSubtasks TaskSubtask[] @relation("SubtaskAssignee")
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -129,9 +136,9 @@ model EmployeeEmployment {
     employeeLevelId  Int?
     employeeLevel    EmployeeLevel?   @relation(fields: [employeeLevelId], references: [id])
 
-    hireDate            DateTime?
-    regularizationDate  DateTime?
-    endDate             DateTime?
+    hireDate           DateTime?
+    regularizationDate DateTime?
+    endDate            DateTime?
 
     reportingManagerId Int?
     reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
@@ -165,12 +172,12 @@ model EmployeeContract {
     dailyRate   Decimal? @db.Decimal(10, 2)
     hourlyRate  Decimal? @db.Decimal(10, 2)
 
-    disbursedMethod     DisbursedMethod?
-    payType             String?          @default("Variable Pay")
-    bankDetails         String?
+    disbursedMethod DisbursedMethod?
+    payType         String?          @default("Variable Pay")
+    bankDetails     String?
 
-    scheduleId          Int?
-    schedule            WorkSchedule?    @relation(fields: [scheduleId], references: [id])
+    scheduleId Int?
+    schedule   WorkSchedule? @relation(fields: [scheduleId], references: [id])
 
     workingHoursPerWeek Int?
     signedDate          DateTime?
@@ -188,6 +195,9 @@ model EmployeeContract {
 model WorkSchedule {
     id Int @id @default(autoincrement())
 
+    clientId Int
+    client   Client @relation(fields: [clientId], references: [id])
+
     name     String
     timezone String @default("Asia/Manila")
 
@@ -196,6 +206,8 @@ model WorkSchedule {
 
     createdAt DateTime @default(now())
 
+    @@unique([clientId, name])
+    @@index([clientId])
     @@map("work_schedule")
 }
 
@@ -256,6 +268,10 @@ model Department {
     positions   Position[]
     employments EmployeeEmployment[]
 
+    taskTemplates        TaskTemplate[]       @relation("TaskTemplateDepartment")
+    taskTemplateItems    TaskTemplateItem[]   @relation("TemplateItemDepartment")
+    taskTemplateSubtasks TaskTemplateSubtask[] @relation("TemplateSubtaskDepartment")
+
     createdAt DateTime @default(now())
 
     @@unique([clientId, name])
@@ -299,13 +315,19 @@ model EmployeeTeam {
 model EmployeeLevel {
     id Int @id @default(autoincrement())
 
-    name        String  @unique
-    position    Int     @unique  // 1 = highest seniority (Executive = 1, Staff = 9)
+    clientId Int
+    client   Client @relation(fields: [clientId], references: [id])
+
+    name        String
+    position    Int // 1 = highest seniority (Executive = 1, Staff = 9)
     description String?
 
     employments EmployeeEmployment[]
 
     createdAt DateTime @default(now())
 
+    @@unique([clientId, name])
+    @@unique([clientId, position])
+    @@index([clientId])
     @@map("employee_level")
 }
