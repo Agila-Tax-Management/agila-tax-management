@@ -7,7 +7,7 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { SubtaskDetailsModal } from './SubtaskDetailsModal';
 import {
-  ChevronLeft, Send, Check, Plus, Calendar, User
+  ChevronLeft, Send, Plus, Calendar, User
 } from 'lucide-react';
 import { LIAISON_TEAM } from '@/lib/mock-liaison-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
