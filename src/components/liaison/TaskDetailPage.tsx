@@ -7,12 +7,7 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { SubtaskDetailsModal } from './SubtaskDetailsModal';
 import {
-  ChevronLeft,
-  Send,
-  Calendar,
-  User,
-  Plus,
-  ChevronRight,
+  ChevronLeft, Send, Check, Plus,
 } from 'lucide-react';
 import { LIAISON_TEAM } from '@/lib/mock-liaison-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -62,7 +57,8 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps): React.R
   const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
 
-  const getClientDetails = (clientId: string) => INITIAL_CLIENTS.find(c => c.id === clientId);
+  const _getClientName = (clientId: string) =>
+    INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName ?? 'Unknown';
 
   const getAssignee = (assigneeId: string) => LIAISON_TEAM.find(m => m.id === assigneeId);
 
@@ -252,9 +248,31 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps): React.R
                       {clientDetails.phone}
                     </a>
                   </div>
-                  <Badge variant={clientDetails.status === 'Active' ? 'success' : 'neutral'} className="text-xs">
-                    {clientDetails.status}
-                  </Badge>
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const dueDate = new Date(editingTask.dueDate);
+                    dueDate.setHours(0, 0, 0, 0);
+                    const daysRemaining = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const isOverdue = daysRemaining < 0;
+                    const isUrgent = daysRemaining <= 3 && daysRemaining >= 0;
+                    
+                    let badgeVariant: 'neutral' | 'info' | 'success' | 'warning' | 'danger' = 'success';
+                    let daysText = `${daysRemaining} days left`;
+                    if (isOverdue) {
+                      badgeVariant = 'danger';
+                      daysText = `Overdue by ${Math.abs(daysRemaining)} days`;
+                    } else if (isUrgent) {
+                      badgeVariant = 'warning';
+                      daysText = `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left - Urgent`;
+                    }
+                    
+                    return (
+                      <Badge variant={badgeVariant} className="text-xs self-start">
+                        {daysText}
+                      </Badge>
+                    );
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">Client information is unavailable.</p>

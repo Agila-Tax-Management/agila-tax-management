@@ -85,6 +85,9 @@ model Employee {
     ledTeams       EmployeeTeam[]         @relation("TeamLeader")
     managedReports EmployeeEmployment[]   @relation("ReportingManager")
 
+    assignedTasks    Task[]        @relation("TaskAssignee")
+    assignedSubtasks TaskSubtask[] @relation("SubtaskAssignee")
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 }
@@ -264,6 +267,10 @@ model Department {
 
     positions   Position[]
     employments EmployeeEmployment[]
+
+    taskTemplates        TaskTemplate[]       @relation("TaskTemplateDepartment")
+    taskTemplateItems    TaskTemplateItem[]   @relation("TemplateItemDepartment")
+    taskTemplateSubtasks TaskTemplateSubtask[] @relation("TemplateSubtaskDepartment")
 
     createdAt DateTime @default(now())
 
