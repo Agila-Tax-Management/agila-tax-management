@@ -7,11 +7,11 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import {
-  ChevronLeft, Calendar, User, Tag, Send, Check, Plus,
+  ChevronLeft, Send, Check, Plus,
 } from 'lucide-react';
 import { LIAISON_TEAM } from '@/lib/mock-liaison-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
-import type { AOTask, AOTaskStatus, AOTaskPriority, AOTaskSubtask } from '@/lib/types';
+import type { AOTask, AOTaskStatus, AOTaskPriority } from '@/lib/types';
 
 const STATUS_OPTIONS: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
 const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
@@ -55,7 +55,7 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps) {
   const [newComment, setNewComment] = useState('');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
-  const getClientName = (clientId: string) =>
+  const _getClientName = (clientId: string) =>
     INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName ?? 'Unknown';
 
   const getClientDetails = (clientId: string) => {
@@ -317,7 +317,7 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps) {
                     const isOverdue = daysRemaining < 0;
                     const isUrgent = daysRemaining <= 3 && daysRemaining >= 0;
                     
-                    let badgeVariant = 'success';
+                    let badgeVariant: 'neutral' | 'info' | 'success' | 'warning' | 'danger' = 'success';
                     let daysText = `${daysRemaining} days left`;
                     if (isOverdue) {
                       badgeVariant = 'danger';
@@ -328,7 +328,7 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps) {
                     }
                     
                     return (
-                      <Badge variant={badgeVariant as any} className="text-xs self-start">
+                      <Badge variant={badgeVariant} className="text-xs self-start">
                         {daysText}
                       </Badge>
                     );

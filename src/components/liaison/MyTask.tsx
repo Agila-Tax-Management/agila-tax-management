@@ -4,7 +4,6 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
-import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import {
   Search, LayoutList, Columns3,
@@ -56,7 +55,7 @@ export function MyTask() {
   const getClientName = (clientId: string) =>
     INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName ?? 'Unknown';
 
-  const getAssignee = (assigneeId: string) => {
+  const getAssignee = (_assigneeId: string) => {
     return { name: CURRENT_LIAISON.name, avatar: CURRENT_LIAISON.avatar };
   };
 
@@ -96,27 +95,21 @@ export function MyTask() {
     return sorted;
   }, [filteredTasks, sortBy]);
 
-  const getGroupLabel = (task: AOTask) => {
-    if (groupBy === 'assignee') {
-      return getAssignee(task.assigneeId).name;
-    }
-
-    if (groupBy === 'company') {
-      return getClientName(task.clientId);
-    }
-
-    return 'All Tasks';
-  };
-
   const groupedTasks = useMemo(() => {
     if (groupBy === 'none') {
       return [] as Array<{ label: string; tasks: AOTask[] }>;
     }
 
+    const getLabel = (task: AOTask) => {
+      if (groupBy === 'assignee') return getAssignee(task.assigneeId).name;
+      if (groupBy === 'company') return getClientName(task.clientId);
+      return 'All Tasks';
+    };
+
     const map = new Map<string, AOTask[]>();
 
     sortedTasks.forEach(task => {
-      const label = getGroupLabel(task);
+      const label = getLabel(task);
       const existing = map.get(label) ?? [];
       existing.push(task);
       map.set(label, existing);
