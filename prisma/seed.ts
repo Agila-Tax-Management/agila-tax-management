@@ -465,6 +465,29 @@ async function seedInternalUser(
   );
 }
 
+/* ─── Government Offices ────────────────────────────────────────── */
+
+const GOVERNMENT_OFFICES = [
+  { code: "BIR",       name: "Bureau of Internal Revenue",                description: "National tax collection authority" },
+  { code: "SEC",       name: "Securities and Exchange Commission",         description: "Corporate registration and regulation" },
+  { code: "DTI",       name: "Department of Trade and Industry",           description: "Sole proprietorship registration and trade" },
+  { code: "SSS",       name: "Social Security System",                     description: "Social insurance for private sector employees" },
+  { code: "PHILHEALTH",name: "Philippine Health Insurance Corporation",    description: "National health insurance program" },
+  { code: "PAGIBIG",   name: "Pag-IBIG Fund (HDMF)",                      description: "National savings and housing fund" },
+  { code: "MAYOR",     name: "Local Government Unit / Mayor's Office",     description: "Business permit and licensing" },
+  { code: "CDA",       name: "Cooperative Development Authority",          description: "Cooperative registration and regulation" },
+  { code: "DOLE",      name: "Department of Labor and Employment",         description: "Labor standards and employment regulation" },
+  { code: "DICT",      name: "Department of Information and Communications Technology", description: "ICT registration and digital services" },
+];
+
+/* ─── Cities ─────────────────────────────────────────────────────── */
+
+const CITIES = [
+  { name: "Cebu City",        province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6000" },
+  { name: "Mandaue City",     province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6014" },
+  { name: "Lapu-Lapu City",   province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6015" },
+];
+
 async function main(): Promise<void> {
   // ── 1. Seed Company (Agila — the internal company) ───────────────
   await prisma.client.upsert({
@@ -605,6 +628,26 @@ async function main(): Promise<void> {
     console.log(`  [CLIENT     ]  ${u.email.padEnd(28)}  ${u.password}`);
   }
   console.log("  ─────────────────────────────────────────────────────\n");
+
+  // ── 8. Seed Government Offices ────────────────────────────────────
+  for (const office of GOVERNMENT_OFFICES) {
+    await prisma.governmentOffice.upsert({
+      where: { code: office.code },
+      update: { name: office.name, description: office.description, isActive: true },
+      create: { ...office, isActive: true },
+    });
+  }
+  console.log(`  ✓ ${GOVERNMENT_OFFICES.length} government offices seeded`);
+
+  // ── 9. Seed Cities ────────────────────────────────────────────────
+  for (const city of CITIES) {
+    await prisma.city.upsert({
+      where: { name: city.name },
+      update: { province: city.province, region: city.region, zipCode: city.zipCode },
+      create: city,
+    });
+  }
+  console.log(`  ✓ ${CITIES.length} cities seeded`);
 }
 
 main()
