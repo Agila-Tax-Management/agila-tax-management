@@ -279,6 +279,36 @@ useEffect(() => {
 
 ---
 
+## Media & File Uploads (Cloudinary)
+
+- Helper: `src/lib/cloudinary.ts` — exports `uploadToCloudinary`, `deleteFromCloudinary`, `getPublicIdFromUrl`
+- SDK: `cloudinary` npm package (v2 API via `import { v2 as cloudinary } from 'cloudinary'`)
+- Required environment variables: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- Profile images are stored as `User.image` (string URL) in the database after upload
+
+### Cloudinary Conventions
+
+- Use `uploadToCloudinary(buffer, folder?, publicId?)` for all uploads — returns `{ publicId, secureUrl, width, height, format, bytes }`
+- Always use `secureUrl` (HTTPS) when storing the URL — never `url`
+- Use `folder: 'atms/profiles'` for profile avatars; add module-specific sub-folders for other assets (e.g., `atms/documents`)
+- Use a fixed `publicId` (e.g., `user-{userId}`) for overwritable assets so re-uploads replace the old file
+- Call `deleteFromCloudinary(publicId)` when replacing or removing an asset — use `getPublicIdFromUrl(url)` to extract the ID from a stored URL
+- Upload transformations for profile photos: `{ width: 400, height: 400, crop: 'fill', gravity: 'face' }` + `{ quality: 'auto', fetch_format: 'auto' }`
+- Validate on both client and server: allowed types `image/jpeg`, `image/png`, `image/webp`, `image/gif`; max size 5 MB
+- File upload API example:
+
+  ```typescript
+  // src/app/api/profile/avatar/route.ts
+  import { uploadToCloudinary } from '@/lib/cloudinary';
+
+  const file = formData.get('file') as File;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const result = await uploadToCloudinary(buffer, 'atms/profiles', `user-${session.user.id}`);
+  // result.secureUrl → store in database
+  ```
+
+---
+
 ## Database (Prisma)
 
 - Config: `prisma.config.ts` (uses `dotenv/config` for env loading)

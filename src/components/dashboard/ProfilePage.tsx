@@ -1,7 +1,7 @@
 // src/components/dashboard/ProfilePage.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
@@ -10,8 +10,35 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import {
   User, Mail, Phone, MapPin, Calendar, Shield,
-  Camera, Eye, EyeOff, Briefcase, Building2, Hash
+  Camera, Eye, EyeOff, Briefcase, Building2, Hash, Loader2
 } from 'lucide-react';
+
+interface ProfileApiData {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    image: string | null;
+  };
+  employee: {
+    id: number;
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    username: string | null;
+    employeeNo: string | null;
+    email: string | null;
+    phone: string;
+    address: string;
+    gender: string;
+    birthDate: string;
+  } | null;
+  employment: {
+    department: { id: number; name: string } | null;
+    position: { id: number; title: string } | null;
+  } | null;
+}
 
 type ProfileTab = 'personal' | 'account' | 'security';
 
@@ -48,26 +75,28 @@ export function ProfilePage(): React.ReactNode {
   const { success, error } = useToast();
   const [activeTab, setActiveTab] = useState<ProfileTab>('personal');
   const [saving, setSaving] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<ProfileApiData | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Personal Information state (mock data)
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
-    firstName: 'Genesis',
+    firstName: '',
     middleName: '',
-    lastName: 'Esdrilon',
-    email: 'genesis.esdrilon@agilatax.com',
-    phone: '+63 912 345 6789',
-    address: 'Cebu City, Cebu, Philippines',
-    gender: 'Male',
-    birthDate: '1998-05-15',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    gender: '',
+    birthDate: '',
   });
 
-  // Account Settings state
   const [accountInfo, setAccountInfo] = useState<AccountInfo>({
-    username: 'genesis.esdrilon',
+    username: '',
     profileImage: null,
   });
 
-  // Security / Password state
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
     currentPassword: '',
     newPassword: '',
@@ -77,6 +106,38 @@ export function ProfilePage(): React.ReactNode {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const res = await fetch('/api/profile');
+        const json = await res.json() as { data?: ProfileApiData; error?: string };
+        if (!res.ok || !json.data) return;
+        const { data } = json;
+        setProfileData(data);
+        setProfileImage(data.user.image);
+        setAccountInfo({ username: data.employee?.username ?? '', profileImage: data.user.image });
+        if (data.employee) {
+          const emp = data.employee;
+          setPersonalInfo({
+            firstName: emp.firstName,
+            middleName: emp.middleName ?? '',
+            lastName: emp.lastName,
+            email: emp.email ?? '',
+            phone: emp.phone,
+            address: emp.address,
+            gender: emp.gender,
+            birthDate: emp.birthDate.slice(0, 10),
+          });
+        }
+      } catch {
+        // Non-blocking — page still renders with empty fields
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+    void fetchProfile();
+  }, []);
 
   const handlePersonalInfoChange = (field: keyof PersonalInfo, value: string) => {
     setPersonalInfo(prev => ({ ...prev, [field]: value }));
@@ -93,11 +154,29 @@ export function ProfilePage(): React.ReactNode {
   const handleSavePersonalInfo = async () => {
     setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: personalInfo.firstName,
+          middleName: personalInfo.middleName || null,
+          lastName: personalInfo.lastName,
+          email: personalInfo.email || null,
+          phone: personalInfo.phone,
+          address: personalInfo.address,
+          gender: personalInfo.gender,
+          birthDate: personalInfo.birthDate,
+        }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Update failed');
+      // Sync display name in profileData
+      setProfileData(prev =>
+        prev ? { ...prev, user: { ...prev.user, name: `${personalInfo.firstName} ${personalInfo.lastName}` } } : prev
+      );
       success('Profile updated', 'Your personal information has been saved successfully.');
-    } catch {
-      error('Update failed', 'Failed to update personal information. Please try again.');
+    } catch (err) {
+      error('Update failed', err instanceof Error ? err.message : 'Failed to update personal information.');
     } finally {
       setSaving(false);
     }
@@ -106,10 +185,16 @@ export function ProfilePage(): React.ReactNode {
   const handleSaveAccountInfo = async () => {
     setSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: accountInfo.username }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Update failed');
       success('Account updated', 'Your account settings have been saved successfully.');
-    } catch {
-      error('Update failed', 'Failed to update account settings. Please try again.');
+    } catch (err) {
+      error('Update failed', err instanceof Error ? err.message : 'Failed to update account settings.');
     } finally {
       setSaving(false);
     }
@@ -131,19 +216,68 @@ export function ProfilePage(): React.ReactNode {
 
     setSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const res = await fetch('/api/profile/password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to change password');
       success('Password changed', 'Your password has been updated successfully.');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch {
-      error('Password change failed', 'Failed to update your password. Please try again.');
+    } catch (err) {
+      error('Password change failed', err instanceof Error ? err.message : 'Failed to update your password.');
     } finally {
       setSaving(false);
     }
   };
 
-  const initials = user
-    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'U';
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      error('Invalid file type', 'Please upload a JPEG, PNG, WebP, or GIF image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      error('File too large', 'Profile photo must be under 5 MB.');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/profile/avatar', { method: 'POST', body: formData });
+      const json = await response.json() as { data?: { imageUrl: string }; error?: string };
+      if (!response.ok) {
+        throw new Error(json.error ?? 'Upload failed');
+      }
+      if (json.data?.imageUrl) {
+        setProfileImage(json.data.imageUrl);
+        setAccountInfo(prev => ({ ...prev, profileImage: json.data!.imageUrl }));
+      }
+      success('Photo updated', 'Your profile photo has been saved.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Please try again.';
+      error('Upload failed', message);
+    } finally {
+      setUploadingAvatar(false);
+      // Reset the input so the same file can be re-selected if needed.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const displayName = profileData?.user.name ?? user?.name ?? 'Employee';
+  const displayRole = profileData?.employment?.position?.title ?? profileData?.user.role ?? user?.role ?? 'Employee';
+  const displayDepartment = profileData?.employment?.department?.name ?? user?.department ?? 'N/A';
+  const displayEmployeeNo = profileData?.employee?.employeeNo ?? user?.employeeId ?? 'N/A';
+  const initials = displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -152,45 +286,65 @@ export function ProfilePage(): React.ReactNode {
         <div className="flex flex-col sm:flex-row items-center gap-6">
           {/* Avatar */}
           <div className="relative group">
-            <div className="w-24 h-24 rounded-full bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-              {accountInfo.profileImage ? (
+            <div className="w-24 h-24 rounded-full bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden">
+              {profileImage ?? accountInfo.profileImage ? (
                 <Image
-                  src={accountInfo.profileImage}
-                  alt="Profile"
+                  src={(profileImage ?? accountInfo.profileImage) as string}
+                  alt="Profile photo"
                   width={96}
                   height={96}
-                  className="rounded-full object-cover"
+                  className="rounded-full object-cover w-full h-full"
                 />
               ) : (
                 initials
               )}
             </div>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
             <button
-              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md hover:bg-blue-700 transition opacity-0 group-hover:opacity-100"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md hover:bg-blue-700 transition disabled:opacity-70"
               title="Change photo"
             >
-              <Camera size={14} />
+              {uploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
             </button>
           </div>
 
           {/* User Info */}
           <div className="text-center sm:text-left flex-1">
-            <h1 className="text-2xl font-bold text-foreground">{user?.name ?? 'Employee'}</h1>
-            <p className="text-muted-foreground mt-1">{user?.role ?? 'Employee'}</p>
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 mt-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Hash size={14} />
-                {user?.employeeId ?? 'N/A'}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Building2 size={14} />
-                {user?.department ?? 'N/A'}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Briefcase size={14} />
-                {user?.role ?? 'N/A'}
-              </span>
-            </div>
+            {profileLoading ? (
+              <div className="space-y-2">
+                <div className="h-7 w-48 bg-muted rounded animate-pulse" />
+                <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+              </div>
+            ) : (
+              <>
+                <h1 className="text-2xl font-bold text-foreground">{displayName}</h1>
+                <p className="text-muted-foreground mt-1">{displayRole}</p>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 mt-3 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Hash size={14} />
+                    {displayEmployeeNo}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Building2 size={14} />
+                    {displayDepartment}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Briefcase size={14} />
+                    {displayRole}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Card>
@@ -214,7 +368,17 @@ export function ProfilePage(): React.ReactNode {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'personal' && (
+      {profileLoading && (
+        <Card className="p-6 sm:p-8">
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-10 bg-muted rounded animate-pulse" />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {!profileLoading && activeTab === 'personal' && (
         <Card className="p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-foreground mb-6">Personal Information</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -314,7 +478,7 @@ export function ProfilePage(): React.ReactNode {
         </Card>
       )}
 
-      {activeTab === 'account' && (
+      {!profileLoading && activeTab === 'account' && (
         <Card className="p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-foreground mb-6">Account Settings</h2>
           <div className="space-y-5">
@@ -335,7 +499,7 @@ export function ProfilePage(): React.ReactNode {
               <label className="block text-sm font-medium text-foreground mb-1.5">Email Address</label>
               <Input
                 type="email"
-                value={personalInfo.email}
+                value={profileData?.user.email ?? ''}
                 disabled
                 className="bg-muted text-muted-foreground cursor-not-allowed"
               />
@@ -347,7 +511,7 @@ export function ProfilePage(): React.ReactNode {
             <div className="max-w-md">
               <label className="block text-sm font-medium text-foreground mb-1.5">Employee ID</label>
               <Input
-                value={user?.employeeId ?? ''}
+                value={displayEmployeeNo}
                 disabled
                 className="bg-muted text-muted-foreground cursor-not-allowed"
               />
@@ -356,7 +520,7 @@ export function ProfilePage(): React.ReactNode {
             <div className="max-w-md">
               <label className="block text-sm font-medium text-foreground mb-1.5">Department</label>
               <Input
-                value={user?.department ?? ''}
+                value={displayDepartment}
                 disabled
                 className="bg-muted text-muted-foreground cursor-not-allowed"
               />
@@ -365,7 +529,7 @@ export function ProfilePage(): React.ReactNode {
             <div className="max-w-md">
               <label className="block text-sm font-medium text-foreground mb-1.5">Role / Position</label>
               <Input
-                value={user?.role ?? ''}
+                value={displayRole}
                 disabled
                 className="bg-muted text-muted-foreground cursor-not-allowed"
               />
@@ -379,7 +543,7 @@ export function ProfilePage(): React.ReactNode {
         </Card>
       )}
 
-      {activeTab === 'security' && (
+      {!profileLoading && activeTab === 'security' && (
         <Card className="p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-foreground mb-2">Change Password</h2>
           <p className="text-sm text-muted-foreground mb-6">
