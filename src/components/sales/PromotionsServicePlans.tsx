@@ -7,7 +7,6 @@ import { Card } from '@/components/UI/Card';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
-import { MOCK_SERVICES, PLAN_DATA } from '@/lib/service-data';
 import {
   BadgePercent,
   Gift,
@@ -57,75 +56,20 @@ interface PromoBundle {
   status: 'Draft' | 'Active';
 }
 
-function parsePlanPrice(price: string): number {
-  return Number(price.replace(/,/g, ''));
+interface PromoApiItem {
+  id: number;
+  name: string;
+  description: string | null;
+  promoFor: 'SERVICE_PLAN' | 'SERVICE_ONE_TIME' | 'BOTH';
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountRate: string;
+  isActive: boolean;
+  validUntil: string | null;
+  servicePlans: { id: number; name: string; serviceRate: string; recurring: string }[];
+  serviceOneTimePlans: { id: number; name: string; serviceRate: string }[];
 }
 
-const INITIAL_DISCOUNTED_SERVICES: DiscountedService[] = [
-  {
-    id: 'discount-1',
-    serviceId: 'plan-starter',
-    serviceName: PLAN_DATA.starter.displayName,
-    category: 'Monthly Plan',
-    teamInCharge: 'Subscription Plan',
-    discountType: 'percentage',
-    discountValue: 15,
-    originalPrice: parsePlanPrice(PLAN_DATA.starter.price),
-    discountedPrice: Math.round(parsePlanPrice(PLAN_DATA.starter.price) * 0.85),
-    validUntil: '2026-04-15',
-    notes: 'Quarter-end acquisition push for new subscribers choosing a recurring monthly plan.',
-    status: 'Active',
-  },
-  {
-    id: 'discount-2',
-    serviceId: MOCK_SERVICES[4]?.id ?? 'svc-5',
-    serviceName: MOCK_SERVICES[4]?.name ?? 'Payroll Processing',
-    category: 'One-Time Service',
-    teamInCharge: MOCK_SERVICES[4]?.teamInCharge ?? 'Accounting',
-    discountType: 'fixed',
-    discountValue: 1200,
-    originalPrice: MOCK_SERVICES[4]?.rate ?? 8000,
-    discountedPrice: Math.max((MOCK_SERVICES[4]?.rate ?? 8000) - 1200, 0),
-    validUntil: '2026-05-01',
-    notes: 'Retention offer for clients upgrading from starter plans.',
-    status: 'Draft',
-  },
-];
 
-const INITIAL_PROMO_BUNDLES: PromoBundle[] = [
-  {
-    id: 'bundle-1',
-    name: 'Startup Launch Pack',
-    headline: 'Recurring starter coverage plus registration support in one offer.',
-    servicesIncluded: [
-      PLAN_DATA.starter.displayName,
-      MOCK_SERVICES[0]?.name ?? 'Business Registration Support',
-      MOCK_SERVICES[1]?.name ?? 'BIR Compliance Filing',
-    ],
-    categoriesIncluded: ['Monthly Plan', 'One-Time Service'],
-    originalPrice: 10000,
-    promoPrice: 8200,
-    validUntil: '2026-04-30',
-    audience: 'New business owners',
-    status: 'Active',
-  },
-  {
-    id: 'bundle-2',
-    name: 'VAT Ready Bundle',
-    headline: 'Monthly VAT plan support paired with add-on compliance services for scaling clients.',
-    servicesIncluded: [
-      PLAN_DATA['essentials-vat'].displayName,
-      MOCK_SERVICES[9]?.name ?? 'Quarterly VAT Filing (2550Q)',
-      MOCK_SERVICES[46]?.name ?? 'Monthly Bookkeeping',
-    ],
-    categoriesIncluded: ['Monthly Plan', 'One-Time Service'],
-    originalPrice: 18500,
-    promoPrice: 15900,
-    validUntil: '2026-05-15',
-    audience: 'Growing VAT entities',
-    status: 'Draft',
-  },
-];
 
 export function PromotionsServicePlans(): React.ReactNode {
   const [isLoading, setIsLoading] = useState(true);
@@ -141,6 +85,9 @@ export function PromotionsServicePlans(): React.ReactNode {
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const { success, error } = useToast();
+
+  const [offeringApiPlans, setOfferingApiPlans] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
+  const [offeringApiOneTime, setOfferingApiOneTime] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
 
   const [discountForm, setDiscountForm] = useState({
     serviceId: '',
@@ -160,34 +107,104 @@ export function PromotionsServicePlans(): React.ReactNode {
   });
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDiscountedServices(INITIAL_DISCOUNTED_SERVICES);
-      setPromoBundles(INITIAL_PROMO_BUNDLES);
-      setIsLoading(false);
-    }, 450);
+    Promise.all([
+      fetch('/api/sales/promos').then((r) => r.json()),
+      fetch('/api/sales/service-plans').then((r) => r.json()),
+      fetch('/api/sales/service-one-time').then((r) => r.json()),
+    ])
+      .then(([promosData, plansData, oneTimeData]) => {
+        const promos: PromoApiItem[] = (promosData as { data?: PromoApiItem[] }).data ?? [];
+        const plans = (plansData as { data?: { id: number; name: string; serviceRate: string }[] }).data ?? [];
+        const oneTime = (oneTimeData as { data?: { id: number; name: string; serviceRate: string }[] }).data ?? [];
 
-    return () => clearTimeout(timer);
+        setOfferingApiPlans(plans);
+        setOfferingApiOneTime(oneTime);
+
+        const discounted: DiscountedService[] = [];
+        const bundles: PromoBundle[] = [];
+
+        for (const promo of promos) {
+          const total = promo.servicePlans.length + promo.serviceOneTimePlans.length;
+          if (total <= 1) {
+            const allSvcs = [...promo.servicePlans, ...promo.serviceOneTimePlans];
+            const firstSvc = allSvcs[0];
+            const isPlan = promo.servicePlans.length > 0;
+            const origPrice = firstSvc ? parseFloat(firstSvc.serviceRate) : 0;
+            const discValue = parseFloat(promo.discountRate);
+            const discPrice =
+              promo.discountType === 'PERCENTAGE'
+                ? Math.max(Math.round(origPrice * (1 - discValue / 100)), 0)
+                : Math.max(origPrice - discValue, 0);
+            discounted.push({
+              id: String(promo.id),
+              serviceId: firstSvc ? (isPlan ? `plan-${firstSvc.id}` : `svc-${firstSvc.id}`) : '',
+              serviceName: firstSvc?.name ?? promo.name,
+              category: isPlan ? 'Monthly Plan' : 'One-Time Service',
+              teamInCharge: isPlan ? 'Monthly Plan' : 'One-Time Service',
+              discountType: promo.discountType === 'PERCENTAGE' ? 'percentage' : 'fixed',
+              discountValue: discValue,
+              originalPrice: origPrice,
+              discountedPrice: discPrice,
+              validUntil: promo.validUntil ? promo.validUntil.slice(0, 10) : '',
+              notes: promo.description ?? '',
+              status: promo.isActive ? 'Active' : 'Draft',
+            });
+          } else {
+            const allNames = [
+              ...promo.servicePlans.map((s) => s.name),
+              ...promo.serviceOneTimePlans.map((s) => s.name),
+            ];
+            const origPrice = [...promo.servicePlans, ...promo.serviceOneTimePlans].reduce(
+              (sum, s) => sum + parseFloat(s.serviceRate),
+              0,
+            );
+            const discAmount =
+              promo.discountType === 'FIXED'
+                ? parseFloat(promo.discountRate)
+                : Math.round((origPrice * parseFloat(promo.discountRate)) / 100);
+            const promoPrice = Math.max(origPrice - discAmount, 0);
+            const cats: PromotionOffering['category'][] = [];
+            if (promo.servicePlans.length > 0) cats.push('Monthly Plan');
+            if (promo.serviceOneTimePlans.length > 0) cats.push('One-Time Service');
+            bundles.push({
+              id: String(promo.id),
+              name: promo.name,
+              headline: promo.description ?? '',
+              servicesIncluded: allNames,
+              categoriesIncluded: cats,
+              originalPrice: origPrice,
+              promoPrice,
+              validUntil: promo.validUntil ? promo.validUntil.slice(0, 10) : '',
+              audience: 'General sales campaign',
+              status: promo.isActive ? 'Active' : 'Draft',
+            });
+          }
+        }
+
+        setDiscountedServices(discounted);
+        setPromoBundles(bundles);
+        setIsLoading(false);
+      })
+      .catch(() => setIsLoading(false));
   }, []);
 
   const offeringOptions = useMemo<PromotionOffering[]>(() => {
-    const monthlyPlanOptions = Object.values(PLAN_DATA).map((plan) => ({
-      id: `plan-${plan.id}`,
-      name: plan.displayName,
+    const monthlyPlanOptions = offeringApiPlans.map((p) => ({
+      id: `plan-${p.id}`,
+      name: p.name,
       category: 'Monthly Plan' as const,
-      teamLabel: 'Subscription Plan',
-      rate: parsePlanPrice(plan.price),
+      teamLabel: 'Monthly Plan',
+      rate: parseFloat(p.serviceRate),
     }));
-
-    const oneTimeServiceOptions = MOCK_SERVICES.slice(0, 12).map((service) => ({
-      id: service.id,
-      name: service.name,
+    const oneTimeOptions = offeringApiOneTime.map((s) => ({
+      id: `svc-${s.id}`,
+      name: s.name,
       category: 'One-Time Service' as const,
-      teamLabel: service.teamInCharge,
-      rate: service.rate,
+      teamLabel: 'One-Time Service',
+      rate: parseFloat(s.serviceRate),
     }));
-
-    return [...monthlyPlanOptions, ...oneTimeServiceOptions];
-  }, []);
+    return [...monthlyPlanOptions, ...oneTimeOptions];
+  }, [offeringApiPlans, offeringApiOneTime]);
 
   const stats = useMemo(() => {
     const activeDiscounts = discountedServices.filter((item) => item.status === 'Active').length;
@@ -267,108 +284,198 @@ export function PromotionsServicePlans(): React.ReactNode {
     });
   }, [bundleCategoryFilter, bundleSearchTerm, bundleStatusFilter, promoBundles]);
 
-  const handleAddDiscountedService = () => {
+  const handleAddDiscountedService = async () => {
     if (!selectedDiscountOffering || !discountPreview || !discountForm.validUntil) {
       error('Missing promotion details', 'Choose a monthly plan or service, enter a discount, and set a validity date.');
       return;
     }
 
-    const createdPromotion: DiscountedService = {
-      id: crypto.randomUUID(),
-      serviceId: selectedDiscountOffering.id,
-      serviceName: selectedDiscountOffering.name,
-      category: selectedDiscountOffering.category,
-      teamInCharge: selectedDiscountOffering.teamLabel,
-      discountType: discountForm.discountType,
-      discountValue: Number(discountForm.discountValue),
-      originalPrice: discountPreview.originalPrice,
-      discountedPrice: discountPreview.discountedPrice,
-      validUntil: discountForm.validUntil,
-      notes: discountForm.notes,
-      status: 'Active',
-    };
+    const isPlan = selectedDiscountOffering.id.startsWith('plan-');
+    const numericId = parseInt(selectedDiscountOffering.id.replace(/^(plan|svc)-/, ''), 10);
+    const discountLabel =
+      discountForm.discountType === 'percentage'
+        ? `${discountForm.discountValue}% off`
+        : `₱${Number(discountForm.discountValue).toLocaleString()} off`;
 
-    setDiscountedServices((prev) => [createdPromotion, ...prev]);
-    setIsDiscountModalOpen(false);
-    setDiscountForm({
-      serviceId: '',
-      discountType: 'percentage',
-      discountValue: '',
-      validUntil: '',
-      notes: '',
-    });
-    success('Discounted offer added', 'The discounted monthly plan or service is now listed under active campaigns.');
+    try {
+      const res = await fetch('/api/sales/promos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${selectedDiscountOffering.name} — ${discountLabel}`,
+          description: discountForm.notes.trim() || undefined,
+          discountType: discountForm.discountType.toUpperCase(),
+          discountRate: Number(discountForm.discountValue),
+          validUntil: `${discountForm.validUntil}T23:59:59.000Z`,
+          servicePlanIds: isPlan ? [numericId] : [],
+          serviceOneTimePlanIds: isPlan ? [] : [numericId],
+        }),
+      });
+      const data = await res.json() as { data?: PromoApiItem; error?: string };
+      if (!res.ok) {
+        error('Failed to add discount', data.error ?? 'An error occurred.');
+        return;
+      }
+      const promo = data.data!;
+      const allSvcs = [...promo.servicePlans, ...promo.serviceOneTimePlans];
+      const firstSvc = allSvcs[0];
+      const origPrice = firstSvc ? parseFloat(firstSvc.serviceRate) : 0;
+      const discValue = parseFloat(promo.discountRate);
+      const discPrice =
+        promo.discountType === 'PERCENTAGE'
+          ? Math.max(Math.round(origPrice * (1 - discValue / 100)), 0)
+          : Math.max(origPrice - discValue, 0);
+      const created: DiscountedService = {
+        id: String(promo.id),
+        serviceId: selectedDiscountOffering.id,
+        serviceName: firstSvc?.name ?? promo.name,
+        category: selectedDiscountOffering.category,
+        teamInCharge: selectedDiscountOffering.category,
+        discountType: promo.discountType === 'PERCENTAGE' ? 'percentage' : 'fixed',
+        discountValue: discValue,
+        originalPrice: origPrice,
+        discountedPrice: discPrice,
+        validUntil: promo.validUntil ? promo.validUntil.slice(0, 10) : discountForm.validUntil,
+        notes: promo.description ?? '',
+        status: promo.isActive ? 'Active' : 'Draft',
+      };
+      setDiscountedServices((prev) => [created, ...prev]);
+      setIsDiscountModalOpen(false);
+      setDiscountForm({ serviceId: '', discountType: 'percentage', discountValue: '', validUntil: '', notes: '' });
+      success('Discounted offer added', 'The discounted offer is now listed under active campaigns.');
+    } catch {
+      error('Failed to add discount', 'An unexpected error occurred.');
+    }
   };
 
-  const handleCreatePromoBundle = () => {
+  const handleCreatePromoBundle = async () => {
     if (!promoForm.name || promoForm.serviceIds.length === 0 || !promoForm.promoPrice || !promoForm.validUntil) {
       error('Incomplete promo bundle', 'Add a promo name, choose plans or services, set the promo price, and pick an expiry date.');
       return;
     }
 
-    const includedServices = offeringOptions.filter((service) => promoForm.serviceIds.includes(service.id));
-    const originalPrice = includedServices.reduce((sum, service) => sum + service.rate, 0);
+    const planIds = promoForm.serviceIds
+      .filter((id) => id.startsWith('plan-'))
+      .map((id) => parseInt(id.replace('plan-', ''), 10));
+    const oneTimeIds = promoForm.serviceIds
+      .filter((id) => id.startsWith('svc-'))
+      .map((id) => parseInt(id.replace('svc-', ''), 10));
 
-    const createdPromo: PromoBundle = {
-      id: crypto.randomUUID(),
-      name: promoForm.name,
-      headline: promoForm.headline || 'Custom front-end promo prepared by Sales/Admin.',
-      servicesIncluded: includedServices.map((service) => service.name),
-      categoriesIncluded: Array.from(new Set(includedServices.map((service) => service.category))),
-      originalPrice,
-      promoPrice: Number(promoForm.promoPrice),
-      validUntil: promoForm.validUntil,
-      audience: promoForm.audience || 'General sales campaign',
-      status: 'Active',
-    };
+    const includedServices = offeringOptions.filter((s) => promoForm.serviceIds.includes(s.id));
+    const originalPrice = includedServices.reduce((sum, s) => sum + s.rate, 0);
+    const promoPrice = Number(promoForm.promoPrice);
+    const discountAmount = Math.max(originalPrice - promoPrice, 0);
 
-    setPromoBundles((prev) => [createdPromo, ...prev]);
-    setIsPromoModalOpen(false);
-    setPromoForm({
-      name: '',
-      headline: '',
-      serviceIds: [],
-      promoPrice: '',
-      validUntil: '',
-      audience: '',
-    });
-    success('Promo bundle created', 'The bundle can now mix monthly plans and one-time services for client pitching.');
+    try {
+      const res = await fetch('/api/sales/promos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: promoForm.name,
+          description: promoForm.headline.trim() || undefined,
+          discountType: 'FIXED',
+          discountRate: discountAmount,
+          validUntil: `${promoForm.validUntil}T23:59:59.000Z`,
+          servicePlanIds: planIds,
+          serviceOneTimePlanIds: oneTimeIds,
+        }),
+      });
+      const data = await res.json() as { data?: PromoApiItem; error?: string };
+      if (!res.ok) {
+        error('Failed to create promo', data.error ?? 'An error occurred.');
+        return;
+      }
+      const promo = data.data!;
+      const allNames = [
+        ...promo.servicePlans.map((s) => s.name),
+        ...promo.serviceOneTimePlans.map((s) => s.name),
+      ];
+      const cats: PromotionOffering['category'][] = [];
+      if (promo.servicePlans.length > 0) cats.push('Monthly Plan');
+      if (promo.serviceOneTimePlans.length > 0) cats.push('One-Time Service');
+      const created: PromoBundle = {
+        id: String(promo.id),
+        name: promo.name,
+        headline: promo.description ?? promoForm.headline,
+        servicesIncluded: allNames,
+        categoriesIncluded: cats,
+        originalPrice,
+        promoPrice,
+        validUntil: promo.validUntil ? promo.validUntil.slice(0, 10) : promoForm.validUntil,
+        audience: promoForm.audience || 'General sales campaign',
+        status: promo.isActive ? 'Active' : 'Draft',
+      };
+      setPromoBundles((prev) => [created, ...prev]);
+      setIsPromoModalOpen(false);
+      setPromoForm({ name: '', headline: '', serviceIds: [], promoPrice: '', validUntil: '', audience: '' });
+      success('Promo bundle created', 'The bundle can now mix monthly plans and one-time services for client pitching.');
+    } catch {
+      error('Failed to create promo', 'An unexpected error occurred.');
+    }
   };
 
-  const handleActivateDiscount = (promotionId: string) => {
-    setDiscountedServices((prev) =>
-      prev.map((promotion) =>
-        promotion.id === promotionId ? { ...promotion, status: 'Active' } : promotion,
-      ),
-    );
-    success('Discount activated', 'The drafted discount is now active and visible in the campaign list.');
+  const handleActivateDiscount = async (promotionId: string) => {
+    const res = await fetch(`/api/sales/promos/${promotionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: true }),
+    }).catch(() => null);
+    if (res?.ok) {
+      setDiscountedServices((prev) =>
+        prev.map((p) => (p.id === promotionId ? { ...p, status: 'Active' } : p)),
+      );
+      success('Discount activated', 'The drafted discount is now active and visible in the campaign list.');
+    } else {
+      error('Activation failed', 'Could not activate the discount. Please try again.');
+    }
   };
 
-  const handleEndDiscount = (promotionId: string) => {
-    setDiscountedServices((prev) =>
-      prev.map((promotion) =>
-        promotion.id === promotionId ? { ...promotion, status: 'Draft' } : promotion,
-      ),
-    );
-    success('Discount ended', 'The active discount was ended and moved back to draft status.');
+  const handleEndDiscount = async (promotionId: string) => {
+    const res = await fetch(`/api/sales/promos/${promotionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: false }),
+    }).catch(() => null);
+    if (res?.ok) {
+      setDiscountedServices((prev) =>
+        prev.map((p) => (p.id === promotionId ? { ...p, status: 'Draft' } : p)),
+      );
+      success('Discount ended', 'The active discount was ended and moved back to draft status.');
+    } else {
+      error('Action failed', 'Could not end the discount. Please try again.');
+    }
   };
 
-  const handleActivateBundle = (bundleId: string) => {
-    setPromoBundles((prev) =>
-      prev.map((bundle) =>
-        bundle.id === bundleId ? { ...bundle, status: 'Active' } : bundle,
-      ),
-    );
-    success('Promo bundle activated', 'The drafted promo bundle is now active and ready for use.');
+  const handleActivateBundle = async (bundleId: string) => {
+    const res = await fetch(`/api/sales/promos/${bundleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: true }),
+    }).catch(() => null);
+    if (res?.ok) {
+      setPromoBundles((prev) =>
+        prev.map((b) => (b.id === bundleId ? { ...b, status: 'Active' } : b)),
+      );
+      success('Promo bundle activated', 'The drafted promo bundle is now active and ready for use.');
+    } else {
+      error('Activation failed', 'Could not activate the bundle. Please try again.');
+    }
   };
 
-  const handleEndBundle = (bundleId: string) => {
-    setPromoBundles((prev) =>
-      prev.map((bundle) =>
-        bundle.id === bundleId ? { ...bundle, status: 'Draft' } : bundle,
-      ),
-    );
-    success('Promo bundle ended', 'The active promo bundle was ended and moved back to draft status.');
+  const handleEndBundle = async (bundleId: string) => {
+    const res = await fetch(`/api/sales/promos/${bundleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: false }),
+    }).catch(() => null);
+    if (res?.ok) {
+      setPromoBundles((prev) =>
+        prev.map((b) => (b.id === bundleId ? { ...b, status: 'Draft' } : b)),
+      );
+      success('Promo bundle ended', 'The active promo bundle was ended and moved back to draft status.');
+    } else {
+      error('Action failed', 'Could not end the bundle. Please try again.');
+    }
   };
 
   const togglePromoService = (serviceId: string) => {

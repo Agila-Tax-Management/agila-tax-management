@@ -48,7 +48,7 @@ model GovernmentOffice {
 
 model City {
     id       Int     @id @default(autoincrement())
-    name     String
+    name     String  @unique
     province String?
     region   String?
     zipCode  String?
