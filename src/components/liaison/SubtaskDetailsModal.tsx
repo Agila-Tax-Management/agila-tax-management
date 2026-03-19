@@ -107,33 +107,41 @@ export function SubtaskDetailsModal({
 
         <div className="space-y-6 overflow-y-auto p-8">
           <section>
-            <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Details</p>
+            <p className="mb-2 text-xs font-black uppercase tracking-widest text-slate-400">Details</p>
             {selectedSubtask ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-medium text-slate-700">
-                  {selectedSubtask.completed ? 'This subtask is completed.' : 'This subtask is pending.'}
-                </p>
-              </div>
+              <textarea
+                value={selectedSubtask.notes ?? ''}
+                onChange={e => {
+                  const updated = {
+                    ...task,
+                    subtasks: (task.subtasks ?? []).map(s =>
+                      s.id === selectedSubtask.id ? { ...s, notes: e.target.value } : s
+                    ),
+                  };
+                  onUpdate(updated);
+                }}
+                rows={4}
+                placeholder="Add details or notes for this subtask…"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-violet-500 resize-none placeholder:text-slate-400"
+              />
             ) : (
-              <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Select a subtask first.</p>
+              <p className="text-sm italic text-slate-400">Select a subtask to add details.</p>
             )}
           </section>
 
           <section>
-            <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Assignee</p>
+            <p className="mb-2 text-xs font-black uppercase tracking-widest text-slate-400">Assignee</p>
             {selectedSubtask ? (
-              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600">
                     <span className="text-xs font-bold text-white">{selectedAssignee?.avatar ?? '?'}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-slate-800">{selectedAssignee?.name ?? 'Unassigned'}</p>
-                    {selectedAssignee && <p className="text-xs text-slate-500">{selectedAssignee.department}</p>}
-                    {selectedAssignee && <p className="truncate text-xs text-slate-500">{selectedAssignee.email}</p>}
+                    {selectedAssignee && <p className="truncate text-xs text-slate-500">{selectedAssignee.department} · {selectedAssignee.email}</p>}
                   </div>
                 </div>
-
                 <select
                   value={selectedSubtask.assigneeId ?? ''}
                   onChange={event => onAssignSubtask(selectedSubtask.id, event.target.value)}
@@ -142,13 +150,13 @@ export function SubtaskDetailsModal({
                   <option value="">Select assignee</option>
                   {LIAISON_TEAM.map(member => (
                     <option key={member.id} value={member.id}>
-                      {member.name} - {member.department}
+                      {member.name} — {member.department}
                     </option>
                   ))}
                 </select>
               </div>
             ) : (
-              <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Select a subtask first.</p>
+              <p className="text-sm italic text-slate-400">Select a subtask to add an assignee.</p>
             )}
           </section>
 
