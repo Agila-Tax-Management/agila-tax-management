@@ -7,7 +7,7 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { SubtaskDetailsModal } from './SubtaskDetailsModal';
 import {
-  ChevronLeft, Send, Check, Plus,
+  ChevronLeft, Send, Check, Plus, Calendar, User
 } from 'lucide-react';
 import { LIAISON_TEAM } from '@/lib/mock-liaison-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -57,8 +57,8 @@ export function TaskDetailPage({ task, onUpdate }: TaskDetailPageProps): React.R
   const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
 
-  const _getClientName = (clientId: string) =>
-    INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName ?? 'Unknown';
+  const getClientDetails = (clientId: string) =>
+    INITIAL_CLIENTS.find(c => c.id === clientId);
 
   const getAssignee = (assigneeId: string) => LIAISON_TEAM.find(m => m.id === assigneeId);
 
