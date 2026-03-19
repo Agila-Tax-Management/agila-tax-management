@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -36,17 +37,13 @@ interface ServiceOneTimeItem {
 const INITIAL_NEW_SERVICE = { name: '', description: '', serviceRate: '', status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' };
 
 export function OneTimeServicePlans(): React.ReactNode {
+  const router = useRouter();
   const { success, error } = useToast();
   const [services, setServices] = useState<ServiceOneTimeItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [servicesPerPage, setServicesPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Add Service Modal
-  const [isAddServiceModalOpen, setIsAddServiceModalOpen] = useState(false);
-  const [newService, setNewService] = useState(INITIAL_NEW_SERVICE);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Edit Service Modal
   const [editTarget, setEditTarget] = useState<ServiceOneTimeItem | null>(null);
@@ -93,36 +90,6 @@ export function OneTimeServicePlans(): React.ReactNode {
     setPrevSearch(searchTerm);
     setCurrentPage(1);
   }
-
-  const handleAddService = async () => {
-    if (!newService.name || !newService.serviceRate) return;
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/sales/service-one-time', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newService.name.trim(),
-          description: newService.description.trim() || undefined,
-          serviceRate: parseFloat(newService.serviceRate),
-          status: newService.status,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error('Failed to add service', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      setServices((prev) => [data.data, ...prev]);
-      setIsAddServiceModalOpen(false);
-      setNewService(INITIAL_NEW_SERVICE);
-      success('Service added', `"${data.data.name}" was added successfully.`);
-    } catch {
-      error('Failed to add service', 'An unexpected error occurred.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const openEdit = (svc: ServiceOneTimeItem) => {
     setEditTarget(svc);
@@ -251,7 +218,7 @@ export function OneTimeServicePlans(): React.ReactNode {
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={() => setIsAddServiceModalOpen(true)}
+              onClick={() => router.push('/portal/sales/services/one-time/new-service')}
               className="bg-blue-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-blue-700 shadow-sm"
             >
               <Plus size={14} className="mr-1" />
@@ -500,74 +467,6 @@ export function OneTimeServicePlans(): React.ReactNode {
           </div>
         )}
       </Card>
-
-      {/* Add Service Modal */}
-      <Modal isOpen={isAddServiceModalOpen} onClose={() => setIsAddServiceModalOpen(false)} title="Add New Service">
-        <div className="space-y-5 p-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Service Name *</label>
-            <Input
-              value={newService.name}
-              onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-              placeholder="Enter service name"
-              className="bg-white border-slate-200"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Description</label>
-            <Input
-              value={newService.description}
-              onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-              placeholder="Brief description"
-              className="bg-white border-slate-200"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Rate (PHP) *</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={newService.serviceRate}
-                onChange={(e) => setNewService({ ...newService, serviceRate: e.target.value })}
-                placeholder="0.00"
-                className="bg-white border-slate-200"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Status</label>
-              <select
-                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={newService.status}
-                onChange={(e) => setNewService({ ...newService, status: e.target.value as typeof newService.status })}
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-slate-200">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => { setIsAddServiceModalOpen(false); setNewService(INITIAL_NEW_SERVICE); }}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleAddService}
-              disabled={!newService.name || !newService.serviceRate || isSubmitting}
-            >
-              <Plus size={14} className="mr-1" />
-              {isSubmitting ? 'Saving...' : 'Add Service'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Edit Service Modal */}
       <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Service">
