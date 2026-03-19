@@ -7,7 +7,7 @@ import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { useToast } from '@/context/ToastContext';
-import { ArrowLeft, CalendarClock, Save, Search, X, Layout } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Save, Search, X, Layout, Plus } from 'lucide-react';
 
 interface RefItem {
   id: number;
@@ -110,6 +110,143 @@ function SearchableMultiSelect({
   );
 }
 
+function InclusionTagInput({
+  inclusions,
+  selectedIds,
+  onAdd,
+  onRemove,
+  onCreateNew,
+}: {
+  inclusions: RefItem[];
+  selectedIds: number[];
+  onAdd: (id: number) => void;
+  onRemove: (id: number) => void;
+  onCreateNew?: (name: string) => Promise<void>;
+}) {
+  const [inputValue, setInputValue] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const filtered = useMemo(
+    () =>
+      inclusions.filter(
+        (i) =>
+          i.name.toLowerCase().includes(inputValue.toLowerCase()) &&
+          !selectedIds.includes(i.id),
+      ),
+    [inclusions, inputValue, selectedIds],
+  );
+
+  const handleSelect = (id: number) => {
+    onAdd(id);
+    setInputValue('');
+    setShowDropdown(false);
+  };
+
+  const handleCreateNew = async () => {
+    if (!inputValue.trim() || !onCreateNew || isCreating) return;
+    setIsCreating(true);
+    await onCreateNew(inputValue.trim());
+    setInputValue('');
+    setShowDropdown(false);
+    setIsCreating(false);
+  };
+
+  const selectedItems = inclusions.filter((i) => selectedIds.includes(i.id));
+  const hasInput = inputValue.trim().length > 0;
+  const exactMatch = inclusions.some((i) => i.name.toLowerCase() === inputValue.toLowerCase());
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          Plan Inclusions
+        </label>
+        {selectedIds.length > 0 && (
+          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+            {selectedIds.length} added
+          </span>
+        )}
+      </div>
+
+      <div className="relative">
+        <input
+          className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          placeholder="Search inclusions..."
+          value={inputValue}
+          onChange={(e) => { setInputValue(e.target.value); setShowDropdown(true); }}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (filtered.length > 0) handleSelect(filtered[0].id);
+              else if (hasInput && onCreateNew && !exactMatch) void handleCreateNew();
+            }
+          }}
+        />
+        {showDropdown && (
+          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+            <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
+              {filtered.length > 0 ? (
+                filtered.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-purple-50 text-slate-800 transition-colors flex items-center gap-2"
+                    onMouseDown={() => handleSelect(item.id)}
+                  >
+                    <Plus size={11} className="text-purple-400 shrink-0" />
+                    <span>
+                      <span className="font-semibold">{item.name}</span>
+                      {item.category && (
+                        <span className="text-slate-400 ml-1">· {item.category}</span>
+                      )}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-3 text-xs text-slate-400 text-center">
+                  {hasInput ? 'No matching inclusions' : 'All inclusions have been added'}
+                </p>
+              )}
+            </div>
+            {onCreateNew && hasInput && !exactMatch && (
+              <div className="border-t border-slate-100 bg-slate-50">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  onMouseDown={handleCreateNew}
+                  disabled={isCreating}
+                >
+                  <Plus size={11} className="shrink-0" />
+                  {isCreating ? 'Adding...' : `Add "${inputValue}" as new inclusion`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {selectedItems.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {selectedItems.map((item) => (
+            <span
+              key={item.id}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800"
+            >
+              {item.name}
+              <button type="button" onClick={() => onRemove(item.id)}>
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FormState {
   name: string;
   description: string;
@@ -190,6 +327,27 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
       ...prev,
       [key]: prev[key].includes(id) ? prev[key].filter((v) => v !== id) : [...prev[key], id],
     }));
+  };
+
+  const handleCreateInclusion = async (name: string) => {
+    try {
+      const res = await fetch('/api/sales/service-inclusions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        error('Failed to create inclusion', (data as { error?: string }).error ?? 'An error occurred.');
+        return;
+      }
+      const newItem = data.data as RefItem;
+      setInclusions((prev) => [...prev, newItem]);
+      setForm((prev) => ({ ...prev, inclusionIds: [...prev.inclusionIds, newItem.id] }));
+      success('Inclusion added', `"${name}" was created and added.`);
+    } catch {
+      error('Failed to create inclusion', 'An unexpected error occurred.');
+    }
   };
 
   const isValid = form.name.trim() !== '' && form.serviceRate !== '' && Number(form.serviceRate) > 0;
@@ -356,16 +514,6 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
             />
 
             <SearchableMultiSelect
-              label="Plan Inclusions"
-              items={inclusions}
-              selectedIds={form.inclusionIds}
-              onToggle={(id) => toggleId('inclusionIds', id)}
-              getLabel={(item) => item.name}
-              getSubLabel={(item) => item.category ?? undefined}
-              placeholder="Search inclusions..."
-            />
-
-            <SearchableMultiSelect
               label="Linked Promos"
               items={promos}
               selectedIds={form.promoIds}
@@ -374,6 +522,14 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
               placeholder="Search promos..."
             />
           </div>
+
+          <InclusionTagInput
+            inclusions={inclusions}
+            selectedIds={form.inclusionIds}
+            onAdd={(id) => toggleId('inclusionIds', id)}
+            onRemove={(id) => toggleId('inclusionIds', id)}
+            onCreateNew={handleCreateInclusion}
+          />
 
           {/* Task Template Picker (UI-only) */}
           <div className="space-y-2">
@@ -410,8 +566,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
 
           {/* Selection Summary */}
           {(form.governmentOfficeIds.length > 0 ||
-            form.cityIds.length > 0 ||
-            form.inclusionIds.length > 0) && (
+            form.cityIds.length > 0) && (
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 Selection Summary
@@ -445,24 +600,6 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
                       >
                         {item.name}
                         <button type="button" onClick={() => toggleId('cityIds', id)}>
-                          <X size={10} />
-                        </button>
-                      </span>
-                    ) : null;
-                  })}
-                </div>
-              )}
-              {form.inclusionIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {form.inclusionIds.map((id) => {
-                    const item = inclusions.find((i) => i.id === id);
-                    return item ? (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800"
-                      >
-                        {item.name}
-                        <button type="button" onClick={() => toggleId('inclusionIds', id)}>
                           <X size={10} />
                         </button>
                       </span>

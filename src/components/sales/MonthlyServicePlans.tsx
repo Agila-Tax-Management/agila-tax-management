@@ -17,6 +17,8 @@ import {
   MapPin,
   Package,
   Clock,
+  Eye,
+  DollarSign,
 } from 'lucide-react';
 
 interface ServicePlanItem {
@@ -47,6 +49,7 @@ export function MonthlyServicePlans(): React.ReactNode {
   const [isLoading, setIsLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<ServicePlanItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [viewTarget, setViewTarget] = useState<ServicePlanItem | null>(null);
 
   useEffect(() => {
     fetch('/api/sales/service-plans')
@@ -169,7 +172,8 @@ export function MonthlyServicePlans(): React.ReactNode {
               {plans.map((plan) => (
                 <div
                   key={plan.id}
-                  className="relative p-6 rounded-2xl border-2 border-slate-200 bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
+                  className="relative p-6 rounded-2xl border-2 border-slate-200 bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group cursor-pointer"
+                  onClick={() => setViewTarget(plan)}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <Badge
@@ -222,8 +226,15 @@ export function MonthlyServicePlans(): React.ReactNode {
 
                   <div className="flex gap-2">
                     <Button
+                      className="flex-1 h-8 px-3 bg-purple-600 hover:bg-purple-700 text-white text-[11px] flex items-center justify-center gap-1.5"
+                      onClick={(e) => { e.stopPropagation(); setViewTarget(plan); }}
+                    >
+                      <Eye size={12} />
+                      View
+                    </Button>
+                    <Button
                       className="flex-1 h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white text-[11px] flex items-center justify-center gap-1.5"
-                      onClick={() => router.push(`/portal/sales/services/monthly/update-service-plan/${plan.id}`)}
+                      onClick={(e) => { e.stopPropagation(); router.push(`/portal/sales/services/monthly/update-service-plan/${plan.id}`); }}
                     >
                       <Pencil size={12} />
                       Edit
@@ -231,7 +242,7 @@ export function MonthlyServicePlans(): React.ReactNode {
                     <Button
                       variant="outline"
                       className="h-8 px-3 text-rose-600 border-rose-200 hover:bg-rose-50 text-[11px] flex items-center justify-center gap-1.5"
-                      onClick={() => setDeleteTarget(plan)}
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(plan); }}
                     >
                       <Trash2 size={12} />
                     </Button>
@@ -242,6 +253,121 @@ export function MonthlyServicePlans(): React.ReactNode {
           )}
         </div>
       </Card>
+
+      {/* View Detail Modal */}
+      <Modal isOpen={!!viewTarget} onClose={() => setViewTarget(null)} title="Service Plan Details" size="md">
+        {viewTarget && (
+          <div className="p-6 space-y-5">
+            {/* Status & Recurring */}
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={viewTarget.status === 'ACTIVE' ? 'success' : viewTarget.status === 'INACTIVE' ? 'warning' : 'neutral'}
+                className="text-[10px] font-black"
+              >
+                {viewTarget.status}
+              </Badge>
+              <Badge variant="info" className="text-[10px] font-bold flex items-center gap-1">
+                <Clock size={10} />
+                {RECURRING_LABEL[viewTarget.recurring]}
+              </Badge>
+            </div>
+
+            {/* Name */}
+            <div>
+              <h3 className="text-xl font-black text-slate-900">{viewTarget.name}</h3>
+              {viewTarget.description && (
+                <p className="text-sm text-slate-500 mt-1">{viewTarget.description}</p>
+              )}
+            </div>
+
+            {/* Rate */}
+            <div className="flex items-baseline gap-1 p-4 bg-purple-50 rounded-xl">
+              <DollarSign size={16} className="text-purple-600 self-center" />
+              <span className="text-2xl font-black text-slate-900">
+                ₱{parseFloat(viewTarget.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              </span>
+              <span className="text-xs text-slate-400">/ {RECURRING_LABEL[viewTarget.recurring].toLowerCase()}</span>
+            </div>
+
+            {/* Government Offices */}
+            {viewTarget.governmentOffices.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Building2 size={13} className="text-slate-500" />
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Government Offices</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {viewTarget.governmentOffices.map((g) => (
+                    <span key={g.id} className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[11px] font-bold rounded-full">
+                      {g.code} — {g.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cities */}
+            {viewTarget.cities.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <MapPin size={13} className="text-slate-500" />
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Cities</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {viewTarget.cities.map((c) => (
+                    <span key={c.id} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full">
+                      {c.name}{c.province ? `, ${c.province}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Inclusions */}
+            {viewTarget.inclusions.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Package size={13} className="text-slate-500" />
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Plan Inclusions</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {viewTarget.inclusions.map((inc) => (
+                    <span key={inc.id} className="px-2.5 py-1 bg-purple-50 text-purple-700 text-[11px] font-bold rounded-full">
+                      {inc.name}{inc.category ? ` · ${inc.category}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2 border-t border-slate-100">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setViewTarget(null)}
+              >
+                Close
+              </Button>
+              <Button
+                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center gap-1.5"
+                onClick={() => { setViewTarget(null); router.push(`/portal/sales/services/monthly/update-service-plan/${viewTarget.id}`); }}
+              >
+                <Pencil size={13} />
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 text-rose-600 border-rose-200 hover:bg-rose-50 flex items-center justify-center gap-1.5"
+                onClick={() => { setDeleteTarget(viewTarget); setViewTarget(null); }}
+              >
+                <Trash2 size={13} />
+                Delete
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Service Plan" size="sm">
