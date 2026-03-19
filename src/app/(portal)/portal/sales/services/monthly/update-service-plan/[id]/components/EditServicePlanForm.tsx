@@ -1,0 +1,497 @@
+// src/app/(portal)/portal/sales/services/monthly/update-service-plan/[id]/components/EditServicePlanForm.tsx
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card } from '@/components/UI/Card';
+import { Button } from '@/components/UI/button';
+import { Input } from '@/components/UI/Input';
+import { useToast } from '@/context/ToastContext';
+import { ArrowLeft, CalendarClock, Save, Search, X, Layout } from 'lucide-react';
+
+interface RefItem {
+  id: number;
+  name: string;
+  code?: string;
+  province?: string | null;
+  category?: string | null;
+}
+
+interface ServicePlanDetail {
+  id: number;
+  name: string;
+  description: string | null;
+  recurring: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  serviceRate: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  governmentOffices: { id: number; code: string; name: string }[];
+  cities: { id: number; name: string; province: string | null }[];
+  inclusions: { id: number; name: string; category: string | null }[];
+  promos: { id: number; name: string }[];
+  taskTemplate: { id: number; name: string } | null;
+}
+
+function SearchableMultiSelect({
+  label,
+  items,
+  selectedIds,
+  onToggle,
+  getLabel,
+  getSubLabel,
+  placeholder,
+}: {
+  label: string;
+  items: RefItem[];
+  selectedIds: number[];
+  onToggle: (id: number) => void;
+  getLabel: (item: RefItem) => string;
+  getSubLabel?: (item: RefItem) => string | undefined;
+  placeholder: string;
+}) {
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(
+    () => items.filter((i) => getLabel(i).toLowerCase().includes(search.toLowerCase())),
+    [items, search, getLabel],
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">{label}</label>
+        {selectedIds.length > 0 && (
+          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+            {selectedIds.length} selected
+          </span>
+        )}
+      </div>
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="p-2 border-b border-slate-100 bg-slate-50">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+            <input
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-400"
+              placeholder={placeholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
+          {filtered.length === 0 && (
+            <p className="p-3 text-xs text-slate-400 text-center">
+              {items.length === 0 ? 'No options available' : 'No matches'}
+            </p>
+          )}
+          {filtered.map((item) => {
+            const checked = selectedIds.includes(item.id);
+            return (
+              <label
+                key={item.id}
+                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(item.id)}
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-400"
+                />
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">{getLabel(item)}</p>
+                  {getSubLabel && getSubLabel(item) && (
+                    <p className="text-[10px] text-slate-400">{getSubLabel(item)}</p>
+                  )}
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface FormState {
+  name: string;
+  description: string;
+  recurring: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  serviceRate: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  governmentOfficeIds: number[];
+  cityIds: number[];
+  inclusionIds: number[];
+  promoIds: number[];
+  taskTemplateSearch: string;
+}
+
+interface EditServicePlanFormProps {
+  planId: number;
+}
+
+export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React.ReactNode {
+  const router = useRouter();
+  const { success, error } = useToast();
+
+  const [form, setForm] = useState<FormState>({
+    name: '',
+    description: '',
+    recurring: 'MONTHLY',
+    serviceRate: '',
+    status: 'ACTIVE',
+    governmentOfficeIds: [],
+    cityIds: [],
+    inclusionIds: [],
+    promoIds: [],
+    taskTemplateSearch: '',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [govOffices, setGovOffices] = useState<RefItem[]>([]);
+  const [cities, setCities] = useState<RefItem[]>([]);
+  const [inclusions, setInclusions] = useState<RefItem[]>([]);
+  const [promos, setPromos] = useState<RefItem[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/sales/service-plans/${planId}`).then((r) => r.json()),
+      fetch('/api/sales/government-offices').then((r) => r.json()),
+      fetch('/api/sales/cities').then((r) => r.json()),
+      fetch('/api/sales/service-inclusions').then((r) => r.json()),
+      fetch('/api/sales/promos').then((r) => r.json()),
+    ])
+      .then(([planRes, gov, cty, inc, prm]) => {
+        const plan: ServicePlanDetail = planRes.data;
+        setForm({
+          name: plan.name,
+          description: plan.description ?? '',
+          recurring: plan.recurring,
+          serviceRate: String(parseFloat(plan.serviceRate)),
+          status: plan.status,
+          governmentOfficeIds: plan.governmentOffices.map((g) => g.id),
+          cityIds: plan.cities.map((c) => c.id),
+          inclusionIds: plan.inclusions.map((i) => i.id),
+          promoIds: plan.promos.map((p) => p.id),
+          taskTemplateSearch: '',
+        });
+        setGovOffices(gov.data ?? []);
+        setCities(cty.data ?? []);
+        setInclusions(inc.data ?? []);
+        setPromos(prm.data ?? []);
+      })
+      .catch(() => {
+        error('Failed to load plan', 'Could not fetch service plan details.');
+      })
+      .finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
+
+  const toggleId = (key: 'governmentOfficeIds' | 'cityIds' | 'inclusionIds' | 'promoIds', id: number) => {
+    setForm((prev) => ({
+      ...prev,
+      [key]: prev[key].includes(id) ? prev[key].filter((v) => v !== id) : [...prev[key], id],
+    }));
+  };
+
+  const isValid = form.name.trim() !== '' && form.serviceRate !== '' && Number(form.serviceRate) > 0;
+
+  const handleSubmit = async () => {
+    if (!isValid) return;
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch(`/api/sales/service-plans/${planId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          description: form.description.trim() || null,
+          recurring: form.recurring,
+          serviceRate: parseFloat(form.serviceRate),
+          status: form.status,
+          governmentOfficeIds: form.governmentOfficeIds,
+          cityIds: form.cityIds,
+          inclusionIds: form.inclusionIds,
+          promoIds: form.promoIds,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        error('Failed to update plan', data.error ?? 'An error occurred.');
+        return;
+      }
+
+      success('Service plan updated', `"${data.data.name}" was updated successfully.`);
+      router.push('/portal/sales/services/monthly');
+    } catch {
+      error('Failed to update plan', 'An unexpected error occurred.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-[3px] border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-slate-500 font-medium">Loading service plan...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => router.push('/portal/sales/services/monthly')}
+          className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-purple-100 text-purple-600 rounded-xl">
+            <CalendarClock size={22} />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Edit Service Plan</h2>
+            <p className="text-xs text-slate-500">Update recurring monthly service package</p>
+          </div>
+        </div>
+      </div>
+
+      <Card className="border-slate-200 shadow-sm">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Plan Details</p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                Plan Name <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Agila Starter Plan"
+                className="bg-white border-slate-200"
+              />
+            </div>
+
+            <div className="sm:col-span-2 space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Description</label>
+              <textarea
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Briefly describe what this plan covers..."
+                className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                Service Rate (PHP) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.serviceRate}
+                onChange={(e) => setForm({ ...form, serviceRate: e.target.value })}
+                placeholder="0.00"
+                className="bg-white border-slate-200"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Recurring</label>
+              <select
+                value={form.recurring}
+                onChange={(e) => setForm({ ...form, recurring: e.target.value as typeof form.recurring })}
+                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="MONTHLY">Monthly</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="DAILY">Daily</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}
+                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <SearchableMultiSelect
+              label="Government Offices"
+              items={govOffices}
+              selectedIds={form.governmentOfficeIds}
+              onToggle={(id) => toggleId('governmentOfficeIds', id)}
+              getLabel={(item) => item.name}
+              getSubLabel={(item) => item.code}
+              placeholder="Search offices..."
+            />
+
+            <SearchableMultiSelect
+              label="Cities / Coverage"
+              items={cities}
+              selectedIds={form.cityIds}
+              onToggle={(id) => toggleId('cityIds', id)}
+              getLabel={(item) => item.name}
+              getSubLabel={(item) => item.province ?? undefined}
+              placeholder="Search cities..."
+            />
+
+            <SearchableMultiSelect
+              label="Plan Inclusions"
+              items={inclusions}
+              selectedIds={form.inclusionIds}
+              onToggle={(id) => toggleId('inclusionIds', id)}
+              getLabel={(item) => item.name}
+              getSubLabel={(item) => item.category ?? undefined}
+              placeholder="Search inclusions..."
+            />
+
+            <SearchableMultiSelect
+              label="Linked Promos"
+              items={promos}
+              selectedIds={form.promoIds}
+              onToggle={(id) => toggleId('promoIds', id)}
+              getLabel={(item) => item.name}
+              placeholder="Search promos..."
+            />
+          </div>
+
+          {/* Task Template Picker (UI-only) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Task Template
+              </label>
+              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                Coming soon
+              </span>
+            </div>
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="p-2 border-b border-slate-100 bg-slate-50">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                  <input
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-400 opacity-60"
+                    placeholder="Search task templates..."
+                    value={form.taskTemplateSearch}
+                    onChange={(e) => setForm({ ...form, taskTemplateSearch: e.target.value })}
+                    disabled
+                  />
+                </div>
+              </div>
+              <div className="p-6 text-center">
+                <Layout size={24} className="mx-auto text-slate-300 mb-2" />
+                <p className="text-xs font-semibold text-slate-400">No task templates yet</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Task template management will be available in a future update.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Selection Summary */}
+          {(form.governmentOfficeIds.length > 0 ||
+            form.cityIds.length > 0 ||
+            form.inclusionIds.length > 0) && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Selection Summary
+              </p>
+              {form.governmentOfficeIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {form.governmentOfficeIds.map((id) => {
+                    const item = govOffices.find((g) => g.id === id);
+                    return item ? (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800"
+                      >
+                        {item.code ?? item.name}
+                        <button type="button" onClick={() => toggleId('governmentOfficeIds', id)}>
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+              {form.cityIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {form.cityIds.map((id) => {
+                    const item = cities.find((c) => c.id === id);
+                    return item ? (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800"
+                      >
+                        {item.name}
+                        <button type="button" onClick={() => toggleId('cityIds', id)}>
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+              {form.inclusionIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {form.inclusionIds.map((id) => {
+                    const item = inclusions.find((i) => i.id === id);
+                    return item ? (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800"
+                      >
+                        {item.name}
+                        <button type="button" onClick={() => toggleId('inclusionIds', id)}>
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex gap-3 justify-end">
+          <Button
+            variant="outline"
+            onClick={() => router.push('/portal/sales/services/monthly')}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="bg-purple-600 hover:bg-purple-700 text-white"
+            onClick={handleSubmit}
+            disabled={!isValid || isSubmitting}
+          >
+            <Save size={14} className="mr-1.5" />
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
