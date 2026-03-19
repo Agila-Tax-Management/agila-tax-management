@@ -23,7 +23,6 @@ model User {
   activityLogs           ActivityLog[]
   notificationsReceived  InternalNotification[] @relation("NotificationRecipient")
   notificationsTriggered InternalNotification[] @relation("NotificationActor")
-  taskConversations      TaskConversation[]
 
   @@unique([email])
   @@map("user")

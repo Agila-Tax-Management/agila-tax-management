@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
-import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
+import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 
 const createTeamSchema = z.object({
@@ -18,11 +18,11 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clientId = await getClientIdFromSession();
-  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+  const atmsClient = await prisma.client.findUnique({ where: { companyCode: "atms" } });
+  if (!atmsClient) return NextResponse.json({ error: "ATMS client not found" }, { status: 500 });
 
   const teams = await prisma.employeeTeam.findMany({
-    where: { clientId },
+    where: { clientId: atmsClient.id },
     orderBy: { name: "asc" },
     include: {
       leader: { select: { id: true, firstName: true, lastName: true, employeeNo: true } },
@@ -67,17 +67,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
-  const clientId = await getClientIdFromSession();
-  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+  const atmsClient = await prisma.client.findUnique({ where: { companyCode: "atms" } });
+  if (!atmsClient) return NextResponse.json({ error: "ATMS client not found" }, { status: 500 });
 
   const duplicate = await prisma.employeeTeam.findFirst({
-    where: { clientId, name: parsed.data.name },
+    where: { clientId: atmsClient.id, name: parsed.data.name },
   });
   if (duplicate) return NextResponse.json({ error: "A team with this name already exists." }, { status: 409 });
 
   const team = await prisma.employeeTeam.create({
     data: {
-      clientId,
+      clientId: atmsClient.id,
       name: parsed.data.name,
       leaderId: parsed.data.leaderId ?? null,
     },

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { AccountingSidebar } from '@/components/accounting/AccountingSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { Button } from '@/components/UI/button';
@@ -11,15 +11,6 @@ import { Menu, User, ArrowLeft } from 'lucide-react';
 export default function AccountingLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
-
-  const moduleRoot = '/portal/accounting';
-  const isRoot = pathname === moduleRoot;
-  const backHref = isRoot ? '/dashboard' : moduleRoot;
-  const backLabel = isRoot
-    ? 'Main Hub'
-    : pathname.split('/').filter(Boolean).at(-1)!
-        .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
     <RoleProvider>
@@ -38,10 +29,10 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => router.push(backHref)}
+                onClick={() => router.push('/dashboard')}
                 className="hidden sm:inline-flex"
               >
-                <ArrowLeft size={16} className="mr-1" /> {backLabel}
+                <ArrowLeft size={16} className="mr-1" /> Dashboard
               </Button>
             </div>
 
