@@ -23,7 +23,7 @@ export default function TaskDetailRoute({ params }: PageProps) {
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-800">Task not found</h1>
-          <p className="text-slate-600 mt-2">The task you're looking for doesn't exist.</p>
+          <p className="text-slate-600 mt-2">The task you&apos;re looking for doesn&apos;t exist.</p>
         </div>
       </div>
     );
