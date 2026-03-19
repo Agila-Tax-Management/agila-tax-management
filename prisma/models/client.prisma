@@ -1,16 +1,3 @@
-enum ClientUserStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-enum ClientPortalRole {
-  OWNER
-  ADMIN
-  EMPLOYEE
-  VIEWER
-}
-
 enum BusinessType {
   INDIVIDUAL
   SOLE_PROPRIETORSHIP
@@ -50,18 +37,14 @@ model Client {
 
   timezone String? @default("Asia/Manila")
 
-  clientUsers     ClientUser[]
-  userAssignments ClientUserAssignment[]
+  clientUsers ClientUser[]
 
   professionalProfiles ProfessionalClient[]
   soleProprietorships  SoleProprietorship[]
 
-  departments    Department[]
-  teams          EmployeeTeam[]
-  employments    EmployeeEmployment[]
-  workSchedules  WorkSchedule[]
-  employeeLevels EmployeeLevel[]
-  tasks          Task[]
+  departments  Department[]
+  teams        EmployeeTeam[]
+  employments  EmployeeEmployment[]
 
   createdAt DateTime? @map("created_at")
 
@@ -82,43 +65,16 @@ model ClientUser {
   id String @id @default(cuid())
 
   name          String?
-  email         String           @unique
-  emailVerified Boolean          @default(false)
+  email         String  @unique
+  emailVerified Boolean @default(false)
   image         String?
-  active        Boolean          @default(true)
-  status        ClientUserStatus @default(ACTIVE)
+  active        Boolean @default(true)
 
-  // Legacy single-client FK kept for BetterAuth additionalFields compatibility
   clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])
 
-  assignments ClientUserAssignment[]
-  employee    Employee?
-  sessions    ClientSession[]
-  accounts    ClientAccount[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@map("client_user")
-}
-
-// ─── Client ↔ ClientUser Join Table ──────────────────────────────
-model ClientUserAssignment {
-  id Int @id @default(autoincrement())
-
-  clientUserId String
-  clientUser   ClientUser @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
-
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  role ClientPortalRole @default(EMPLOYEE)
-
-  createdAt DateTime @default(now())
-
-  @@unique([clientUserId, clientId])
-  @@map("client_user_assignment")
 }
 
 model ProfessionalClient {
@@ -251,8 +207,8 @@ model SoleProprietorship {
 
   noRentReason String?
 
-  landlordOwnDocs   String?
-  landlordOwnReason String?
+  landlordOwnDocs     String?
+  landlordOwnReason   String?
 
   landlordLeaseDocs   String?
   landlordLeaseReason String?

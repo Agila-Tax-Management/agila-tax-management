@@ -88,7 +88,7 @@ export function EmployeeContractView({ employee }: EmployeeContractViewProps) {
   const { success } = useToast();
   const [activeTab, setActiveTab] = useState<ContractTab>('info');
   const [isInfoEditing, setIsInfoEditing] = useState(false);
-  const [_form, setForm] = useState<ContractFormData>(() => getContractDefaults(employee));
+  const [form, setForm] = useState<ContractFormData>(() => getContractDefaults(employee));
   const [savedEmpInfo, setSavedEmpInfo] = useState<EmployeeInfoFormData>({
     fullName: employee.fullName,
     employeeNo: employee.employeeNo,

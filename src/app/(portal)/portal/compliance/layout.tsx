@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ComplianceSidebar } from '@/components/compliance/ComplianceSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { Button } from '@/components/UI/button';
@@ -15,15 +15,6 @@ export default function CompliancePortalLayout({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
-
-  const moduleRoot = '/portal/compliance';
-  const isRoot = pathname === moduleRoot;
-  const backHref = isRoot ? '/dashboard' : moduleRoot;
-  const backLabel = isRoot
-    ? 'Main Hub'
-    : pathname.split('/').filter(Boolean).at(-1)!
-        .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
     <RoleProvider>
@@ -45,10 +36,10 @@ export default function CompliancePortalLayout({
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => router.push(backHref)}
+                onClick={() => router.push('/dashboard')}
                 className="hidden sm:inline-flex"
               >
-                <ArrowLeft size={16} className="mr-1" /> {backLabel}
+                <ArrowLeft size={16} className="mr-1" /> Dashboard
               </Button>
             </div>
 

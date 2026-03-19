@@ -121,15 +121,19 @@ export function TeamsTab(): React.ReactNode {
     finally { setLoadingMembers(false); }
   }, [error]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- initial data fetch on mount */
   useEffect(() => {
     void fetchTeams();
     void fetchEmployees();
   }, [fetchTeams, fetchEmployees]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
+  /* eslint-disable react-hooks/set-state-in-effect -- load members when modal opens */
   useEffect(() => {
     if (membersTeam) void fetchMembers(membersTeam.id);
     else setMembers([]);
   }, [membersTeam, fetchMembers]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   /* â”€â”€ CRUD handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 

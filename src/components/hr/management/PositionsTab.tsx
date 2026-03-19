@@ -27,62 +27,6 @@ interface PosForm {
 
 const EMPTY: PosForm = { title: '', departmentId: '', description: '' };
 
-interface FormModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  onSave: () => Promise<void>;
-  form: PosForm;
-  setForm: React.Dispatch<React.SetStateAction<PosForm>>;
-  departments: Department[];
-  saving: boolean;
-}
-
-function PositionFormModal({ isOpen, onClose, title, onSave, form, setForm, departments, saving }: FormModalProps): React.ReactNode {
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
-      <div className="p-6 space-y-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Position Title <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-              value={form.title}
-              onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department <span className="text-red-500">*</span></label>
-            <select
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none"
-              value={form.departmentId}
-              onChange={e => setForm(p => ({ ...p, departmentId: e.target.value }))}
-            >
-              <option value="">Select department</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Description</label>
-            <textarea
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 min-h-20 resize-none"
-              value={form.description}
-              onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => void onSave()} disabled={saving}>
-            {saving && <Loader2 size={14} className="animate-spin" />} Save Position
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 export function PositionsTab(): React.ReactNode {
   const { success, error } = useToast();
   const [positions, setPositions] = useState<Position[]>([]);
@@ -201,6 +145,49 @@ export function PositionsTab(): React.ReactNode {
     }
   };
 
+  const FormModal = ({ isOpen, onClose, title, onSave }: { isOpen: boolean; onClose: () => void; title: string; onSave: () => Promise<void> }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
+      <div className="p-6 space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Position Title <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+              value={form.title}
+              onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Department <span className="text-red-500">*</span></label>
+            <select
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none"
+              value={form.departmentId}
+              onChange={e => setForm(p => ({ ...p, departmentId: e.target.value }))}
+            >
+              <option value="">Select department</option>
+              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Description</label>
+            <textarea
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 min-h-20 resize-none"
+              value={form.description}
+              onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => void onSave()} disabled={saving}>
+            {saving && <Loader2 size={14} className="animate-spin" />} Save Position
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+
   return (
     <>
       <div className="flex justify-end">
@@ -261,8 +248,8 @@ export function PositionsTab(): React.ReactNode {
         </Card>
       )}
 
-      <PositionFormModal isOpen={isAddOpen} onClose={closeAdd} title="Add Position" onSave={handleAdd} form={form} setForm={setForm} departments={departments} saving={saving} />
-      <PositionFormModal isOpen={isEditOpen} onClose={closeEdit} title="Edit Position" onSave={handleEdit} form={form} setForm={setForm} departments={departments} saving={saving} />
+      <FormModal isOpen={isAddOpen} onClose={closeAdd} title="Add Position" onSave={handleAdd} />
+      <FormModal isOpen={isEditOpen} onClose={closeEdit} title="Edit Position" onSave={handleEdit} />
     </>
   );
 }

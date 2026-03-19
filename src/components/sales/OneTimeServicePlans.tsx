@@ -7,75 +7,66 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
-import { useToast } from '@/context/ToastContext';
 import {
   Trash2,
   Plus,
   Search,
+  Upload,
   ChevronLeft,
   ChevronRight,
   FileText,
-  Pencil,
+  Filter,
   LayoutGrid,
   List,
 } from 'lucide-react';
-
-interface ServiceOneTimeItem {
-  id: number;
-  name: string;
-  description: string | null;
-  serviceRate: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
-  governmentOffices: { id: number; code: string; name: string }[];
-  cities: { id: number; name: string }[];
-  inclusions: { id: number; name: string }[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-const INITIAL_NEW_SERVICE = { name: '', description: '', serviceRate: '', status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' };
+import type { ServiceItem } from '@/lib/types';
+import { MOCK_SERVICES, GOVERNMENT_AGENCIES, TEAM_OPTIONS } from '@/lib/service-data';
 
 export function OneTimeServicePlans(): React.ReactNode {
-  const { success, error } = useToast();
-  const [services, setServices] = useState<ServiceOneTimeItem[]>([]);
+  const [services, setServices] = useState<ServiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [servicesPerPage, setServicesPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Filters
+  const [filterTeam, setFilterTeam] = useState('All');
+  const [filterAgency, setFilterAgency] = useState('All');
+
   // Add Service Modal
   const [isAddServiceModalOpen, setIsAddServiceModalOpen] = useState(false);
-  const [newService, setNewService] = useState(INITIAL_NEW_SERVICE);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Edit Service Modal
-  const [editTarget, setEditTarget] = useState<ServiceOneTimeItem | null>(null);
-  const [editForm, setEditForm] = useState(INITIAL_NEW_SERVICE);
-  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [newService, setNewService] = useState({
+    name: '',
+    teamInCharge: '',
+    government: '',
+    rate: '',
+  });
 
   // Delete Confirmation Modal
-  const [deleteTarget, setDeleteTarget] = useState<ServiceOneTimeItem | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null);
 
   // View mode
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   useEffect(() => {
-    fetch('/api/sales/service-one-time')
-      .then((res) => res.json())
-      .then((data: { data?: ServiceOneTimeItem[] }) => {
-        setServices(data.data ?? []);
-        setIsLoading(false);
-      })
-      .catch(() => setIsLoading(false));
+    const timer = setTimeout(() => {
+      setServices([...MOCK_SERVICES]);
+      setIsLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
   }, []);
 
   // Filtering & Pagination
   const filteredServices = useMemo(() => {
-    return services.filter((s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [services, searchTerm]);
+    return services.filter((s) => {
+      const matchesSearch =
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.government.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesTeam = filterTeam === 'All' || s.teamInCharge === filterTeam;
+      const matchesAgency = filterAgency === 'All' || s.government === filterAgency;
+      return matchesSearch && matchesTeam && matchesAgency;
+    });
+  }, [services, searchTerm, filterTeam, filterAgency]);
 
   const totalPages = Math.ceil(filteredServices.length / servicesPerPage);
   const startIndex = (currentPage - 1) * servicesPerPage;
@@ -87,108 +78,46 @@ export function OneTimeServicePlans(): React.ReactNode {
     setCurrentPage(1);
   };
 
-  // Reset page on search change
-  const [prevSearch, setPrevSearch] = useState(searchTerm);
-  if (prevSearch !== searchTerm) {
-    setPrevSearch(searchTerm);
+  // Reset page when filters change ("adjust state during render" pattern)
+  const [prevFilters, setPrevFilters] = useState({ searchTerm, filterTeam, filterAgency });
+  if (prevFilters.searchTerm !== searchTerm || prevFilters.filterTeam !== filterTeam || prevFilters.filterAgency !== filterAgency) {
+    setPrevFilters({ searchTerm, filterTeam, filterAgency });
     setCurrentPage(1);
   }
 
-  const handleAddService = async () => {
-    if (!newService.name || !newService.serviceRate) return;
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/sales/service-one-time', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newService.name.trim(),
-          description: newService.description.trim() || undefined,
-          serviceRate: parseFloat(newService.serviceRate),
-          status: newService.status,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error('Failed to add service', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      setServices((prev) => [data.data, ...prev]);
-      setIsAddServiceModalOpen(false);
-      setNewService(INITIAL_NEW_SERVICE);
-      success('Service added', `"${data.data.name}" was added successfully.`);
-    } catch {
-      error('Failed to add service', 'An unexpected error occurred.');
-    } finally {
-      setIsSubmitting(false);
+  const handleBulkImport = () => {
+    setServices([...MOCK_SERVICES]);
+  };
+
+  const handleAddService = () => {
+    if (!newService.name || !newService.teamInCharge || !newService.government || !newService.rate) {
+      return;
     }
+
+    const created: ServiceItem = {
+      id: `svc-custom-${Date.now()}`,
+      name: newService.name,
+      teamInCharge: newService.teamInCharge,
+      government: newService.government,
+      rate: parseFloat(newService.rate),
+    };
+
+    setServices((prev) => [...prev, created]);
+    setIsAddServiceModalOpen(false);
+    setNewService({ name: '', teamInCharge: '', government: '', rate: '' });
   };
 
-  const openEdit = (svc: ServiceOneTimeItem) => {
-    setEditTarget(svc);
-    setEditForm({
-      name: svc.name,
-      description: svc.description ?? '',
-      serviceRate: String(parseFloat(svc.serviceRate)),
-      status: svc.status,
-    });
-  };
-
-  const handleUpdateService = async () => {
-    if (!editTarget || !editForm.name || !editForm.serviceRate) return;
-    setIsEditSubmitting(true);
-    try {
-      const res = await fetch(`/api/sales/service-one-time/${editTarget.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editForm.name.trim(),
-          description: editForm.description.trim() || null,
-          serviceRate: parseFloat(editForm.serviceRate),
-          status: editForm.status,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error('Failed to update service', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      setServices((prev) => prev.map((s) => (s.id === editTarget.id ? data.data : s)));
-      setEditTarget(null);
-      success('Service updated', `"${data.data.name}" was updated successfully.`);
-    } catch {
-      error('Failed to update service', 'An unexpected error occurred.');
-    } finally {
-      setIsEditSubmitting(false);
-    }
-  };
-
-  const handleDeleteService = async () => {
+  const handleDeleteService = () => {
     if (!deleteTarget) return;
-    setIsDeleting(true);
-    try {
-      const res = await fetch(`/api/sales/service-one-time/${deleteTarget.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        error('Failed to delete service', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      setServices((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-      setDeleteTarget(null);
-      success('Service deleted', `"${deleteTarget.name}" was removed successfully.`);
-    } catch {
-      error('Failed to delete service', 'An error occurred.');
-    } finally {
-      setIsDeleting(false);
-    }
+    setServices((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+    setDeleteTarget(null);
   };
 
   const stats = useMemo(() => {
-    const active = services.filter((s) => s.status === 'ACTIVE').length;
-    const avgRate = services.length > 0
-      ? services.reduce((sum, s) => sum + parseFloat(s.serviceRate), 0) / services.length
-      : 0;
-    return { total: services.length, active, avgRate: Math.round(avgRate).toLocaleString() };
+    const teams = new Set(services.map((s) => s.teamInCharge));
+    const agencies = new Set(services.map((s) => s.government));
+    const avgRate = services.length > 0 ? services.reduce((sum, s) => sum + s.rate, 0) / services.length : 0;
+    return { total: services.length, teams: teams.size, agencies: agencies.size, avgRate };
   }, [services]);
 
   if (isLoading) {
@@ -226,12 +155,12 @@ export function OneTimeServicePlans(): React.ReactNode {
             <p className="text-[10px] text-slate-400 font-bold uppercase">Services</p>
           </div>
           <div className="text-center px-4 py-2 bg-white border border-slate-200 rounded-xl">
-            <p className="text-lg font-black text-slate-900">{stats.active}</p>
-            <p className="text-[10px] text-slate-400 font-bold uppercase">Active</p>
+            <p className="text-lg font-black text-slate-900">{stats.teams}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase">Teams</p>
           </div>
           <div className="text-center px-4 py-2 bg-white border border-slate-200 rounded-xl">
-            <p className="text-lg font-black text-slate-900">₱{stats.avgRate}</p>
-            <p className="text-[10px] text-slate-400 font-bold uppercase">Avg Rate</p>
+            <p className="text-lg font-black text-slate-900">{stats.agencies}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase">Agencies</p>
           </div>
         </div>
       </div>
@@ -246,10 +175,19 @@ export function OneTimeServicePlans(): React.ReactNode {
             </h3>
             <p className="text-xs text-slate-500 mt-1">
               {filteredServices.length} of {services.length} services
-              {searchTerm ? ' (filtered)' : ''}
+              {searchTerm || filterTeam !== 'All' || filterAgency !== 'All' ? ' (filtered)' : ''}
             </p>
           </div>
           <div className="flex gap-2">
+            {services.length === 0 && (
+              <Button
+                onClick={handleBulkImport}
+                className="bg-green-600 hover:bg-green-700 text-white text-[11px]"
+              >
+                <Upload size={14} className="mr-1" />
+                Import All (64)
+              </Button>
+            )}
             <Button
               onClick={() => setIsAddServiceModalOpen(true)}
               className="bg-blue-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-blue-700 shadow-sm"
@@ -267,10 +205,35 @@ export function OneTimeServicePlans(): React.ReactNode {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <Input
                 className="pl-10 h-10 bg-slate-50 border-slate-200 rounded-md text-sm w-full"
-                placeholder="Search services..."
+                placeholder="Search services or agencies..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
+            </div>
+            <div className="flex gap-2 items-center">
+              <Filter size={14} className="text-slate-400" />
+              <select
+                className="h-10 bg-slate-50 border border-slate-200 rounded-md px-3 text-sm font-medium text-slate-800"
+                value={filterTeam}
+                onChange={(e) => setFilterTeam(e.target.value)}
+              >
+                {TEAM_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t === 'All' ? 'All Teams' : t}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-10 bg-slate-50 border border-slate-200 rounded-md px-3 text-sm font-medium text-slate-800"
+                value={filterAgency}
+                onChange={(e) => setFilterAgency(e.target.value)}
+              >
+                {GOVERNMENT_AGENCIES.map((a) => (
+                  <option key={a} value={a}>
+                    {a === 'All' ? 'All Agencies' : a}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -314,10 +277,10 @@ export function OneTimeServicePlans(): React.ReactNode {
                 <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <th className="p-4 w-12">#</th>
                   <th className="p-4">Service Name</th>
-                  <th className="p-4">Status</th>
+                  <th className="p-4">Team In Charge</th>
+                  <th className="p-4">Government</th>
                   <th className="p-4 text-right">Rate (PHP)</th>
-                  <th className="p-4">Gov Offices</th>
-                  <th className="p-4 text-center w-24">Actions</th>
+                  <th className="p-4 text-center w-20">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -329,54 +292,47 @@ export function OneTimeServicePlans(): React.ReactNode {
                       </td>
                       <td className="p-4">
                         <span className="font-bold text-slate-900 text-sm">{service.name}</span>
-                        {service.description && (
-                          <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{service.description}</p>
-                        )}
                       </td>
                       <td className="p-4">
                         <Badge
-                          variant={service.status === 'ACTIVE' ? 'success' : service.status === 'INACTIVE' ? 'warning' : 'neutral'}
+                          variant={
+                            service.teamInCharge === 'Compliance'
+                              ? 'warning'
+                              : service.teamInCharge === 'Accounting'
+                              ? 'info'
+                              : 'neutral'
+                          }
                           className="text-xs"
                         >
-                          {service.status}
+                          {service.teamInCharge}
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant="info" className="text-xs">
+                          {service.government}
                         </Badge>
                       </td>
                       <td className="p-4 text-right">
                         <span className="font-black text-slate-800 text-sm">
-                          ₱{parseFloat(service.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <span className="text-xs text-slate-500">
-                          {service.governmentOffices.length > 0
-                            ? service.governmentOffices.map((g) => g.code).join(', ')
-                            : <span className="text-slate-300">—</span>}
+                          ₱{service.rate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => openEdit(service)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-100"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(service)}
-                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-md transition-colors border border-transparent hover:border-rose-100"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => setDeleteTarget(service)}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-md transition-colors border border-transparent hover:border-rose-100 opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td colSpan={6} className="p-12 text-center text-slate-400 italic">
-                      {searchTerm
-                        ? 'No services found matching your search.'
-                        : 'No services available. Add a service to get started.'}
+                      {searchTerm || filterTeam !== 'All' || filterAgency !== 'All'
+                        ? 'No services found matching your filters.'
+                        : 'No services available. Import or add services to get started.'}
                     </td>
                   </tr>
                 )}
@@ -396,36 +352,34 @@ export function OneTimeServicePlans(): React.ReactNode {
                     className="p-4 bg-white border border-slate-200 rounded-xl hover:shadow-md transition-all group"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <Badge
-                        variant={service.status === 'ACTIVE' ? 'success' : service.status === 'INACTIVE' ? 'warning' : 'neutral'}
-                        className="text-[9px]"
-                      >
-                        {service.status}
+                      <Badge variant="info" className="text-[9px]">
+                        {service.government}
                       </Badge>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEdit(service)}
-                          className="p-1.5 text-blue-400 hover:bg-blue-50 rounded-md transition-colors"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(service)}
-                          className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-md transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => setDeleteTarget(service)}
+                        className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                     <h4 className="text-sm font-bold text-slate-900 mb-2 line-clamp-2 leading-snug">
                       {service.name}
                     </h4>
-                    {service.governmentOffices.length > 0 && (
-                      <p className="text-[10px] text-slate-400 mb-1">{service.governmentOffices.map((g) => g.code).join(', ')}</p>
-                    )}
+                    <Badge
+                      variant={
+                        service.teamInCharge === 'Compliance'
+                          ? 'warning'
+                          : service.teamInCharge === 'Accounting'
+                          ? 'info'
+                          : 'neutral'
+                      }
+                      className="text-[9px] mb-3"
+                    >
+                      {service.teamInCharge}
+                    </Badge>
                     <div className="pt-3 border-t border-slate-100">
                       <span className="text-lg font-black text-slate-900">
-                        ₱{parseFloat(service.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        ₱{service.rate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
@@ -433,9 +387,9 @@ export function OneTimeServicePlans(): React.ReactNode {
               </div>
             ) : (
               <div className="p-12 text-center text-slate-400 italic">
-                {searchTerm
-                  ? 'No services found matching your search.'
-                  : 'No services available. Add a service to get started.'}
+                {searchTerm || filterTeam !== 'All' || filterAgency !== 'All'
+                  ? 'No services found matching your filters.'
+                  : 'No services available. Import or add services to get started.'}
               </div>
             )}
           </div>
@@ -513,124 +467,69 @@ export function OneTimeServicePlans(): React.ReactNode {
               className="bg-white border-slate-200"
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Description</label>
-            <Input
-              value={newService.description}
-              onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-              placeholder="Brief description"
-              className="bg-white border-slate-200"
-            />
-          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Rate (PHP) *</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={newService.serviceRate}
-                onChange={(e) => setNewService({ ...newService, serviceRate: e.target.value })}
-                placeholder="0.00"
-                className="bg-white border-slate-200"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Status</label>
+              <label className="text-xs font-bold text-slate-700">Team In Charge *</label>
               <select
                 className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={newService.status}
-                onChange={(e) => setNewService({ ...newService, status: e.target.value as typeof newService.status })}
+                value={newService.teamInCharge}
+                onChange={(e) => setNewService({ ...newService, teamInCharge: e.target.value })}
               >
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="ARCHIVED">Archived</option>
+                <option value="">Select team</option>
+                <option value="Liaison">Liaison</option>
+                <option value="Compliance">Compliance</option>
+                <option value="Accounting">Accounting</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Government Agency *</label>
+              <select
+                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={newService.government}
+                onChange={(e) => setNewService({ ...newService, government: e.target.value })}
+              >
+                <option value="">Select agency</option>
+                {GOVERNMENT_AGENCIES.filter((a) => a !== 'All').map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700">Rate (PHP) *</label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={newService.rate}
+              onChange={(e) => setNewService({ ...newService, rate: e.target.value })}
+              placeholder="0.00"
+              className="bg-white border-slate-200"
+            />
+          </div>
+
           <div className="flex gap-3 pt-4 border-t border-slate-200">
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => { setIsAddServiceModalOpen(false); setNewService(INITIAL_NEW_SERVICE); }}
-              disabled={isSubmitting}
+              onClick={() => {
+                setIsAddServiceModalOpen(false);
+                setNewService({ name: '', teamInCharge: '', government: '', rate: '' });
+              }}
             >
               Cancel
             </Button>
             <Button
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={handleAddService}
-              disabled={!newService.name || !newService.serviceRate || isSubmitting}
+              disabled={!newService.name || !newService.teamInCharge || !newService.government || !newService.rate}
             >
               <Plus size={14} className="mr-1" />
-              {isSubmitting ? 'Saving...' : 'Add Service'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Edit Service Modal */}
-      <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Service">
-        <div className="space-y-5 p-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Service Name *</label>
-            <Input
-              value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              placeholder="Enter service name"
-              className="bg-white border-slate-200"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">Description</label>
-            <Input
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-              placeholder="Brief description"
-              className="bg-white border-slate-200"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Rate (PHP) *</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={editForm.serviceRate}
-                onChange={(e) => setEditForm({ ...editForm, serviceRate: e.target.value })}
-                placeholder="0.00"
-                className="bg-white border-slate-200"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Status</label>
-              <select
-                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={editForm.status}
-                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as typeof editForm.status })}
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-slate-200">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setEditTarget(null)}
-              disabled={isEditSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleUpdateService}
-              disabled={!editForm.name || !editForm.serviceRate || isEditSubmitting}
-            >
-              {isEditSubmitting ? 'Saving...' : 'Save Changes'}
+              Add Service
             </Button>
           </div>
         </div>
@@ -645,16 +544,15 @@ export function OneTimeServicePlans(): React.ReactNode {
             This action cannot be undone.
           </p>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+            <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
             <Button
               className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
               onClick={handleDeleteService}
-              disabled={isDeleting}
             >
               <Trash2 size={14} className="mr-1" />
-              {isDeleting ? 'Deleting...' : 'Delete'}
+              Delete
             </Button>
           </div>
         </div>

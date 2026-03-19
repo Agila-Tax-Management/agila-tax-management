@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, List, Wallet,
   ShoppingBag, BarChart3, ChevronDown, ChevronUp,
-  CalendarClock, FileText, TicketPercent, Settings
+  CalendarClock, FileText, TicketPercent
 } from 'lucide-react';
 
 interface NavItem {
@@ -105,17 +105,15 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
               );
             }
 
-            // Dropdown item (Services, etc.)
+            // Dropdown item (Services)
             if (item.isDropdown && item.children) {
               const Icon = item.icon!;
               const isChildActive = item.children.some(c => pathname === c.href);
-              const isOpen = item.id === 'services' ? servicesOpen : false;
-              const toggleOpen = item.id === 'services' ? setServicesOpen : null;
 
               return (
                 <div key={item.id}>
                   <button
-                    onClick={() => toggleOpen && toggleOpen(prev => !prev)}
+                    onClick={() => setServicesOpen(prev => !prev)}
                     className={`
                       w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
                       ${isChildActive
@@ -126,9 +124,9 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
                   >
                     <Icon size={18} />
                     <span className="text-sm flex-1 text-left">{item.label}</span>
-                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {servicesOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
-                  {isOpen && (
+                  {servicesOpen && (
                     <div className="ml-7 mt-1 space-y-1">
                       {item.children.map(child => {
                         const ChildIcon = child.icon;
@@ -177,23 +175,6 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
             );
           })}
         </nav>
-
-        {/* Settings Footer */}
-        <div className="border-t border-slate-200 p-4 shrink-0">
-          <button
-            onClick={() => handleNavigation('/portal/sales/settings')}
-            className={`
-              w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-              ${pathname === '/portal/sales/settings'
-                ? 'bg-blue-50 text-blue-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:bg-slate-50 font-medium'
-              }
-            `}
-          >
-            <Settings size={18} />
-            <span className="text-sm">Settings</span>
-          </button>
-        </div>
       </aside>
     </>
   );
