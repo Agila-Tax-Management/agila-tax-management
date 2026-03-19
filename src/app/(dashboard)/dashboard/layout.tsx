@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
-  Settings, LogOut, ChevronLeft, ChevronRight, X, Menu, User,
+  Settings, LogOut, ChevronLeft, ChevronRight, X, Menu,
   ChevronDown, ChevronUp, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
   Sun, Moon
 } from 'lucide-react';
@@ -16,6 +16,38 @@ import { AuthProvider } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { authClient } from '@/lib/auth-client';
 
+
+function HeaderAvatar({ onClick }: { onClick: () => void }) {
+  const { data: sessionData } = authClient.useSession();
+  const name = sessionData?.user?.name ?? '';
+  const image = (sessionData?.user as { image?: string | null } | undefined)?.image ?? null;
+  const initials = name
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || '?';
+
+  return (
+    <button
+      onClick={onClick}
+      title="Profile"
+      className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-blue-600 text-white text-sm font-semibold shrink-0 hover:ring-2 hover:ring-blue-400 transition focus:outline-none focus:ring-2 focus:ring-blue-400"
+    >
+      {image ? (
+        <Image
+          src={image}
+          alt={name || 'Profile'}
+          width={36}
+          height={36}
+          className="object-cover w-full h-full"
+        />
+      ) : (
+        initials
+      )}
+    </button>
+  );
+}
 
 const NAV_ITEMS = [
   { href: '/dashboard',                   label: 'Dashboard',   icon: LayoutDashboard },
@@ -74,12 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </Button>
               <NotificationDropdown />
-              <Button
-                variant="ghost"
-                onClick={() => router.push('/dashboard/profile')}
-              >
-                <User size={18} />
-              </Button>
+              <HeaderAvatar onClick={() => router.push('/dashboard/profile')} />
             </div>
           </header>
 
