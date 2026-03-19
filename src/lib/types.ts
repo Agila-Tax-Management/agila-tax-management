@@ -149,6 +149,9 @@ export interface AOTaskSubtask {
   id: string;
   title: string;
   completed: boolean;
+  assigneeId?: string;
+  dueDate?: string;
+  notes?: string;
   createdAt: string;
 }
 
