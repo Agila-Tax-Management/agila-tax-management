@@ -65,3 +65,53 @@ model ClientVerification {
   @@index([identifier])
   @@map("client_verification")
 }
+
+model ClientUser {
+  id String @id @default(cuid())
+
+  name          String?
+  email         String           @unique
+  emailVerified Boolean          @default(false)
+  image         String?
+  active        Boolean          @default(true)
+  status        ClientUserStatus @default(ACTIVE)
+
+  // Legacy single-client FK kept for BetterAuth additionalFields compatibility
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  assignments ClientUserAssignment[]
+  employee    Employee?
+  sessions    ClientSession[]
+  accounts    ClientAccount[]
+
+  overtimesApproved    OvertimeRequest[] @relation("ClientOvertimeApprover")
+  leavesApproved       LeaveRequest[]    @relation("ClientLeaveApprover")
+  payslipsApproved     Payslip[]         @relation("ClientPayslipApprover")
+  payslipsAcknowledged Payslip[]         @relation("ClientPayslipAcknowledger")
+  cashAdvancesApproved  CashAdvance[] @relation("ClientCashAdvanceApprover")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("client_user")
+}
+
+// ─── Client ↔ ClientUser Join Table ──────────────────────────────
+model ClientUserAssignment {
+  id Int @id @default(autoincrement())
+
+  clientUserId String
+  clientUser   ClientUser @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  role ClientPortalRole @default(EMPLOYEE)
+
+  createdAt DateTime @default(now())
+
+  @@unique([clientUserId, clientId])
+  @@map("client_user_assignment")
+}
+
