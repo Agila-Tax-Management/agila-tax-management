@@ -1,0 +1,200 @@
+enum OvertimeStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+enum LeaveRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+enum CoaActionType {
+    TIME_IN
+    LUNCH_START
+    LUNCH_END
+    TIME_OUT
+}
+
+enum CoaRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+// ─── Leave Type (Company Policies) ────────────────────────────────
+model LeaveType {
+    id          Int      @id @default(autoincrement())
+    
+    clientId    Int
+    client      Client   @relation(fields: [clientId], references: [id])
+    
+    name        String   
+    isPaid      Boolean  @default(true) 
+    defaultDays Decimal  @db.Decimal(5, 2) @default(0.00)
+    
+    carryOverLimit Decimal @db.Decimal(5, 2) @default(0.00)
+    resetMonth  Int?     
+    resetDay    Int?     
+
+    credits     EmployeeLeaveCredit[]
+    requests    LeaveRequest[]
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    @@unique([clientId, name])
+    @@index([clientId])
+    @@map("leave_type")
+}
+
+// ─── Employee Leave Credit (The Ledger) ───────────────────────────
+model EmployeeLeaveCredit {
+    id          Int      @id @default(autoincrement())
+    
+    employeeId  Int
+    employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+    
+    leaveTypeId Int
+    leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+    
+    allocated   Decimal  @db.Decimal(5, 2) @default(0.00) 
+    used        Decimal  @db.Decimal(5, 2) @default(0.00) 
+
+    validFrom   DateTime @db.Date 
+    expiresAt   DateTime @db.Date 
+    isExpired   Boolean  @default(false)
+
+    remarks     String?
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    @@index([employeeId])
+    @@index([expiresAt]) 
+    @@map("employee_leave_credit")
+}
+
+// ─── Leave Request ────────────────────────────────────────────────
+model LeaveRequest {
+    id              String   @id @default(cuid())
+    
+    employeeId      Int
+    employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+    
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    // Links relationally to dynamic company policies (e.g., Vacation, Sick)
+    leaveTypeId     Int
+    leaveType       LeaveType @relation(fields: [leaveTypeId], references: [id])
+    
+    startDate       DateTime @db.Date 
+    endDate         DateTime @db.Date 
+    
+    // Fractional/Hourly Leave Support
+    startTime       DateTime? @db.Time 
+    endTime         DateTime? @db.Time 
+
+    // E.g., 1.00 for a whole day, 0.50 for half, 0.25 for 2 hours
+    creditUsed      Decimal  @db.Decimal(5, 2) 
+
+    reason          String   @db.Text
+    status          LeaveRequestStatus @default(PENDING)
+    attachmentUrl   String?
+
+    // ─── Dual Auth Approvers ───
+    approvedById           String?
+    approvedBy             User?       @relation("LeaveApprover", fields: [approvedById], references: [id])
+    
+    approvedByClientUserId String?
+    approvedByClientUser   ClientUser? @relation("ClientLeaveApprover", fields: [approvedByClientUserId], references: [id])
+    
+    approvedAt             DateTime?
+    rejectionReason        String?     @db.Text
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([employeeId])
+    @@index([clientId])
+    @@map("leave_request")
+}
+
+// ─── Overtime Request ─────────────────────────────────────────────
+model OvertimeRequest {
+    id              String   @id @default(cuid())
+    
+    employeeId      Int
+    employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+    
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    date            DateTime @db.Date
+    type            String   // e.g., "Regular Day OT", "Rest Day OT"
+    
+    timeFrom        DateTime @db.Time
+    timeTo          DateTime @db.Time
+    hours           Decimal  @db.Decimal(5, 2)
+    
+    reason          String   @db.Text
+    status          OvertimeStatus @default(PENDING)
+
+    // ─── Dual Auth Approvers ───
+    approvedById           String?
+    approvedBy             User?       @relation("OvertimeApprover", fields: [approvedById], references: [id])
+    
+    approvedByClientUserId String?
+    approvedByClientUser   ClientUser? @relation("ClientOvertimeApprover", fields: [approvedByClientUserId], references: [id])
+    
+    approvedAt             DateTime?
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([employeeId])
+    @@index([clientId])
+    @@map("overtime_request")
+}
+
+// ─── Certificate of Attendance (COA) / Missed Punch Request ───────
+model CoaRequest {
+    id              String   @id @default(cuid())
+    
+    employeeId      Int
+    employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+    
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    dateAffected    DateTime @db.Date
+    actionType      CoaActionType
+    
+    // The actual time they are requesting to be logged (e.g., 08:00 AM)
+    timeValue       DateTime @db.Time 
+    
+    reason          String   @db.Text
+    status          CoaRequestStatus @default(PENDING)
+
+    // ─── Dual Auth Approvers ───
+    approvedById           String?
+    approvedBy             User?       @relation("CoaApprover", fields: [approvedById], references: [id])
+    
+    approvedByClientUserId String?
+    approvedByClientUser   ClientUser? @relation("ClientCoaApprover", fields: [approvedByClientUserId], references: [id])
+    
+    approvedAt             DateTime?
+    rejectionReason        String?     @db.Text
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([employeeId])
+    @@index([clientId])
+    @@map("coa_request")
+}

@@ -106,9 +106,11 @@ model Employee {
     // ─── Timekeeping & Payroll Relations (From our recent updates) ───
     scheduleOverrides ScheduleOverride[]
     timesheets        Timesheet[]
+    // ─── HR Request Ledgers ───
     overtimeRequests  OvertimeRequest[]
-    leaveCredits      EmployeeLeaveCredit[]
     leaveRequests     LeaveRequest[]
+    coaRequests       CoaRequest[]
+    leaveCredits      EmployeeLeaveCredit[]
     payslips          Payslip[]
     cashAdvances      CashAdvance[]
     governmentLoans          GovernmentLoan[]

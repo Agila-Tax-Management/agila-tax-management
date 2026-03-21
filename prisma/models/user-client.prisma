@@ -84,9 +84,11 @@ model ClientUser {
   employee    Employee?
   sessions    ClientSession[]
   accounts    ClientAccount[]
-
-  overtimesApproved    OvertimeRequest[] @relation("ClientOvertimeApprover")
-  leavesApproved       LeaveRequest[]    @relation("ClientLeaveApprover")
+  
+  approvedOvertimes OvertimeRequest[] @relation("ClientOvertimeApprover")
+  approvedLeaves    LeaveRequest[]    @relation("ClientLeaveApprover")
+  approvedCoas      CoaRequest[]      @relation("ClientCoaApprover")
+  
   payslipsApproved     Payslip[]         @relation("ClientPayslipApprover")
   payslipsAcknowledged Payslip[]         @relation("ClientPayslipAcknowledger")
   cashAdvancesApproved  CashAdvance[] @relation("ClientCashAdvanceApprover")

@@ -9,13 +9,6 @@ enum AttendanceStatus {
     SPECIAL_HOLIDAY
 }
 
-enum OvertimeStatus {
-    PENDING
-    APPROVED
-    REJECTED
-    CANCELLED
-}
-
 enum PayrollPeriodStatus {
     DRAFT
     PROCESSING
@@ -36,13 +29,6 @@ enum HolidayType {
     SPECIAL_NON_WORKING     
     SPECIAL_WORKING         
     LOCAL_HOLIDAY           
-}
-
-enum LeaveRequestStatus {
-    PENDING
-    APPROVED
-    REJECTED
-    CANCELLED
 }
 
 enum CashAdvanceStatus {
@@ -141,43 +127,6 @@ model Timesheet {
     @@unique([employeeId, date]) 
     @@index([clientId])
     @@map("timesheet")
-}
-
-// ─── Overtime Request (Dual-Auth Approvals) ───────────────────────
-model OvertimeRequest {
-    id              String   @id @default(cuid())
-    
-    employeeId      Int
-    employee        Employee @relation(fields: [employeeId], references: [id])
-    
-    clientId        Int
-    client          Client   @relation(fields: [clientId], references: [id])
-
-    date            DateTime @db.Date
-    type            String   
-    
-    timeFrom        DateTime
-    timeTo          DateTime
-    hours           Decimal  @db.Decimal(5, 2)
-    
-    reason          String   @db.Text
-    status          OvertimeStatus @default(PENDING)
-
-    // ─── Dual Auth Approvers ───
-    approvedById           String?
-    approvedBy             User?       @relation("OvertimeApprover", fields: [approvedById], references: [id])
-    
-    approvedByClientUserId String?
-    approvedByClientUser   ClientUser? @relation("ClientOvertimeApprover", fields: [approvedByClientUserId], references: [id])
-    
-    approvedAt             DateTime?
-
-    createdAt       DateTime @default(now())
-    updatedAt       DateTime @updatedAt
-
-    @@index([employeeId])
-    @@index([clientId])
-    @@map("overtime_request")
 }
 
 // ─── Payroll Period ───────────────────────────────────────────────

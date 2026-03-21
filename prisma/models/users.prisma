@@ -33,9 +33,11 @@ model User {
   invoiceHistoryLogs        InvoiceHistory[]
   subscriptionHistoryLogs   SubscriptionHistory[]
   cashAdvancesApproved  CashAdvance[] @relation("CashAdvanceApprover")
-
-  approvedOvertimes    OvertimeRequest[] @relation("OvertimeApprover")
-  approvedLeaves       LeaveRequest[]    @relation("LeaveApprover")
+  
+  approvedOvertimes OvertimeRequest[] @relation("OvertimeApprover")
+  approvedLeaves    LeaveRequest[]    @relation("LeaveApprover")
+  approvedCoas      CoaRequest[]      @relation("CoaApprover")
+  
   payslipsPrepared     Payslip[]         @relation("PayslipPreparer")
   payslipsApproved     Payslip[]         @relation("PayslipApprover")
   acknowledgedPayslips Payslip[]         @relation("PayslipAcknowledger")

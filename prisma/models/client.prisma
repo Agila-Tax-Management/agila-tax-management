@@ -81,7 +81,8 @@ model Client {
 
   holidays         Holiday[]
   timesheets       Timesheet[]
-  overtimeRequests OvertimeRequest[]
+  overtimeRequests  OvertimeRequest[]
+  coaRequests       CoaRequest[]
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
   payrollPeriods   PayrollPeriod[]
