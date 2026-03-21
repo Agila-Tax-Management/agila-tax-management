@@ -255,6 +255,7 @@ model Payslip {
     disbursedStatus DisbursedStatus @default(PENDING)
 
     cashAdvanceDeductions CashAdvanceDeduction[]
+    governmentLoanDeductions GovernmentLoanDeduction[]
 
     createdAt       DateTime @default(now())
     updatedAt       DateTime @updatedAt

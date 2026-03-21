@@ -1,0 +1,74 @@
+enum GovernmentProvider {
+    SSS
+    PAG_IBIG
+    PhilHealth
+    BIR
+}
+
+enum LoanStatus {
+    PENDING
+    ACTIVE
+    COMPLETED
+    CANCELLED
+}
+
+// ─── Government Loan (e.g., SSS Salary Loan) ──────────────────────
+model GovernmentLoan {
+    id                  String   @id @default(cuid())
+    
+    employeeId          Int
+    employee            Employee @relation(fields: [employeeId], references: [id])
+    
+    clientId            Int
+    client              Client   @relation(fields: [clientId], references: [id])
+
+    provider            GovernmentProvider // SSS or PAG_IBIG
+    loanType            String   // e.g., "Salary Loan", "Calamity Loan", "Multi-Purpose Loan"
+    
+    // ─── Financial Terms ───
+    principalAmount     Decimal  @db.Decimal(10, 2)
+    paymentTermsMonths  Int      // e.g., 24 months
+    
+    // Calculated amount to deduct per payroll cutoff
+    installmentAmount   Decimal  @db.Decimal(10, 2) 
+    remainingBalance    Decimal  @db.Decimal(10, 2)
+
+    status              LoanStatus @default(ACTIVE)
+
+    grantedDate         DateTime? @db.Date
+    deductionStartDate  DateTime? @db.Date
+
+    // The history of deductions applied to payslips
+    deductions          GovernmentLoanDeduction[]
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([employeeId])
+    @@index([clientId])
+    @@map("government_loan")
+}
+
+// ─── Government Loan Deduction (The Repayment Ledger) ─────────────
+model GovernmentLoanDeduction {
+    id                  String   @id @default(cuid())
+
+    loanId              String
+    loan                GovernmentLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+    // Links directly to the generated payslip snapshot
+    payslipId           String
+    payslip             Payslip     @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+    amountDeducted      Decimal  @db.Decimal(10, 2)
+    
+    // Usually matches the payslip date
+    dateDeducted        DateTime @db.Date
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([loanId])
+    @@index([payslipId])
+    @@map("government_loan_deduction")
+}

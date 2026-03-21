@@ -111,6 +111,7 @@ model Employee {
     leaveRequests     LeaveRequest[]
     payslips          Payslip[]
     cashAdvances      CashAdvance[]
+    governmentLoans          GovernmentLoan[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -148,15 +149,24 @@ model EmployeeEmployment {
     clientId Int
     client   Client @relation(fields: [clientId], references: [id])
 
+    // ─── Contact Info ───
+    workEmail String?
+    workPhone String?
+
+    // ─── Organizational Hierarchy ───
     departmentId Int?
     department   Department? @relation(fields: [departmentId], references: [id])
 
     positionId Int?
-    position   Position? @relation(fields: [positionId], references: [id])
+    position   Position?   @relation(fields: [positionId], references: [id])
 
     teamId Int?
     team   EmployeeTeam? @relation(fields: [teamId], references: [id])
 
+    reportingManagerId Int?
+    reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+
+    // ─── Job Status & Dates ───
     employmentType   EmploymentType?
     employmentStatus EmploymentStatus @default(ACTIVE)
     employeeLevelId  Int?
@@ -164,10 +174,10 @@ model EmployeeEmployment {
 
     hireDate           DateTime?
     regularizationDate DateTime?
-    endDate            DateTime?
+    endDate            DateTime? // Maps to inactive_date
 
-    reportingManagerId Int?
-    reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+    // Replaces past_role boolean. If true, this is a historical record.
+    isPastRole         Boolean @default(false) 
 
     contracts EmployeeContract[]
 

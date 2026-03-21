@@ -75,6 +75,7 @@ model Client {
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
   payrollPeriods   PayrollPeriod[]
+  governmentLoans  GovernmentLoan[]
 
   createdAt DateTime? @map("created_at")
 
