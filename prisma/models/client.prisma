@@ -50,6 +50,8 @@ model Client {
 
   timezone String? @default("Asia/Manila")
 
+  lead            Lead?
+
   clientUsers     ClientUser[]
   userAssignments ClientUserAssignment[]
 
@@ -62,6 +64,9 @@ model Client {
   workSchedules  WorkSchedule[]
   employeeLevels EmployeeLevel[]
   tasks          Task[]
+
+  subscriptions ClientSubscription[]
+  invoices      Invoice[]
 
   createdAt DateTime? @map("created_at")
 

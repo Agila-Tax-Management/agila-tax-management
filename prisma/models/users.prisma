@@ -26,6 +26,13 @@ model User {
   taskConversations      TaskConversation[]
   taskHistoryLogs        TaskHistory[]
 
+  leadComments          LeadComment[]
+  leadHistoryLogs       LeadHistory[]
+
+  paymentsRecorded          Payment[]
+  invoiceHistoryLogs        InvoiceHistory[]
+  subscriptionHistoryLogs   SubscriptionHistory[]
+
   @@unique([email])
   @@map("user")
 }

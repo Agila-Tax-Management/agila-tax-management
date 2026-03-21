@@ -1,0 +1,157 @@
+enum LeadChangeType {
+    CREATED
+    STATUS_CHANGED
+    DETAILS_UPDATED
+    SCHEDULE_UPDATED
+    
+    // Document Generation & Signing
+    INVOICE_GENERATED
+    CONTRACT_GENERATED
+    CONTRACT_SIGNED
+    TSA_GENERATED
+    TSA_SIGNED
+    JOB_ORDER_GENERATED
+    
+    // Account & Conversion
+    ACCOUNT_CREATED
+    CONVERTED
+}
+
+// ─── Lead Status (Dynamic CRM Workflow) ──────────────────────────
+model LeadStatus {
+    id          Int      @id @default(autoincrement())
+    name        String   // e.g., "Pending", "Contacted", "Onboarding", "Converted"
+    color       String?
+    
+    // Order of the workflow stages on the Kanban board
+    sequence    Int      @default(0) 
+
+    // Logic Flags
+    isDefault    Boolean  @default(false) // Leads automatically land here
+    isOnboarding Boolean  @default(false) // Stage where TSA/Job Orders are prepared
+    isConverted  Boolean  @default(false) // Terminal stage; triggers Client portal creation
+
+    leads       Lead[]
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@map("lead_status")
+}
+
+// ─── Lead (The Prospect) ─────────────────────────────────────────
+model Lead {
+    id              Int      @id @default(autoincrement())
+
+    // ─── Core Information ───
+    firstName       String
+    middleName      String?
+    lastName        String
+    contactNumber   String?
+    businessType    String   @default("Not Specified")
+    leadSource      String   @default("Facebook")
+
+    // ─── Social / Source Specifics ───
+    facebookSenderId String?
+    facebookUrl      String?
+    facebookName     String?
+
+    // ─── Dynamic Workflow ───
+    statusId        Int
+    status          LeadStatus @relation(fields: [statusId], references: [id])
+
+    // ─── Scheduling & Engagements ───
+    isCallRequest         Boolean   @default(false)
+    phoneCallSchedule     DateTime?
+
+    isOfficeVisit         Boolean   @default(false)
+    officeVisitSchedule   DateTime?
+
+    isClientVisit         Boolean   @default(false)
+    clientVisitSchedule   DateTime?
+    clientVisitLocation   String?
+
+    isVirtualMeeting      Boolean   @default(false)
+    virtualMeetingSchedule DateTime?
+
+    // ─── Onboarding & Conversion Pipeline ───
+    onboardingSchedule    DateTime?
+
+    // Pipeline Checklist Flags
+    isCreatedInvoice      Boolean   @default(false)
+    isCreatedContract     Boolean   @default(false)
+    isSignedTSA           Boolean   @default(false)
+    isCreatedJobOrder     Boolean   @default(false)
+    
+    // ─── NEW: Account Provisioning Flag ───
+    isAccountCreated      Boolean   @default(false)
+    
+    // Document URLs
+    signedContractUrl     String?
+    signedTsaUrl          String?   
+    signedJobOrderUrl     String?   
+
+    // Link to the newly created, inactive Client entity upon conversion
+    convertedClientId     Int?      @unique
+    convertedClient       Client?   @relation(fields: [convertedClientId], references: [id], onDelete: SetNull)
+
+    // ─── Services Availed / Interested In ───
+    servicePlans          ServicePlan[]
+    serviceOneTimePlans   ServiceOneTime[]
+
+    // ─── Timeline & Logs ───
+    comments              LeadComment[]
+    historyLogs           LeadHistory[]
+
+    invoices      Invoice[]
+
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
+
+    @@index([statusId])
+    @@map("lead")
+}
+
+// ─── Lead Comment (Internal CRM Notes) ───────────────────────────
+model LeadComment {
+    id          Int      @id @default(autoincrement())
+    
+    leadId      Int
+    lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+    // Strictly internal ERP users logging updates
+    authorId    String
+    author      User     @relation(fields: [authorId], references: [id])
+
+    comment     String   @db.Text
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@index([leadId])
+    @@map("lead_comment")
+}
+
+// ─── Lead History (CRM Timeline Ledger) ──────────────────────────
+model LeadHistory {
+    id          String   @id @default(cuid())
+
+    leadId      Int
+    lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+    // Strictly internal ERP users acting on leads
+    actorId     String
+    actor       User     @relation(fields: [actorId], references: [id])
+
+    changeType  LeadChangeType
+
+    // Text snapshots (e.g., oldValue: "Pending", newValue: "Contacted")
+    oldValue    String?  @db.Text
+    newValue    String?  @db.Text
+
+    createdAt   DateTime @default(now())
+
+    @@index([leadId])
+    @@index([leadId, createdAt(sort: Desc)]) 
+    @@map("lead_history")
+}
