@@ -264,13 +264,15 @@ model Department {
 
     name        String
     description String?
-
+    
     positions   Position[]
     employments EmployeeEmployment[]
 
-    taskTemplates        TaskTemplate[]       @relation("TaskTemplateDepartment")
-    taskTemplateItems    TaskTemplateItem[]   @relation("TemplateItemDepartment")
-    taskTemplateSubtasks TaskTemplateSubtask[] @relation("TemplateSubtaskDepartment")
+    // ─── NEW: Task & Workflow Relations ───
+    templateRoutes TaskTemplateRoute[]    @relation("DepartmentTemplateRoutes")
+    statuses       DepartmentTaskStatus[] @relation("DepartmentStatuses")
+    activeTasks    Task[]                 @relation("TaskCurrentDepartment")
+    subtasks       TaskSubtask[]          @relation("SubtaskDepartment")
 
     createdAt DateTime @default(now())
 

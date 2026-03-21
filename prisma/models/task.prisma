@@ -2,15 +2,6 @@
 
 // ─── Enums ────────────────────────────────────────────────────────
 
-enum TaskStatus {
-    TODO
-    IN_PROGRESS
-    IN_REVIEW
-    DONE
-    CANCELLED
-    ON_HOLD
-}
-
 enum TaskPriority {
     LOW
     NORMAL
@@ -18,46 +9,72 @@ enum TaskPriority {
     URGENT
 }
 
-// ─── Task ─────────────────────────────────────────────────────────
-// Client-facing task created for compliance work
+enum TaskChangeType {
+    CREATED
+    STATUS_CHANGED
+    DEPARTMENT_CHANGED
+    ASSIGNEE_CHANGED
+    DUE_DATE_CHANGED
+    DETAILS_UPDATED
+    COMMENT_ADDED
+}
 
+// ─── Task (The Live Record) ───────────────────────────────────────
 model Task {
-    id Int @id @default(autoincrement())
-
+    id          Int      @id @default(autoincrement())
     name        String
     description String?
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+    // Ties to external Client Portal
+    clientId    Int?
+    client      Client?   @relation(fields: [clientId], references: [id])
+
+    // The blueprint this task is following
+    templateId  Int?
+    template    TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+    // ─── MACRO POSITION (Which Department?) ───
+    currentDepartmentId Int?
+    currentDepartment   Department? @relation("TaskCurrentDepartment", fields: [currentDepartmentId], references: [id])
+    
+    // Tracks where we are in the template's departmentRoutes
+    currentRouteOrder   Int @default(1) 
+
+    // ─── MICRO POSITION (Which Status?) ───
+    currentStatusId     Int?
+    currentStatus       DepartmentTaskStatus? @relation("TaskCurrentStatus", fields: [currentStatusId], references: [id])
 
     assignedToId Int?
     assignedTo   Employee? @relation("TaskAssignee", fields: [assignedToId], references: [id])
 
-    dueDate DateTime?
-    daysDue Int?
-
-    status   TaskStatus   @default(TODO)
-    priority TaskPriority @default(NORMAL)
-    order    Int          @default(0) // for manual ordering / drag-and-drop
+    priority    TaskPriority @default(NORMAL)
+    
+    // Automated deadline tracking
+    daysDue     Int?
+    dueDate     DateTime?
 
     subtasks      TaskSubtask[]
     conversations TaskConversation[]
+    historyLogs   TaskHistory[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
     @@index([clientId])
-    @@index([status])
+    @@index([currentDepartmentId, currentStatusId]) 
     @@map("task")
 }
 
-// ─── Task Subtask ─────────────────────────────────────────────────
-
+// ─── Task Subtask (The Live Checklist) ────────────────────────────
 model TaskSubtask {
     id Int @id @default(autoincrement())
 
     parentTaskId Int
     parentTask   Task @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
+
+    // Tagged so UI knows which department this subtask belongs to
+    departmentId Int?
+    department   Department? @relation("SubtaskDepartment", fields: [departmentId], references: [id])
 
     name        String
     description String?
@@ -65,29 +82,57 @@ model TaskSubtask {
     assignedToId Int?
     assignedTo   Employee? @relation("SubtaskAssignee", fields: [assignedToId], references: [id])
 
-    dueDate DateTime?
-    daysDue Int?
+    // Uses the department's custom statuses
+    statusId     Int?
+    status       DepartmentTaskStatus? @relation("SubtaskStatus", fields: [statusId], references: [id])
 
-    status   TaskStatus   @default(TODO)
     priority TaskPriority @default(NORMAL)
     order    Int          @default(0)
+
+    // Automated deadline tracking
+    daysDue  Int?
+    dueDate  DateTime?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     @@index([parentTaskId])
+    @@index([departmentId])
     @@map("task_subtask")
 }
 
-// ─── Task Conversation ────────────────────────────────────────────
-// Threaded comments / discussion thread on a task
+// ─── Task History (Timeline Ledger) ───────────────────────────────
+model TaskHistory {
+    id          String   @id @default(cuid())
 
+    taskId      Int
+    task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+    // Strictly internal ERP users acting on tasks
+    actorId     String
+    actor       User     @relation(fields: [actorId], references: [id])
+
+    changeType  TaskChangeType
+
+    // Text snapshots to prevent broken logs if an employee/department is deleted
+    oldValue    String?  @db.Text
+    newValue    String?  @db.Text
+
+    createdAt   DateTime @default(now())
+
+    @@index([taskId])
+    @@index([taskId, createdAt(sort: Desc)]) 
+    @@map("task_history")
+}
+
+// ─── Task Conversation (Threaded Comments) ────────────────────────
 model TaskConversation {
     id Int @id @default(autoincrement())
 
     taskId Int
     task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
+    // Strictly internal ERP users discussing the task
     authorId String
     author   User @relation(fields: [authorId], references: [id])
 
@@ -100,20 +145,17 @@ model TaskConversation {
     @@map("task_conversation")
 }
 
-// ─── Task Template ────────────────────────────────────────────────
-// Reusable task blueprints assignable to a department and linked to service plans
-
+// ─── Task Template (The Blueprint) ────────────────────────────────
 model TaskTemplate {
-    id Int @id @default(autoincrement())
-
-    name        String
+    id          Int      @id @default(autoincrement())
+    name        String   // e.g., "Business Registration Pipeline"
     description String?
 
-    // Department that owns / manages this template
-    departmentId Int?
-    department   Department? @relation("TaskTemplateDepartment", fields: [departmentId], references: [id])
+    // Total expected days to complete the ENTIRE pipeline
+    daysDue     Int?
 
-    items TaskTemplateItem[]
+    departmentRoutes TaskTemplateRoute[]
+    tasks            Task[]
 
     servicePlans        ServicePlan[]
     serviceOneTimePlans ServiceOneTime[]
@@ -124,55 +166,80 @@ model TaskTemplate {
     @@map("task_template")
 }
 
-// ─── Task Template Item ───────────────────────────────────────────
-// A parent-level task slot within a template
+// ─── Task Template Route (Macro Order) ────────────────────────────
+model TaskTemplateRoute {
+    id           Int @id @default(autoincrement())
+    
+    templateId   Int
+    template     TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+    
+    departmentId Int
+    department   Department   @relation("DepartmentTemplateRoutes", fields: [departmentId], references: [id])
+    
+    // 🟢 Edit this to change which department gets the task first
+    routeOrder   Int @default(1) 
 
-model TaskTemplateItem {
-    id Int @id @default(autoincrement())
+    // Days allocated specifically for THIS department to finish their phase
+    daysDue      Int?
 
-    templateId Int
-    template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-    name        String
-    description String?
-    order       Int          @default(0)
-
-    // Department responsible for completing this step
-    assignedToDepartmentId Int?
-    assignedToDepartment   Department? @relation("TemplateItemDepartment", fields: [assignedToDepartmentId], references: [id])
-
-    priority TaskPriority @default(NORMAL)
-
-    subtasks TaskTemplateSubtask[]
+    subtasks     TaskTemplateSubtask[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
+    @@unique([templateId, departmentId]) 
     @@index([templateId])
-    @@map("task_template_item")
+    @@map("task_template_route")
 }
 
-// ─── Task Template Subtask ────────────────────────────────────────
-// A subtask slot nested under a parent template item
-
+// ─── Task Template Subtask (Blueprint Checklists) ─────────────────
 model TaskTemplateSubtask {
-    id Int @id @default(autoincrement())
-
-    templateItemId Int
-    templateItem   TaskTemplateItem @relation(fields: [templateItemId], references: [id], onDelete: Cascade)
+    id          Int @id @default(autoincrement())
+    
+    routeId     Int
+    route       TaskTemplateRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
     name        String
     description String?
-    order       Int          @default(0)
+    
+    subtaskOrder Int @default(1)
+    priority    TaskPriority @default(NORMAL)
 
-    assignedToDepartmentId Int?
-    assignedToDepartment   Department? @relation("TemplateSubtaskDepartment", fields: [assignedToDepartmentId], references: [id])
+    // Days allocated to complete this specific checklist item
+    daysDue     Int?
 
-    priority TaskPriority @default(NORMAL)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@index([templateItemId])
+    @@index([routeId])
     @@map("task_template_subtask")
 }
+
+// ─── Department Task Status (Micro Order) ─────────────────────────
+// Defines the dynamic Kanban columns specific to a single department
+model DepartmentTaskStatus {
+    id           Int        @id @default(autoincrement())
+    name         String     
+    color        String?    
+    
+    departmentId Int
+    department   Department @relation("DepartmentStatuses", fields: [departmentId], references: [id], onDelete: Cascade)
+
+    // 🟢 Edit this to change the column order INSIDE the department
+    statusOrder  Int        @default(1) 
+    
+    isEntryStep  Boolean    @default(false) // Task automatically lands here
+    isExitStep   Boolean    @default(false) // Triggers handover to next department
+
+    activeTasks  Task[]        @relation("TaskCurrentStatus")
+    subtasks     TaskSubtask[] @relation("SubtaskStatus")
+
+    createdAt    DateTime   @default(now())
+    updatedAt    DateTime   @updatedAt
+
+    @@unique([departmentId, name]) 
+    @@index([departmentId])
+    @@map("department_task_status")
+}
+
+
