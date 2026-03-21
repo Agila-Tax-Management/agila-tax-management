@@ -1,0 +1,335 @@
+enum AttendanceStatus {
+    PRESENT
+    ABSENT
+    INCOMPLETE
+    PAID_LEAVE
+    UNPAID_LEAVE
+    DAY_OFF          
+    REGULAR_HOLIDAY
+    SPECIAL_HOLIDAY
+}
+
+enum OvertimeStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+enum PayrollPeriodStatus {
+    DRAFT
+    PROCESSING
+    APPROVED
+    PAID
+    CLOSED
+}
+
+enum DisbursedStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    FAILED
+}
+
+enum HolidayType {
+    REGULAR                 
+    SPECIAL_NON_WORKING     
+    SPECIAL_WORKING         
+    LOCAL_HOLIDAY           
+}
+
+enum LeaveRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+enum CashAdvanceStatus {
+    PENDING
+    APPROVED
+    ACTIVE       // Currently being deducted from payroll
+    COMPLETED    // Fully paid off
+    CANCELLED
+}
+
+// ─── Company / Client Holiday Calendar ────────────────────────────
+model Holiday {
+    id          Int      @id @default(autoincrement())
+    
+    clientId    Int
+    client      Client   @relation(fields: [clientId], references: [id])
+    
+    name        String   
+    date        DateTime @db.Date
+    type        HolidayType
+    
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    @@unique([clientId, date]) 
+    @@index([clientId])
+    @@map("holiday")
+}
+
+// ─── Schedule Override (Ad-hoc Rest Days & Shift Changes) ─────────
+model ScheduleOverride {
+    id          String   @id @default(cuid())
+    
+    employeeId  Int
+    employee    Employee @relation(fields: [employeeId], references: [id])
+    
+    date        DateTime @db.Date
+    isRestDay   Boolean  @default(false) 
+    
+    startTime   String?
+    endTime     String?
+    reason      String?  @db.Text
+    
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    @@unique([employeeId, date]) 
+    @@index([employeeId])
+    @@map("schedule_override")
+}
+
+// ─── Timesheet (Daily Breakdown) ──────────────────────────────────
+model Timesheet {
+    id              String   @id @default(cuid())
+    
+    employeeId      Int
+    employee        Employee @relation(fields: [employeeId], references: [id])
+    
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    date            DateTime @db.Date 
+    status          AttendanceStatus @default(ABSENT)
+
+    // ─── Raw Punch Data ───
+    timeIn          DateTime? 
+    lunchStart      DateTime?
+    lunchEnd        DateTime?
+    timeOut         DateTime?
+    
+    lateMinutes         Int @default(0)
+    undertimeMinutes    Int @default(0)
+    
+    // ─── DOLE Hours (Defaults to 0.00 to prevent crashing) ───
+    regularHours        Decimal @db.Decimal(5, 2) @default(0.00) 
+    
+    regOtHours          Decimal @db.Decimal(5, 2) @default(0.00) 
+    rdHours             Decimal @db.Decimal(5, 2) @default(0.00) 
+    rdOtHours           Decimal @db.Decimal(5, 2) @default(0.00) 
+    
+    shHours             Decimal @db.Decimal(5, 2) @default(0.00) 
+    shOtHours           Decimal @db.Decimal(5, 2) @default(0.00) 
+    shRdHours           Decimal @db.Decimal(5, 2) @default(0.00) 
+    shRdOtHours         Decimal @db.Decimal(5, 2) @default(0.00) 
+    
+    rhHours             Decimal @db.Decimal(5, 2) @default(0.00) 
+    rhOtHours           Decimal @db.Decimal(5, 2) @default(0.00) 
+    rhRdHours           Decimal @db.Decimal(5, 2) @default(0.00) 
+    rhRdOtHours         Decimal @db.Decimal(5, 2) @default(0.00) 
+
+    dailyGrossPay       Decimal @db.Decimal(10, 2) @default(0.00) 
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@unique([employeeId, date]) 
+    @@index([clientId])
+    @@map("timesheet")
+}
+
+// ─── Overtime Request (Dual-Auth Approvals) ───────────────────────
+model OvertimeRequest {
+    id              String   @id @default(cuid())
+    
+    employeeId      Int
+    employee        Employee @relation(fields: [employeeId], references: [id])
+    
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    date            DateTime @db.Date
+    type            String   
+    
+    timeFrom        DateTime
+    timeTo          DateTime
+    hours           Decimal  @db.Decimal(5, 2)
+    
+    reason          String   @db.Text
+    status          OvertimeStatus @default(PENDING)
+
+    // ─── Dual Auth Approvers ───
+    approvedById           String?
+    approvedBy             User?       @relation("OvertimeApprover", fields: [approvedById], references: [id])
+    
+    approvedByClientUserId String?
+    approvedByClientUser   ClientUser? @relation("ClientOvertimeApprover", fields: [approvedByClientUserId], references: [id])
+    
+    approvedAt             DateTime?
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([employeeId])
+    @@index([clientId])
+    @@map("overtime_request")
+}
+
+// ─── Payroll Period ───────────────────────────────────────────────
+model PayrollPeriod {
+    id              Int      @id @default(autoincrement())
+    
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    startDate       DateTime @db.Date
+    endDate         DateTime @db.Date
+    
+    status          PayrollPeriodStatus @default(DRAFT)
+
+    payslips        Payslip[]
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([clientId])
+    @@map("payroll_period")
+}
+
+// ─── Payslip (Dual-Auth Approvals & Acknowledgments) ──────────────
+model Payslip {
+    id              String   @id @default(cuid())
+    
+    payrollPeriodId Int
+    payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+
+    employeeId      Int
+    employee        Employee @relation(fields: [employeeId], references: [id])
+
+    basicPay        Decimal  @db.Decimal(10, 2) @default(0.00) 
+    holidayPay      Decimal  @db.Decimal(10, 2) @default(0.00) 
+    overtimePay     Decimal  @db.Decimal(10, 2) @default(0.00) 
+    paidLeavePay    Decimal  @db.Decimal(10, 2) @default(0.00)
+    allowance       Decimal  @db.Decimal(10, 2) @default(0.00)
+    
+    grossPay        Decimal  @db.Decimal(10, 2) @default(0.00)
+
+    sssDeduction        Decimal  @db.Decimal(10, 2) @default(0.00)
+    philhealthDeduction Decimal  @db.Decimal(10, 2) @default(0.00)
+    pagibigDeduction    Decimal  @db.Decimal(10, 2) @default(0.00)
+    withholdingTax      Decimal  @db.Decimal(10, 2) @default(0.00)
+
+    lateUndertimeDeduction Decimal @db.Decimal(10, 2) @default(0.00)
+    pagibigLoan         Decimal  @db.Decimal(10, 2) @default(0.00)
+    sssLoan             Decimal  @db.Decimal(10, 2) @default(0.00)
+    cashAdvanceRepayment Decimal @db.Decimal(10, 2) @default(0.00)
+    
+    totalDeductions     Decimal  @db.Decimal(10, 2) @default(0.00)
+    netPay              Decimal  @db.Decimal(10, 2) @default(0.00)
+
+    // ─── Approvals & Audits ───
+    preparedById           String?
+    preparedBy             User?       @relation("PayslipPreparer", fields: [preparedById], references: [id])
+    preparedAt             DateTime?
+
+    approvedById           String?
+    approvedBy             User?       @relation("PayslipApprover", fields: [approvedById], references: [id])
+    
+    approvedByClientUserId String?
+    approvedByClientUser   ClientUser? @relation("ClientPayslipApprover", fields: [approvedByClientUserId], references: [id])
+    approvedAt             DateTime?
+
+    // ─── Employee Acknowledgments ───
+    acknowledgedById           String?
+    acknowledgedBy             User?       @relation("PayslipAcknowledger", fields: [acknowledgedById], references: [id])
+    
+    acknowledgedByClientUserId String?
+    acknowledgedByClientUser   ClientUser? @relation("ClientPayslipAcknowledger", fields: [acknowledgedByClientUserId], references: [id])
+    acknowledgedAt             DateTime?
+
+    disbursedStatus DisbursedStatus @default(PENDING)
+
+    cashAdvanceDeductions CashAdvanceDeduction[]
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@unique([payrollPeriodId, employeeId])
+    @@index([employeeId])
+    @@map("payslip")
+}
+
+// ─── Cash Advance (The Loan Record) ───────────────────────────────
+model CashAdvance {
+    id                  String   @id @default(cuid())
+    
+    employeeId          Int
+    employee            Employee @relation(fields: [employeeId], references: [id])
+    
+    clientId            Int
+    client              Client   @relation(fields: [clientId], references: [id])
+
+    // ─── Financial Terms ───
+    principalAmount     Decimal  @db.Decimal(10, 2)
+    
+    // How many payroll cutoffs this will be split across
+    installmentCount    Int      
+    
+    // Amount to deduct per payslip (usually principalAmount / installmentCount)
+    installmentAmount   Decimal  @db.Decimal(10, 2) 
+    
+    // Live tracker of what is left to pay
+    remainingBalance    Decimal  @db.Decimal(10, 2)
+
+    // ─── Schedule ───
+    grantedDate         DateTime? @db.Date
+    deductionStartDate  DateTime? @db.Date
+
+    remarks             String?  @db.Text
+    status              CashAdvanceStatus @default(PENDING)
+
+    // ─── Dual Auth Approvers ───
+    approvedById           String?
+    approvedBy             User?       @relation("CashAdvanceApprover", fields: [approvedById], references: [id])
+    
+    approvedByClientUserId String?
+    approvedByClientUser   ClientUser? @relation("ClientCashAdvanceApprover", fields: [approvedByClientUserId], references: [id])
+    
+    approvedAt             DateTime?
+
+    // The history of deductions applied to payslips
+    deductions          CashAdvanceDeduction[]
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([employeeId])
+    @@index([clientId])
+    @@map("cash_advance")
+}
+
+// ─── Cash Advance Deduction (The Repayment Ledger) ────────────────
+model CashAdvanceDeduction {
+    id                  String   @id @default(cuid())
+
+    cashAdvanceId       String
+    cashAdvance         CashAdvance @relation(fields: [cashAdvanceId], references: [id], onDelete: Cascade)
+
+    // Links directly to the generated payslip snapshot
+    payslipId           String
+    payslip             Payslip     @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+    amountDeducted      Decimal  @db.Decimal(10, 2)
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([cashAdvanceId])
+    @@index([payslipId])
+    @@map("cash_advance_deduction")
+}

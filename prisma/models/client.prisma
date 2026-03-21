@@ -67,6 +67,14 @@ model Client {
 
   subscriptions ClientSubscription[]
   invoices      Invoice[]
+  cashAdvances          CashAdvance[]
+
+  holidays         Holiday[]
+  timesheets       Timesheet[]
+  overtimeRequests OvertimeRequest[]
+  leaveTypes       LeaveType[]
+  leaveRequests    LeaveRequest[]
+  payrollPeriods   PayrollPeriod[]
 
   createdAt DateTime? @map("created_at")
 
@@ -101,6 +109,12 @@ model ClientUser {
   employee    Employee?
   sessions    ClientSession[]
   accounts    ClientAccount[]
+
+  overtimesApproved    OvertimeRequest[] @relation("ClientOvertimeApprover")
+  leavesApproved       LeaveRequest[]    @relation("ClientLeaveApprover")
+  payslipsApproved     Payslip[]         @relation("ClientPayslipApprover")
+  payslipsAcknowledged Payslip[]         @relation("ClientPayslipAcknowledger")
+  cashAdvancesApproved  CashAdvance[] @relation("ClientCashAdvanceApprover")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

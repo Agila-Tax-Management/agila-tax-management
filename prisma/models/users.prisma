@@ -32,6 +32,13 @@ model User {
   paymentsRecorded          Payment[]
   invoiceHistoryLogs        InvoiceHistory[]
   subscriptionHistoryLogs   SubscriptionHistory[]
+  cashAdvancesApproved  CashAdvance[] @relation("CashAdvanceApprover")
+
+  approvedOvertimes    OvertimeRequest[] @relation("OvertimeApprover")
+  approvedLeaves       LeaveRequest[]    @relation("LeaveApprover")
+  payslipsPrepared     Payslip[]         @relation("PayslipPreparer")
+  payslipsApproved     Payslip[]         @relation("PayslipApprover")
+  acknowledgedPayslips Payslip[]         @relation("PayslipAcknowledger")
 
   @@unique([email])
   @@map("user")
