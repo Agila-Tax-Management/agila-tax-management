@@ -117,7 +117,6 @@ model BirInformation {
 }
 
 // ─── Business Operations (For LGU Permits & Physical Checks) ──────
-// ─── Business Operations (For LGU Permits & Physical Checks) ──────
 model BusinessOperations {
     id                  Int      @id @default(autoincrement())
     
@@ -126,7 +125,7 @@ model BusinessOperations {
 
     tradeName           String?
     
-    // ─── NEW: Business Category & Nature ───
+    // ─── Business Category & Nature ───
     industry            String?  // e.g., "Retail", "Real Estate", "Professional Services"
     lineOfBusiness      String?  @db.Text // Specifically what they do (e.g., "IT Consulting and Software Development")
     psicCode            String?  // Philippine Standard Industrial Classification Code (Crucial for BIR forms)
@@ -145,6 +144,10 @@ model BusinessOperations {
     hasCctv             Boolean  @default(false)
     signboardLength     String?
     hasSignboardLight   Boolean  @default(false)
+
+    // ─── Location Contact Info ───
+    landlineNumber      String?
+    faxNumber           String?
 
     // ─── Lease / Location Compliance ───
     placeType           PlaceType @default(RENTED)
@@ -175,32 +178,74 @@ model CorporateDetails {
     clientId            Int      @unique
     client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+    // ─── SEC Information ───
     secRegistrationNo   String?
+    acronym             String?
+    suffix              String?   // e.g., "Inc.", "Corp.", "Ltd."
+    companyClassification String? // e.g., "Stock", "Non-Stock"
+    companySubclass     String?
+    
     dateOfIncorporation DateTime? @db.Date
     termOfExistence     String?
     primaryPurpose      String?   @db.Text
     annualMeetingDate   DateTime? @db.Date
+    
+    numberOfIncorporators Int?
+    hasBoardOfDirectors Boolean   @default(true)
 
-    // Capitalization
+    // ─── Capitalization ───
     authorizedCapital   Decimal?  @db.Decimal(15, 2)
     subscribedCapital   Decimal?  @db.Decimal(15, 2)
     paidUpCapital       Decimal?  @db.Decimal(15, 2)
 
+    // ─── Corporate Contact Info ───
+    primaryEmail        String?
+    secondaryEmail      String?
+    primaryContactNo    String?
+    secondaryContactNo  String?
+    
+    // ─── Authorized Representative ───
+    contactPerson       String?   // General contact person
+    authRepFirstName    String?
+    authRepMiddleName   String?
+    authRepLastName     String?
+    authRepPosition     String?
+    authRepTin          String?
+    authRepDob          DateTime? @db.Date
+
     // ─── Board of Directors / Key Officers ───
-    presidentName       String?
-    presidentTin        String?
-    presidentDob        DateTime? @db.Date
+    // President
+    presidentFirstName  String?
+    presidentMiddleName String?
+    presidentLastName   String?
+    presidentGender     String?
+    presidentNationality String?
     presidentAddress    String?   @db.Text
+    presidentTin        String?
+    presidentEmail      String?
+    presidentDob        DateTime? @db.Date
 
-    treasurerName       String?
-    treasurerTin        String?
-    treasurerDob        DateTime? @db.Date
+    // Treasurer
+    treasurerFirstName  String?
+    treasurerMiddleName String?
+    treasurerLastName   String?
+    treasurerGender     String?
+    treasurerNationality String?
     treasurerAddress    String?   @db.Text
+    treasurerTin        String?
+    treasurerEmail      String?
+    treasurerDob        DateTime? @db.Date
 
-    secretaryName       String?
-    secretaryTin        String?
-    secretaryDob        DateTime? @db.Date
+    // Secretary
+    secretaryFirstName  String?
+    secretaryMiddleName String?
+    secretaryLastName   String?
+    secretaryGender     String?
+    secretaryNationality String?
     secretaryAddress    String?   @db.Text
+    secretaryTin        String?
+    secretaryEmail      String?
+    secretaryDob        DateTime? @db.Date
 
     @@map("corporate_details")
 }
@@ -212,6 +257,7 @@ model CorporateShareholder {
     clientId            Int
     client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+    // ─── Shareholder Details ───
     firstName           String
     middleName          String?
     lastName            String
@@ -220,23 +266,24 @@ model CorporateShareholder {
     gender              String?
     tin                 String?
 
+    // ─── Shares Info ───
     numberOfShares      Decimal  @db.Decimal(15, 2)
     paidUpCapital       Decimal  @db.Decimal(15, 2)
-    methodOfPayment     String   @default("CASH") // Cash vs Non-Cash
+    methodOfPayment     String   @default("CASH") // Matches your ENUM('Cash','Non-Cash')
 
-    orderSequence       Int      @default(0) // Determines the print order on the SEC GIS Form
+    orderSequence       Int      @default(0) 
 
     @@map("corporate_shareholder")
 }
 
-// ─── Individual Details (For DTI/PRC & Sole Proprietors) ──────────
+// ─── Individual Details (Sole Proprietors & Professionals) ────────
 model IndividualDetails {
     id                  Int      @id @default(autoincrement())
     
     clientId            Int      @unique
     client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-    // Official ID Information
+    // ─── Personal Information ───
     firstName           String
     middleName          String?
     lastName            String
@@ -245,15 +292,32 @@ model IndividualDetails {
     gender              String
     citizenship         String   @default("Filipino")
     placeOfBirth        String?
-
+    
+    residentialAddress  String?  @db.Text
+    
+    // ─── Identifications ───
     prcLicenseNo        String?
+    primaryIdType       String?  // e.g., "Passport", "Driver's License"
+    primaryIdNumber     String?
 
-    // Lineage (Often required for new TIN creation)
-    motherMaidenName    String?
-    fatherName          String?
+    // ─── Contact Information ───
+    personalEmail       String?
+    mobileNumber        String?
+    telephoneNumber     String?
 
-    // Spouse Information (Joint filing requirements)
-    spouseName          String?
+    // ─── Parent Information (Lineage for BIR/DTI) ───
+    motherFirstName     String?
+    motherMiddleName    String?
+    motherLastName      String?
+
+    fatherFirstName     String?
+    fatherMiddleName    String?
+    fatherLastName      String?
+
+    // ─── Spouse Information (For Joint Tax Filings) ───
+    spouseFirstName     String?
+    spouseMiddleName    String?
+    spouseLastName      String?
     spouseEmploymentStatus String?
     spouseTin           String?
     spouseEmployerName  String?
