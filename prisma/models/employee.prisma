@@ -42,13 +42,14 @@ enum ContractStatus {
 model Employee {
     id Int @id @default(autoincrement())
 
-    userId String? @unique
-    user   User?   @relation(fields: [userId], references: [id])
+    // ─── Dual Auth Links ───
+    userId       String?     @unique
+    user         User?       @relation(fields: [userId], references: [id])
 
-    // External client portal user — set when this Employee profile belongs to a client employee
     clientUserId String?     @unique
     clientUser   ClientUser? @relation(fields: [clientUserId], references: [id])
 
+    // ─── Personal Info ───
     firstName     String
     middleName    String?
     lastName      String
@@ -59,37 +60,65 @@ model Employee {
 
     email         String?
     personalEmail String?
-
     birthDate    DateTime
     placeOfBirth String?
     gender       String
     civilStatus  String?
     citizenship  String?
+    phone        String
 
-    phone   String
-    address String
+    // ─── Current Address ───
+    currentStreet   String?
+    currentBarangay String?
+    currentCity     String?
+    currentProvince String?
+    currentZip      String?
 
+    // ─── Permanent Address ───
+    permanentStreet   String?
+    permanentBarangay String?
+    permanentCity     String?
+    permanentProvince String?
+    permanentZip      String?
+
+    // ─── Education & Qualifications ───
     educationalBackground String?
     school                String?
     course                String?
     yearGraduated         String?
     certifications        String?
-
+    
     active     Boolean @default(true)
     softDelete Boolean @default(false)
 
+    // ─── Existing Relations ───
     governmentIds  EmployeeGovernmentIds?
     employments    EmployeeEmployment[]
     requirements   EmployeeRequirement[]
     appAccess      EmployeeAppAccess[]
+    
     ledTeams       EmployeeTeam[]         @relation("TeamLeader")
     managedReports EmployeeEmployment[]   @relation("ReportingManager")
 
     assignedTasks    Task[]        @relation("TaskAssignee")
     assignedSubtasks TaskSubtask[] @relation("SubtaskAssignee")
 
+    // ─── Timekeeping & Payroll Relations (From our recent updates) ───
+    scheduleOverrides ScheduleOverride[]
+    timesheets        Timesheet[]
+    // ─── HR Request Ledgers ───
+    overtimeRequests  OvertimeRequest[]
+    leaveRequests     LeaveRequest[]
+    coaRequests       CoaRequest[]
+    leaveCredits      EmployeeLeaveCredit[]
+    payslips          Payslip[]
+    cashAdvances      CashAdvance[]
+    governmentLoans          GovernmentLoan[]
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+
+    @@map("employee")
 }
 
 // ─── Government IDs (PH Compliance) ─────────────────────────────
@@ -122,15 +151,24 @@ model EmployeeEmployment {
     clientId Int
     client   Client @relation(fields: [clientId], references: [id])
 
+    // ─── Contact Info ───
+    workEmail String?
+    workPhone String?
+
+    // ─── Organizational Hierarchy ───
     departmentId Int?
     department   Department? @relation(fields: [departmentId], references: [id])
 
     positionId Int?
-    position   Position? @relation(fields: [positionId], references: [id])
+    position   Position?   @relation(fields: [positionId], references: [id])
 
     teamId Int?
     team   EmployeeTeam? @relation(fields: [teamId], references: [id])
 
+    reportingManagerId Int?
+    reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+
+    // ─── Job Status & Dates ───
     employmentType   EmploymentType?
     employmentStatus EmploymentStatus @default(ACTIVE)
     employeeLevelId  Int?
@@ -138,10 +176,10 @@ model EmployeeEmployment {
 
     hireDate           DateTime?
     regularizationDate DateTime?
-    endDate            DateTime?
+    endDate            DateTime? // Maps to inactive_date
 
-    reportingManagerId Int?
-    reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+    // Replaces past_role boolean. If true, this is a historical record.
+    isPastRole         Boolean @default(false) 
 
     contracts EmployeeContract[]
 
@@ -153,8 +191,8 @@ model EmployeeEmployment {
     @@map("employee_employment")
 }
 
-// ─── Employee Contracts ───────────────────────────────────────────
-// Legal terms, salary, and schedule per employment tenure.
+// ─── Updated EmployeeContract ─────────────────────────────────────
+// Replace your existing EmployeeContract with this to hold salary/tax configs
 model EmployeeContract {
     id Int @id @default(autoincrement())
 
@@ -167,10 +205,15 @@ model EmployeeContract {
     contractStart DateTime
     contractEnd   DateTime?
 
-    monthlyRate Decimal? @db.Decimal(10, 2)
-    weeklyRate  Decimal? @db.Decimal(10, 2)
-    dailyRate   Decimal? @db.Decimal(10, 2)
-    hourlyRate  Decimal? @db.Decimal(10, 2)
+    monthlyRate   Decimal? @db.Decimal(10, 2)
+    dailyRate     Decimal? @db.Decimal(10, 2)
+    hourlyRate    Decimal? @db.Decimal(10, 2)
+    allowanceRate Decimal? @db.Decimal(10, 2) @default(0.00)
+
+    deductSss        Boolean @default(false)
+    deductPagibig    Boolean @default(false)
+    deductPhilhealth Boolean @default(false)
+    deductTax        Boolean @default(false) 
 
     disbursedMethod DisbursedMethod?
     payType         String?          @default("Variable Pay")
@@ -189,6 +232,7 @@ model EmployeeContract {
     @@index([employmentId])
     @@map("employee_contract")
 }
+
 
 // ─── Work Schedule Templates ──────────────────────────────────────
 // Reusable schedule definitions (e.g. Office Hours, Night Shift).
@@ -264,13 +308,15 @@ model Department {
 
     name        String
     description String?
-
+    
     positions   Position[]
     employments EmployeeEmployment[]
 
-    taskTemplates        TaskTemplate[]       @relation("TaskTemplateDepartment")
-    taskTemplateItems    TaskTemplateItem[]   @relation("TemplateItemDepartment")
-    taskTemplateSubtasks TaskTemplateSubtask[] @relation("TemplateSubtaskDepartment")
+    // ─── NEW: Task & Workflow Relations ───
+    templateRoutes TaskTemplateRoute[]    @relation("DepartmentTemplateRoutes")
+    statuses       DepartmentTaskStatus[] @relation("DepartmentStatuses")
+    activeTasks    Task[]                 @relation("TaskCurrentDepartment")
+    subtasks       TaskSubtask[]          @relation("SubtaskDepartment")
 
     createdAt DateTime @default(now())
 

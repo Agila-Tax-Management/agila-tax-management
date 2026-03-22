@@ -24,6 +24,23 @@ model User {
   notificationsReceived  InternalNotification[] @relation("NotificationRecipient")
   notificationsTriggered InternalNotification[] @relation("NotificationActor")
   taskConversations      TaskConversation[]
+  taskHistoryLogs        TaskHistory[]
+
+  leadComments          LeadComment[]
+  leadHistoryLogs       LeadHistory[]
+
+  paymentsRecorded          Payment[]
+  invoiceHistoryLogs        InvoiceHistory[]
+  subscriptionHistoryLogs   SubscriptionHistory[]
+  cashAdvancesApproved  CashAdvance[] @relation("CashAdvanceApprover")
+  
+  approvedOvertimes OvertimeRequest[] @relation("OvertimeApprover")
+  approvedLeaves    LeaveRequest[]    @relation("LeaveApprover")
+  approvedCoas      CoaRequest[]      @relation("CoaApprover")
+  
+  payslipsPrepared     Payslip[]         @relation("PayslipPreparer")
+  payslipsApproved     Payslip[]         @relation("PayslipApprover")
+  acknowledgedPayslips Payslip[]         @relation("PayslipAcknowledger")
 
   @@unique([email])
   @@map("user")

@@ -11,7 +11,7 @@ enum ClientPortalRole {
   VIEWER
 }
 
-enum BusinessType {
+enum BusinessEntity {
   INDIVIDUAL
   SOLE_PROPRIETORSHIP
   PARTNERSHIP
@@ -19,42 +19,54 @@ enum BusinessType {
   COOPERATIVE
 }
 
+enum BranchType {
+    MAIN
+    BRANCH
+}
+
+enum PlaceType {
+    OWNED
+    RENTED
+    FREE_USE // e.g., using a relative's property for free
+}
+
 model Client {
-  id Int @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
+  companyCode     String?  @unique // e.g., "comp-001"
+  clientNo        String?  @unique // e.g., "2024-0001"
+  
+  portalName      String   // Used for their BetterAuth login portal URL
+  businessName    String   // Official registered name
+  logoUrl         String?
+  
+  businessEntity  BusinessEntity
+  branchType      BranchType @default(MAIN)
+  
+  // ─── Self-Relation for Head Office vs Branches ───
+  mainBranchId    Int?
+  mainBranch      Client?  @relation("BranchToMain", fields: [mainBranchId], references: [id])
+  branches        Client[] @relation("BranchToMain")
 
-  companyCode String? @unique
-  clientNo    String?
+  active          Boolean  @default(false)
+  
+  // ─── Timekeeping & SLA Defaults ───
+  dayResetTime     String  @default("00:00:00") // When the system flips to "tomorrow"
+  workingDayStarts String  @default("09:00:00") // Default opening hour
+  timezone         String  @default("Asia/Manila")
 
-  active Boolean @default(false)
+  // ─── 1-to-1 Tax & Compliance Profiles ───
+  birInfo             BirInformation?
+  businessDetails     BusinessOperations?
+  corporateDetails    CorporateDetails?
+  individualDetails   IndividualDetails?
+  
+  // 1-to-Many
+  shareholders        CorporateShareholder[]
 
-  businessType BusinessType?
-
-  businessCategoryId Int?
-  businessCategory   BusinessCategory? @relation(fields: [businessCategoryId], references: [id])
-
-  portalName   String?
-  businessName String?
-
-  branchType String?
-
-  mainBranchId Int?
-  mainBranch   Client?  @relation("BranchRelation", fields: [mainBranchId], references: [id])
-  branches     Client[] @relation("BranchRelation")
-
-  logo String?
-
-  clientIpAddress String?
-
-  dayResetTime     DateTime? @db.Time
-  workingDayStarts DateTime? @db.Time
-
-  timezone String? @default("Asia/Manila")
+  lead            Lead?
 
   clientUsers     ClientUser[]
   userAssignments ClientUserAssignment[]
-
-  professionalProfiles ProfessionalClient[]
-  soleProprietorships  SoleProprietorship[]
 
   departments    Department[]
   teams          EmployeeTeam[]
@@ -63,208 +75,254 @@ model Client {
   employeeLevels EmployeeLevel[]
   tasks          Task[]
 
-  createdAt DateTime? @map("created_at")
+  subscriptions ClientSubscription[]
+  invoices      Invoice[]
+  cashAdvances          CashAdvance[]
+
+  holidays         Holiday[]
+  timesheets       Timesheet[]
+  overtimeRequests  OvertimeRequest[]
+  coaRequests       CoaRequest[]
+  leaveTypes       LeaveType[]
+  leaveRequests    LeaveRequest[]
+  payrollPeriods   PayrollPeriod[]
+  governmentLoans  GovernmentLoan[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("atms_clients")
 }
 
-model BusinessCategory {
-  id Int @id @default(autoincrement())
+// ─── BIR Information (Form 2303 / COR Details) ────────────────────
+model BirInformation {
+    id                  Int      @id @default(autoincrement())
+    
+    clientId            Int      @unique
+    client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  name String @unique
+    tin                 String   // 9-digit TIN
+    branchCode          String   @default("0000") // Last 3-4 digits
+    rdoCode             String   // e.g., "082" for Cebu City South
+    
+    registeredAddress   String   @db.Text
+    zipCode             String
+    contactNumber       String?
+    
+    isWithholdingAgent  Boolean  @default(false)
+    withholdingCategory String?
+    
+    corUrl              String?  // Cloud link to scanned Certificate of Registration
 
-  clients Client[]
-
-  createdAt DateTime @default(now())
+    @@map("bir_information")
 }
 
-model ClientUser {
-  id String @id @default(cuid())
+// ─── Business Operations (For LGU Permits & Physical Checks) ──────
+model BusinessOperations {
+    id                  Int      @id @default(autoincrement())
+    
+    clientId            Int      @unique
+    client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  name          String?
-  email         String           @unique
-  emailVerified Boolean          @default(false)
-  image         String?
-  active        Boolean          @default(true)
-  status        ClientUserStatus @default(ACTIVE)
+    tradeName           String?
+    
+    // ─── Business Category & Nature ───
+    industry            String?  // e.g., "Retail", "Real Estate", "Professional Services"
+    lineOfBusiness      String?  @db.Text // Specifically what they do (e.g., "IT Consulting and Software Development")
+    psicCode            String?  // Philippine Standard Industrial Classification Code (Crucial for BIR forms)
+    
+    businessAreaSqm     Decimal? @db.Decimal(10, 2)
+    
+    // Employee Headcounts (Often required for LGU permit renewals)
+    noOfManagers        Int      @default(0)
+    noOfSupervisors     Int      @default(0)
+    noOfRankAndFile     Int      @default(0)
 
-  // Legacy single-client FK kept for BetterAuth additionalFields compatibility
-  clientId Int?
-  client   Client? @relation(fields: [clientId], references: [id])
+    // Facility Details (LGU requirements)
+    noOfElevators       Int      @default(0)
+    noOfEscalators      Int      @default(0)
+    noOfAircons         Int      @default(0)
+    hasCctv             Boolean  @default(false)
+    signboardLength     String?
+    hasSignboardLight   Boolean  @default(false)
 
-  assignments ClientUserAssignment[]
-  employee    Employee?
-  sessions    ClientSession[]
-  accounts    ClientAccount[]
+    // ─── Location Contact Info ───
+    landlineNumber      String?
+    faxNumber           String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+    // ─── Lease / Location Compliance ───
+    placeType           PlaceType @default(RENTED)
+    
+    // Rented Docs
+    lessorName          String?
+    lessorAddress       String?  @db.Text
+    monthlyRent         Decimal? @db.Decimal(15, 2)
+    rentContractUrl     String?
+    isNotarized         Boolean  @default(false)
+    hasDocStamp         Boolean  @default(false)
 
-  @@map("client_user")
+    // Owned Docs
+    propertyOwner       String?
+    ownedDocsUrl        String?
+    ownedReason         String?  @db.Text
+    
+    // Free Use (No Rent)
+    noRentReason        String?  @db.Text
+
+    @@map("business_operations")
 }
 
-// ─── Client ↔ ClientUser Join Table ──────────────────────────────
-model ClientUserAssignment {
-  id Int @id @default(autoincrement())
+// ─── Corporate Details (For SEC & GIS Reporting) ──────────────────
+model CorporateDetails {
+    id                  Int      @id @default(autoincrement())
+    
+    clientId            Int      @unique
+    client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  clientUserId String
-  clientUser   ClientUser @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
+    // ─── SEC Information ───
+    secRegistrationNo   String?
+    acronym             String?
+    suffix              String?   // e.g., "Inc.", "Corp.", "Ltd."
+    companyClassification String? // e.g., "Stock", "Non-Stock"
+    companySubclass     String?
+    
+    dateOfIncorporation DateTime? @db.Date
+    termOfExistence     String?
+    primaryPurpose      String?   @db.Text
+    annualMeetingDate   DateTime? @db.Date
+    
+    numberOfIncorporators Int?
+    hasBoardOfDirectors Boolean   @default(true)
 
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    // ─── Capitalization ───
+    authorizedCapital   Decimal?  @db.Decimal(15, 2)
+    subscribedCapital   Decimal?  @db.Decimal(15, 2)
+    paidUpCapital       Decimal?  @db.Decimal(15, 2)
 
-  role ClientPortalRole @default(EMPLOYEE)
+    // ─── Corporate Contact Info ───
+    primaryEmail        String?
+    secondaryEmail      String?
+    primaryContactNo    String?
+    secondaryContactNo  String?
+    
+    // ─── Authorized Representative ───
+    contactPerson       String?   // General contact person
+    authRepFirstName    String?
+    authRepMiddleName   String?
+    authRepLastName     String?
+    authRepPosition     String?
+    authRepTin          String?
+    authRepDob          DateTime? @db.Date
 
-  createdAt DateTime @default(now())
+    // ─── Board of Directors / Key Officers ───
+    // President
+    presidentFirstName  String?
+    presidentMiddleName String?
+    presidentLastName   String?
+    presidentGender     String?
+    presidentNationality String?
+    presidentAddress    String?   @db.Text
+    presidentTin        String?
+    presidentEmail      String?
+    presidentDob        DateTime? @db.Date
 
-  @@unique([clientUserId, clientId])
-  @@map("client_user_assignment")
+    // Treasurer
+    treasurerFirstName  String?
+    treasurerMiddleName String?
+    treasurerLastName   String?
+    treasurerGender     String?
+    treasurerNationality String?
+    treasurerAddress    String?   @db.Text
+    treasurerTin        String?
+    treasurerEmail      String?
+    treasurerDob        DateTime? @db.Date
+
+    // Secretary
+    secretaryFirstName  String?
+    secretaryMiddleName String?
+    secretaryLastName   String?
+    secretaryGender     String?
+    secretaryNationality String?
+    secretaryAddress    String?   @db.Text
+    secretaryTin        String?
+    secretaryEmail      String?
+    secretaryDob        DateTime? @db.Date
+
+    @@map("corporate_details")
 }
 
-model ProfessionalClient {
-  id Int @id @default(autoincrement())
+// ─── Corporate Shareholder (For GIS Form Generation) ──────────────
+model CorporateShareholder {
+    id                  Int      @id @default(autoincrement())
+    
+    clientId            Int
+    client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id])
+    // ─── Shareholder Details ───
+    firstName           String
+    middleName          String?
+    lastName            String
+    dob                 DateTime? @db.Date
+    nationality         String?
+    gender              String?
+    tin                 String?
 
-  firstName  String?
-  middleName String?
-  lastName   String?
+    // ─── Shares Info ───
+    numberOfShares      Decimal  @db.Decimal(15, 2)
+    paidUpCapital       Decimal  @db.Decimal(15, 2)
+    methodOfPayment     String   @default("CASH") // Matches your ENUM('Cash','Non-Cash')
 
-  residentialAddress String?
+    orderSequence       Int      @default(0) 
 
-  businessType String?
-  tradeName    String?
-
-  civilStatus String?
-
-  dateOfBirth DateTime?
-  age         Int?
-
-  gender String?
-
-  tinNumber String?
-
-  citizenship  String?
-  placeOfBirth String?
-
-  prcLicense String?
-
-  contactNumber String?
-  contactEmail  String?
-  contactPerson String?
-
-  idType   String?
-  idNumber String?
-
-  spouseTinNumber    String?
-  spouseEmployerName String?
-  spouseEmployerTin  String?
-
-  spouseFirstName  String?
-  spouseMiddleName String?
-  spouseLastName   String?
-
-  spouseEmploymentStatus String?
-
-  motherFirstName  String?
-  motherMiddleName String?
-  motherLastName   String?
-
-  fatherFirstName  String?
-  fatherMiddleName String?
-  fatherLastName   String?
-
-  createdAt DateTime @default(now())
-
-  @@map("atms_professional")
+    @@map("corporate_shareholder")
 }
 
-model SoleProprietorship {
-  id Int @id @default(autoincrement())
+// ─── Individual Details (Sole Proprietors & Professionals) ────────
+model IndividualDetails {
+    id                  Int      @id @default(autoincrement())
+    
+    clientId            Int      @unique
+    client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id])
+    // ─── Personal Information ───
+    firstName           String
+    middleName          String?
+    lastName            String
+    dob                 DateTime @db.Date
+    civilStatus         String
+    gender              String
+    citizenship         String   @default("Filipino")
+    placeOfBirth        String?
+    
+    residentialAddress  String?  @db.Text
+    
+    // ─── Identifications ───
+    prcLicenseNo        String?
+    primaryIdType       String?  // e.g., "Passport", "Driver's License"
+    primaryIdNumber     String?
 
-  businessName String?
+    // ─── Contact Information ───
+    personalEmail       String?
+    mobileNumber        String?
+    telephoneNumber     String?
 
-  firstName  String?
-  middleName String?
-  lastName   String?
+    // ─── Parent Information (Lineage for BIR/DTI) ───
+    motherFirstName     String?
+    motherMiddleName    String?
+    motherLastName      String?
 
-  residentialAddress String?
-  businessAddress    String?
+    fatherFirstName     String?
+    fatherMiddleName    String?
+    fatherLastName      String?
 
-  businessType String?
-  tradeName    String?
+    // ─── Spouse Information (For Joint Tax Filings) ───
+    spouseFirstName     String?
+    spouseMiddleName    String?
+    spouseLastName      String?
+    spouseEmploymentStatus String?
+    spouseTin           String?
+    spouseEmployerName  String?
+    spouseEmployerTin   String?
 
-  civilStatus String?
-
-  dateOfBirth DateTime?
-  age         Int?
-
-  gender String?
-
-  tinNumber String?
-
-  citizenship  String?
-  placeOfBirth String?
-
-  businessArea      String?
-  numberOfEmployees Int?
-
-  beginningCapital String?
-
-  landlineNumber String?
-  faxNumber      String?
-
-  motherFirstName  String?
-  motherMiddleName String?
-  motherLastName   String?
-
-  fatherFirstName  String?
-  fatherMiddleName String?
-  fatherLastName   String?
-
-  spouseFirstName  String?
-  spouseMiddleName String?
-  spouseLastName   String?
-
-  spouseEmploymentStatus String?
-  spouseTinNumber        String?
-  spouseEmployerName     String?
-  spouseEmployerTin      String?
-
-  businessPlace String?
-
-  ownedDocs   String?
-  ownedReason String?
-
-  rentedContract      String?
-  rentedNotarized     String?
-  rentedDocStamp      String?
-  rentedMonthlyRent   String?
-  rentedLessorName    String?
-  rentedLessorAddress String?
-
-  propertyOwner String?
-
-  noRentReason String?
-
-  landlordOwnDocs   String?
-  landlordOwnReason String?
-
-  landlordLeaseDocs   String?
-  landlordLeaseReason String?
-
-  contactPerson String?
-  contactEmail  String?
-  contactNumber String?
-
-  idType   String?
-  idNumber String?
-
-  createdAt DateTime @default(now())
-
-  @@map("atms_sole_proprietorship")
+    @@map("individual_details")
 }

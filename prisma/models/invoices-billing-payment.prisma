@@ -1,0 +1,198 @@
+enum InvoiceStatus {
+    DRAFT
+    UNPAID
+    PARTIALLY_PAID
+    PAID
+    OVERDUE
+    VOID
+}
+
+enum PaymentMethod {
+    CASH
+    BANK_TRANSFER
+    CHECK
+    E_WALLET
+    CREDIT_CARD
+}
+
+enum InvoiceChangeType {
+    INVOICE_CREATED
+    INVOICE_UPDATED
+    STATUS_CHANGED
+    DUE_DATE_CHANGED
+    PAYMENT_ADDED
+    PAYMENT_VOIDED
+    ITEM_ADDED
+    ITEM_REMOVED
+    INVOICE_VOIDED
+}
+
+enum SubscriptionChangeType {
+    SUBSCRIPTION_CREATED
+    RATE_CHANGED
+    PLAN_CHANGED
+    PAUSED
+    REACTIVATED
+    CANCELLED
+}
+
+// ─── Client Service Subscription (Replaces acs_client_service_plan)
+// Tracks the active recurring plans a client has agreed to.
+model ClientSubscription {
+    id              Int      @id @default(autoincrement())
+
+    clientId        Int
+    client          Client   @relation(fields: [clientId], references: [id])
+
+    // We still link the original plan so we know what to generate, 
+    // but the actual billed price is snapshot below in `agreedRate`.
+    servicePlanId   Int
+    servicePlan     ServicePlan @relation(fields: [servicePlanId], references: [id])
+
+    agreedRate      Decimal  @db.Decimal(10, 2)
+    effectiveDate   DateTime
+    inactiveDate    DateTime?
+    
+    isActive        Boolean  @default(true)
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    historyLogs   SubscriptionHistory[]
+
+    @@index([clientId, isActive])
+    @@map("client_subscription")
+}
+
+// ─── Invoice (Replaces acs_invoices & acs_billing) ────────────────
+model Invoice {
+    id              String   @id @default(cuid())
+    invoiceNumber   String   @unique // e.g., "INV-2026-0001"
+
+    // Can belong to an active Client OR an onboarding Lead
+    clientId        Int?
+    client          Client?  @relation(fields: [clientId], references: [id])
+    leadId          Int?
+    lead            Lead?    @relation(fields: [leadId], references: [id])
+
+    status          InvoiceStatus @default(UNPAID)
+    
+    issueDate       DateTime @default(now())
+    dueDate         DateTime
+
+    // Financial Totals
+    subTotal        Decimal  @db.Decimal(10, 2) @default(0.00)
+    taxAmount       Decimal  @db.Decimal(10, 2) @default(0.00)
+    discountAmount  Decimal  @db.Decimal(10, 2) @default(0.00)
+    totalAmount     Decimal  @db.Decimal(10, 2) @default(0.00)
+    balanceDue      Decimal  @db.Decimal(10, 2) @default(0.00)
+
+    notes           String?  @db.Text
+    terms           String?  @db.Text // "Net 15", "Net 30"
+
+    items           InvoiceItem[]
+    payments        Payment[]
+    historyLogs     InvoiceHistory[]
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([clientId])
+    @@index([leadId])
+    @@index([status])
+    @@map("invoice")
+}
+
+// ─── Invoice Item (Snapshot of the service rendered) ──────────────
+model InvoiceItem {
+    id              Int      @id @default(autoincrement())
+    
+    invoiceId       String
+    invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+    // NO FOREIGN KEYS TO SERVICES. This is a hardcoded snapshot.
+    description     String   // e.g., "Monthly Bookkeeping - March 2026"
+    quantity        Int      @default(1)
+    unitPrice       Decimal  @db.Decimal(10, 2)
+    total           Decimal  @db.Decimal(10, 2)
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([invoiceId])
+    @@map("invoice_item")
+}
+
+// ─── Payment (Replaces acs_payment_system) ────────────────────────
+model Payment {
+    id              String   @id @default(cuid())
+
+    invoiceId       String
+    invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+    // Track exactly who recorded this payment (Internal ERP Staff)
+    recordedById    String?
+    recordedBy      User?    @relation(fields: [recordedById], references: [id])
+
+    amount          Decimal  @db.Decimal(10, 2)
+    paymentDate     DateTime @default(now())
+    method          PaymentMethod
+    
+    referenceNumber String?  // e.g., Bank Transfer Ref # or Check #
+    proofOfPaymentUrl String? // URL to the uploaded deposit slip/screenshot
+
+    notes           String?  @db.Text
+
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([invoiceId])
+    @@map("payment")
+}
+
+// ─── Invoice History (Audit Trail) ────────────────────────────────
+model InvoiceHistory {
+    id          String   @id @default(cuid())
+
+    invoiceId   String
+    invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+    // The internal ERP user who made the change (or "SYSTEM" if done by a cron job)
+    actorId     String?
+    actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+    changeType  InvoiceChangeType
+
+    // Text snapshots (e.g., oldValue: "UNPAID", newValue: "PARTIALLY_PAID")
+    oldValue    String?  @db.Text
+    newValue    String?  @db.Text
+
+    createdAt   DateTime @default(now())
+
+    @@index([invoiceId])
+    @@index([invoiceId, createdAt(sort: Desc)])
+    @@map("invoice_history")
+}
+
+// ─── Subscription History (Audit Trail) ───────────────────────────
+model SubscriptionHistory {
+    id              String   @id @default(cuid())
+
+    subscriptionId  Int
+    subscription    ClientSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+    actorId         String?
+    actor           User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+    changeType      SubscriptionChangeType
+
+    // Text snapshots (e.g., oldValue: "5000.00", newValue: "6000.00")
+    oldValue        String?  @db.Text
+    newValue        String?  @db.Text
+
+    createdAt       DateTime @default(now())
+
+    @@index([subscriptionId])
+    @@index([subscriptionId, createdAt(sort: Desc)])
+    @@map("subscription_history")
+}
