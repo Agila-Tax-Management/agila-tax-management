@@ -21,6 +21,7 @@ const PORTAL_APPS = [
   { name: "ACCOUNT_OFFICER" as const, label: "Account Officer Portal" },
   { name: "HR" as const, label: "HR Portal" },
   { name: "TASK_MANAGEMENT" as const, label: "Task Management Portal" },
+  { name: "CLIENT_MANAGEMENT" as const, label: "Client Management" },
 ];
 
 /* ─── Employee Level definitions (position 1 = highest) ─────────── */
@@ -56,7 +57,11 @@ interface InternalUserSeed {
   gender: string;
   birthDate: Date;
   phone: string;
-  address: string;
+
+  // Updated to match the new split address schema
+  currentCity: string;
+  currentProvince: string;
+
   department: string;
   departmentDescription: string;
   positionTitle: string;
@@ -79,7 +84,8 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     gender: "Male",
     birthDate: new Date("1990-01-01"),
     phone: "09170000000",
-    address: "Cebu City, Philippines",
+    currentCity: "Cebu City",
+    currentProvince: "Cebu",
     department: "Administration",
     departmentDescription: "Executive administration and system management",
     positionTitle: "System Administrator",
@@ -97,7 +103,8 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     gender: "Female",
     birthDate: new Date("1992-06-15"),
     phone: "09180000000",
-    address: "Cebu City, Philippines",
+    currentCity: "Cebu City",
+    currentProvince: "Cebu",
     department: "Human Resources",
     departmentDescription: "HR operations and employee management",
     positionTitle: "HR Manager",
@@ -115,7 +122,8 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     gender: "Male",
     birthDate: new Date("1998-09-20"),
     phone: "09190000000",
-    address: "Mandaue City, Philippines",
+    currentCity: "Mandaue City",
+    currentProvince: "Cebu",
     department: "Accounting",
     departmentDescription: "Bookkeeping, payroll, and financial reporting",
     positionTitle: "Accountant",
@@ -142,8 +150,13 @@ interface ClientSeed {
   clientNo: string;
   businessName: string;
   portalName: string;
-  businessType: "INDIVIDUAL" | "SOLE_PROPRIETORSHIP" | "PARTNERSHIP" | "CORPORATION" | "COOPERATIVE";
-  branchType?: string;
+  businessEntity: "SOLE_PROPRIETORSHIP" | "CORPORATION" | "PARTNERSHIP" | "INDIVIDUAL" | "COOPERATIVE";
+  branchType: "MAIN" | "BRANCH";
+  // Tax defaults for seeding
+  tin: string;
+  rdoCode: string;
+  registeredAddress: string;
+  zipCode: string;
 }
 
 const CLIENT_COMPANIES: ClientSeed[] = [
@@ -152,8 +165,12 @@ const CLIENT_COMPANIES: ClientSeed[] = [
     clientNo: "2024-0001",
     businessName: "Santos General Merchandise",
     portalName: "Santos General Merchandise",
-    businessType: "SOLE_PROPRIETORSHIP",
-    branchType: "Main Branch",
+    businessEntity: "SOLE_PROPRIETORSHIP",
+    branchType: "MAIN",
+    tin: "987-654-321-000",
+    rdoCode: "082",
+    registeredAddress: "Fuente Osmena, Cebu City",
+    zipCode: "6000",
   },
 ];
 
@@ -180,7 +197,8 @@ interface ClientUserSeed {
     gender: string;
     birthDate: Date;
     phone: string;
-    address: string;
+    currentCity: string;
+    currentProvince: string;
     positionTitle: string;
     hireDate: Date;
   };
@@ -199,7 +217,8 @@ const CLIENT_USERS: ClientUserSeed[] = [
       gender: "Female",
       birthDate: new Date("1985-03-22"),
       phone: "09270000000",
-      address: "Cebu City, Philippines",
+      currentCity: "Cebu City",
+      currentProvince: "Cebu",
       positionTitle: "Business Owner",
       hireDate: new Date("2024-01-01"),
     },
@@ -256,7 +275,9 @@ async function seedClientUser(
           gender: emp.gender,
           birthDate: emp.birthDate,
           phone: emp.phone,
-          address: emp.address,
+          // Mapped to the new address fields
+          currentCity: emp.currentCity,
+          currentProvince: emp.currentProvince,
           active: true,
         },
       });
@@ -406,7 +427,8 @@ async function seedInternalUser(
         birthDate: seed.birthDate,
         gender: seed.gender,
         phone: seed.phone,
-        address: seed.address,
+        currentCity: seed.currentCity,
+        currentProvince: seed.currentProvince,
         active: true,
       },
     });
@@ -490,25 +512,50 @@ const CITIES = [
 
 async function main(): Promise<void> {
   // ── 1. Seed Company (Agila — the internal company) ───────────────
-  await prisma.client.upsert({
+  const atmsClient = await prisma.client.upsert({
     where: { companyCode: "atms" },
     update: {
       active: true,
       businessName: "Agila Tax Management Services",
       portalName: "Agila Tax Management Services",
-      branchType: "Main Branch",
+      businessEntity: "SOLE_PROPRIETORSHIP",
+      branchType: "MAIN",
     },
     create: {
       companyCode: "atms",
       clientNo: "2023-1001",
       active: true,
-      businessType: "SOLE_PROPRIETORSHIP",
+      businessEntity: "SOLE_PROPRIETORSHIP",
       businessName: "Agila Tax Management Services",
       portalName: "Agila Tax Management Services",
-      branchType: "Main Branch",
+      branchType: "MAIN",
     },
   });
-  console.log("  ✓ Company (Agila Tax Management Services) seeded");
+
+  // Seed the normalized 1-to-1 tax models for ATMS
+  await prisma.birInformation.upsert({
+      where: { clientId: atmsClient.id },
+      update: {},
+      create: {
+          clientId: atmsClient.id,
+          tin: "123-456-789-000",
+          rdoCode: "082",
+          registeredAddress: "Cebu City, Philippines",
+          zipCode: "6000"
+      }
+  });
+
+  await prisma.businessOperations.upsert({
+      where: { clientId: atmsClient.id },
+      update: {},
+      create: {
+          clientId: atmsClient.id,
+          tradeName: "Agila Tax Management Services",
+          placeType: "RENTED"
+      }
+  });
+
+  console.log("  ✓ Company (Agila Tax Management Services) seeded with BIR Profile");
 
   // ── 2. Seed Portal Apps ──────────────────────────────────────────
   for (const app of PORTAL_APPS) {
@@ -520,22 +567,16 @@ async function main(): Promise<void> {
   }
   console.log(`  ✓ ${PORTAL_APPS.length} portal apps seeded`);
 
-  // ── 3. Resolve ATMS client ID ────────────────────────────────────
-  const agilaClient = await prisma.client.findUnique({
-    where: { companyCode: "atms" },
-  });
-  if (!agilaClient) throw new Error("ATMS client not found — step 1 failed");
-
   // ── 4. Seed Employee Levels (scoped to ATMS client) ───────────────
   for (const level of EMPLOYEE_LEVELS) {
     await prisma.employeeLevel.upsert({
-      where: { clientId_name: { clientId: agilaClient.id, name: level.name } },
+      where: { clientId_name: { clientId: atmsClient.id, name: level.name } },
       update: { position: level.position, description: level.description },
-      create: { clientId: agilaClient.id, ...level },
+      create: { clientId: atmsClient.id, ...level },
     });
   }
   const allLevels = await prisma.employeeLevel.findMany({
-    where: { clientId: agilaClient.id },
+    where: { clientId: atmsClient.id },
   });
   const levelsByName = new Map(allLevels.map((l) => [l.name, l.id]));
   console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded (ATMS client)`);
@@ -549,11 +590,11 @@ async function main(): Promise<void> {
   for (const seed of INTERNAL_USERS) {
     const dept = await prisma.department.upsert({
       where: {
-        clientId_name: { clientId: agilaClient.id, name: seed.department },
+        clientId_name: { clientId: atmsClient.id, name: seed.department },
       },
       update: {},
       create: {
-        clientId: agilaClient.id,
+        clientId: atmsClient.id,
         name: seed.department,
         description: seed.departmentDescription,
       },
@@ -574,7 +615,7 @@ async function main(): Promise<void> {
     }
 
     const employeeLevelId = levelsByName.get(seed.employeeLevel) ?? null;
-    await seedInternalUser(seed, agilaClient.id, dept.id, position.id, employeeLevelId);
+    await seedInternalUser(seed, atmsClient.id, dept.id, position.id, employeeLevelId);
   }
 
   console.log("\n  Internal user credentials:");
@@ -586,23 +627,37 @@ async function main(): Promise<void> {
 
   // ── 6. Seed External Client Companies ─────────────────────────────
   for (const c of CLIENT_COMPANIES) {
-    await prisma.client.upsert({
+    const externalClient = await prisma.client.upsert({
       where: { companyCode: c.companyCode },
       update: {
         active: true,
         businessName: c.businessName,
         portalName: c.portalName,
-        branchType: c.branchType ?? "Main Branch",
+        businessEntity: c.businessEntity,
+        branchType: c.branchType,
       },
       create: {
         companyCode: c.companyCode,
         clientNo: c.clientNo,
         active: true,
-        businessType: c.businessType,
+        businessEntity: c.businessEntity,
         businessName: c.businessName,
         portalName: c.portalName,
-        branchType: c.branchType ?? "Main Branch",
+        branchType: c.branchType,
       },
+    });
+
+    // Seed the external client's normalized tax models
+    await prisma.birInformation.upsert({
+        where: { clientId: externalClient.id },
+        update: {},
+        create: {
+            clientId: externalClient.id,
+            tin: c.tin,
+            rdoCode: c.rdoCode,
+            registeredAddress: c.registeredAddress,
+            zipCode: c.zipCode
+        }
     });
   }
   console.log(`  ✓ ${CLIENT_COMPANIES.length} client company/companies seeded`);
@@ -629,7 +684,7 @@ async function main(): Promise<void> {
   }
   console.log("  ─────────────────────────────────────────────────────\n");
 
-  // ── 8. Seed Government Offices ────────────────────────────────────
+  // ── 8. Seed Government Offices & Cities ───────────────────────────
   for (const office of GOVERNMENT_OFFICES) {
     await prisma.governmentOffice.upsert({
       where: { code: office.code },
@@ -637,9 +692,7 @@ async function main(): Promise<void> {
       create: { ...office, isActive: true },
     });
   }
-  console.log(`  ✓ ${GOVERNMENT_OFFICES.length} government offices seeded`);
 
-  // ── 9. Seed Cities ────────────────────────────────────────────────
   for (const city of CITIES) {
     await prisma.city.upsert({
       where: { name: city.name },
@@ -647,7 +700,7 @@ async function main(): Promise<void> {
       create: city,
     });
   }
-  console.log(`  ✓ ${CITIES.length} cities seeded`);
+  console.log(`  ✓ Reference tables (Gov Offices, Cities) seeded`);
 }
 
 main()
