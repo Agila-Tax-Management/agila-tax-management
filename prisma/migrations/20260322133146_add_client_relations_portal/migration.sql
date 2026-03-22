@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AppPortal" ADD VALUE 'CLIENT_RELATIONS';
