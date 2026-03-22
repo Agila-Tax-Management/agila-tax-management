@@ -20,9 +20,8 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
-  activityLogs           ActivityLog[]
-  notificationsReceived  InternalNotification[] @relation("NotificationRecipient")
-  notificationsTriggered InternalNotification[] @relation("NotificationActor")
+  activityLogs    ActivityLog[]  @relation("InternalUserLogs")
+  notifications   Notification[] @relation("UserNotifications")
   taskConversations      TaskConversation[]
   taskHistoryLogs        TaskHistory[]
 

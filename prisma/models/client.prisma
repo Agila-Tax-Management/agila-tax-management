@@ -65,6 +65,8 @@ model Client {
 
   lead            Lead?
 
+  activityLogs    ActivityLog[]
+
   clientUsers     ClientUser[]
   userAssignments ClientUserAssignment[]
 

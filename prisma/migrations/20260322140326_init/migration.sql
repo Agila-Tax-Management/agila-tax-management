@@ -2,7 +2,7 @@
 CREATE TYPE "LogAction" AS ENUM ('CREATED', 'UPDATED', 'DELETED', 'VIEWED', 'EXPORTED', 'IMPORTED', 'LOGIN', 'LOGOUT', 'STATUS_CHANGE', 'PERMISSION_CHANGE', 'ASSIGNED', 'UNASSIGNED', 'APPROVED', 'REJECTED', 'SUBMITTED', 'CANCELLED', 'ARCHIVED', 'RESTORED');
 
 -- CreateEnum
-CREATE TYPE "AppPortal" AS ENUM ('SALES', 'COMPLIANCE', 'LIAISON', 'ACCOUNTING', 'ACCOUNT_OFFICER', 'HR', 'TASK_MANAGEMENT');
+CREATE TYPE "AppPortal" AS ENUM ('SALES', 'COMPLIANCE', 'LIAISON', 'ACCOUNTING', 'ACCOUNT_OFFICER', 'HR', 'TASK_MANAGEMENT', 'CLIENT_RELATIONS');
 
 -- CreateEnum
 CREATE TYPE "ClientUserStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED');
@@ -53,7 +53,7 @@ CREATE TYPE "CoaActionType" AS ENUM ('TIME_IN', 'LUNCH_START', 'LUNCH_END', 'TIM
 CREATE TYPE "CoaRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('INFO', 'SUCCESS', 'WARNING', 'ERROR', 'ACTION_REQUIRED');
+CREATE TYPE "NotificationType" AS ENUM ('SYSTEM', 'HR', 'PAYROLL', 'TASK', 'DOCUMENT', 'ANNOUNCEMENT');
 
 -- CreateEnum
 CREATE TYPE "NotificationPriority" AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT');
@@ -112,7 +112,10 @@ CREATE TYPE "Role" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'EMPLOYEE');
 -- CreateTable
 CREATE TABLE "activity_log" (
     "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "clientId" INTEGER,
+    "userId" TEXT,
+    "clientUserId" TEXT,
+    "isSystemAction" BOOLEAN NOT NULL DEFAULT false,
     "action" "LogAction" NOT NULL,
     "entity" TEXT NOT NULL,
     "entityId" TEXT,
@@ -665,22 +668,21 @@ CREATE TABLE "coa_request" (
 );
 
 -- CreateTable
-CREATE TABLE "internal_notification" (
+CREATE TABLE "notification" (
     "id" TEXT NOT NULL,
-    "recipientId" TEXT NOT NULL,
-    "actorId" TEXT,
-    "type" "NotificationType" NOT NULL DEFAULT 'INFO',
-    "priority" "NotificationPriority" NOT NULL DEFAULT 'NORMAL',
+    "userId" TEXT,
+    "clientUserId" TEXT,
     "title" TEXT NOT NULL,
     "message" TEXT NOT NULL,
-    "entity" TEXT,
-    "entityId" TEXT,
-    "actionUrl" TEXT,
+    "linkUrl" TEXT,
+    "type" "NotificationType" NOT NULL DEFAULT 'SYSTEM',
+    "priority" "NotificationPriority" NOT NULL DEFAULT 'NORMAL',
     "isRead" BOOLEAN NOT NULL DEFAULT false,
     "readAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "internal_notification_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "notification_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1417,7 +1419,13 @@ CREATE TABLE "_ServiceOneTimePromos" (
 );
 
 -- CreateIndex
+CREATE INDEX "activity_log_clientId_idx" ON "activity_log"("clientId");
+
+-- CreateIndex
 CREATE INDEX "activity_log_userId_idx" ON "activity_log"("userId");
+
+-- CreateIndex
+CREATE INDEX "activity_log_clientUserId_idx" ON "activity_log"("clientUserId");
 
 -- CreateIndex
 CREATE INDEX "activity_log_entity_entityId_idx" ON "activity_log"("entity", "entityId");
@@ -1537,13 +1545,13 @@ CREATE INDEX "coa_request_employeeId_idx" ON "coa_request"("employeeId");
 CREATE INDEX "coa_request_clientId_idx" ON "coa_request"("clientId");
 
 -- CreateIndex
-CREATE INDEX "internal_notification_recipientId_isRead_idx" ON "internal_notification"("recipientId", "isRead");
+CREATE INDEX "notification_userId_idx" ON "notification"("userId");
 
 -- CreateIndex
-CREATE INDEX "internal_notification_recipientId_createdAt_idx" ON "internal_notification"("recipientId", "createdAt");
+CREATE INDEX "notification_clientUserId_idx" ON "notification"("clientUserId");
 
 -- CreateIndex
-CREATE INDEX "internal_notification_actorId_idx" ON "internal_notification"("actorId");
+CREATE INDEX "notification_isRead_priority_idx" ON "notification"("isRead", "priority");
 
 -- CreateIndex
 CREATE INDEX "client_subscription_clientId_isActive_idx" ON "client_subscription"("clientId", "isActive");
@@ -1744,7 +1752,13 @@ CREATE INDEX "_ServicePlanPromos_B_index" ON "_ServicePlanPromos"("B");
 CREATE INDEX "_ServiceOneTimePromos_B_index" ON "_ServiceOneTimePromos"("B");
 
 -- AddForeignKey
+ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_clientUserId_fkey" FOREIGN KEY ("clientUserId") REFERENCES "client_user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EmployeeAppAccess" ADD CONSTRAINT "EmployeeAppAccess_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1891,10 +1905,10 @@ ALTER TABLE "coa_request" ADD CONSTRAINT "coa_request_approvedById_fkey" FOREIGN
 ALTER TABLE "coa_request" ADD CONSTRAINT "coa_request_approvedByClientUserId_fkey" FOREIGN KEY ("approvedByClientUserId") REFERENCES "client_user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "internal_notification" ADD CONSTRAINT "internal_notification_recipientId_fkey" FOREIGN KEY ("recipientId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "notification" ADD CONSTRAINT "notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "internal_notification" ADD CONSTRAINT "internal_notification_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "notification" ADD CONSTRAINT "notification_clientUserId_fkey" FOREIGN KEY ("clientUserId") REFERENCES "client_user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "client_subscription" ADD CONSTRAINT "client_subscription_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
