@@ -21,7 +21,7 @@ const PORTAL_APPS = [
   { name: "ACCOUNT_OFFICER" as const, label: "Account Officer Portal" },
   { name: "HR" as const, label: "HR Portal" },
   { name: "TASK_MANAGEMENT" as const, label: "Task Management Portal" },
-  { name: "CLIENT_MANAGEMENT" as const, label: "Client Management" },
+  { name: "CLIENT_RELATIONS" as const, label: "Client Relations" },
 ];
 
 /* ─── Employee Level definitions (position 1 = highest) ─────────── */

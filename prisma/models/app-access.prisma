@@ -6,7 +6,7 @@ enum AppPortal {
     ACCOUNT_OFFICER
     HR
     TASK_MANAGEMENT
-    CLIENT_MANAGEMENT
+    CLIENT_RELATIONS
 }
 
 model App {
