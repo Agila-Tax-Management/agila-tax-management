@@ -106,9 +106,12 @@ export default function UserClientViewModal({
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">{a.portalName}</p>
                       </div>
-                      <Badge variant={a.active ? 'success' : 'neutral'}>
-                        {a.active ? 'Active' : 'Inactive'}
-                      </Badge>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="info">{a.role}</Badge>
+                        <Badge variant={a.active ? 'success' : 'neutral'}>
+                          {a.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 ))

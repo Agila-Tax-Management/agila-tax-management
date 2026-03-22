@@ -90,9 +90,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const role = request.nextUrl.searchParams.get("role");
 
+  const validRoles = ["OWNER", "ADMIN", "EMPLOYEE", "VIEWER"] as const;
+  type PortalRole = typeof validRoles[number];
+  const roleFilter: PortalRole | undefined = role && (validRoles as readonly string[]).includes(role)
+    ? (role as PortalRole)
+    : undefined;
+
   const users = await prisma.clientUser.findMany({
-    where: role
-      ? { assignments: { some: { role: role as "OWNER" | "ADMIN" | "EMPLOYEE" | "VIEWER" } } }
+    where: roleFilter
+      ? { assignments: { some: { role: roleFilter } } }
       : undefined,
     orderBy: { createdAt: "desc" },
     include: CLIENT_USER_INCLUDE,

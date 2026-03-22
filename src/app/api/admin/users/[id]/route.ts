@@ -19,7 +19,6 @@ const USER_INCLUDE = {
       lastName: true,
       employeeNo: true,
       phone: true,
-      address: true,
       birthDate: true,
       gender: true,
       appAccess: {
@@ -65,7 +64,6 @@ function toUserRecord(u: {
     lastName: string;
     employeeNo: string | null;
     phone: string;
-    address: string;
     birthDate: Date;
     gender: string;
     appAccess: {
@@ -105,7 +103,6 @@ function toUserRecord(u: {
           lastName: emp.lastName,
           employeeNo: emp.employeeNo,
           phone: emp.phone,
-          address: emp.address,
           birthDate: emp.birthDate.toISOString(),
           gender: emp.gender,
           employment: employment
@@ -199,7 +196,7 @@ export async function PUT(
 
   const {
     name, email, password, role, active,
-    firstName, middleName, lastName, phone, address, birthDate, gender,
+    firstName, middleName, lastName, phone, birthDate, gender,
     portalAccess, employeeLevelId,
   } = parsed.data;
 
@@ -256,7 +253,6 @@ export async function PUT(
             lastName,
             email,
             phone,
-            address: address || "N/A",
             birthDate: new Date(birthDate),
             gender,
           },

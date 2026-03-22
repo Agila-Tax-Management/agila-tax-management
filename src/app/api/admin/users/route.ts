@@ -35,7 +35,6 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
           lastName: true,
           employeeNo: true,
           phone: true,
-          address: true,
           birthDate: true,
           gender: true,
           appAccess: {
@@ -86,7 +85,6 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
             lastName: emp.lastName,
             employeeNo: emp.employeeNo,
             phone: emp.phone,
-            address: emp.address,
             birthDate: emp.birthDate.toISOString(),
             gender: emp.gender,
             employment: employment
@@ -149,7 +147,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const {
     name, email, password, role, active,
-    firstName, middleName, lastName, phone, address, birthDate, gender,
+    firstName, middleName, lastName, phone, birthDate, gender,
     portalAccess, employeeLevelId,
   } = parsed.data;
 
@@ -219,7 +217,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           birthDate: new Date(birthDate),
           gender,
           phone,
-          address: address || "N/A",
           active: true,
         },
       });

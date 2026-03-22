@@ -24,6 +24,7 @@ const PORTAL_LABELS: Record<string, string> = {
   ACCOUNT_OFFICER: 'Account Officer Portal',
   HR: 'HR Portal',
   TASK_MANAGEMENT: 'Task Management Portal',
+  CLIENT_RELATIONS: 'Client Relations Portal',
 };
 
 const PERM_LABELS: Record<string, string> = {
@@ -103,7 +104,6 @@ export default function UserViewModal({
                       })
                     : '—',
                 },
-                { label: 'Address', value: user.employee.address || '—' },
               ].map((f) => (
                 <div key={f.label} className="space-y-0.5">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">

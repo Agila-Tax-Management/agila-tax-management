@@ -29,8 +29,8 @@ function getInitialForm(editingClient?: ClientRecord | null): ClientFormValues {
     clientNo: editingClient?.clientNo ?? '',
     businessName: editingClient?.businessName ?? '',
     portalName: editingClient?.portalName ?? '',
-    businessType: (editingClient?.businessType as ClientFormValues['businessType']) ?? 'SOLE_PROPRIETORSHIP',
-    branchType: editingClient?.branchType ?? 'Main Branch',
+    businessEntity: (editingClient?.businessEntity as ClientFormValues['businessEntity']) ?? 'SOLE_PROPRIETORSHIP',
+    branchType: editingClient?.branchType ?? 'MAIN',
     timezone: editingClient?.timezone ?? 'Asia/Manila',
   };
 }
@@ -62,7 +62,7 @@ export default function ClientFormModal({
     const errors: Record<string, string> = {};
     if (!form.companyCode.trim()) errors.companyCode = 'Company code is required';
     if (!form.businessName.trim()) errors.businessName = 'Business name is required';
-    if (!form.businessType) errors.businessType = 'Business type is required';
+    if (!form.businessEntity) errors.businessEntity = 'Business entity is required';
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       toastError('Validation failed', 'Please check the form for errors.');
@@ -139,30 +139,33 @@ export default function ClientFormModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-              Business Type <span className="text-red-500">*</span>
+              Business Entity <span className="text-red-500">*</span>
             </label>
             <select
-              value={form.businessType}
-              onChange={(e) => set('businessType', e.target.value)}
+              value={form.businessEntity}
+              onChange={(e) => set('businessEntity', e.target.value)}
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {BIZ_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
-            {fieldErrors.businessType && (
-              <p className="mt-1 text-xs text-red-500">{fieldErrors.businessType}</p>
+            {fieldErrors.businessEntity && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.businessEntity}</p>
             )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
               Branch Type
             </label>
-            <Input
+            <select
               value={form.branchType}
               onChange={(e) => set('branchType', e.target.value)}
-              placeholder="e.g. Main Branch"
-            />
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="MAIN">Main Branch</option>
+              <option value="BRANCH">Branch</option>
+            </select>
           </div>
         </div>
 

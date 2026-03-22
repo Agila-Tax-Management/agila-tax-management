@@ -112,7 +112,7 @@ model ClientUserAssignment {
   clientId Int
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  role ClientPortalRole @default(EMPLOYEE)
+  role ClientPortalRole @default(OWNER)
 
   createdAt DateTime @default(now())
 
