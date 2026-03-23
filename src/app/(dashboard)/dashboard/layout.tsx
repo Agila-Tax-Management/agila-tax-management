@@ -6,7 +6,7 @@ import Image from 'next/image';
 import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
   Settings, LogOut, ChevronLeft, ChevronRight, X, Menu,
-  ChevronDown, ChevronUp, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
+  ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
   Sun, Moon
 } from 'lucide-react';
 import { Button } from '@/components/UI/button';
@@ -57,13 +57,13 @@ const NAV_ITEMS = [
 ];
 
 const PORTAL_ITEMS = [
-  { href: '/portal/sales', label: 'Agila Sales Portal', icon: Megaphone },
-  { href: '/portal/compliance', label: 'Agila Compliance Portal', icon: ShieldCheck },
-  { href: '/portal/liaison', label: 'Agila Liaison Portal', icon: Building2 },
-  { href: '/portal/accounting', label: 'Agila Accounting Portal', icon: BarChart3 },
-  { href: '/portal/account-officer', label: 'Agila Account Officer Portal', icon: Briefcase },
-  { href: '/portal/hr', label: 'Agila HR Portal', icon: UserCheck },
-  { href: '/portal/task-management', label: 'Agila Task Management Portal', icon: UserCheck },
+  { href: '/portal/sales',           label: 'Sales',           icon: Megaphone  },
+  { href: '/portal/compliance',      label: 'Compliance',      icon: ShieldCheck },
+  { href: '/portal/liaison',         label: 'Liaison',         icon: Building2  },
+  { href: '/portal/accounting',      label: 'Accounting',      icon: BarChart3  },
+  { href: '/portal/account-officer', label: 'Account Officer', icon: Briefcase  },
+  { href: '/portal/hr',              label: 'HR',              icon: UserCheck  },
+  { href: '/portal/task-management', label: 'Task Management', icon: UserCheck  },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -142,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             {children}
           </main>
         </div>
@@ -233,7 +233,7 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 mt-4 space-y-1 overflow-y-auto pb-6">
+        <nav className="flex-1 px-3 mt-4 space-y-1 overflow-y-auto pb-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
             return (
@@ -256,30 +256,41 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
           })}
 
           {/* Portal Dropdown */}
-          <div className="relative">
+          <div>
             <button
               onClick={() => setPortalOpen((open) => !open)}
-              className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 rounded-xl transition-all duration-200 text-slate-400 hover:bg-slate-800 hover:text-white`}
+              className={`w-full flex items-center ${
+                isExpanded ? 'gap-3 px-3' : 'justify-center'
+              } p-3 rounded-xl transition-all duration-200 ${
+                portalOpen
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
               title={!isExpanded ? 'Portals' : undefined}
             >
               <span className="shrink-0"><Briefcase size={20} /></span>
               {isExpanded && <span className="font-semibold text-sm whitespace-nowrap">Portals</span>}
               {isExpanded && (
-                <span className="ml-auto">
-                  {portalOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                <span className="ml-auto transition-transform duration-200" style={{ transform: portalOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  <ChevronDown size={16} />
                 </span>
               )}
             </button>
+
             {portalOpen && isExpanded && (
-              <div className="ml-8 mt-1 space-y-1">
+              <div className="mt-1 mx-1 rounded-xl border border-slate-700/50 bg-slate-800/40 overflow-hidden">
                 {PORTAL_ITEMS.map(({ href, label, icon: Icon }) => (
                   <button
                     key={href}
                     onClick={() => navigate(href)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition text-left ${isActive(href) ? 'bg-blue-700 text-white' : ''}`}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                      isActive(href)
+                        ? 'bg-blue-600/80 text-white'
+                        : 'text-slate-400 hover:bg-slate-700/60 hover:text-white'
+                    }`}
                   >
-                    <Icon size={18} className="shrink-0" />
-                    <span className="text-sm">{label}</span>
+                    <Icon size={15} className="shrink-0" />
+                    <span className="text-[13px] font-medium">{label}</span>
                   </button>
                 ))}
               </div>

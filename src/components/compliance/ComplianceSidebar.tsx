@@ -67,7 +67,7 @@ export function ComplianceSidebar({ isOpen, onClose }: ComplianceSidebarProps) {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           {COMPLIANCE_NAV_ITEMS.map((item) => {
             if (item.isSection) {
               return (

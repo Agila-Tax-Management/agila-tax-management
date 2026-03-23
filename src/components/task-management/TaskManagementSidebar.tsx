@@ -66,7 +66,7 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           {NAV_ITEMS.map((item) => {
             if (item.isSection) {
               return (

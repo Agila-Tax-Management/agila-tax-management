@@ -65,7 +65,7 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           {LIAISON_NAV_ITEMS.map((item) => {
             if (item.isSection) {
               return (
