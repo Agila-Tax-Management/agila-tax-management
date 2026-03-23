@@ -15,11 +15,6 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
 
   const moduleRoot = '/portal/accounting';
   const isRoot = pathname === moduleRoot;
-  const backHref = isRoot ? '/dashboard' : moduleRoot;
-  const backLabel = isRoot
-    ? 'Main Hub'
-    : pathname.split('/').filter(Boolean).at(-1)!
-        .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
     <RoleProvider>
@@ -38,10 +33,10 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => router.push(backHref)}
+                onClick={() => isRoot ? router.push('/dashboard') : router.back()}
                 className="hidden sm:inline-flex"
               >
-                <ArrowLeft size={16} className="mr-1" /> {backLabel}
+                <ArrowLeft size={16} className="mr-1" /> {isRoot ? 'Main Hub' : 'Back'}
               </Button>
             </div>
 
