@@ -95,6 +95,9 @@ model Lead {
     convertedClientId     Int?      @unique
     convertedClient       Client?   @relation(fields: [convertedClientId], references: [id], onDelete: SetNull)
 
+    assignedAgentId       String?
+    assignedAgent         User?     @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+
     // ─── Services Availed / Interested In ───
     servicePlans          ServicePlan[]
     serviceOneTimePlans   ServiceOneTime[]
