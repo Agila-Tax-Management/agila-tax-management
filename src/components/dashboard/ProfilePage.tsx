@@ -24,15 +24,29 @@ interface ProfileApiData {
   employee: {
     id: number;
     firstName: string;
+    nameExtension: string | null;
     middleName: string | null;
     lastName: string;
     username: string | null;
     employeeNo: string | null;
     email: string | null;
+    personalEmail: string | null;
     phone: string;
-    address: string;
     gender: string;
     birthDate: string;
+    placeOfBirth: string | null;
+    civilStatus: string | null;
+    citizenship: string | null;
+    currentStreet: string | null;
+    currentBarangay: string | null;
+    currentCity: string | null;
+    currentProvince: string | null;
+    currentZip: string | null;
+    permanentStreet: string | null;
+    permanentBarangay: string | null;
+    permanentCity: string | null;
+    permanentProvince: string | null;
+    permanentZip: string | null;
   } | null;
   employment: {
     department: { id: number; name: string } | null;
@@ -44,13 +58,27 @@ type ProfileTab = 'personal' | 'account' | 'security';
 
 interface PersonalInfo {
   firstName: string;
+  nameExtension: string;
   middleName: string;
   lastName: string;
   email: string;
+  personalEmail: string;
   phone: string;
-  address: string;
   gender: string;
   birthDate: string;
+  placeOfBirth: string;
+  civilStatus: string;
+  citizenship: string;
+  currentStreet: string;
+  currentBarangay: string;
+  currentCity: string;
+  currentProvince: string;
+  currentZip: string;
+  permanentStreet: string;
+  permanentBarangay: string;
+  permanentCity: string;
+  permanentProvince: string;
+  permanentZip: string;
 }
 
 interface AccountInfo {
@@ -83,13 +111,27 @@ export function ProfilePage(): React.ReactNode {
 
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
     firstName: '',
+    nameExtension: '',
     middleName: '',
     lastName: '',
     email: '',
+    personalEmail: '',
     phone: '',
-    address: '',
     gender: '',
     birthDate: '',
+    placeOfBirth: '',
+    civilStatus: '',
+    citizenship: '',
+    currentStreet: '',
+    currentBarangay: '',
+    currentCity: '',
+    currentProvince: '',
+    currentZip: '',
+    permanentStreet: '',
+    permanentBarangay: '',
+    permanentCity: '',
+    permanentProvince: '',
+    permanentZip: '',
   });
 
   const [accountInfo, setAccountInfo] = useState<AccountInfo>({
@@ -121,13 +163,27 @@ export function ProfilePage(): React.ReactNode {
           const emp = data.employee;
           setPersonalInfo({
             firstName: emp.firstName,
+            nameExtension: emp.nameExtension ?? '',
             middleName: emp.middleName ?? '',
             lastName: emp.lastName,
             email: emp.email ?? '',
+            personalEmail: emp.personalEmail ?? '',
             phone: emp.phone,
-            address: emp.address,
             gender: emp.gender,
             birthDate: emp.birthDate.slice(0, 10),
+            placeOfBirth: emp.placeOfBirth ?? '',
+            civilStatus: emp.civilStatus ?? '',
+            citizenship: emp.citizenship ?? '',
+            currentStreet: emp.currentStreet ?? '',
+            currentBarangay: emp.currentBarangay ?? '',
+            currentCity: emp.currentCity ?? '',
+            currentProvince: emp.currentProvince ?? '',
+            currentZip: emp.currentZip ?? '',
+            permanentStreet: emp.permanentStreet ?? '',
+            permanentBarangay: emp.permanentBarangay ?? '',
+            permanentCity: emp.permanentCity ?? '',
+            permanentProvince: emp.permanentProvince ?? '',
+            permanentZip: emp.permanentZip ?? '',
           });
         }
       } catch {
@@ -159,13 +215,27 @@ export function ProfilePage(): React.ReactNode {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firstName: personalInfo.firstName,
+          nameExtension: personalInfo.nameExtension || null,
           middleName: personalInfo.middleName || null,
           lastName: personalInfo.lastName,
           email: personalInfo.email || null,
-          phone: personalInfo.phone,
-          address: personalInfo.address,
+          personalEmail: personalInfo.personalEmail || null,
+          phone: personalInfo.phone || null,
           gender: personalInfo.gender,
           birthDate: personalInfo.birthDate,
+          placeOfBirth: personalInfo.placeOfBirth || null,
+          civilStatus: personalInfo.civilStatus || null,
+          citizenship: personalInfo.citizenship || null,
+          currentStreet: personalInfo.currentStreet || null,
+          currentBarangay: personalInfo.currentBarangay || null,
+          currentCity: personalInfo.currentCity || null,
+          currentProvince: personalInfo.currentProvince || null,
+          currentZip: personalInfo.currentZip || null,
+          permanentStreet: personalInfo.permanentStreet || null,
+          permanentBarangay: personalInfo.permanentBarangay || null,
+          permanentCity: personalInfo.permanentCity || null,
+          permanentProvince: personalInfo.permanentProvince || null,
+          permanentZip: personalInfo.permanentZip || null,
         }),
       });
       const json = await res.json() as { error?: string };
@@ -394,6 +464,15 @@ export function ProfilePage(): React.ReactNode {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Name Extension</label>
+              <Input
+                value={personalInfo.nameExtension}
+                onChange={e => handlePersonalInfoChange('nameExtension', e.target.value)}
+                placeholder="e.g. Jr., Sr., III"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Middle Name</label>
               <Input
                 value={personalInfo.middleName}
@@ -413,13 +492,25 @@ export function ProfilePage(): React.ReactNode {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                <span className="flex items-center gap-1.5"><Mail size={14} /> Email</span>
+                <span className="flex items-center gap-1.5"><Mail size={14} /> Work Email</span>
               </label>
               <Input
                 type="email"
                 value={personalInfo.email}
                 onChange={e => handlePersonalInfoChange('email', e.target.value)}
-                placeholder="Enter email address"
+                placeholder="Enter work email"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                <span className="flex items-center gap-1.5"><Mail size={14} /> Personal Email</span>
+              </label>
+              <Input
+                type="email"
+                value={personalInfo.personalEmail}
+                onChange={e => handlePersonalInfoChange('personalEmail', e.target.value)}
+                placeholder="Enter personal email"
                 className="bg-background text-foreground"
               />
             </div>
@@ -441,6 +532,7 @@ export function ProfilePage(): React.ReactNode {
                 onChange={e => handlePersonalInfoChange('gender', e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               >
+                <option value="">Select gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
@@ -458,18 +550,147 @@ export function ProfilePage(): React.ReactNode {
                 className="bg-background text-foreground"
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                <span className="flex items-center gap-1.5"><MapPin size={14} /> Address</span>
-              </label>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Place of Birth</label>
               <Input
-                value={personalInfo.address}
-                onChange={e => handlePersonalInfoChange('address', e.target.value)}
-                placeholder="Enter full address"
+                value={personalInfo.placeOfBirth}
+                onChange={e => handlePersonalInfoChange('placeOfBirth', e.target.value)}
+                placeholder="Enter place of birth"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Civil Status</label>
+              <select
+                value={personalInfo.civilStatus}
+                onChange={e => handlePersonalInfoChange('civilStatus', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              >
+                <option value="">Select civil status</option>
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+                <option value="Widowed">Widowed</option>
+                <option value="Separated">Separated</option>
+                <option value="Annulled">Annulled</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Citizenship</label>
+              <Input
+                value={personalInfo.citizenship}
+                onChange={e => handlePersonalInfoChange('citizenship', e.target.value)}
+                placeholder="e.g. Filipino"
                 className="bg-background text-foreground"
               />
             </div>
           </div>
+
+          {/* Current Address */}
+          <div className="mt-6 mb-4 flex items-center gap-2">
+            <MapPin size={15} className="text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Current Address</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1.5">Street</label>
+              <Input
+                value={personalInfo.currentStreet}
+                onChange={e => handlePersonalInfoChange('currentStreet', e.target.value)}
+                placeholder="House no., street name"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Barangay</label>
+              <Input
+                value={personalInfo.currentBarangay}
+                onChange={e => handlePersonalInfoChange('currentBarangay', e.target.value)}
+                placeholder="Barangay"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">City / Municipality</label>
+              <Input
+                value={personalInfo.currentCity}
+                onChange={e => handlePersonalInfoChange('currentCity', e.target.value)}
+                placeholder="City or municipality"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Province</label>
+              <Input
+                value={personalInfo.currentProvince}
+                onChange={e => handlePersonalInfoChange('currentProvince', e.target.value)}
+                placeholder="Province"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">ZIP Code</label>
+              <Input
+                value={personalInfo.currentZip}
+                onChange={e => handlePersonalInfoChange('currentZip', e.target.value)}
+                placeholder="ZIP code"
+                className="bg-background text-foreground"
+              />
+            </div>
+          </div>
+
+          {/* Permanent Address */}
+          <div className="mt-6 mb-4 flex items-center gap-2">
+            <MapPin size={15} className="text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Permanent Address</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1.5">Street</label>
+              <Input
+                value={personalInfo.permanentStreet}
+                onChange={e => handlePersonalInfoChange('permanentStreet', e.target.value)}
+                placeholder="House no., street name"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Barangay</label>
+              <Input
+                value={personalInfo.permanentBarangay}
+                onChange={e => handlePersonalInfoChange('permanentBarangay', e.target.value)}
+                placeholder="Barangay"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">City / Municipality</label>
+              <Input
+                value={personalInfo.permanentCity}
+                onChange={e => handlePersonalInfoChange('permanentCity', e.target.value)}
+                placeholder="City or municipality"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Province</label>
+              <Input
+                value={personalInfo.permanentProvince}
+                onChange={e => handlePersonalInfoChange('permanentProvince', e.target.value)}
+                placeholder="Province"
+                className="bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">ZIP Code</label>
+              <Input
+                value={personalInfo.permanentZip}
+                onChange={e => handlePersonalInfoChange('permanentZip', e.target.value)}
+                placeholder="ZIP code"
+                className="bg-background text-foreground"
+              />
+            </div>
+          </div>
+
           <div className="flex justify-end mt-6">
             <Button onClick={handleSavePersonalInfo} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
