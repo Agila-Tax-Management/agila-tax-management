@@ -50,6 +50,7 @@ model Lead {
     contactNumber   String?
     businessType    String   @default("Not Specified")
     leadSource      String   @default("Facebook")
+    address         String?
 
     // ─── Social / Source Specifics ───
     facebookSenderId String?
