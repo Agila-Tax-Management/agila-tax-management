@@ -20,6 +20,10 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
+  // ─── CRM / Account Management ───
+  managedClientsAsCro    Client[] @relation("ClientRelationOfficer")
+  managedClientsAsOm     Client[] @relation("OperationsManager")
+
   activityLogs    ActivityLog[]  @relation("InternalUserLogs")
   notifications   Notification[] @relation("UserNotifications")
   taskConversations      TaskConversation[]
