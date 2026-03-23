@@ -26,10 +26,10 @@ export const MOCK_AGENTS = [
 ];
 
 export const BUSINESS_TYPES = [
+  'Not Specified',
+  'Professional',
   'Sole Proprietorship',
-  'Partnership',
   'Corporation',
-  'One Person Corporation (OPC)',
 ];
 
 export const LEAD_SOURCES = [

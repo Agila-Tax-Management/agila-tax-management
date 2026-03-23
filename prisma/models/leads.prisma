@@ -47,10 +47,12 @@ model Lead {
     firstName       String
     middleName      String?
     lastName        String
+    businessName    String?
     contactNumber   String?
     businessType    String   @default("Not Specified")
     leadSource      String   @default("Facebook")
     address         String?
+    notes           String?  @db.Text
 
     // ─── Social / Source Specifics ───
     facebookSenderId String?
