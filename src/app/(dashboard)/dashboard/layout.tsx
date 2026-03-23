@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -70,7 +70,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+
+  /* eslint-disable react-hooks/set-state-in-effect -- Hydration-safe: sets document.title based on pathname */
+  useEffect(() => {
+    const titleMap: Record<string, string> = {
+      '/dashboard':                                        'Dashboard | Agila Tax Management System',
+      '/dashboard/timesheet':                              'Timesheet | Agila Tax Management System',
+      '/dashboard/payslips':                               'Payslips | Agila Tax Management System',
+      '/dashboard/payslips/compensation':                  'Compensation | Agila Tax Management System',
+      '/dashboard/payslips/computation':                   'Payroll Computation | Agila Tax Management System',
+      '/dashboard/payslips/schedule':                      'Pay Schedule | Agila Tax Management System',
+      '/dashboard/hr-apps':                                'HR Applications | Agila Tax Management System',
+      '/dashboard/hr':                                     'HR | Agila Tax Management System',
+      '/dashboard/notifications':                          'Notifications | Agila Tax Management System',
+      '/dashboard/profile':                                'My Profile | Agila Tax Management System',
+      '/dashboard/sop':                                    'SOP | Agila Tax Management System',
+      '/dashboard/admin':                                  'Admin | Agila Tax Management System',
+      '/dashboard/clients':                                'Clients | Agila Tax Management System',
+      '/dashboard/quick-links':                            'Quick Links | Agila Tax Management System',
+      '/dashboard/quick-links/book-appointment':           'Book Appointment | Agila Tax Management System',
+      '/dashboard/quick-links/salary-computation':         'Salary Computation | Agila Tax Management System',
+      '/dashboard/settings':                               'Settings | Agila Tax Management System',
+      '/dashboard/settings/user-management':               'User Management | Agila Tax Management System',
+      '/dashboard/settings/user-client-management':        'Client User Management | Agila Tax Management System',
+      '/dashboard/settings/client-management':             'Client Management | Agila Tax Management System',
+    };
+    const matched = Object.keys(titleMap)
+      .sort((a, b) => b.length - a.length)
+      .find(key => pathname === key || pathname.startsWith(key + '/'));
+    document.title = matched ? titleMap[matched] : 'Dashboard | Agila Tax Management System';
+  }, [pathname]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <RoleProvider>
