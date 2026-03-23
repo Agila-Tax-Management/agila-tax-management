@@ -4,24 +4,34 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban,
+  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban, Settings2, Handshake, UserCog,
 } from 'lucide-react';
 import { ALL_TASKS } from '@/lib/mock-task-management-data';
 
 const activeTasks = ALL_TASKS.filter(t => t.status !== 'Done');
+const omBadge = ALL_TASKS.filter(t => t.source === 'om' && t.status !== 'Done').length;
+const clientRelationsBadge = ALL_TASKS.filter(t => t.source === 'client-relations' && t.status !== 'Done').length;
 const liaisonBadge = ALL_TASKS.filter(t => t.source === 'liaison' && t.status !== 'Done').length;
 const complianceBadge = ALL_TASKS.filter(t => t.source === 'compliance' && t.status !== 'Done').length;
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/task-management', badge: 0 },
   {
-    id: 'section-tasks',
-    label: 'TASK VIEWS',
+    id: 'section-depts',
+    label: 'DEPARTMENTS',
     isSection: true,
   },
   { id: 'all-tasks', label: 'All Tasks', icon: FolderKanban, href: '/portal/task-management/tasks', badge: activeTasks.length },
-  { id: 'liaison-tasks', label: 'Liaison Tasks', icon: Truck, href: '/portal/task-management/liaison', badge: liaisonBadge },
-  { id: 'compliance-tasks', label: 'Compliance Tasks', icon: Shield, href: '/portal/task-management/compliance', badge: complianceBadge },
+  { id: 'om-tasks', label: 'Operations Manager', icon: UserCog, href: '/portal/task-management/om', badge: omBadge },
+  { id: 'client-relations', label: 'Client Relations', icon: Handshake, href: '/portal/task-management/client-relations', badge: clientRelationsBadge },
+  { id: 'liaison-tasks', label: 'Liaison', icon: Truck, href: '/portal/task-management/liaison', badge: liaisonBadge },
+  { id: 'compliance-tasks', label: 'Compliance', icon: Shield, href: '/portal/task-management/compliance', badge: complianceBadge },
+  {
+    id: 'section-settings',
+    label: 'SETTINGS',
+    isSection: true,
+  },
+  { id: 'settings', label: 'Task Settings', icon: Settings2, href: '/portal/task-management/settings', badge: 0 },
 ];
 
 interface TaskManagementSidebarProps {

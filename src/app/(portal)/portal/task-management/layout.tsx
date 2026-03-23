@@ -7,6 +7,7 @@ import { TaskManagementSidebar } from '@/components/task-management/TaskManageme
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { Button } from '@/components/UI/button';
 import { RoleProvider } from '@/lib/role-context';
+import { TaskDepartmentsProvider } from '@/context/TaskDepartmentsContext';
 import { Menu, User, ArrowLeft } from 'lucide-react';
 
 export default function TaskManagementLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export default function TaskManagementLayout({ children }: { children: React.Rea
         .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
+    <TaskDepartmentsProvider>
     <RoleProvider>
       <div className="flex h-screen overflow-hidden bg-slate-50">
         <TaskManagementSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -63,5 +65,6 @@ export default function TaskManagementLayout({ children }: { children: React.Rea
         </div>
       </div>
     </RoleProvider>
+    </TaskDepartmentsProvider>
   );
 }

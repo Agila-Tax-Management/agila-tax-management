@@ -7,7 +7,7 @@ import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import {
   ClipboardList, AlertTriangle, CheckCircle2, Clock,
-  ArrowRight, Calendar, Shield, Truck,
+  ArrowRight, Calendar, Shield, Truck, Handshake,
 } from 'lucide-react';
 import { ALL_TASKS, SOURCE_CONFIG } from '@/lib/mock-task-management-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -35,9 +35,10 @@ export function TaskManagementDashboard() {
     const done = ALL_TASKS.filter(t => t.status === 'Done').length;
     const overdue = ALL_TASKS.filter(t => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-12')).length;
     const urgent = ALL_TASKS.filter(t => t.priority === 'Urgent' && t.status !== 'Done').length;
+    const clientRelationsCount = ALL_TASKS.filter(t => t.source === 'client-relations').length;
     const liaisonCount = ALL_TASKS.filter(t => t.source === 'liaison').length;
     const complianceCount = ALL_TASKS.filter(t => t.source === 'compliance').length;
-    return { total, done, overdue, urgent, liaisonCount, complianceCount };
+    return { total, done, overdue, urgent, clientRelationsCount, liaisonCount, complianceCount };
   }, []);
 
   const statusBreakdown = useMemo(() => {
@@ -75,11 +76,11 @@ export function TaskManagementDashboard() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-black text-slate-800 tracking-tight">Task Management Dashboard</h2>
-        <p className="text-sm text-slate-500 font-medium">Overview of all liaison and compliance tasks across teams.</p>
+        <p className="text-sm text-slate-500 font-medium">Overview of all client relations, liaison, and compliance tasks across teams.</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <Card
           className="p-5 cursor-pointer hover:shadow-md transition-shadow border-none shadow-sm"
           onClick={() => router.push('/portal/task-management/tasks')}
@@ -109,6 +110,23 @@ export function TaskManagementDashboard() {
           {stats.urgent > 0 && (
             <Badge variant="danger" className="text-[9px] mt-2">{stats.urgent} Urgent</Badge>
           )}
+        </Card>
+
+        <Card
+          className="p-5 cursor-pointer hover:shadow-md transition-shadow border-none shadow-sm"
+          onClick={() => router.push('/portal/task-management/client-relations')}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
+              <Handshake size={20} className="text-rose-600" />
+            </div>
+            <ArrowRight size={14} className="text-slate-300" />
+          </div>
+          <p className="text-2xl font-black text-slate-900">{stats.clientRelationsCount}</p>
+          <p className="text-xs text-slate-500 font-medium">Client Relations</p>
+          <Badge variant="info" className="text-[9px] mt-2">
+            {ALL_TASKS.filter(t => t.source === 'client-relations' && t.status !== 'Done').length} Active
+          </Badge>
         </Card>
 
         <Card
