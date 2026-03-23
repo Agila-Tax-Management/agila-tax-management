@@ -32,9 +32,10 @@ const PORTALS = [
   { key: 'COMPLIANCE', label: 'Compliance Portal' },
   { key: 'LIAISON', label: 'Liaison Portal' },
   { key: 'ACCOUNTING', label: 'Accounting Portal' },
-  { key: 'ACCOUNT_OFFICER', label: 'Account Officer Portal' },
+  { key: 'OPERATIONS_MANAGEMENT', label: 'Operations Management Portal' },
   { key: 'HR', label: 'HR Portal' },
   { key: 'TASK_MANAGEMENT', label: 'Task Management Portal' },
+  { key: 'CLIENT_RELATIONS', label: 'Client Relations Portal' },
 ] as const;
 
 const PERMISSIONS = ['canRead', 'canWrite', 'canEdit', 'canDelete'] as const;
@@ -125,7 +126,6 @@ export default function UserFormModal({
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [gender, setGender] = useState('Male');
 
@@ -153,7 +153,6 @@ export default function UserFormModal({
         setMiddleName(editingUser.employee?.middleName ?? '');
         setLastName(editingUser.employee?.lastName ?? '');
         setPhone(editingUser.employee?.phone ?? '');
-        setAddress(editingUser.employee?.address ?? '');
         setBirthDate(
           editingUser.employee?.birthDate
             ? editingUser.employee.birthDate.split('T')[0]
@@ -172,7 +171,6 @@ export default function UserFormModal({
         setMiddleName('');
         setLastName('');
         setPhone('');
-        setAddress('');
         setBirthDate('');
         setGender('Male');
         setEmployeeLevelId(null);
@@ -237,7 +235,6 @@ export default function UserFormModal({
       middleName: middleName.trim(),
       lastName: lastName.trim(),
       phone: phone.trim(),
-      address: address.trim(),
       birthDate,
       gender,
       employeeLevelId,
@@ -417,17 +414,6 @@ export default function UserFormModal({
             </div>
 
             <div className="sm:col-span-3">
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Address
-              </label>
-              <Input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Complete address"
-              />
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-foreground mb-1">
                 Employee Level
               </label>

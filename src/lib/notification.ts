@@ -6,13 +6,16 @@ import type {
 } from "@/generated/prisma/client";
 
 /**
- * Input for creating an internal notification.
+ * Input for creating a notification.
+ *
+ * At least one of `userId` or `clientUserId` must be provided to route
+ * the notification to the correct recipient (internal user or client portal user).
  */
 export interface NotifyInput {
-  /** User ID who will receive the notification */
-  recipientId: string;
-  /** User ID whose action triggered this (omit for system-generated) */
-  actorId?: string;
+  /** Internal User ID of the recipient (internal portal) */
+  userId?: string;
+  /** ClientUser ID of the recipient (client portal) */
+  clientUserId?: string;
   /** Notification category */
   type?: NotificationType;
   /** Urgency level */
@@ -21,12 +24,8 @@ export interface NotifyInput {
   title: string;
   /** Detailed message body */
   message: string;
-  /** Entity type this relates to (e.g. "Client", "Lead") */
-  entity?: string;
-  /** Primary key of the related record */
-  entityId?: string;
   /** URL path to navigate to when clicked */
-  actionUrl?: string;
+  linkUrl?: string;
 }
 
 /**
@@ -34,31 +33,35 @@ export interface NotifyInput {
  *
  * Call with `void` so it never blocks the API response:
  * ```ts
+ * // Internal user notification
  * void notify({
- *   recipientId: managerId,
- *   actorId: session.user.id,
- *   type: "SUCCESS",
- *   title: "New client created",
- *   message: "Acme Corp was added by Maria Santos.",
- *   entity: "Client",
- *   entityId: client.id,
- *   actionUrl: `/portal/sales/clients/${client.id}`,
+ *   userId: managerId,
+ *   type: "TASK",
+ *   title: "New task assigned",
+ *   message: "You have been assigned a compliance task for Acme Corp.",
+ *   linkUrl: `/portal/compliance/tasks/${task.id}`,
+ * });
+ *
+ * // Client portal user notification
+ * void notify({
+ *   clientUserId: clientUser.id,
+ *   type: "DOCUMENT",
+ *   title: "Document uploaded",
+ *   message: "Your SEC form has been uploaded.",
  * });
  * ```
  */
 export function notify(input: NotifyInput): Promise<void> {
-  return prisma.internalNotification
+  return prisma.notification
     .create({
       data: {
-        recipientId: input.recipientId,
-        actorId: input.actorId ?? null,
-        type: input.type ?? "INFO",
+        userId: input.userId ?? null,
+        clientUserId: input.clientUserId ?? null,
+        type: input.type ?? "SYSTEM",
         priority: input.priority ?? "NORMAL",
         title: input.title,
         message: input.message,
-        entity: input.entity ?? null,
-        entityId: input.entityId ?? null,
-        actionUrl: input.actionUrl ?? null,
+        linkUrl: input.linkUrl ?? null,
       },
     })
     .then(() => {
@@ -70,34 +73,33 @@ export function notify(input: NotifyInput): Promise<void> {
 }
 
 /**
- * Send the same notification to multiple recipients at once.
+ * Send the same notification to multiple internal users at once.
  *
  * Uses `createMany` for a single DB round-trip.
  * ```ts
  * void notifyMany({
- *   recipientIds: [userId1, userId2],
- *   title: "Monthly report ready",
- *   message: "The March compliance report is now available.",
+ *   userIds: [userId1, userId2],
+ *   type: "ANNOUNCEMENT",
+ *   title: "Company holiday",
+ *   message: "The office will be closed on April 9.",
  * });
  * ```
  */
 export function notifyMany(
-  input: Omit<NotifyInput, "recipientId"> & { recipientIds: string[] }
+  input: Omit<NotifyInput, "userId" | "clientUserId"> & { userIds: string[] }
 ): Promise<void> {
-  const { recipientIds, ...rest } = input;
+  const { userIds, ...rest } = input;
 
-  return prisma.internalNotification
+  return prisma.notification
     .createMany({
-      data: recipientIds.map((recipientId) => ({
-        recipientId,
-        actorId: rest.actorId ?? null,
-        type: rest.type ?? "INFO",
+      data: userIds.map((userId) => ({
+        userId,
+        clientUserId: null,
+        type: rest.type ?? "SYSTEM",
         priority: rest.priority ?? "NORMAL",
         title: rest.title,
         message: rest.message,
-        entity: rest.entity ?? null,
-        entityId: rest.entityId ?? null,
-        actionUrl: rest.actionUrl ?? null,
+        linkUrl: rest.linkUrl ?? null,
       })),
     })
     .then(() => {

@@ -18,36 +18,40 @@ enum LogAction {
     ARCHIVED
     RESTORED
 }
-
+// ─── Business Activity Log (The Universal Audit Trail) ────────────
 model ActivityLog {
-    id String @id @default(cuid())
+    id              String @id @default(cuid())
 
-    userId String
-    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+    // ─── Multi-Tenancy (Which workspace did this happen in?) ───
+    clientId        Int?
+    client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-    action LogAction
+    // ─── Dual-Auth Actors (Who did it?) ───
+    userId          String?
+    user            User?   @relation("InternalUserLogs", fields: [userId], references: [id], onDelete: Cascade)
 
-    /// The type of entity acted upon (e.g. "Client", "Employee", "Lead")
-    entity String
+    clientUserId    String?
+    clientUser      ClientUser? @relation("ClientUserLogs", fields: [clientUserId], references: [id], onDelete: Cascade)
+    
+    isSystemAction  Boolean @default(false)
 
-    /// The primary key of the affected record
-    entityId String?
+    // ─── The Action ───
+    action          LogAction
+    entity          String   // e.g., "Client", "Employee", "Payslip", "Task"
+    entityId        String?  // The primary key of the affected record
+    description     String   @db.Text // Human-readable summary for the timeline
 
-    /// Human-readable summary shown in the UI
-    description String
+    // ─── Technical Audit Data ───
+    metadata        Json?    // Optional JSON blob for old/new values
+    ipAddress       String?  // Security tracking
+    userAgent       String?  // Browser/Device tracking
 
-    /// Optional JSON blob for extra context (old/new values, metadata)
-    metadata Json?
+    createdAt       DateTime @default(now())
 
-    /// IP address of the request (when available)
-    ipAddress String?
-
-    /// Browser / client user-agent string
-    userAgent String?
-
-    createdAt DateTime @default(now())
-
+    // ─── Optimized Indexes ───
+    @@index([clientId])
     @@index([userId])
+    @@index([clientUserId])
     @@index([entity, entityId])
     @@index([action])
     @@index([createdAt])

@@ -23,8 +23,10 @@ export type AppPortalName =
   | 'COMPLIANCE'
   | 'LIAISON'
   | 'ACCOUNTING'
-  | 'ACCOUNT_OFFICER'
-  | 'HR';
+  | 'OPERATIONS_MANAGEMENT'
+  | 'HR'
+  | 'TASK_MANAGEMENT'
+  | 'CLIENT_RELATIONS';
 
 export interface PortalPermissions {
   canRead: boolean;

@@ -84,6 +84,9 @@ model ClientUser {
   employee    Employee?
   sessions    ClientSession[]
   accounts    ClientAccount[]
+
+  activityLogs    ActivityLog[]  @relation("ClientUserLogs")
+  notifications   Notification[] @relation("ClientUserNotifications")
   
   approvedOvertimes OvertimeRequest[] @relation("ClientOvertimeApprover")
   approvedLeaves    LeaveRequest[]    @relation("ClientLeaveApprover")
@@ -109,7 +112,7 @@ model ClientUserAssignment {
   clientId Int
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  role ClientPortalRole @default(EMPLOYEE)
+  role ClientPortalRole @default(OWNER)
 
   createdAt DateTime @default(now())
 

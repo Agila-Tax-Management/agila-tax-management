@@ -48,6 +48,14 @@ model Client {
   branches        Client[] @relation("BranchToMain")
 
   active          Boolean  @default(false)
+
+  // The Client Relation Officer (Handles client communications, onboarding, and overall relationship management)
+  clientRelationOfficerId String?
+  clientRelationOfficer   User?    @relation("ClientRelationOfficer", fields: [clientRelationOfficerId], references: [id])
+
+    // The Operations Manager (Oversees bookkeeping, HR, and tax compliance execution)
+    operationsManagerId     String?
+    operationsManager       User?    @relation("OperationsManager", fields: [operationsManagerId], references: [id])
   
   // ─── Timekeeping & SLA Defaults ───
   dayResetTime     String  @default("00:00:00") // When the system flips to "tomorrow"
@@ -64,6 +72,8 @@ model Client {
   shareholders        CorporateShareholder[]
 
   lead            Lead?
+
+  activityLogs    ActivityLog[]
 
   clientUsers     ClientUser[]
   userAssignments ClientUserAssignment[]

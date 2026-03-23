@@ -9,9 +9,10 @@ const portalAccessEntrySchema = z.object({
     "COMPLIANCE",
     "LIAISON",
     "ACCOUNTING",
-    "ACCOUNT_OFFICER",
+    "OPERATIONS_MANAGEMENT",
     "HR",
     "TASK_MANAGEMENT",
+    "CLIENT_RELATIONS",
   ]),
   canRead: z.boolean().default(false),
   canWrite: z.boolean().default(false),
@@ -34,7 +35,6 @@ export const createUserSchema = z.object({
   middleName: z.string().optional().default(""),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(1, "Phone is required"),
-  address: z.string().optional().default(""),
   birthDate: z.string().min(1, "Birth date is required"),
   gender: z.string().min(1, "Gender is required"),
 
@@ -64,7 +64,6 @@ export const updateUserSchema = z.object({
   middleName: z.string().optional().default(""),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(1, "Phone is required"),
-  address: z.string().optional().default(""),
   birthDate: z.string().min(1, "Birth date is required"),
   gender: z.string().min(1, "Gender is required"),
 
@@ -101,7 +100,6 @@ export interface UserRecord {
     lastName: string;
     employeeNo: string | null;
     phone: string;
-    address: string;
     birthDate: string;
     gender: string;
     employment: {

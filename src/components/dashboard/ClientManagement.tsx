@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Ban,
   Building2,
@@ -22,7 +23,6 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { useToast } from '@/context/ToastContext';
 import ClientFormModal from './ClientFormModal';
-import ClientUsersModal from './ClientUsersModal';
 import type {
   ClientFormValues,
   ClientRecord,
@@ -49,6 +49,7 @@ function formatDate(val: string | null): string {
 }
 
 export default function ClientManagement(): React.ReactNode {
+  const router = useRouter();
   const { success, error: toastError } = useToast();
 
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -58,7 +59,6 @@ export default function ClientManagement(): React.ReactNode {
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
-  const [viewingClient, setViewingClient] = useState<ClientRecord | null>(null);
 
   const fetchClients = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -311,7 +311,7 @@ export default function ClientManagement(): React.ReactNode {
                         {/* Business name / code */}
                         <td className="px-4 py-3">
                           <button
-                            onClick={() => setViewingClient(client)}
+                            onClick={() => router.push(`/dashboard/settings/client-management/${client.id}`)}
                             className="flex items-center gap-3 text-left transition hover:opacity-80"
                           >
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -331,9 +331,9 @@ export default function ClientManagement(): React.ReactNode {
 
                         {/* Business type */}
                         <td className="hidden px-4 py-3 md:table-cell">
-                          {client.businessType ? (
+                          {client.businessEntity ? (
                             <Badge variant="neutral">
-                              {BIZ_TYPE_LABELS[client.businessType] ?? client.businessType}
+                              {BIZ_TYPE_LABELS[client.businessEntity] ?? client.businessEntity}
                             </Badge>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -361,7 +361,7 @@ export default function ClientManagement(): React.ReactNode {
                         {/* User count */}
                         <td className="hidden px-4 py-3 text-center sm:table-cell">
                           <button
-                            onClick={() => setViewingClient(client)}
+                            onClick={() => router.push(`/dashboard/settings/client-management/${client.id}`)}
                             className="inline-flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-xs font-semibold text-foreground transition hover:bg-muted/70"
                             title="View assigned users"
                           >
@@ -463,11 +463,6 @@ export default function ClientManagement(): React.ReactNode {
         editingClient={editingClient}
       />
 
-      <ClientUsersModal
-        isOpen={!!viewingClient}
-        onClose={() => setViewingClient(null)}
-        client={viewingClient}
-      />
     </div>
   );
 }

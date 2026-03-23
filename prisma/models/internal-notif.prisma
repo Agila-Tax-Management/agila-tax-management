@@ -1,54 +1,49 @@
+// ─── Notification Enums ───
 enum NotificationType {
-    INFO
-    SUCCESS
-    WARNING
-    ERROR
-    ACTION_REQUIRED
+    SYSTEM       // Scheduled Maintenance, System Errors
+    HR           // Leave Approved, COA Rejected, Schedule Changed
+    PAYROLL      // Payslip Available, Loan Approved
+    TASK         // New Task Assigned, Task Completed
+    DOCUMENT     // SEC Form Uploaded, Contract Signed
+    ANNOUNCEMENT // Company Team Building, Public Holidays
 }
 
 enum NotificationPriority {
-    LOW
-    NORMAL
-    HIGH
-    URGENT
+    LOW          // Minor updates (e.g., someone commented on a task)
+    NORMAL       // Standard alerts (Default)
+    HIGH         // Action required (e.g., leave request awaiting your approval)
+    URGENT       // Critical (e.g., timesheet missing for payroll cutoff!)
 }
 
-model InternalNotification {
-    id String @id @default(cuid())
+// ─── Notification (Targeted User Alerts) ──────────────────────────
+model Notification {
+    id              String   @id @default(cuid())
+    
+    // ─── The Recipient (Dual-Auth Routing) ───
+    userId          String?
+    user            User?       @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+    
+    clientUserId    String?
+    clientUser      ClientUser? @relation("ClientUserNotifications", fields: [clientUserId], references: [id], onDelete: Cascade)
 
-    /// The user who receives this notification
-    recipientId String
-    recipient   User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+    // ─── Content & Routing ───
+    title           String      
+    message         String      @db.Text 
+    linkUrl         String?     // The exact frontend route to redirect to
+    
+    // ─── Categorization & Weight ───
+    type            NotificationType     @default(SYSTEM)
+    priority        NotificationPriority @default(NORMAL)
 
-    /// The user whose action triggered this notification (nullable for system-generated)
-    actorId String?
-    actor   User?  @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+    // ─── State ───
+    isRead          Boolean     @default(false)
+    readAt          DateTime?
 
-    type     NotificationType     @default(INFO)
-    priority NotificationPriority @default(NORMAL)
+    createdAt       DateTime    @default(now())
+    updatedAt       DateTime    @updatedAt
 
-    /// Short title shown in the notification list
-    title String
-
-    /// Detailed message body
-    message String
-
-    /// The entity type this notification relates to (e.g. "Client", "Lead")
-    entity String?
-
-    /// The primary key of the related record — for building deep links
-    entityId String?
-
-    /// Optional URL path to navigate to when clicked
-    actionUrl String?
-
-    isRead Boolean @default(false)
-    readAt DateTime?
-
-    createdAt DateTime @default(now())
-
-    @@index([recipientId, isRead])
-    @@index([recipientId, createdAt])
-    @@index([actorId])
-    @@map("internal_notification")
+    @@index([userId])
+    @@index([clientUserId])
+    @@index([isRead, priority]) // Optimizes fetching unread, urgent alerts first
+    @@map("notification")
 }
