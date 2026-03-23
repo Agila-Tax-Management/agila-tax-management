@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { AccountingSidebar } from '@/components/accounting/AccountingSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -15,6 +15,10 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
 
   const moduleRoot = '/portal/accounting';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'Accounting Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>

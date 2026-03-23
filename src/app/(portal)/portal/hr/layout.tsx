@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { HRSidebar } from '@/components/hr/HRSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -15,6 +15,10 @@ export default function HRLayout({ children }: { children: React.ReactNode }) {
 
   const moduleRoot = '/portal/hr';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'HR Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>

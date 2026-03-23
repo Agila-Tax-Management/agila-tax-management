@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ComplianceSidebar } from '@/components/compliance/ComplianceSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -19,6 +19,10 @@ export default function CompliancePortalLayout({
 
   const moduleRoot = '/portal/compliance';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'Compliance Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>

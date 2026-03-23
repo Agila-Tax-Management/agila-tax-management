@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { AOSidebar } from '@/components/account-officer/AOSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -15,6 +15,10 @@ export default function AccountOfficerLayout({ children }: { children: React.Rea
 
   const moduleRoot = '/portal/account-officer';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'Account Officer Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>

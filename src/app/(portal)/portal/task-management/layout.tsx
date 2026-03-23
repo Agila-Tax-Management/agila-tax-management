@@ -1,7 +1,7 @@
 // src/app/(portal)/portal/task-management/layout.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { TaskManagementSidebar } from '@/components/task-management/TaskManagementSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -16,6 +16,10 @@ export default function TaskManagementLayout({ children }: { children: React.Rea
 
   const moduleRoot = '/portal/task-management';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'Task Management Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>

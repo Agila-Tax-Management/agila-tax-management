@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ASPSidebar } from '@/components/sales/ASPSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -15,6 +15,10 @@ export default function SalesPortalLayout({ children }: { children: React.ReactN
 
   const moduleRoot = '/portal/sales';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'Sales Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>

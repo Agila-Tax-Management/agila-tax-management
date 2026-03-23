@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { LiaisonSidebar } from '@/components/liaison/LiaisonSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -15,6 +15,10 @@ export default function LiaisonLayout({ children }: { children: React.ReactNode 
 
   const moduleRoot = '/portal/liaison';
   const isRoot = pathname === moduleRoot;
+
+  useEffect(() => {
+    document.title = 'Liaison Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>
