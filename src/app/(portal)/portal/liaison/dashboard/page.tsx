@@ -1,5 +1,5 @@
-import { LiaisonDashboard } from '@/components/liaison/LiaisonDashboard';
+import { redirect } from 'next/navigation';
 
 export default function LiaisonDashboardPage() {
-  return <LiaisonDashboard />;
+  redirect('/portal/liaison');
 }

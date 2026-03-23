@@ -1,14 +1,5 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { LiaisonDashboard } from '@/components/liaison/LiaisonDashboard';
 
 export default function LiaisonPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.push('/portal/liaison/tasks');
-  }, [router]);
-
-  return null;
+  return <LiaisonDashboard />;
 }
