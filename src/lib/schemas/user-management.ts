@@ -9,7 +9,7 @@ const portalAccessEntrySchema = z.object({
     "COMPLIANCE",
     "LIAISON",
     "ACCOUNTING",
-    "ACCOUNT_OFFICER",
+    "OPERATIONS_MANAGEMENT",
     "HR",
     "TASK_MANAGEMENT",
     "CLIENT_RELATIONS",

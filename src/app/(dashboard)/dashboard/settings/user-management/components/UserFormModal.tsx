@@ -32,7 +32,7 @@ const PORTALS = [
   { key: 'COMPLIANCE', label: 'Compliance Portal' },
   { key: 'LIAISON', label: 'Liaison Portal' },
   { key: 'ACCOUNTING', label: 'Accounting Portal' },
-  { key: 'ACCOUNT_OFFICER', label: 'Account Officer Portal' },
+  { key: 'OPERATIONS_MANAGEMENT', label: 'Operations Management Portal' },
   { key: 'HR', label: 'HR Portal' },
   { key: 'TASK_MANAGEMENT', label: 'Task Management Portal' },
   { key: 'CLIENT_RELATIONS', label: 'Client Relations Portal' },

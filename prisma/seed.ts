@@ -14,14 +14,14 @@ const prisma = new PrismaClient({ adapter });
 /* ─── Portal App definitions ──────────────────────────────────────── */
 
 const PORTAL_APPS = [
-  { name: "SALES" as const, label: "Sales Portal" },
-  { name: "COMPLIANCE" as const, label: "Compliance Portal" },
-  { name: "LIAISON" as const, label: "Liaison Portal" },
-  { name: "ACCOUNTING" as const, label: "Accounting Portal" },
-  { name: "ACCOUNT_OFFICER" as const, label: "Account Officer Portal" },
-  { name: "HR" as const, label: "HR Portal" },
-  { name: "TASK_MANAGEMENT" as const, label: "Task Management Portal" },
-  { name: "CLIENT_RELATIONS" as const, label: "Client Relations" },
+  { name: "SALES" as const,                label: "Sales Portal" },
+  { name: "COMPLIANCE" as const,           label: "Compliance Portal" },
+  { name: "LIAISON" as const,              label: "Liaison Portal" },
+  { name: "ACCOUNTING" as const,           label: "Accounting Portal" },
+  { name: "OPERATIONS_MANAGEMENT" as const, label: "Operations Management Portal" },
+  { name: "HR" as const,                   label: "HR Portal" },
+  { name: "TASK_MANAGEMENT" as const,      label: "Task Management Portal" },
+  { name: "CLIENT_RELATIONS" as const,     label: "Client Relations Portal" },
 ];
 
 /* ─── Employee Level definitions (position 1 = highest) ─────────── */
@@ -36,6 +36,57 @@ const EMPLOYEE_LEVELS = [
   { name: "Mid",        position: 7, description: "Mid-level individual contributors" },
   { name: "Junior",     position: 8, description: "Junior individual contributors" },
   { name: "Staff",      position: 9, description: "Entry-level staff" },
+];
+
+/* ─── Standalone Department + Position definitions ───────────────────
+ *
+ *  These departments are seeded independently of the INTERNAL_USERS loop
+ *  so they exist in the system even before employees are assigned to them.
+ *
+ * ─────────────────────────────────────────────────────────────────── */
+
+const STANDALONE_DEPARTMENTS = [
+  {
+    name: "Operations",
+    description: "Day-to-day business operations and process management",
+    positions: [
+      { title: "Operations Manager",           description: "Oversees daily operations and business processes" },
+      { title: "Operations Supervisor",        description: "Supervises operational tasks and team workflows" },
+    ],
+  },
+  {
+    name: "Client Relations",
+    description: "Client relationship management and account servicing",
+    positions: [
+      { title: "Client Relations Officer",     description: "Manages client accounts and relationship activities" },
+      { title: "Client Relations Supervisor",  description: "Supervises the client relations team" },
+    ],
+  },
+  {
+    name: "Liaison",
+    description: "Field operations and government agency liaison work",
+    positions: [
+      { title: "Liaison Officer",              description: "Handles field tasks and government agency submissions" },
+      { title: "Liaison Supervisor",           description: "Supervises field liaison activities and scheduling" },
+    ],
+  },
+  {
+    name: "Compliance",
+    description: "Tax compliance monitoring and regulatory filings",
+    positions: [
+      { title: "Compliance Officer",           description: "Monitors and manages client tax compliance tasks" },
+      { title: "Tax Compliance Specialist",    description: "Handles detailed tax compliance and filing requirements" },
+      { title: "Compliance Supervisor",        description: "Supervises compliance team and review processes" },
+    ],
+  },
+  {
+    name: "IT",
+    description: "Information technology infrastructure and technical support",
+    positions: [
+      { title: "IT Specialist",                description: "Manages system infrastructure and technical support" },
+      { title: "IT Manager",                   description: "Oversees IT operations, security, and development" },
+    ],
+  },
 ];
 
 /* ─── Internal user definitions ──────────────────────────────────────
@@ -133,7 +184,7 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     appAccess: {
       COMPLIANCE: { canRead: true, canWrite: true, canEdit: true, canDelete: false },
       ACCOUNTING: { canRead: true, canWrite: true, canEdit: false, canDelete: false },
-      ACCOUNT_OFFICER: { canRead: true, canWrite: false, canEdit: false, canDelete: false },
+      OPERATIONS_MANAGEMENT: { canRead: true, canWrite: false, canEdit: false, canDelete: false },
     },
   },
 ];
@@ -581,7 +632,34 @@ async function main(): Promise<void> {
   const levelsByName = new Map(allLevels.map((l) => [l.name, l.id]));
   console.log(`  ✓ ${EMPLOYEE_LEVELS.length} employee levels seeded (ATMS client)`);
 
-  // ── 5. Seed Departments, Positions & Internal Users ─────────────
+  // ── 5a. Seed Standalone Departments & Positions ─────────────────
+  //  These departments are seeded before internal users so they exist
+  //  in the system regardless of which employees are currently seeded.
+
+  let standaloneDeptCount = 0;
+  let standalonePositionCount = 0;
+  for (const dept of STANDALONE_DEPARTMENTS) {
+    const deptRecord = await prisma.department.upsert({
+      where: { clientId_name: { clientId: atmsClient.id, name: dept.name } },
+      update: { description: dept.description },
+      create: { clientId: atmsClient.id, name: dept.name, description: dept.description },
+    });
+    standaloneDeptCount++;
+    for (const pos of dept.positions) {
+      const existing = await prisma.position.findFirst({
+        where: { departmentId: deptRecord.id, title: pos.title },
+      });
+      if (!existing) {
+        await prisma.position.create({
+          data: { title: pos.title, description: pos.description, departmentId: deptRecord.id },
+        });
+      }
+      standalonePositionCount++;
+    }
+  }
+  console.log(`  ✓ ${standaloneDeptCount} standalone departments and ${standalonePositionCount} positions seeded`);
+
+  // ── 5b. Seed Departments, Positions & Internal Users ─────────────
   //  Each internal user's department is upserted before creating the user
   //  so that we can pass the correct departmentId, positionId, and levelId.
 
