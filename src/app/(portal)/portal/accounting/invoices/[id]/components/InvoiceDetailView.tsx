@@ -9,19 +9,31 @@ import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 import { InvoiceTemplate } from '@/components/accounting/InvoiceTemplate';
+
+async function openInvoicePDF(invoice: import('@/types/accounting.types').InvoiceRecord) {
+  const [{ pdf }, { InvoicePDF }] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('@/components/accounting/InvoicePDF'),
+  ]);
+  const el = React.createElement(InvoicePDF, { invoice }) as Parameters<typeof pdf>[0];
+  const blob = await pdf(el).toBlob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 import {
   ArrowLeft, Printer, Pencil, CheckCircle2, Loader2,
   Plus, Trash2, ChevronDown, Search, Clock,
   AlertTriangle, FileText, XCircle, CircleDot,
   CreditCard, Save, X,
 } from 'lucide-react';
+import type { ServiceOption } from '@/types/accounting.types';
 import type {
   InvoiceRecord,
   InvoiceItemInput,
   PaymentMethodType,
   InvoiceStatus,
 } from '@/types/accounting.types';
-import type { ServiceOption } from '@/types/accounting.types';
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 function fmt(n: number) {
@@ -94,6 +106,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
   const [editItems, setEditItems] = useState<ItemRow[]>([]);
   const [editStatus, setEditStatus] = useState<InvoiceStatus>('UNPAID');
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Payment recording
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -105,8 +118,6 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
   const [isRecording, setIsRecording] = useState(false);
 
   // Print
-  const [showPrint, setShowPrint] = useState(false);
-
   // Service picker for edit mode
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
@@ -320,9 +331,14 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
               <Button
                 variant="outline"
                 className="gap-1.5 text-sm"
-                onClick={() => setShowPrint(true)}
+                disabled={isPrinting}
+                onClick={() => {
+                  setIsPrinting(true);
+                  openInvoicePDF(invoice).catch(() => toastError('PDF Error', 'Could not generate PDF.')).finally(() => setIsPrinting(false));
+                }}
               >
-                <Printer size={15} /> Print
+                {isPrinting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={15} />}
+                {isPrinting ? 'Generating...' : 'Print'}
               </Button>
               <Button
                 variant="default"
@@ -613,32 +629,6 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
         </form>
       </Modal>
 
-      {/* ── Print Modal ───────────────────────────────────────── */}
-      <Modal isOpen={showPrint} onClose={() => setShowPrint(false)} title="Print Preview" size="3xl">
-        <div className="p-4 space-y-4">
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="default"
-              className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
-              onClick={() => {
-                const el = document.getElementById('invoice-print-area');
-                if (!el) return;
-                const win = window.open('', '_blank');
-                if (!win) return;
-                win.document.write(
-                  `<html><head><title>${invoice.invoiceNumber}</title><style>*{font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box}body{margin:0;padding:24px;color:#0f172a}</style></head><body>${el.outerHTML}</body></html>`,
-                );
-                win.document.close();
-                setTimeout(() => { win.print(); win.close(); }, 500);
-              }}
-            >
-              <Printer size={14} /> Print
-            </Button>
-            <Button variant="outline" onClick={() => setShowPrint(false)}>Close</Button>
-          </div>
-          <InvoiceTemplate invoice={invoice} />
-        </div>
-      </Modal>
     </div>
   );
 }

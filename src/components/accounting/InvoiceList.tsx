@@ -14,7 +14,18 @@ import {
   Eye, Printer, Pencil, Copy, Trash2,
 } from 'lucide-react';
 import type { InvoiceRecord, InvoiceStats } from '@/types/accounting.types';
-import { InvoiceTemplate } from './InvoiceTemplate';
+
+async function openInvoicePDF(invoice: InvoiceRecord) {
+  const [{ pdf }, { InvoicePDF }] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('./InvoicePDF'),
+  ]);
+  const el = React.createElement(InvoicePDF, { invoice }) as Parameters<typeof pdf>[0];
+  const blob = await pdf(el).toBlob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 /* ── Types ──────────────────────────────────────────────────────── */
 type InvoiceStatus = InvoiceRecord['status'];
@@ -69,12 +80,11 @@ export function InvoiceList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Print preview modal
-  const [printInvoice, setPrintInvoice] = useState<InvoiceRecord | null>(null);
   // Delete confirm modal
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState<string | null>(null);
+  const [printingId, setPrintingId] = useState<string | null>(null);
 
   // Reset page on filter change (adjust during render)
   const [prevFilters, setPrevFilters] = useState({ search, statusFilter });
@@ -153,16 +163,20 @@ export function InvoiceList() {
     }
   };
 
-  const handlePrintClick = (inv: InvoiceRecord, e: React.MouseEvent) => {
+  const handlePrintClick = async (inv: InvoiceRecord, e: React.MouseEvent) => {
     e.stopPropagation();
-    if ((inv as InvoiceRecord & { items?: unknown }).items) {
-      setPrintInvoice(inv);
-      return;
+    setPrintingId(inv.id);
+    try {
+      // Always fetch the full invoice (items + payments needed for PDF)
+      const res = await fetch(`/api/accounting/invoices/${inv.id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await openInvoicePDF(data.data);
+    } catch {
+      toastError('Print failed', 'Could not generate PDF.');
+    } finally {
+      setPrintingId(null);
     }
-    fetch(`/api/accounting/invoices/${inv.id}`)
-      .then((r) => r.json())
-      .then((d) => setPrintInvoice(d.data))
-      .catch(() => toastError('Print failed', 'Could not load invoice details.'));
   };
 
   return (
@@ -296,8 +310,8 @@ export function InvoiceList() {
                           <button title="View" onClick={() => router.push(`/portal/accounting/invoices/${inv.id}`)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
                             <Eye size={14} />
                           </button>
-                          <button title="Print" onClick={(e) => handlePrintClick(inv, e)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
-                            <Printer size={14} />
+                          <button title="Print" onClick={(e) => void handlePrintClick(inv, e)} disabled={printingId === inv.id} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-40">
+                            <Printer size={14} className={printingId === inv.id ? 'animate-pulse' : ''} />
                           </button>
                           <button title="Edit" onClick={(e) => { e.stopPropagation(); router.push(`/portal/accounting/invoices/${inv.id}?edit=true`); }} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors">
                             <Pencil size={14} />
@@ -327,33 +341,6 @@ export function InvoiceList() {
           </div>
         )}
       </Card>
-
-      {/* Print Preview Modal */}
-      <Modal isOpen={!!printInvoice} onClose={() => setPrintInvoice(null)} title="Print Preview" size="3xl">
-        {printInvoice && (
-          <div className="p-4 space-y-4">
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="default"
-                className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
-                onClick={() => {
-                  const el = document.getElementById('invoice-print-area');
-                  if (!el) return;
-                  const win = window.open('', '_blank');
-                  if (!win) return;
-                  win.document.write(`<html><head><title>${printInvoice.invoiceNumber}</title><style>*{font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box}body{margin:0;padding:24px;color:#0f172a}</style></head><body>${el.outerHTML}</body></html>`);
-                  win.document.close();
-                  setTimeout(() => { win.print(); win.close(); }, 500);
-                }}
-              >
-                <Printer size={14} /> Print
-              </Button>
-              <Button variant="outline" onClick={() => setPrintInvoice(null)}>Close</Button>
-            </div>
-            <InvoiceTemplate invoice={printInvoice} />
-          </div>
-        )}
-      </Modal>
 
       {/* Delete Confirm */}
       <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Invoice" size="sm">

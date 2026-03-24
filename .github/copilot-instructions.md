@@ -309,6 +309,43 @@ useEffect(() => {
 
 ---
 
+## PDF Generation (@react-pdf/renderer)
+
+- Package: `@react-pdf/renderer` — installed, use for all client-side PDF generation
+- **Never** use `window.open` with injected HTML to print — Tailwind classes do not carry over to a new window
+- PDF template file: `src/components/accounting/InvoicePDF.tsx` — uses `Document`, `Page`, `View`, `Text`, `StyleSheet` primitives
+- **Always lazy-load** via dynamic `import()` inside click handlers — `@react-pdf/renderer` must never be imported at the module level in App Router components (causes SSR errors)
+
+### Standard `openPDF` helper pattern
+
+```typescript
+async function openInvoicePDF(invoice: InvoiceRecord) {
+  const [{ pdf }, { InvoicePDF }] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('@/components/accounting/InvoicePDF'),
+  ]);
+  const el = React.createElement(InvoicePDF, { invoice }) as Parameters<typeof pdf>[0];
+  const blob = await pdf(el).toBlob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');           // opens browser's native PDF viewer
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+```
+
+- Use `React.createElement(Component, props) as Parameters<typeof pdf>[0]` — required type assertion because `pdf()` expects `ReactElement<DocumentProps>`, not a generic JSX element
+- The browser's native PDF viewer provides its own Print / Save buttons — no custom print modal needed
+- Call `URL.revokeObjectURL` after a delay to free memory
+- Show a loading indicator (`isPrinting` state) while generating; disable the button to prevent double-clicks
+
+### InvoicePDF styling rules
+
+- Use `StyleSheet.create()` — inline style objects in JSX are not supported by react-pdf
+- Only `Helvetica`, `Helvetica-Bold`, `Helvetica-Oblique`, and `Courier` are available without registering fonts
+- Use `textTransform: 'uppercase'` and `letterSpacing` for section headings
+- Monetary values rendered with `₱` + `toLocaleString('en-PH', { minimumFractionDigits: 2 })`
+
+---
+
 ## Database (Prisma)
 
 - Config: `prisma.config.ts` (uses `dotenv/config` for env loading)
