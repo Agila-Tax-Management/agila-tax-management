@@ -153,6 +153,7 @@ export interface AOTaskSubtask {
   dueDate?: string;
   notes?: string;
   createdAt: string;
+  comments?: AOTaskComment[];
 }
 
 export interface AOTask {

@@ -1,5 +1,5 @@
-import { TaskBoard } from '@/components/account-officer/TaskBoard';
+import { TaskManagementBoard } from '@/components/task-management/TaskManagementBoard';
 
 export default function TasksPage() {
-  return <TaskBoard />;
+  return <TaskManagementBoard sourceFilter="client-relations" />;
 }

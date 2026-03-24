@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, FileText, Clock, Users, ChevronRight,
-  Pencil, Trash2, Search, Briefcase, Copy,
+  Trash2, Search, Briefcase, Copy,
   X, Check, AlertTriangle, Loader2,
   ArrowUp, ArrowDown, ListChecks, ChevronDown, ChevronUp, Minus,
 } from 'lucide-react';
@@ -850,12 +850,6 @@ function EditTemplateModal({
                                 ) : (
                                   <div className="flex items-center gap-0.5 shrink-0">
                                     <button
-                                      onClick={() => startEdit(route.id, sub)}
-                                      className="p-1 rounded text-slate-400 hover:text-teal-700 hover:bg-teal-50 transition-colors"
-                                    >
-                                      <Pencil size={12} />
-                                    </button>
-                                    <button
                                       onClick={() => setConfirmDeleteSubtask({ routeId: route.id, subtaskId: sub.id })}
                                       className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                     >
@@ -1206,10 +1200,6 @@ function TemplateCard({
             <button onClick={onDuplicate} title="Duplicate template"
               className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
               <Copy size={13} />
-            </button>
-            <button onClick={onEdit} title="Edit"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-teal-700 hover:bg-teal-50 transition-colors">
-              <Pencil size={13} />
             </button>
             <button onClick={onDelete} title="Delete"
               className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">

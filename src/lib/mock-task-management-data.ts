@@ -11,7 +11,7 @@ import { INITIAL_LIAISON_TASKS, LIAISON_TEAM } from './mock-liaison-data';
 import type { AOTask, AOTeamMember } from './types';
 
 // ── Source type ───────────────────────────────────────────
-export type TaskSource = 'client-relations' | 'liaison' | 'compliance' | 'om';
+export type TaskSource = 'client-relations' | 'liaison' | 'compliance' | 'om' | 'admin' | 'accounting' | 'hr';
 
 export interface UnifiedTask extends AOTask {
   source: TaskSource;
@@ -176,8 +176,11 @@ export const ALL_TASKS: UnifiedTask[] = [
 
 // ── Source display config ─────────────────────────────────
 export const SOURCE_CONFIG: Record<TaskSource, { label: string; color: string; bg: string; textColor: string }> = {
-  'client-relations': { label: 'Client Relations',    color: 'bg-rose-500',   bg: 'bg-rose-50',   textColor: 'text-rose-700'   },
-  liaison:            { label: 'Liaison',              color: 'bg-cyan-500',   bg: 'bg-cyan-50',   textColor: 'text-cyan-700'   },
-  compliance:         { label: 'Compliance',           color: 'bg-violet-500', bg: 'bg-violet-50', textColor: 'text-violet-700' },
-  om:                 { label: 'Operations Manager',   color: 'bg-teal-500',   bg: 'bg-teal-50',   textColor: 'text-teal-700'   },
+  'client-relations': { label: 'Client Relations',    color: 'bg-rose-500',    bg: 'bg-rose-50',    textColor: 'text-rose-700'    },
+  liaison:            { label: 'Liaison',              color: 'bg-cyan-500',    bg: 'bg-cyan-50',    textColor: 'text-cyan-700'    },
+  compliance:         { label: 'Compliance',           color: 'bg-violet-500',  bg: 'bg-violet-50',  textColor: 'text-violet-700'  },
+  om:                 { label: 'Operations Manager',   color: 'bg-teal-500',    bg: 'bg-teal-50',    textColor: 'text-teal-700'    },
+  admin:              { label: 'Admin',                color: 'bg-slate-500',   bg: 'bg-slate-50',   textColor: 'text-slate-700'   },
+  accounting:         { label: 'Accounting',           color: 'bg-emerald-500', bg: 'bg-emerald-50', textColor: 'text-emerald-700' },
+  hr:                 { label: 'Human Resources',      color: 'bg-orange-500',  bg: 'bg-orange-50',  textColor: 'text-orange-700'  },
 };

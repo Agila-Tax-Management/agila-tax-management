@@ -4,11 +4,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
-  Pencil, Check, X, Loader2, Settings2, ArrowRight,
-  Building2, ChevronRight, AlertTriangle,
+  ChevronLeft, Pencil, Check, X, Loader2, Settings2, ArrowRight,
+  Building2, ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
-import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
+import { useTaskDepartments, applyStoredDeptOrder } from '@/context/TaskDepartmentsContext';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -1068,27 +1068,49 @@ function DeptStatusPanel({
 
 export function WorkflowSettings(): React.ReactNode {
   const { success, error } = useToast();
-  const { refresh } = useTaskDepartments();
+  const { refresh, reorderDepts } = useTaskDepartments();
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeDeptId, setActiveDeptId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showNewDeptInput, setShowNewDeptInput] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [addingDept, setAddingDept] = useState(false);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [newStatusNames, setNewStatusNames] = useState<Record<number, string>>({});
+  const [addingStatus, setAddingStatus] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     const res = await fetch('/api/admin/settings/task-workflow/departments');
     const data = await res.json();
     if (res.ok) {
-      setAllDepartments(data.data);
-      if (data.data.length > 0) setActiveDeptId((prev) => prev ?? data.data[0].id);
+      const sorted = applyStoredDeptOrder(data.data as Department[]);
+      setAllDepartments(sorted);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ── Drag-to-reorder ──────────────────────────────────────────────
+  const handleDrop = (targetId: number) => {
+    if (!draggingId || draggingId === targetId) return;
+    setAllDepartments(prev => {
+      const next = [...prev];
+      const fromIdx = next.findIndex(d => d.id === draggingId);
+      const toIdx = next.findIndex(d => d.id === targetId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      reorderDepts(next.map(d => d.id));
+      return next;
+    });
+  };
+
+  // ── Dept CRUD ────────────────────────────────────────────────────
   const addDept = async () => {
     if (!newDeptName.trim()) return;
     setAddingDept(true);
@@ -1100,16 +1122,94 @@ export function WorkflowSettings(): React.ReactNode {
     const data = await res.json();
     if (!res.ok) { error('Create failed', data.error); setAddingDept(false); return; }
     const newDept: Department = { ...data.data, statuses: [] };
-    setAllDepartments(prev => [...prev, newDept].sort((a, b) => a.name.localeCompare(b.name)));
-    setActiveDeptId(newDept.id);
+    setAllDepartments(prev => [...prev, newDept]);
+    setExpandedId(newDept.id);
     setNewDeptName('');
     setShowNewDeptInput(false);
     setAddingDept(false);
-    success('Workflow created', `"${newDept.name}" is ready to configure`);
+    success('Department created', `"${newDept.name}" is ready to configure`);
     refresh();
   };
 
-  const activeDept = allDepartments.find(d => d.id === activeDeptId) ?? null;
+  const renameDept = async (deptId: number, name: string) => {
+    const res = await fetch(`/api/admin/settings/task-workflow/departments/${deptId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) { error('Rename failed', data.error); throw new Error(data.error as string); }
+    setAllDepartments(prev => prev.map(d => d.id === deptId ? { ...d, name } : d));
+    success('Renamed', `Department renamed to "${name}".`);
+    refresh();
+  };
+
+  const deleteDept = async (deptId: number) => {
+    setDeletingId(deptId);
+    const res = await fetch(`/api/admin/settings/task-workflow/departments/${deptId}`, { method: 'DELETE' });
+    const data = await safeJson(res);
+    setConfirmDeleteId(null);
+    if (!res.ok) { error('Delete failed', (data.error as string) ?? 'Unexpected error'); setDeletingId(null); return; }
+    setAllDepartments(prev => prev.filter(d => d.id !== deptId));
+    if (expandedId === deptId) setExpandedId(null);
+    setDeletingId(null);
+    success('Deleted', 'Department removed.');
+    refresh();
+  };
+
+  // ── Status CRUD ──────────────────────────────────────────────────
+  const addStatus = async (deptId: number) => {
+    const name = (newStatusNames[deptId] ?? '').trim();
+    if (!name) return;
+    setAddingStatus(deptId);
+    const res = await fetch(`/api/admin/settings/task-workflow/departments/${deptId}/statuses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) { error('Add failed', data.error); setAddingStatus(null); return; }
+    setAllDepartments(prev => prev.map(d =>
+      d.id === deptId ? { ...d, statuses: [...d.statuses, data.data as DepartmentStatus] } : d
+    ));
+    setNewStatusNames(prev => ({ ...prev, [deptId]: '' }));
+    setAddingStatus(null);
+    success('Status added', `"${(data.data as DepartmentStatus).name}" added.`);
+    refresh();
+  };
+
+  const moveStatus = async (deptId: number, statuses: DepartmentStatus[], index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    const next = [...statuses];
+    [next[index], next[targetIdx]] = [next[targetIdx], next[index]];
+    const reordered = next.map((s, i) => ({ ...s, statusOrder: i + 1 }));
+    setAllDepartments(prev => prev.map(d => d.id === deptId ? { ...d, statuses: reordered } : d));
+    const res = await fetch(`/api/admin/settings/task-workflow/departments/${deptId}/statuses/reorder`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: reordered.map(s => ({ statusId: s.id, statusOrder: s.statusOrder })) }),
+    });
+    if (!res.ok) {
+      error('Reorder failed', 'Could not save order');
+      setAllDepartments(prev => prev.map(d => d.id === deptId ? { ...d, statuses } : d));
+    } else { refresh(); }
+  };
+
+  const updateStatus = (deptId: number, statusId: number, patch: Partial<DepartmentStatus>) => {
+    setAllDepartments(prev => prev.map(d =>
+      d.id === deptId
+        ? { ...d, statuses: d.statuses.map(s => s.id === statusId ? { ...s, ...patch } : s) }
+        : d
+    ));
+    refresh();
+  };
+
+  const removeStatus = (deptId: number, statusId: number) => {
+    setAllDepartments(prev => prev.map(d =>
+      d.id === deptId ? { ...d, statuses: d.statuses.filter(s => s.id !== statusId) } : d
+    ));
+    refresh();
+  };
 
   if (loading) {
     return (
@@ -1121,77 +1221,173 @@ export function WorkflowSettings(): React.ReactNode {
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-      {/* ── Tab strip ── */}
-      <div className="border-b border-slate-200 flex items-center">
-        {/* Scrollable tabs */}
-        <div className="flex items-end overflow-x-auto flex-1 min-w-0">
-          {allDepartments.map(dept => (
-            <button
-              key={dept.id}
-              onClick={() => setActiveDeptId(dept.id)}
-              className={`px-3 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
-                dept.id === activeDeptId
-                  ? 'border-teal-700 text-teal-700 bg-teal-50/50'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-              }`}
-            >
-              {dept.name}
-            </button>
-          ))}
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/50">
+        <div className="flex items-center gap-2">
+          <Settings2 size={15} className="text-teal-700 shrink-0" />
+          <span className="text-sm font-bold text-slate-700">Department Workflows</span>
+          <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-full">
+            {allDepartments.length}
+          </span>
         </div>
-
-        {/* + New Workflow — always visible */}
-        <div className="shrink-0 border-l border-slate-200 px-3 py-2">
-          {showNewDeptInput ? (
-            <div className="flex items-center gap-1">
-              <input
-                autoFocus
-                value={newDeptName}
-                onChange={e => setNewDeptName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addDept(); if (e.key === 'Escape') setShowNewDeptInput(false); }}
-                placeholder="Workflow name…"
-                className="border border-slate-300 rounded px-2 py-1 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <button
-                onClick={addDept}
-                disabled={addingDept || !newDeptName.trim()}
-                className="text-teal-700 hover:text-teal-900 disabled:opacity-40"
-              >
-                {addingDept ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              </button>
-              <button onClick={() => setShowNewDeptInput(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={16} />
-              </button>
-            </div>
-          ) : (
+        {showNewDeptInput ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={newDeptName}
+              onChange={e => setNewDeptName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addDept(); if (e.key === 'Escape') { setShowNewDeptInput(false); setNewDeptName(''); } }}
+              placeholder="Department name…"
+              className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
             <button
-              onClick={() => setShowNewDeptInput(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors"
+              onClick={addDept}
+              disabled={addingDept || !newDeptName.trim()}
+              className="text-teal-700 hover:text-teal-900 disabled:opacity-40"
             >
-              <Plus size={15} /> New Workflow
+              {addingDept ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Content ── */}
-      <div className="px-4 py-5">
-        {allDepartments.length === 0 && (
-          <div className="text-center py-12 text-slate-400">
-            <Settings2 size={40} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No workflows yet</p>
-            <p className="text-sm mt-1">Click &ldquo;+ New Workflow&rdquo; to create your first department workflow.</p>
+            <button onClick={() => { setShowNewDeptInput(false); setNewDeptName(''); }} className="text-slate-400 hover:text-slate-600">
+              <X size={16} />
+            </button>
           </div>
-        )}
-        {activeDept && (
-          <DeptStatusPanel
-            key={activeDept.id}
-            dept={activeDept}
-            setDepts={setAllDepartments}
-            onRefresh={refresh}
-          />
+        ) : (
+          <button
+            onClick={() => setShowNewDeptInput(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors"
+          >
+            <Plus size={14} /> New Department
+          </button>
         )}
       </div>
+
+      {/* Department list */}
+      {allDepartments.length === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          <Settings2 size={40} className="mx-auto mb-3 opacity-30" />
+          <p className="font-medium">No departments yet</p>
+          <p className="text-sm mt-1">Click &ldquo;+ New Department&rdquo; to get started.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {allDepartments.map((dept, idx) => {
+            const isExpanded = expandedId === dept.id;
+            const isDragging = draggingId === dept.id;
+            const isDragOver = dragOverId === dept.id && !isDragging;
+            return (
+              <div
+                key={dept.id}
+                draggable
+                onDragStart={() => setDraggingId(dept.id)}
+                onDragOver={e => { e.preventDefault(); setDragOverId(dept.id); }}
+                onDrop={() => { handleDrop(dept.id); setDragOverId(null); }}
+                onDragEnd={() => { setDraggingId(null); setDragOverId(null); }}
+                className={`transition-all ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'bg-teal-50/60' : ''}`}
+              >
+                {/* Row header */}
+                <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/70 transition-colors">
+                  <GripVertical size={15} className="text-slate-300 cursor-grab active:cursor-grabbing shrink-0" />
+                  <span className="w-5 h-5 rounded-full bg-teal-700/10 text-teal-700 text-[10px] font-bold flex items-center justify-center shrink-0 select-none">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <InlineEdit
+                      value={dept.name}
+                      onSave={name => renameDept(dept.id, name)}
+                      className="font-semibold text-slate-800 text-sm"
+                    />
+                  </div>
+                  <span className="text-[11px] text-slate-400 shrink-0">
+                    {dept.statuses.length} status{dept.statuses.length !== 1 ? 'es' : ''}
+                  </span>
+                  {/* Delete with confirm */}
+                  {confirmDeleteId === dept.id ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-red-600 font-medium">Delete?</span>
+                      <button
+                        onClick={() => deleteDept(dept.id)}
+                        disabled={deletingId === dept.id}
+                        className="px-2 py-0.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === dept.id ? <Loader2 size={11} className="animate-spin" /> : 'Yes'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-2 py-0.5 text-xs font-bold text-slate-600 border border-slate-200 rounded hover:bg-slate-100 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(dept.id)}
+                      className="text-slate-300 hover:text-red-500 transition-colors shrink-0"
+                      title="Delete department"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                  {/* Expand/collapse */}
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : dept.id)}
+                    className={`p-1 rounded-lg transition-colors shrink-0 ${isExpanded ? 'bg-teal-50 text-teal-700' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'}`}
+                    title={isExpanded ? 'Collapse' : 'Show statuses'}
+                  >
+                    <ChevronDown size={15} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Expanded statuses panel */}
+                {isExpanded && (
+                  <div className="px-5 pb-4 pt-1 bg-slate-50/50 border-t border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pt-2">
+                      Statuses
+                    </p>
+                    <div className="space-y-1.5 mb-3">
+                      {dept.statuses.length === 0 && (
+                        <p className="text-xs text-slate-400 italic py-3 text-center border-2 border-dashed border-slate-100 rounded-xl">
+                          No statuses yet — add one below.
+                        </p>
+                      )}
+                      {dept.statuses.map((st, sIdx) => (
+                        <StatusRow
+                          key={st.id}
+                          status={st}
+                          deptId={dept.id}
+                          isFirst={sIdx === 0}
+                          isLast={sIdx === dept.statuses.length - 1}
+                          onMoveUp={() => moveStatus(dept.id, dept.statuses, sIdx, 'up')}
+                          onMoveDown={() => moveStatus(dept.id, dept.statuses, sIdx, 'down')}
+                          onDelete={() => removeStatus(dept.id, st.id)}
+                          onUpdate={patch => updateStatus(dept.id, st.id, patch)}
+                        />
+                      ))}
+                    </div>
+                    {/* Add status */}
+                    <div className="flex gap-2">
+                      <input
+                        value={newStatusNames[dept.id] ?? ''}
+                        onChange={e => setNewStatusNames(prev => ({ ...prev, [dept.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') addStatus(dept.id); }}
+                        placeholder="New status name…"
+                        className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                      />
+                      <button
+                        onClick={() => addStatus(dept.id)}
+                        disabled={addingStatus === dept.id || !(newStatusNames[dept.id] ?? '').trim()}
+                        className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-sm rounded-lg font-medium disabled:opacity-50 flex items-center gap-1 transition-colors"
+                      >
+                        {addingStatus === dept.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

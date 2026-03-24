@@ -123,6 +123,12 @@ export function MyTask() {
 
   const isOverdue = (t: AOTask) => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-11');
 
+  const getGroupLabel = (task: AOTask) => {
+    if (groupBy === 'assignee') return getAssignee(task.assigneeId).name;
+    if (groupBy === 'company') return getClientName(task.clientId);
+    return 'All Tasks';
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       {/* Header */}
