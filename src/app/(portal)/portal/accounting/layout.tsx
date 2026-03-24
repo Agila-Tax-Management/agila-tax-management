@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { AccountingSidebar } from '@/components/accounting/AccountingSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { Button } from '@/components/UI/button';
+import { PortalBreadcrumb } from '@/components/UI/PortalBreadcrumb';
 import { RoleProvider } from '@/lib/role-context';
 import { Menu, User, ArrowLeft } from 'lucide-react';
 
@@ -42,6 +43,10 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
               >
                 <ArrowLeft size={16} className="mr-1" /> {isRoot ? 'Main Hub' : 'Back'}
               </Button>
+              <span className="hidden sm:block text-slate-300 select-none">|</span>
+              <div className="hidden sm:flex min-w-0">
+                <PortalBreadcrumb />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
