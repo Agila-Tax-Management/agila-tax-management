@@ -45,19 +45,26 @@ const FULL_SELECT = {
     },
     orderBy: { id: 'asc' as const },
   },
-  payments: {
+  allocations: {
     select: {
       id: true,
-      amount: true,
-      paymentDate: true,
-      method: true,
-      referenceNumber: true,
-      proofOfPaymentUrl: true,
-      notes: true,
-      recordedBy: { select: { id: true, name: true } },
+      amountApplied: true,
       createdAt: true,
+      payment: {
+        select: {
+          id: true,
+          paymentDate: true,
+          method: true,
+          referenceNumber: true,
+          proofOfPaymentUrl: true,
+          notes: true,
+          unusedAmount: true,
+          recordedBy: { select: { id: true, name: true } },
+          createdAt: true,
+        },
+      },
     },
-    orderBy: { paymentDate: 'desc' as const },
+    orderBy: { payment: { paymentDate: 'desc' as const } },
   },
   historyLogs: {
     select: {
@@ -93,12 +100,21 @@ function serialize(inv: unknown) {
       unitPrice: Number(it.unitPrice),
       total: Number(it.total),
     })),
-    payments: ((i.payments as Record<string, unknown>[]) ?? []).map((p) => ({
-      ...p,
-      amount: Number(p.amount),
-      paymentDate: (p.paymentDate as Date).toISOString(),
-      createdAt: (p.createdAt as Date).toISOString(),
-    })),
+    payments: ((i.allocations as Record<string, unknown>[]) ?? []).map((alloc) => {
+      const p = alloc.payment as Record<string, unknown>;
+      return {
+        id: p.id,
+        amount: Number(alloc.amountApplied),
+        unusedAmount: Number(p.unusedAmount ?? 0),
+        paymentDate: (p.paymentDate as Date).toISOString(),
+        method: p.method,
+        referenceNumber: p.referenceNumber ?? null,
+        proofOfPaymentUrl: p.proofOfPaymentUrl ?? null,
+        notes: p.notes ?? null,
+        recordedBy: p.recordedBy ?? null,
+        createdAt: (p.createdAt as Date).toISOString(),
+      };
+    }),
     historyLogs: ((i.historyLogs as Record<string, unknown>[]) ?? []).map((h) => ({
       ...h,
       createdAt: (h.createdAt as Date).toISOString(),
@@ -148,7 +164,7 @@ export async function PUT(
   const { id } = await params;
   const existing = await prisma.invoice.findUnique({
     where: { id },
-    include: { payments: { select: { amount: true } } },
+    include: { allocations: { select: { amountApplied: true } } },
   });
   if (!existing) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
@@ -159,7 +175,7 @@ export async function PUT(
   }
 
   const data = parsed.data;
-  const totalPaid = existing.payments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalPaid = existing.allocations.reduce((s, a) => s + Number(a.amountApplied), 0);
   const subTotal = data.items
     ? data.items.reduce((s, it) => s + it.total, 0)
     : Number(existing.subTotal);

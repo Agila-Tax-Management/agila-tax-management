@@ -58,7 +58,7 @@ model ClientSubscription {
 
     // ─── NEW: Automation Triggers ───
     billingCycle    BillingCycle @default(MONTHLY)
-    nextBillingDate DateTime // The cron job looks for this date!
+    nextBillingDate DateTime? // The cron job looks for this date; null = not yet scheduled
 
     agreedRate    Decimal   @db.Decimal(10, 2)
     effectiveDate DateTime
@@ -142,8 +142,8 @@ model Payment {
     id String @id @default(cuid())
 
     // ─── Which Client & Invoice does this payment belong to? ───
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+    clientId Int?
+    client   Client? @relation(fields: [clientId], references: [id])
 
     // Track exactly who recorded this payment (Internal ERP Staff)
     recordedById String?
@@ -154,7 +154,7 @@ model Payment {
     method      PaymentMethod
 
     // Crucial for tracking if there is leftover money (e.g., they overpaid)
-    unusedAmount Decimal @db.Decimal(10, 2)
+    unusedAmount Decimal @default(0) @db.Decimal(10, 2)
 
     referenceNumber   String? // e.g., Bank Transfer Ref # or Check #
     proofOfPaymentUrl String? // URL to the uploaded deposit slip/screenshot

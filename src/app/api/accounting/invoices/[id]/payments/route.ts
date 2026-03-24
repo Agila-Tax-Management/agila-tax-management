@@ -25,7 +25,7 @@ export async function POST(
   const { id } = await params;
   const invoice = await prisma.invoice.findUnique({
     where: { id },
-    include: { payments: { select: { amount: true } } },
+    include: { allocations: { select: { amountApplied: true } } },
   });
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
   if (invoice.status === 'PAID' || invoice.status === 'VOID') {
@@ -42,7 +42,10 @@ export async function POST(
   }
 
   const data = parsed.data;
-  const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0) + data.amount;
+  const currentBalanceDue = Number(invoice.balanceDue);
+  const amountApplied = Math.min(data.amount, currentBalanceDue);
+  const unusedAmount = Math.max(0, data.amount - currentBalanceDue);
+  const totalPaid = invoice.allocations.reduce((s, a) => s + Number(a.amountApplied), 0) + amountApplied;
   const totalAmount = Number(invoice.totalAmount);
   const newBalanceDue = Math.max(0, totalAmount - totalPaid);
   const newStatus = newBalanceDue === 0 ? 'PAID' : totalPaid > 0 ? 'PARTIALLY_PAID' : invoice.status;
@@ -50,17 +53,22 @@ export async function POST(
   const payment = await prisma.$transaction(async (tx) => {
     const p = await tx.payment.create({
       data: {
-        invoiceId: id,
+        clientId: invoice.clientId ?? null,
         recordedById: session.user.id,
         amount: data.amount,
+        unusedAmount,
         paymentDate: new Date(data.paymentDate),
         method: data.method,
         referenceNumber: data.referenceNumber ?? null,
         notes: data.notes ?? null,
+        allocations: {
+          create: { invoiceId: id, amountApplied },
+        },
       },
       select: {
         id: true,
         amount: true,
+        unusedAmount: true,
         paymentDate: true,
         method: true,
         referenceNumber: true,
@@ -97,6 +105,7 @@ export async function POST(
     data: {
       ...payment,
       amount: Number(payment.amount),
+      unusedAmount: Number(payment.unusedAmount),
       paymentDate: payment.paymentDate.toISOString(),
       createdAt: payment.createdAt.toISOString(),
     },

@@ -38,6 +38,7 @@ export interface InvoiceItemRecord {
 export interface PaymentRecord {
   id: string;
   amount: number;
+  unusedAmount: number;
   paymentDate: string;
   method: PaymentMethodType;
   referenceNumber: string | null;
