@@ -22,6 +22,7 @@ import type {
   GovernmentIdsState,
   PersonalInfoFormState,
   ProfileTab,
+  ScheduleOption,
 } from './profile-types';
 
 const TABS: { key: ProfileTab; label: string; icon: typeof User }[] = [
@@ -57,6 +58,7 @@ interface ApiContract {
   monthlyRate: string | null;
   dailyRate: string | null;
   hourlyRate: string | null;
+  payType: string | null;
   disbursedMethod: string | null;
   scheduleId: number | null;
   workingHoursPerWeek: number | null;
@@ -82,7 +84,16 @@ interface ApiEmployeeDetail {
   personalEmail: string | null;
   email: string | null;
   user: { email: string } | null;
-  address: string;
+  currentStreet: string | null;
+  currentBarangay: string | null;
+  currentCity: string | null;
+  currentProvince: string | null;
+  currentZip: string | null;
+  permanentStreet: string | null;
+  permanentBarangay: string | null;
+  permanentCity: string | null;
+  permanentProvince: string | null;
+  permanentZip: string | null;
   employeeNo: string | null;
   educationalBackground: string | null;
   school: string | null;
@@ -145,7 +156,16 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
     gender: '',
     civilStatus: '',
     personalEmail: '',
-    address: '',
+    currentStreet: '',
+    currentBarangay: '',
+    currentCity: '',
+    currentProvince: '',
+    currentZip: '',
+    permanentStreet: '',
+    permanentBarangay: '',
+    permanentCity: '',
+    permanentProvince: '',
+    permanentZip: '',
     email: employee.email,
     educationalBackground: '',
     school: '',
@@ -182,7 +202,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
   const [levelOptions, setLevelOptions] = useState<IdNameOption[]>([]);
 
   const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
-  const [scheduleOptions, setScheduleOptions] = useState<IdNameOption[]>([]);
+  const [scheduleOptions, setScheduleOptions] = useState<ScheduleOption[]>([]);
 
   /* ── Fetch helpers ───────────────────────────────────────────── */
 
@@ -212,7 +232,16 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         gender: emp.gender,
         civilStatus: emp.civilStatus ?? '',
         personalEmail: emp.personalEmail ?? '',
-        address: emp.address,
+        currentStreet: emp.currentStreet ?? '',
+        currentBarangay: emp.currentBarangay ?? '',
+        currentCity: emp.currentCity ?? '',
+        currentProvince: emp.currentProvince ?? '',
+        currentZip: emp.currentZip ?? '',
+        permanentStreet: emp.permanentStreet ?? '',
+        permanentBarangay: emp.permanentBarangay ?? '',
+        permanentCity: emp.permanentCity ?? '',
+        permanentProvince: emp.permanentProvince ?? '',
+        permanentZip: emp.permanentZip ?? '',
         email: emp.email ?? emp.user?.email ?? '',
         educationalBackground: emp.educationalBackground ?? '',
         school: emp.school ?? '',
@@ -279,6 +308,7 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         monthlyRate: c.monthlyRate,
         dailyRate: c.dailyRate,
         hourlyRate: c.hourlyRate,
+        payType: c.payType,
         disbursedMethod: c.disbursedMethod,
         status: c.status,
         scheduleId: c.scheduleId,
@@ -319,8 +349,22 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         );
       }
       if (schedRes.ok) {
-        const schedData = (await schedRes.json()) as { data: { id: number; name: string }[] };
-        setScheduleOptions((schedData.data ?? []).map((s) => ({ id: s.id, name: s.name })));
+        const schedData = (await schedRes.json()) as {
+          data: {
+            id: number;
+            name: string;
+            timezone: string;
+            days: { dayOfWeek: number; startTime: string; endTime: string; breakStart: string | null; breakEnd: string | null; isWorkingDay: boolean }[];
+          }[];
+        };
+        setScheduleOptions(
+          (schedData.data ?? []).map((s) => ({
+            id: s.id,
+            name: s.name,
+            timezone: s.timezone,
+            days: s.days,
+          })),
+        );
       }
     } catch {
       error('Network error', 'Failed to load form options. Please refresh the page.');
@@ -374,7 +418,16 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
         gender: '',
         civilStatus: '',
         personalEmail: '',
-        address: '',
+        currentStreet: '',
+        currentBarangay: '',
+        currentCity: '',
+        currentProvince: '',
+        currentZip: '',
+        permanentStreet: '',
+        permanentBarangay: '',
+        permanentCity: '',
+        permanentProvince: '',
+        permanentZip: '',
         email: employee.email,
         educationalBackground: '',
         school: '',
@@ -406,7 +459,16 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
           gender: personalInfoForm.gender || undefined,
           civilStatus: personalInfoForm.civilStatus || null,
           personalEmail: personalInfoForm.personalEmail || null,
-          address: personalInfoForm.address || undefined,
+          currentStreet: personalInfoForm.currentStreet || null,
+          currentBarangay: personalInfoForm.currentBarangay || null,
+          currentCity: personalInfoForm.currentCity || null,
+          currentProvince: personalInfoForm.currentProvince || null,
+          currentZip: personalInfoForm.currentZip || null,
+          permanentStreet: personalInfoForm.permanentStreet || null,
+          permanentBarangay: personalInfoForm.permanentBarangay || null,
+          permanentCity: personalInfoForm.permanentCity || null,
+          permanentProvince: personalInfoForm.permanentProvince || null,
+          permanentZip: personalInfoForm.permanentZip || null,
           employeeNo: personalInfoForm.employeeNo || null,
           educationalBackground: personalInfoForm.educationalBackground || null,
           school: personalInfoForm.school || null,

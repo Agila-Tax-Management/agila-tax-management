@@ -45,6 +45,24 @@ export interface EmploymentFormState {
   reportingManagerId: string;
 }
 
+// ─── Schedule ───────────────────────────────────────────────────
+
+export interface ScheduleDay {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  isWorkingDay: boolean;
+}
+
+export interface ScheduleOption {
+  id: number;
+  name: string;
+  timezone: string;
+  days: ScheduleDay[];
+}
+
 // ─── Contracts ───────────────────────────────────────────────────
 
 export interface ContractRecord {
@@ -58,6 +76,7 @@ export interface ContractRecord {
   monthlyRate: string | null;
   dailyRate: string | null;
   hourlyRate: string | null;
+  payType: string | null;
   disbursedMethod: string | null;
   status: string;
   scheduleId: number | null;
@@ -102,8 +121,18 @@ export interface PersonalInfoFormState {
   hireDate: string;
   employmentType: string;
   employmentStatus: string;
-  // Address
-  address: string;
+  // Current Address
+  currentStreet: string;
+  currentBarangay: string;
+  currentCity: string;
+  currentProvince: string;
+  currentZip: string;
+  // Permanent Address
+  permanentStreet: string;
+  permanentBarangay: string;
+  permanentCity: string;
+  permanentProvince: string;
+  permanentZip: string;
   // Education
   educationalBackground: string;
   school: string;

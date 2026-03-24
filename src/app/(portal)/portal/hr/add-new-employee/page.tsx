@@ -57,7 +57,16 @@ interface Step1Data {
   birthDate: string;
   gender: string;
   phone: string;
-  address: string;
+  currentStreet: string;
+  currentBarangay: string;
+  currentCity: string;
+  currentProvince: string;
+  currentZip: string;
+  permanentStreet: string;
+  permanentBarangay: string;
+  permanentCity: string;
+  permanentProvince: string;
+  permanentZip: string;
   email: string;
   employeeNo: string;
   userLinkMode: UserLinkMode;
@@ -86,6 +95,7 @@ interface Step3Data {
   monthlyRate: string;
   dailyRate: string;
   hourlyRate: string;
+  rateType: 'MONTHLY' | 'DAILY';
   disbursedMethod: string;
   payType: string;
   bankDetails: string;
@@ -171,7 +181,10 @@ export default function AddNewEmployeePage(): React.ReactNode {
 
   const [s1, setS1] = useState<Step1Data>({
     firstName: '', middleName: '', lastName: '', birthDate: '', gender: '',
-    phone: '', address: '', email: '', employeeNo: '',
+    phone: '',
+    currentStreet: '', currentBarangay: '', currentCity: '', currentProvince: '', currentZip: '',
+    permanentStreet: '', permanentBarangay: '', permanentCity: '', permanentProvince: '', permanentZip: '',
+    email: '', employeeNo: '',
     userLinkMode: 'none', selectedUserId: '',
     newUserName: '', newUserEmail: '', newUserPassword: '', newUserRole: 'EMPLOYEE',
   });
@@ -183,8 +196,8 @@ export default function AddNewEmployeePage(): React.ReactNode {
 
   const [s3, setS3] = useState<Step3Data>({
     contractType: '', status: 'DRAFT', contractStart: '', contractEnd: '',
-    monthlyRate: '', dailyRate: '', hourlyRate: '', disbursedMethod: '',
-    payType: 'Variable Pay', bankDetails: '', workingHoursPerWeek: '', notes: '',
+    monthlyRate: '', dailyRate: '', hourlyRate: '', rateType: 'MONTHLY',
+    disbursedMethod: '', payType: 'FIXED_PAY', bankDetails: '', workingHoursPerWeek: '0', notes: '',
   });
 
   const [s4, setS4] = useState<Step4Data>(DEFAULT_STEP4);
@@ -249,8 +262,8 @@ export default function AddNewEmployeePage(): React.ReactNode {
       error('Missing fields', 'First name and last name are required.');
       return;
     }
-    if (!s1.birthDate || !s1.gender || !s1.phone.trim() || !s1.address.trim()) {
-      error('Missing fields', 'Birth date, gender, phone, and address are required.');
+    if (!s1.birthDate || !s1.gender || !s1.phone.trim()) {
+      error('Missing fields', 'Birth date, gender, and phone are required.');
       return;
     }
     if (empNoConflict) {
@@ -299,7 +312,16 @@ export default function AddNewEmployeePage(): React.ReactNode {
           birthDate: s1.birthDate,
           gender: s1.gender,
           phone: s1.phone.trim(),
-          address: s1.address.trim(),
+          currentStreet: s1.currentStreet.trim() || null,
+          currentBarangay: s1.currentBarangay.trim() || null,
+          currentCity: s1.currentCity.trim() || null,
+          currentProvince: s1.currentProvince.trim() || null,
+          currentZip: s1.currentZip.trim() || null,
+          permanentStreet: s1.permanentStreet.trim() || null,
+          permanentBarangay: s1.permanentBarangay.trim() || null,
+          permanentCity: s1.permanentCity.trim() || null,
+          permanentProvince: s1.permanentProvince.trim() || null,
+          permanentZip: s1.permanentZip.trim() || null,
           email: s1.email.trim() || null,
           employeeNo: s1.employeeNo.trim() || null,
           userId: resolvedUserId,
@@ -392,13 +414,13 @@ export default function AddNewEmployeePage(): React.ReactNode {
           status: s3.status,
           contractStart: s3.contractStart,
           contractEnd: s3.contractEnd || null,
-          monthlyRate: s3.monthlyRate || null,
-          dailyRate: s3.dailyRate || null,
-          hourlyRate: s3.hourlyRate || null,
+          monthlyRate: s3.rateType === 'MONTHLY' ? (s3.monthlyRate || null) : null,
+          dailyRate: s3.rateType === 'DAILY' ? (s3.dailyRate || null) : null,
+          hourlyRate: null,
           disbursedMethod: s3.disbursedMethod || null,
           payType: s3.payType || null,
           bankDetails: s3.bankDetails || null,
-          workingHoursPerWeek: s3.workingHoursPerWeek ? parseInt(s3.workingHoursPerWeek, 10) : null,
+          workingHoursPerWeek: 0,
           notes: s3.notes || null,
         }),
       });
@@ -586,11 +608,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
                 <input className={inputCls} value={s1.phone}
                   onChange={(e) => setS1((p) => ({ ...p, phone: e.target.value }))} placeholder="09xxxxxxxxx" />
               </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Address <span className="text-red-500">*</span></label>
-                <input className={inputCls} value={s1.address}
-                  onChange={(e) => setS1((p) => ({ ...p, address: e.target.value }))} placeholder="City, Province" />
-              </div>
               <div>
                 <label className={labelCls}>Email</label>
                 <input type="email" className={inputCls} value={s1.email}
@@ -616,6 +633,71 @@ export default function AddNewEmployeePage(): React.ReactNode {
                 {empNoConflict && (
                   <p className="text-xs text-red-500 mt-1">This employee number is already in use.</p>
                 )}
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Current Address</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Street / House No.</label>
+                    <input className={inputCls} value={s1.currentStreet}
+                      onChange={(e) => setS1((p) => ({ ...p, currentStreet: e.target.value }))} placeholder="123 Mabini St." />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Barangay</label>
+                    <input className={inputCls} value={s1.currentBarangay}
+                      onChange={(e) => setS1((p) => ({ ...p, currentBarangay: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>City / Municipality</label>
+                    <input className={inputCls} value={s1.currentCity}
+                      onChange={(e) => setS1((p) => ({ ...p, currentCity: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Province</label>
+                    <input className={inputCls} value={s1.currentProvince}
+                      onChange={(e) => setS1((p) => ({ ...p, currentProvince: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>ZIP Code</label>
+                    <input className={inputCls} value={s1.currentZip}
+                      onChange={(e) => setS1((p) => ({ ...p, currentZip: e.target.value }))} placeholder="6000" />
+                  </div>
+                </div>
+              </div>
+              <hr className="border-border" />
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Permanent Address</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Street / House No.</label>
+                    <input className={inputCls} value={s1.permanentStreet}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentStreet: e.target.value }))} placeholder="123 Mabini St." />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Barangay</label>
+                    <input className={inputCls} value={s1.permanentBarangay}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentBarangay: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>City / Municipality</label>
+                    <input className={inputCls} value={s1.permanentCity}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentCity: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Province</label>
+                    <input className={inputCls} value={s1.permanentProvince}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentProvince: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>ZIP Code</label>
+                    <input className={inputCls} value={s1.permanentZip}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentZip: e.target.value }))} placeholder="6000" />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -836,14 +918,29 @@ export default function AddNewEmployeePage(): React.ReactNode {
                   onChange={(e) => setS3((p) => ({ ...p, contractEnd: e.target.value }))} />
               </div>
               <div>
-                <label className={labelCls}>Monthly Rate (₱)</label>
-                <input type="number" className={inputCls} value={s3.monthlyRate}
-                  onChange={(e) => setS3((p) => ({ ...p, monthlyRate: e.target.value }))} placeholder="0.00" />
+                <label className={labelCls}>Rate Type</label>
+                <select className={selectCls} value={s3.rateType}
+                  onChange={(e) => setS3((p) => ({ ...p, rateType: e.target.value as 'MONTHLY' | 'DAILY', monthlyRate: '', dailyRate: '' }))}>
+                  <option value="MONTHLY">Monthly Rate</option>
+                  <option value="DAILY">Daily Rate</option>
+                </select>
               </div>
               <div>
-                <label className={labelCls}>Daily Rate (₱)</label>
-                <input type="number" className={inputCls} value={s3.dailyRate}
-                  onChange={(e) => setS3((p) => ({ ...p, dailyRate: e.target.value }))} placeholder="0.00" />
+                <label className={labelCls}>{s3.rateType === 'MONTHLY' ? 'Monthly Rate (₱)' : 'Daily Rate (₱)'}</label>
+                <input type="number" className={inputCls}
+                  value={s3.rateType === 'MONTHLY' ? s3.monthlyRate : s3.dailyRate}
+                  onChange={(e) => setS3((p) => s3.rateType === 'MONTHLY'
+                    ? { ...p, monthlyRate: e.target.value }
+                    : { ...p, dailyRate: e.target.value })}
+                  placeholder="0.00" />
+              </div>
+              <div>
+                <label className={labelCls}>Pay Type</label>
+                <select className={selectCls} value={s3.payType}
+                  onChange={(e) => setS3((p) => ({ ...p, payType: e.target.value }))}>
+                  <option value="FIXED_PAY">Fixed Pay</option>
+                  <option value="VARIABLE_PAY">Variable Pay</option>
+                </select>
               </div>
               <div>
                 <label className={labelCls}>Disbursement Method</label>
@@ -853,11 +950,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
                   <option value="CASH_SALARY">Cash Salary</option>
                   <option value="FUND_TRANSFER">Fund Transfer</option>
                 </select>
-              </div>
-              <div>
-                <label className={labelCls}>Working Hours/Week</label>
-                <input type="number" className={inputCls} value={s3.workingHoursPerWeek}
-                  onChange={(e) => setS3((p) => ({ ...p, workingHoursPerWeek: e.target.value }))} placeholder="40" />
               </div>
               <div className="md:col-span-2">
                 <label className={labelCls}>Bank Details</label>

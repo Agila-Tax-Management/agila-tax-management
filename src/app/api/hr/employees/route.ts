@@ -55,7 +55,16 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       phone: e.phone,
       gender: e.gender,
       birthDate: e.birthDate.toISOString(),
-      address: e.address,
+      currentStreet: e.currentStreet ?? null,
+      currentBarangay: e.currentBarangay ?? null,
+      currentCity: e.currentCity ?? null,
+      currentProvince: e.currentProvince ?? null,
+      currentZip: e.currentZip ?? null,
+      permanentStreet: e.permanentStreet ?? null,
+      permanentBarangay: e.permanentBarangay ?? null,
+      permanentCity: e.permanentCity ?? null,
+      permanentProvince: e.permanentProvince ?? null,
+      permanentZip: e.permanentZip ?? null,
       active: e.active,
       createdAt: e.createdAt.toISOString(),
       user: e.user
@@ -103,8 +112,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
-  const { firstName, middleName, lastName, birthDate, gender, phone, address, email, employeeNo, userId } =
-    parsed.data;
+  const {
+    firstName, middleName, lastName, nameExtension,
+    birthDate, placeOfBirth, gender, civilStatus, citizenship,
+    phone, personalEmail, email, employeeNo, userId,
+    currentStreet, currentBarangay, currentCity, currentProvince, currentZip,
+    permanentStreet, permanentBarangay, permanentCity, permanentProvince, permanentZip,
+    educationalBackground, school, course, yearGraduated, certifications,
+  } = parsed.data;
 
   // Unique employee number check
   if (employeeNo) {
@@ -146,13 +161,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       firstName,
       middleName: middleName ?? null,
       lastName,
+      nameExtension: nameExtension ?? null,
       birthDate: new Date(birthDate),
+      placeOfBirth: placeOfBirth ?? null,
       gender,
+      civilStatus: civilStatus ?? null,
+      citizenship: citizenship ?? null,
       phone,
-      address,
+      personalEmail: personalEmail ?? null,
       email: email ?? null,
       employeeNo: resolvedEmployeeNo,
       userId: userId ?? null,
+      currentStreet: currentStreet ?? null,
+      currentBarangay: currentBarangay ?? null,
+      currentCity: currentCity ?? null,
+      currentProvince: currentProvince ?? null,
+      currentZip: currentZip ?? null,
+      permanentStreet: permanentStreet ?? null,
+      permanentBarangay: permanentBarangay ?? null,
+      permanentCity: permanentCity ?? null,
+      permanentProvince: permanentProvince ?? null,
+      permanentZip: permanentZip ?? null,
+      educationalBackground: educationalBackground ?? null,
+      school: school ?? null,
+      course: course ?? null,
+      yearGraduated: yearGraduated ?? null,
+      certifications: certifications ?? null,
       active: true,
     },
   });
