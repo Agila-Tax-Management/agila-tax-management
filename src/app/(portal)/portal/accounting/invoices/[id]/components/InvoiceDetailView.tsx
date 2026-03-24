@@ -22,7 +22,7 @@ async function openInvoicePDF(invoice: import('@/types/accounting.types').Invoic
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 import {
-  ArrowLeft, Printer, Pencil, CheckCircle2, Loader2,
+  Printer, Pencil, CheckCircle2, Loader2,
   Plus, Trash2, ChevronDown, Search, Clock,
   AlertTriangle, FileText, XCircle, CircleDot,
   CreditCard, Save, X,
@@ -133,7 +133,25 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
         const res = await fetch(`/api/accounting/invoices/${id}`);
         if (!res.ok) { toastError('Not found', 'Invoice could not be loaded.'); return; }
         const data = await res.json();
-        setInvoice(data.data);
+        const loadedInvoice = data.data as InvoiceRecord;
+        setInvoice(loadedInvoice);
+        // If page opened directly in edit mode (?edit=true), populate edit fields now
+        if (isEditing) {
+          setEditDueDate(loadedInvoice.dueDate.split('T')[0]);
+          setEditTerms(loadedInvoice.terms ?? '');
+          setEditNotes(loadedInvoice.notes ?? '');
+          setEditStatus(loadedInvoice.status);
+          setEditItems(
+            loadedInvoice.items.map((it) => ({
+              _key: crypto.randomUUID(),
+              description: it.description,
+              quantity: it.quantity,
+              unitPrice: it.unitPrice,
+              total: it.total,
+              remarks: it.remarks ?? '',
+            })),
+          );
+        }
       } catch {
         toastError('Error', 'Failed to load invoice.');
       } finally {
@@ -309,21 +327,16 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
       {/* ── Top Bar ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => router.push('/portal/accounting/invoices')} className="text-slate-500">
-            <ArrowLeft size={16} className="mr-1" /> Invoices
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-black text-slate-800">{invoice.invoiceNumber}</h2>
-              <Badge variant={statusCfg.badge} className="text-[10px] uppercase flex items-center gap-1">
-                {statusCfg.icon} {statusCfg.label}
-              </Badge>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Issued: {fmtDate(invoice.issueDate)} · Due: {fmtDate(invoice.dueDate)}
-            </p>
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-black text-slate-800">{invoice.invoiceNumber}</h2>
+            <Badge variant={statusCfg.badge} className="text-[10px] uppercase flex items-center gap-1">
+              {statusCfg.icon} {statusCfg.label}
+            </Badge>
           </div>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Issued: {fmtDate(invoice.issueDate)} · Due: {fmtDate(invoice.dueDate)}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {!isEditing ? (
@@ -372,6 +385,19 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
       {/* ── EDIT MODE ───────────────────────────────────────── */}
       {isEditing && (
         <div className="space-y-5">
+          {/* PAID warning banner */}
+          {invoice.status === 'PAID' && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-amber-800">This invoice is fully paid</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Editing a paid invoice may cause accounting discrepancies. Changes to items or amounts will not automatically update existing payment records.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Edit Meta */}
           <Card className="p-6 border-slate-200 shadow-sm">
             <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">Invoice Details</h3>

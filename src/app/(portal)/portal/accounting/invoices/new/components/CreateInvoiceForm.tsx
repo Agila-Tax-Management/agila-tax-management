@@ -8,7 +8,7 @@ import { Button } from '@/components/UI/button';
 import { Badge } from '@/components/UI/Badge';
 import { useToast } from '@/context/ToastContext';
 import {
-  ArrowLeft, Plus, Trash2, ChevronDown, Search,
+  Plus, Trash2, ChevronDown, Search,
   FileText, Users, Loader2,
 } from 'lucide-react';
 import type { ClientOption, ServiceOption, InvoiceItemInput } from '@/types/accounting.types';
@@ -221,14 +221,9 @@ export function CreateInvoiceForm() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => router.back()} className="text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={16} className="mr-1" /> Back
-        </Button>
-        <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">New Invoice</h2>
-          <p className="text-sm text-slate-500">Create and issue a new invoice.</p>
-        </div>
+      <div>
+        <h2 className="text-2xl font-black text-slate-800 tracking-tight">New Invoice</h2>
+        <p className="text-sm text-slate-500">Create and issue a new invoice.</p>
       </div>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
