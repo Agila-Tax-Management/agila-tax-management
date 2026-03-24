@@ -36,6 +36,13 @@ enum SubscriptionChangeType {
     CANCELLED
 }
 
+enum BillingCycle {
+    MONTHLY
+    QUARTERLY
+    SEMI_ANNUALLY
+    ANNUALLY
+}
+
 // ─── Client Service Subscription (Replaces acs_client_service_plan)
 // Tracks the active recurring plans a client has agreed to.
 model ClientSubscription {
@@ -49,6 +56,10 @@ model ClientSubscription {
     servicePlanId Int
     servicePlan   ServicePlan @relation(fields: [servicePlanId], references: [id])
 
+    // ─── NEW: Automation Triggers ───
+    billingCycle    BillingCycle @default(MONTHLY)
+    nextBillingDate DateTime // The cron job looks for this date!
+
     agreedRate    Decimal   @db.Decimal(10, 2)
     effectiveDate DateTime
     inactiveDate  DateTime?
@@ -61,6 +72,7 @@ model ClientSubscription {
     historyLogs SubscriptionHistory[]
 
     @@index([clientId, isActive])
+    @@index([nextBillingDate])
     @@map("client_subscription")
 }
 
@@ -91,11 +103,12 @@ model Invoice {
     terms String? @db.Text // "Net 15", "Net 30"
 
     items       InvoiceItem[]
-    payments    Payment[]
+    allocations PaymentAllocation[]
     historyLogs InvoiceHistory[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    payments  Payment[]
 
     @@index([clientId])
     @@index([leadId])
@@ -128,8 +141,9 @@ model InvoiceItem {
 model Payment {
     id String @id @default(cuid())
 
-    invoiceId String
-    invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+    // ─── Which Client & Invoice does this payment belong to? ───
+    clientId Int
+    client   Client @relation(fields: [clientId], references: [id])
 
     // Track exactly who recorded this payment (Internal ERP Staff)
     recordedById String?
@@ -139,16 +153,45 @@ model Payment {
     paymentDate DateTime      @default(now())
     method      PaymentMethod
 
+    // Crucial for tracking if there is leftover money (e.g., they overpaid)
+    unusedAmount Decimal @db.Decimal(10, 2)
+
     referenceNumber   String? // e.g., Bank Transfer Ref # or Check #
     proofOfPaymentUrl String? // URL to the uploaded deposit slip/screenshot
 
     notes String? @db.Text
 
+    // The Bridge connections
+    allocations PaymentAllocation[]
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+    invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+    invoiceId String?
 
-    @@index([invoiceId])
+    @@index([clientId])
     @@map("payment")
+}
+
+model PaymentAllocation {
+    id String @id @default(cuid())
+
+    // Which Payment is this cash coming from?
+    paymentId String
+    payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+    // Which Invoice is this cash paying down?
+    invoiceId String
+    invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+    // How much of the payment was applied to this specific invoice?
+    amountApplied Decimal @db.Decimal(10, 2)
+
+    createdAt DateTime @default(now())
+
+    @@index([paymentId])
+    @@index([invoiceId])
+    @@map("payment_allocation")
 }
 
 // ─── Invoice History (Audit Trail) ────────────────────────────────
