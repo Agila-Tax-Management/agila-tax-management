@@ -1,17 +1,17 @@
 enum Role {
-    SUPER_ADMIN
-    ADMIN
-    EMPLOYEE
+  SUPER_ADMIN
+  ADMIN
+  EMPLOYEE
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    
-  role          Role
-  active        Boolean @default(true)
+  id     String  @id @default(cuid())
+  name   String
+  email  String
+  role   Role
+  active Boolean @default(true)
 
-  employee      Employee?
+  employee Employee?
 
   emailVerified Boolean   @default(false)
   image         String?
@@ -21,31 +21,32 @@ model User {
   accounts      Account[]
 
   // ─── CRM / Account Management ───
-  managedClientsAsCro    Client[] @relation("ClientRelationOfficer")
-  managedClientsAsOm     Client[] @relation("OperationsManager")
+  managedClientsAsCro Client[] @relation("ClientRelationOfficer")
+  managedClientsAsOm  Client[] @relation("OperationsManager")
 
-  assignedLeads           Lead[]   @relation("AssignedAgent")
+  assignedLeads Lead[] @relation("AssignedAgent")
 
-  activityLogs    ActivityLog[]  @relation("InternalUserLogs")
-  notifications   Notification[] @relation("UserNotifications")
-  taskConversations      TaskConversation[]
-  taskHistoryLogs        TaskHistory[]
+  activityLogs      ActivityLog[]      @relation("InternalUserLogs")
+  notifications     Notification[]     @relation("UserNotifications")
+  taskConversations TaskConversation[]
+  taskHistoryLogs   TaskHistory[]
 
-  leadComments          LeadComment[]
-  leadHistoryLogs       LeadHistory[]
+  leadComments    LeadComment[]
+  leadHistoryLogs LeadHistory[]
 
-  paymentsRecorded          Payment[]
-  invoiceHistoryLogs        InvoiceHistory[]
-  subscriptionHistoryLogs   SubscriptionHistory[]
-  cashAdvancesApproved  CashAdvance[] @relation("CashAdvanceApprover")
-  
+  paymentsRecorded        Payment[]
+  paymentHistories        PaymentHistory[]
+  invoiceHistoryLogs      InvoiceHistory[]
+  subscriptionHistoryLogs SubscriptionHistory[]
+  cashAdvancesApproved    CashAdvance[]         @relation("CashAdvanceApprover")
+
   approvedOvertimes OvertimeRequest[] @relation("OvertimeApprover")
   approvedLeaves    LeaveRequest[]    @relation("LeaveApprover")
   approvedCoas      CoaRequest[]      @relation("CoaApprover")
-  
-  payslipsPrepared     Payslip[]         @relation("PayslipPreparer")
-  payslipsApproved     Payslip[]         @relation("PayslipApprover")
-  acknowledgedPayslips Payslip[]         @relation("PayslipAcknowledger")
+
+  payslipsPrepared     Payslip[] @relation("PayslipPreparer")
+  payslipsApproved     Payslip[] @relation("PayslipApprover")
+  acknowledgedPayslips Payslip[] @relation("PayslipAcknowledger")
 
   @@unique([email])
   @@map("user")
@@ -98,4 +99,3 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
-

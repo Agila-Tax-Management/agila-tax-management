@@ -51,8 +51,25 @@ export async function POST(
   const newStatus = newBalanceDue === 0 ? 'PAID' : totalPaid > 0 ? 'PARTIALLY_PAID' : invoice.status;
 
   const payment = await prisma.$transaction(async (tx) => {
+    // Generate payment number atomically (PAY-YYYY-XXXX)
+    const year = new Date().getFullYear();
+    const prefix = `PAY-${year}-`;
+    const latest = await tx.payment.findFirst({
+      where: { paymentNumber: { startsWith: prefix } },
+      orderBy: { paymentNumber: 'desc' },
+      select: { paymentNumber: true },
+    });
+    let nextSeq = 1;
+    if (latest) {
+      const parts = latest.paymentNumber.split('-');
+      const lastSeq = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+    }
+    const paymentNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
+
     const p = await tx.payment.create({
       data: {
+        paymentNumber,
         clientId: invoice.clientId ?? null,
         recordedById: session.user.id,
         amount: data.amount,
@@ -67,6 +84,7 @@ export async function POST(
       },
       select: {
         id: true,
+        paymentNumber: true,
         amount: true,
         unusedAmount: true,
         paymentDate: true,

@@ -26,6 +26,13 @@ export type InvoiceChangeType =
   | 'ITEM_REMOVED'
   | 'INVOICE_VOIDED';
 
+export type PaymentChangeType =
+  | 'PAYMENT_RECORDED'
+  | 'PAYMENT_UPDATED'
+  | 'ALLOCATION_MODIFIED'
+  | 'STATUS_CHANGED'
+  | 'PAYMENT_VOIDED';
+
 export interface InvoiceItemRecord {
   id: number;
   description: string;
@@ -123,6 +130,94 @@ export interface ServiceOption {
   type: 'plan' | 'one-time';
   name: string;
   rate: number;
+}
+
+// ── Payment Module Types ─────────────────────────────────────────
+
+export interface ClientOnlyOption {
+  id: number;
+  label: string;
+  subLabel: string;
+  businessName: string;
+  clientNo: string | null;
+}
+
+export interface UnpaidInvoiceOption {
+  id: string;
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate: string;
+  totalAmount: number;
+  balanceDue: number;
+  status: InvoiceStatus;
+}
+
+export interface PaymentHistoryRecord {
+  id: string;
+  changeType: PaymentChangeType;
+  oldValue: string | null;
+  newValue: string | null;
+  actorId: string | null;
+  actor: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface PaymentAllocationRecord {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceTotalAmount: number;
+  invoiceStatus: InvoiceStatus;
+  amountApplied: number;
+  createdAt: string;
+}
+
+export interface PaymentListRecord {
+  id: string;
+  paymentNumber: string;
+  clientId: number | null;
+  client: { id: number; businessName: string; clientNo: string | null } | null;
+  amount: number;
+  unusedAmount: number;
+  paymentDate: string;
+  method: PaymentMethodType;
+  referenceNumber: string | null;
+  createdAt: string;
+}
+
+export interface PaymentDetailRecord {
+  id: string;
+  paymentNumber: string;
+  clientId: number | null;
+  client: { id: number; businessName: string; clientNo: string | null } | null;
+  amount: number;
+  unusedAmount: number;
+  paymentDate: string;
+  method: PaymentMethodType;
+  referenceNumber: string | null;
+  proofOfPaymentUrl: string | null;
+  notes: string | null;
+  recordedBy: { id: string; name: string } | null;
+  allocations: PaymentAllocationRecord[];
+  historyLogs: PaymentHistoryRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentStats {
+  totalReceived: number;
+  totalUnusedCredit: number;
+  paymentCount: number;
+}
+
+export interface RecordPaymentInput {
+  clientId: number;
+  amount: number;
+  paymentDate: string;
+  method: PaymentMethodType;
+  referenceNumber?: string;
+  notes?: string;
+  allocations: Array<{ invoiceId: string; amountApplied: number }>;
 }
 
 export interface InvoiceItemInput {

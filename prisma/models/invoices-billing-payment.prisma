@@ -15,6 +15,14 @@ enum PaymentMethod {
     CREDIT_CARD
 }
 
+enum PaymentChangeType {
+    PAYMENT_RECORDED
+    PAYMENT_UPDATED
+    ALLOCATION_MODIFIED
+    STATUS_CHANGED // E.g., if a check clears or bounces
+    PAYMENT_VOIDED
+}
+
 enum InvoiceChangeType {
     INVOICE_CREATED
     INVOICE_UPDATED
@@ -141,6 +149,8 @@ model InvoiceItem {
 model Payment {
     id String @id @default(cuid())
 
+    paymentNumber String @unique // ADD THIS: e.g., "PAY-2026-0001"
+
     // ─── Which Client & Invoice does this payment belong to? ───
     clientId Int?
     client   Client? @relation(fields: [clientId], references: [id])
@@ -169,6 +179,8 @@ model Payment {
     invoice   Invoice? @relation(fields: [invoiceId], references: [id])
     invoiceId String?
 
+    historyLogs PaymentHistory[]
+
     @@index([clientId])
     @@map("payment")
 }
@@ -192,6 +204,30 @@ model PaymentAllocation {
     @@index([paymentId])
     @@index([invoiceId])
     @@map("payment_allocation")
+}
+
+// ─── Payment History (Audit Trail) ────────────────────────────────
+model PaymentHistory {
+    id String @id @default(cuid())
+
+    paymentId String
+    payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+    // The internal ERP user who made the change
+    actorId String?
+    actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+    changeType PaymentChangeType
+
+    // Text snapshots (e.g., oldValue: "Amount: 20000", newValue: "Amount: 2000")
+    oldValue String? @db.Text
+    newValue String? @db.Text
+
+    createdAt DateTime @default(now())
+
+    @@index([paymentId])
+    @@index([paymentId, createdAt(sort: Desc)])
+    @@map("payment_history")
 }
 
 // ─── Invoice History (Audit Trail) ────────────────────────────────
