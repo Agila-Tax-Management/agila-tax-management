@@ -1,6 +1,6 @@
 // src/components/accounting/InvoicePDF.tsx
 import React from 'react';
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 import type { InvoiceRecord } from '@/types/accounting.types';
 
 /* ── Color palette ─────────────────────────────────────────────── */
@@ -57,15 +57,12 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  logoBox: {
-    width: 28, height: 28,
-    backgroundColor: C.amber,
+  logoImg: {
+    width: 28,
+    height: 28,
     borderRadius: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginRight: 7,
   },
-  logoLetter: { color: C.white, fontFamily: 'Helvetica-Bold', fontSize: 13 },
   companyName: { fontFamily: 'Helvetica-Bold', fontSize: 11, color: C.slate900 },
   companyCity: { fontSize: 8, color: C.slate500 },
   companyContact: { fontSize: 7.5, color: C.slate400, marginTop: 3 },
@@ -214,9 +211,7 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
           {/* Left: Company info */}
           <View>
             <View style={s.logoRow}>
-              <View style={s.logoBox}>
-                <Text style={s.logoLetter}>A</Text>
-              </View>
+              <Image src="/images/agila_logo.webp" style={s.logoImg} />
               <View>
                 <Text style={s.companyName}>AGILA TAX MANAGEMENT</Text>
                 <Text style={s.companyCity}>Cebu City, Philippines</Text>

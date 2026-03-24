@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import type { InvoiceRecord } from '@/types/accounting.types';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -87,9 +88,13 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
       <div className="flex items-start justify-between px-8 pt-8 pb-6 border-b border-slate-100">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center">
-              <span className="text-white font-black text-sm">A</span>
-            </div>
+            <Image
+              src="/images/agila_logo.webp"
+              alt="Agila Tax Management"
+              width={40}
+              height={40}
+              className="rounded-xl"
+            />
             <div>
               <p className="font-black text-slate-900 text-base leading-tight">AGILA TAX MANAGEMENT</p>
               <p className="text-xs text-slate-500">Cebu City, Philippines</p>
