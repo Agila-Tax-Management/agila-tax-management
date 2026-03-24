@@ -24,6 +24,8 @@ model User {
   managedClientsAsCro    Client[] @relation("ClientRelationOfficer")
   managedClientsAsOm     Client[] @relation("OperationsManager")
 
+  assignedLeads           Lead[]   @relation("AssignedAgent")
+
   activityLogs    ActivityLog[]  @relation("InternalUserLogs")
   notifications   Notification[] @relation("UserNotifications")
   taskConversations      TaskConversation[]

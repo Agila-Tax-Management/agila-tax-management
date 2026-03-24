@@ -100,7 +100,7 @@ model ServicePlan {
     taskTemplateId Int?
     taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
 
-    leads          Lead[]
+    leads               Lead[]
     clientSubscriptions ClientSubscription[]
 
     createdAt DateTime @default(now())
@@ -128,7 +128,7 @@ model ServiceOneTime {
     taskTemplateId Int?
     taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
 
-    leads          Lead[]
+    leads Lead[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -161,6 +161,9 @@ model Promo {
     // Plan-specific targeting (used alongside promoFor for granular control)
     servicePlans        ServicePlan[]    @relation("ServicePlanPromos")
     serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimePromos")
+
+    // Leads that have this promo applied
+    leads Lead[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

@@ -779,6 +779,69 @@ async function main(): Promise<void> {
     });
   }
   console.log(`  ✓ Reference tables (Gov Offices, Cities) seeded`);
+
+  // ── 9. Seed Lead Pipeline Statuses ────────────────────────────────
+  const LEAD_STATUSES = [
+    { name: "New",                  color: "#3b82f6", sequence: 1,  isDefault: true,  isOnboarding: false, isConverted: false },
+    { name: "Contacted",            color: "#0ea5e9", sequence: 2,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Qualified",            color: "#10b981", sequence: 3,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Proposal",             color: "#f59e0b", sequence: 4,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Negotiation",          color: "#f97316", sequence: 5,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Closed Won",           color: "#16a34a", sequence: 6,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Pending Onboarding",   color: "#8b5cf6", sequence: 7,  isDefault: false, isOnboarding: true,  isConverted: false },
+    { name: "Contract Signing",     color: "#6366f1", sequence: 8,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Waiting for Payment",  color: "#eab308", sequence: 9,  isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Turn Over",            color: "#0d9488", sequence: 10, isDefault: false, isOnboarding: false, isConverted: true  },
+    { name: "Lost",                 color: "#ef4444", sequence: 11, isDefault: false, isOnboarding: false, isConverted: false },
+  ];
+
+  for (const status of LEAD_STATUSES) {
+    const existing = await prisma.leadStatus.findFirst({ where: { name: status.name } });
+    if (existing) {
+      await prisma.leadStatus.update({
+        where: { id: existing.id },
+        data: { color: status.color, sequence: status.sequence, isDefault: status.isDefault, isOnboarding: status.isOnboarding, isConverted: status.isConverted },
+      });
+    } else {
+      await prisma.leadStatus.create({ data: status });
+    }
+  }
+  console.log(`  ✓ ${LEAD_STATUSES.length} lead pipeline statuses seeded`);
+
+  // ── 10. Seed Sample Leads ─────────────────────────────────────────
+  const newStatus   = await prisma.leadStatus.findFirst({ where: { name: "New" } });
+  const contactedStatus = await prisma.leadStatus.findFirst({ where: { name: "Contacted" } });
+
+  if (newStatus && contactedStatus) {
+    const sampleLeads = [
+      {
+        firstName: "Roberto",
+        lastName: "Villanueva",
+        contactNumber: "09171234567",
+        businessType: "Sole Proprietorship",
+        leadSource: "Walk-in",
+        statusId: newStatus.id,
+      },
+      {
+        firstName: "Patricia",
+        lastName: "Lim",
+        contactNumber: "09189876543",
+        businessType: "Corporation",
+        leadSource: "Referral",
+        statusId: contactedStatus.id,
+      },
+    ];
+
+    for (const lead of sampleLeads) {
+      const existingLead = await prisma.lead.findFirst({
+        where: { firstName: lead.firstName, lastName: lead.lastName },
+      });
+      if (!existingLead) {
+        await prisma.lead.create({ data: lead });
+      }
+    }
+    console.log(`  ✓ 2 sample leads seeded`);
+  }
 }
 
 main()
