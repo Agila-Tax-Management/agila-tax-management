@@ -67,8 +67,8 @@ This applies to all feature work, refactors, bug fixes, and schema changes. Triv
 prisma/
   schema.prisma          # Prisma config (generator + datasource only)
   models/                # Multi-file schema models
-    users.prisma          # User, Session, Account, Verification + Role enum
-    employee.prisma       # Employee, Department, Position, Teams
+    users.prisma          # User, Session, Account, Verification + Role enum (SUPER_ADMIN, ADMIN, EMPLOYEE)
+    employee.prisma       # Employee (structured address fields, extended personal info), Department, Position, Teams
     client.prisma         # Client, ClientUser, ProfessionalClient, SoleProprietorship
     app-access.prisma     # App, EmployeeAppAccess (RBAC per module)
   migrations/
@@ -267,7 +267,7 @@ useEffect(() => {
 - Client: `src/lib/auth-client.ts` — `createAuthClient()` with `nextCookies()` plugin
 - API route: `src/app/api/auth/[...all]/route.ts` — catch-all handler
 - Auth models: `User`, `Session`, `Account`, `Verification` in `prisma/models/users.prisma`
-- Roles enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`, `CLIENT`
+- Roles enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`
 
 ### BetterAuth Conventions
 
@@ -325,6 +325,9 @@ useEffect(() => {
 - Use `@default(cuid())` for string IDs, `@default(autoincrement())` for integer IDs
 - Use `Decimal` with `@db.Decimal(precision, scale)` for monetary values
 - Always include `createdAt DateTime @default(now())` and `updatedAt DateTime @updatedAt` on models
+- `Employee` model uses **structured address fields** (no flat `address` string): `currentStreet`, `currentBarangay`, `currentCity`, `currentProvince`, `currentZip` + permanent equivalents — all optional
+- `Employee` model has extended personal info: `nameExtension`, `username`, `personalEmail`, `placeOfBirth`, `civilStatus`, `citizenship`, `educationalBackground`, `school`, `course`, `yearGraduated`, `certifications` — all optional
+- `Employee` has a `softDelete Boolean @default(false)` flag alongside `active`
 
 ---
 
@@ -427,7 +430,7 @@ useEffect(() => {
 
 ## Role-Based Access Control
 
-- Roles defined in Prisma enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`, `CLIENT`
+- Roles defined in Prisma enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`
 - App-level permissions: `EmployeeAppAccess` model with `canRead`, `canWrite`, `canEdit`, `canDelete` per app module
 - Client context roles: `Employee`, `HR`, `Admin` (in `src/lib/role-context.tsx`)
 - Permissions map in `src/lib/constants.ts` (`ROLE_PERMISSIONS`)
@@ -482,6 +485,28 @@ src/app/(dashboard)/dashboard/settings/user-management/
 
 ---
 
+## Client Portal Users (`ClientUser` + `ClientUserAssignment`)
+
+Client portal users are external users (typically client business owners) who access the client-facing portal. They are fully isolated from internal `User` accounts.
+
+- Model: `ClientUser` in `prisma/models/user-client.prisma` — BetterAuth-compatible with its own `ClientSession`, `ClientAccount`, `ClientVerification` tables
+- Join table: `ClientUserAssignment` links a `ClientUser` to one or more `Client` records with a `ClientPortalRole`
+- Role enum: `ClientPortalRole` — `OWNER`, `ADMIN`, `EMPLOYEE`, `VIEWER`
+- **Default role for `ClientUserAssignment` is `OWNER`** — the admin management page always creates assignments with `role: "OWNER"`
+- `ClientUserStatus` enum: `ACTIVE`, `INACTIVE`, `SUSPENDED`
+
+### Client User Management Conventions
+
+- API: `GET/POST /api/admin/settings/client-users` and `GET/PUT/PATCH/DELETE /api/admin/settings/client-users/[id]`
+- The management UI (`UserClientManagement`, `UserClientFormModal`, `UserClientViewModal`) lives in `src/components/dashboard/`
+- Shared types live in `src/types/client-user-management.types.ts` — `ClientUserRecord`, `ApiAssignment`, `ClientUserFormValues`, `ClientOption`
+- The GET endpoint accepts `?role=OWNER` to filter by role
+- Creating or updating a client user always uses `role: "OWNER"` for all assignments
+- The view modal displays a role badge (`a.role`) alongside the client active status badge
+- Auth client for the portal: `src/lib/auth-client-portal.ts` (separate BetterAuth instance)
+
+---
+
 ## Portal Apps (AppPortal Enum)
 
 All portal apps are defined in `prisma/models/app-access.prisma` and seeded in `prisma/seed.ts`:
@@ -495,6 +520,7 @@ All portal apps are defined in `prisma/models/app-access.prisma` and seeded in `
 | `ACCOUNT_OFFICER`  | Account Officer Portal   |
 | `HR`               | HR Portal                |
 | `TASK_MANAGEMENT`  | Task Management Portal   |
+| `CLIENT_RELATIONS` | Client Relations Portal  |
 
 When adding portal-related UI (checkboxes, labels), always include **all** portals from this list.
 

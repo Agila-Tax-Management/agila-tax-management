@@ -7,8 +7,14 @@ import type { Prisma } from "@/generated/prisma/client";
  * Input for creating an activity log entry.
  */
 export interface LogActivityInput {
-  /** The authenticated user's ID */
-  userId: string;
+  /** Internal user's ID (omit for client portal or system actions) */
+  userId?: string;
+  /** Client portal user's ID (omit for internal user or system actions) */
+  clientUserId?: string;
+  /** Client/workspace this action belongs to (for multi-tenancy) */
+  clientId?: number;
+  /** Set true for automated/scheduled system actions */
+  isSystemAction?: boolean;
   /** What kind of action was performed */
   action: LogAction;
   /** The entity type acted upon (e.g. "Client", "Employee", "Lead") */
@@ -46,7 +52,10 @@ export function logActivity(input: LogActivityInput): Promise<void> {
   return prisma.activityLog
     .create({
       data: {
-        userId: input.userId,
+        userId: input.userId ?? null,
+        clientUserId: input.clientUserId ?? null,
+        clientId: input.clientId ?? null,
+        isSystemAction: input.isSystemAction ?? false,
         action: input.action,
         entity: input.entity,
         entityId: input.entityId ?? null,

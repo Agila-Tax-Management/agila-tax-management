@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionWithAccess } from "@/lib/session";
 import prisma from "@/lib/db";
 import { z } from "zod";
+import type { NotificationType, NotificationPriority } from "@/generated/prisma/client";
 
 /**
  * GET /api/notifications
@@ -25,14 +26,18 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 20));
   const skip = (page - 1) * limit;
   const unreadOnly = searchParams.get("unread") === "true";
+  const typeFilter = searchParams.get("type") as NotificationType | null;
+  const priorityFilter = searchParams.get("priority") as NotificationPriority | null;
 
   const where: Record<string, unknown> = {
-    recipientId: session.user.id,
+    userId: session.user.id,
   };
   if (unreadOnly) where.isRead = false;
+  if (typeFilter) where.type = typeFilter;
+  if (priorityFilter) where.priority = priorityFilter;
 
   const [notifications, total, unreadCount] = await Promise.all([
-    prisma.internalNotification.findMany({
+    prisma.notification.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip,
@@ -43,20 +48,15 @@ export async function GET(request: NextRequest) {
         priority: true,
         title: true,
         message: true,
-        entity: true,
-        entityId: true,
-        actionUrl: true,
+        linkUrl: true,
         isRead: true,
         readAt: true,
         createdAt: true,
-        actor: {
-          select: { id: true, name: true },
-        },
       },
     }),
-    prisma.internalNotification.count({ where }),
-    prisma.internalNotification.count({
-      where: { recipientId: session.user.id, isRead: false },
+    prisma.notification.count({ where }),
+    prisma.notification.count({
+      where: { userId: session.user.id, isRead: false },
     }),
   ]);
 
@@ -105,15 +105,15 @@ export async function PATCH(request: NextRequest) {
   const now = new Date();
 
   if ("all" in parsed.data) {
-    await prisma.internalNotification.updateMany({
-      where: { recipientId: session.user.id, isRead: false },
+    await prisma.notification.updateMany({
+      where: { userId: session.user.id, isRead: false },
       data: { isRead: true, readAt: now },
     });
   } else {
-    await prisma.internalNotification.updateMany({
+    await prisma.notification.updateMany({
       where: {
         id: { in: parsed.data.ids },
-        recipientId: session.user.id, // ensure ownership
+        userId: session.user.id, // ensure ownership
       },
       data: { isRead: true, readAt: now },
     });

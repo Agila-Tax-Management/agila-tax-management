@@ -36,17 +36,21 @@ export async function uploadToCloudinary(
   buffer: Buffer,
   folder = "atms/profiles",
   publicId?: string,
+  applyTransform = true,
 ): Promise<CloudinaryUploadResult> {
   return new Promise((resolve, reject) => {
     const options: Record<string, unknown> = {
       folder,
       resource_type: "image",
       overwrite: true,
-      transformation: [
+    };
+
+    if (applyTransform) {
+      options.transformation = [
         { width: 400, height: 400, crop: "fill", gravity: "face" },
         { quality: "auto", fetch_format: "auto" },
-      ],
-    };
+      ];
+    }
 
     if (publicId) {
       options.public_id = publicId;

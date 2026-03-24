@@ -24,15 +24,29 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     select: {
       id: true,
       firstName: true,
+      nameExtension: true,
       middleName: true,
       lastName: true,
       username: true,
       employeeNo: true,
       email: true,
+      personalEmail: true,
       phone: true,
-      address: true,
       gender: true,
       birthDate: true,
+      placeOfBirth: true,
+      civilStatus: true,
+      citizenship: true,
+      currentStreet: true,
+      currentBarangay: true,
+      currentCity: true,
+      currentProvince: true,
+      currentZip: true,
+      permanentStreet: true,
+      permanentBarangay: true,
+      permanentCity: true,
+      permanentProvince: true,
+      permanentZip: true,
       employments: {
         where: { employmentStatus: "ACTIVE" },
         take: 1,
@@ -65,10 +79,23 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
             username: employee.username,
             employeeNo: employee.employeeNo,
             email: employee.email,
+            personalEmail: employee.personalEmail,
             phone: employee.phone,
-            address: employee.address,
             gender: employee.gender,
             birthDate: employee.birthDate.toISOString(),
+            placeOfBirth: employee.placeOfBirth,
+            civilStatus: employee.civilStatus,
+            citizenship: employee.citizenship,
+            currentStreet: employee.currentStreet,
+            currentBarangay: employee.currentBarangay,
+            currentCity: employee.currentCity,
+            currentProvince: employee.currentProvince,
+            currentZip: employee.currentZip,
+            permanentStreet: employee.permanentStreet,
+            permanentBarangay: employee.permanentBarangay,
+            permanentCity: employee.permanentCity,
+            permanentProvince: employee.permanentProvince,
+            permanentZip: employee.permanentZip,
           }
         : null,
       employment: employment
@@ -107,13 +134,27 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
   const {
     firstName,
+    nameExtension,
     middleName,
     lastName,
     email,
+    personalEmail,
     phone,
-    address,
     gender,
     birthDate,
+    placeOfBirth,
+    civilStatus,
+    citizenship,
+    currentStreet,
+    currentBarangay,
+    currentCity,
+    currentProvince,
+    currentZip,
+    permanentStreet,
+    permanentBarangay,
+    permanentCity,
+    permanentProvince,
+    permanentZip,
     username,
   } = parsed.data;
 
@@ -131,13 +172,27 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
   const employeeUpdate: Record<string, unknown> = {};
   if (firstName !== undefined) employeeUpdate.firstName = firstName;
+  if (nameExtension !== undefined) employeeUpdate.nameExtension = nameExtension;
   if (middleName !== undefined) employeeUpdate.middleName = middleName;
   if (lastName !== undefined) employeeUpdate.lastName = lastName;
   if (email !== undefined) employeeUpdate.email = email;
+  if (personalEmail !== undefined) employeeUpdate.personalEmail = personalEmail;
   if (phone !== undefined) employeeUpdate.phone = phone;
-  if (address !== undefined) employeeUpdate.address = address;
   if (gender !== undefined) employeeUpdate.gender = gender;
   if (birthDate !== undefined) employeeUpdate.birthDate = new Date(birthDate);
+  if (placeOfBirth !== undefined) employeeUpdate.placeOfBirth = placeOfBirth;
+  if (civilStatus !== undefined) employeeUpdate.civilStatus = civilStatus;
+  if (citizenship !== undefined) employeeUpdate.citizenship = citizenship;
+  if (currentStreet !== undefined) employeeUpdate.currentStreet = currentStreet;
+  if (currentBarangay !== undefined) employeeUpdate.currentBarangay = currentBarangay;
+  if (currentCity !== undefined) employeeUpdate.currentCity = currentCity;
+  if (currentProvince !== undefined) employeeUpdate.currentProvince = currentProvince;
+  if (currentZip !== undefined) employeeUpdate.currentZip = currentZip;
+  if (permanentStreet !== undefined) employeeUpdate.permanentStreet = permanentStreet;
+  if (permanentBarangay !== undefined) employeeUpdate.permanentBarangay = permanentBarangay;
+  if (permanentCity !== undefined) employeeUpdate.permanentCity = permanentCity;
+  if (permanentProvince !== undefined) employeeUpdate.permanentProvince = permanentProvince;
+  if (permanentZip !== undefined) employeeUpdate.permanentZip = permanentZip;
   if (username !== undefined) employeeUpdate.username = username;
 
   const [updatedEmployee] = await prisma.$transaction([
@@ -147,15 +202,29 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       select: {
         id: true,
         firstName: true,
+        nameExtension: true,
         middleName: true,
         lastName: true,
         username: true,
         employeeNo: true,
         email: true,
+        personalEmail: true,
         phone: true,
-        address: true,
         gender: true,
         birthDate: true,
+        placeOfBirth: true,
+        civilStatus: true,
+        citizenship: true,
+        currentStreet: true,
+        currentBarangay: true,
+        currentCity: true,
+        currentProvince: true,
+        currentZip: true,
+        permanentStreet: true,
+        permanentBarangay: true,
+        permanentCity: true,
+        permanentProvince: true,
+        permanentZip: true,
       },
     }),
     // Keep user.name in sync with the employee's display name.

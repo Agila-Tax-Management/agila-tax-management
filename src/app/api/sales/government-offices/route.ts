@@ -3,19 +3,23 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createGovernmentOfficeSchema } from "@/lib/schemas/sales";
+import { logActivity, getRequestMeta } from "@/lib/activity-log";
 
 /**
  * GET /api/sales/government-offices
  * Returns all active government offices for dropdown / reference data.
  */
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(request.url);
+  const includeInactive = searchParams.get('includeInactive') === 'true';
+
   const offices = await prisma.governmentOffice.findMany({
-    where: { isActive: true },
+    where: includeInactive ? undefined : { isActive: true },
     orderBy: { name: "asc" },
-    select: { id: true, code: true, name: true, description: true },
+    select: { id: true, code: true, name: true, description: true, isActive: true },
   });
 
   return NextResponse.json({ data: offices });
@@ -56,5 +60,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const office = await prisma.governmentOffice.create({ data: parsed.data });
+
+  void logActivity({
+    userId: session.user.id,
+    action: "CREATED",
+    entity: "GovernmentOffice",
+    entityId: String(office.id),
+    description: `Created government office ${office.name} (${office.code})`,
+    ...getRequestMeta(request),
+  });
+
   return NextResponse.json({ data: office }, { status: 201 });
 }

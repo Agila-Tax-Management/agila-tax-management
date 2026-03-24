@@ -3,19 +3,23 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createCitySchema } from "@/lib/schemas/sales";
+import { logActivity, getRequestMeta } from "@/lib/activity-log";
 
 /**
  * GET /api/sales/cities
  * Returns all active cities for dropdown / reference data.
  */
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(request.url);
+  const includeInactive = searchParams.get('includeInactive') === 'true';
+
   const cities = await prisma.city.findMany({
-    where: { isActive: true },
+    where: includeInactive ? undefined : { isActive: true },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, province: true, region: true, zipCode: true },
+    select: { id: true, name: true, province: true, region: true, zipCode: true, isActive: true },
   });
 
   return NextResponse.json({ data: cities });
@@ -49,5 +53,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const city = await prisma.city.create({ data: parsed.data });
+
+  void logActivity({
+    userId: session.user.id,
+    action: "CREATED",
+    entity: "City",
+    entityId: String(city.id),
+    description: `Created city ${city.name}`,
+    ...getRequestMeta(request),
+  });
+
   return NextResponse.json({ data: city }, { status: 201 });
 }

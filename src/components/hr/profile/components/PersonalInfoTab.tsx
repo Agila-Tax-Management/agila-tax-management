@@ -133,9 +133,58 @@ export function PersonalInfoTab({
         {/* Address Information */}
         <Card className="p-6 space-y-5">
           <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Address Information</h3>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1">Address</p>
-            <p className="text-sm font-medium text-foreground">{personalInfoForm.address || '—'}</p>
+          <div className="space-y-5">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Current Address</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="md:col-span-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Street / House No.</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.currentStreet || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Barangay</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.currentBarangay || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">City / Municipality</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.currentCity || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Province</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.currentProvince || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">ZIP Code</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.currentZip || '—'}</p>
+                </div>
+              </div>
+            </div>
+            <hr className="border-border" />
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Permanent Address</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="md:col-span-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Street / House No.</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.permanentStreet || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Barangay</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.permanentBarangay || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">City / Municipality</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.permanentCity || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Province</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.permanentProvince || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">ZIP Code</p>
+                  <p className="text-sm font-medium text-foreground">{personalInfoForm.permanentZip || '—'}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -296,14 +345,72 @@ export function PersonalInfoTab({
       {/* Edit Address Information */}
       <Card className="p-6 space-y-5">
         <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Address Information</h3>
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Address</label>
-          <input
-            type="text"
-            className={personalInputClass}
-            value={personalInfoForm.address}
-            onChange={(e) => onFieldChange('address', e.target.value)}
-          />
+        <div className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Current Address</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Street / House No.</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.currentStreet}
+                  placeholder="123 Mabini St."
+                  onChange={(e) => onFieldChange('currentStreet', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Barangay</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.currentBarangay}
+                  onChange={(e) => onFieldChange('currentBarangay', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">City / Municipality</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.currentCity}
+                  onChange={(e) => onFieldChange('currentCity', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Province</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.currentProvince}
+                  onChange={(e) => onFieldChange('currentProvince', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">ZIP Code</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.currentZip}
+                  placeholder="6000"
+                  onChange={(e) => onFieldChange('currentZip', e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <hr className="border-border" />
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Permanent Address</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Street / House No.</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.permanentStreet}
+                  placeholder="123 Mabini St."
+                  onChange={(e) => onFieldChange('permanentStreet', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Barangay</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.permanentBarangay}
+                  onChange={(e) => onFieldChange('permanentBarangay', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">City / Municipality</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.permanentCity}
+                  onChange={(e) => onFieldChange('permanentCity', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Province</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.permanentProvince}
+                  onChange={(e) => onFieldChange('permanentProvince', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">ZIP Code</label>
+                <input type="text" className={personalInputClass} value={personalInfoForm.permanentZip}
+                  placeholder="6000"
+                  onChange={(e) => onFieldChange('permanentZip', e.target.value)} />
+              </div>
+            </div>
+          </div>
         </div>
       </Card>
 

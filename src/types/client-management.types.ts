@@ -1,6 +1,6 @@
 // src/components/dashboard/client-management.types.ts
 
-export type ClientBusinessType =
+export type BusinessEntityType =
   | 'INDIVIDUAL'
   | 'SOLE_PROPRIETORSHIP'
   | 'PARTNERSHIP'
@@ -22,7 +22,7 @@ export interface ClientRecord {
   clientNo: string | null;
   businessName: string | null;
   portalName: string | null;
-  businessType: string | null;
+  businessEntity: string | null;
   branchType: string | null;
   active: boolean;
   timezone: string | null;
@@ -59,7 +59,31 @@ export interface ClientFormValues {
   clientNo: string;
   businessName: string;
   portalName: string;
-  businessType: ClientBusinessType;
-  branchType: string;
+  businessEntity: BusinessEntityType;
+  branchType: 'MAIN' | 'BRANCH';
   timezone: string;
+}
+
+export type ClientPortalRole = 'OWNER' | 'ADMIN' | 'EMPLOYEE' | 'VIEWER';
+
+export interface ClientDetailRecord {
+  id: number;
+  companyCode: string | null;
+  clientNo: string | null;
+  businessName: string | null;
+  portalName: string | null;
+  businessEntity: string | null;
+  branchType: string | null;
+  active: boolean;
+  timezone: string | null;
+  createdAt: string | null;
+  users: ClientUserMember[];
+}
+
+export interface ClientDetailUserFormValues {
+  name: string;
+  email: string;
+  password: string;
+  role: ClientPortalRole;
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 }

@@ -12,14 +12,14 @@ const updateSchema = z.object({
   clientNo: z.string().optional(),
   businessName: z.string().min(1, "Business name is required"),
   portalName: z.string().optional(),
-  businessType: z.enum([
+  businessEntity: z.enum([
     "INDIVIDUAL",
     "SOLE_PROPRIETORSHIP",
     "PARTNERSHIP",
     "CORPORATION",
     "COOPERATIVE",
   ]),
-  branchType: z.string().optional(),
+  branchType: z.enum(["MAIN", "BRANCH"]).optional(),
   timezone: z.string().optional(),
 });
 
@@ -56,7 +56,7 @@ export async function GET(
       clientNo: true,
       businessName: true,
       portalName: true,
-      businessType: true,
+      businessEntity: true,
       branchType: true,
       active: true,
       timezone: true,
@@ -107,7 +107,7 @@ export async function GET(
       clientNo: client.clientNo,
       businessName: client.businessName,
       portalName: client.portalName,
-      businessType: client.businessType,
+      businessEntity: client.businessEntity,
       branchType: client.branchType,
       active: client.active,
       timezone: client.timezone,
@@ -194,7 +194,7 @@ export async function PUT(
       clientNo: parsed.data.clientNo,
       businessName: parsed.data.businessName,
       portalName: parsed.data.portalName ?? parsed.data.businessName,
-      businessType: parsed.data.businessType,
+      businessEntity: parsed.data.businessEntity,
       branchType: parsed.data.branchType,
       timezone: parsed.data.timezone,
     },

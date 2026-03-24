@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ASPSidebar } from '@/components/sales/ASPSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -15,11 +15,10 @@ export default function SalesPortalLayout({ children }: { children: React.ReactN
 
   const moduleRoot = '/portal/sales';
   const isRoot = pathname === moduleRoot;
-  const backHref = isRoot ? '/dashboard' : moduleRoot;
-  const backLabel = isRoot
-    ? 'Main Hub'
-    : pathname.split('/').filter(Boolean).at(-1)!
-        .split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+  useEffect(() => {
+    document.title = 'Sales Portal | Agila Tax Management System';
+  }, []);
 
   return (
     <RoleProvider>
@@ -38,10 +37,10 @@ export default function SalesPortalLayout({ children }: { children: React.ReactN
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => router.push(backHref)}
+                onClick={() => isRoot ? router.push('/dashboard') : router.back()}
                 className="hidden sm:inline-flex"
               >
-                <ArrowLeft size={16} className="mr-1" /> {backLabel}
+                <ArrowLeft size={16} className="mr-1" /> {isRoot ? 'Main Hub' : 'Back'}
               </Button>
             </div>
 
@@ -56,7 +55,7 @@ export default function SalesPortalLayout({ children }: { children: React.ReactN
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             {children}
           </main>
         </div>

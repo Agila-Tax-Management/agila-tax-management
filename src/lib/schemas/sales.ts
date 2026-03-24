@@ -6,17 +6,40 @@ import { z } from "zod";
 export const createGovernmentOfficeSchema = z.object({
   code: z.string().min(1, "Code is required"),
   name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true).optional(),
 });
+
+export const updateGovernmentOfficeSchema = z.object({
+  code: z.string().min(1, "Code is required").optional(),
+  name: z.string().min(1, "Name is required").optional(),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export type CreateGovernmentOfficeInput = z.infer<typeof createGovernmentOfficeSchema>;
+export type UpdateGovernmentOfficeInput = z.infer<typeof updateGovernmentOfficeSchema>;
 
 /* ─── Cities ─────────────────────────────────────────────────────── */
 
 export const createCitySchema = z.object({
   name: z.string().min(1, "City name is required"),
-  province: z.string().optional(),
-  region: z.string().optional(),
-  zipCode: z.string().optional(),
+  province: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  zipCode: z.string().optional().nullable(),
+  isActive: z.boolean().default(true).optional(),
 });
+
+export const updateCitySchema = z.object({
+  name: z.string().min(1, "City name is required").optional(),
+  province: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  zipCode: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export type CreateCityInput = z.infer<typeof createCitySchema>;
+export type UpdateCityInput = z.infer<typeof updateCitySchema>;
 
 /* ─── Service Inclusions ─────────────────────────────────────────── */
 
@@ -128,3 +151,84 @@ export const updatePromoSchema = z.object({
 
 export type CreatePromoInput = z.infer<typeof createPromoSchema>;
 export type UpdatePromoInput = z.infer<typeof updatePromoSchema>;
+
+/* ─── Lead Status (Pipeline) ─────────────────────────────────────── */
+
+export const createLeadStatusSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  color: z.string().optional().nullable(),
+  sequence: z.number().int().nonnegative().default(0),
+  isDefault: z.boolean().default(false),
+  isOnboarding: z.boolean().default(false),
+  isConverted: z.boolean().default(false),
+});
+
+export const updateLeadStatusSchema = z.object({
+  name: z.string().min(1, "Name is required").optional(),
+  color: z.string().optional().nullable(),
+  sequence: z.number().int().nonnegative().optional(),
+  isDefault: z.boolean().optional(),
+  isOnboarding: z.boolean().optional(),
+  isConverted: z.boolean().optional(),
+});
+
+export type CreateLeadStatusInput = z.infer<typeof createLeadStatusSchema>;
+export type UpdateLeadStatusInput = z.infer<typeof updateLeadStatusSchema>;
+
+/* ─── Leads ──────────────────────────────────────────────────────── */
+
+export const createLeadSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  middleName: z.string().optional().nullable(),
+  lastName: z.string().min(1, "Last name is required"),
+  businessName: z.string().optional().nullable(),
+  contactNumber: z.string().optional().nullable(),
+  businessType: z.string().default("Not Specified"),
+  leadSource: z.string().default("Manual"),
+  address: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  statusId: z.number().int().positive().optional(),
+  assignedAgentId: z.string().optional().nullable(),
+  // Services Interested In
+  servicePlanIds: z.array(z.number().int().positive()).default([]).optional(),
+  serviceOneTimeIds: z.array(z.number().int().positive()).default([]).optional(),
+  promoId: z.number().int().positive().optional().nullable(),
+  // Scheduling & Engagements
+  officeVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+  isClientVisit: z.boolean().default(false).optional(),
+  clientVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+  clientVisitLocation: z.string().optional().nullable(),
+  isVirtualMeeting: z.boolean().default(false).optional(),
+  virtualMeetingSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+  onboardingSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+});
+
+export const updateLeadSchema = z.object({
+  firstName: z.string().min(1, "First name is required").optional(),
+  middleName: z.string().optional().nullable(),
+  lastName: z.string().min(1, "Last name is required").optional(),
+  businessName: z.string().optional().nullable(),
+  contactNumber: z.string().optional().nullable(),
+  businessType: z.string().optional(),
+  leadSource: z.string().optional(),
+  address: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  statusId: z.number().int().positive().optional(),
+  assignedAgentId: z.string().optional().nullable(),
+  isAccountCreated: z.boolean().optional(),
+  // Services Interested In
+  servicePlanIds: z.array(z.number().int().positive()).optional(),
+  serviceOneTimeIds: z.array(z.number().int().positive()).optional(),
+  promoId: z.number().int().positive().optional().nullable(),
+  // Scheduling & Engagements
+  officeVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+  isClientVisit: z.boolean().optional(),
+  clientVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+  clientVisitLocation: z.string().optional().nullable(),
+  isVirtualMeeting: z.boolean().optional(),
+  virtualMeetingSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+  onboardingSchedule: z.string().datetime({ offset: true }).optional().nullable(),
+});
+
+export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
