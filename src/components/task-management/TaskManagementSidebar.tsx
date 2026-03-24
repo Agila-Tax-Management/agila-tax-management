@@ -35,6 +35,10 @@ function lookupDeptNav(name: string) {
   return DEPT_NAV_MAP.get(name.toLowerCase().trim());
 }
 
+type SectionItem = { id: string; label: string; isSection: true };
+type NavItem   = { id: string; label: string; icon: LucideIcon; href: string; badge: number; isSection?: never };
+type SidebarItem = SectionItem | NavItem;
+
 interface TaskManagementSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -45,7 +49,7 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
   const router = useRouter();
   const { departments } = useTaskDepartments();
 
-  const navItems = useMemo(() => {
+  const navItems = useMemo((): SidebarItem[] => {
     const deptItems = departments.map(dept => {
       const cfg = lookupDeptNav(dept.name);
       const badge = cfg
@@ -101,8 +105,8 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-          {NAV_ITEMS.map((item) => {
-            if (item.isSection) {
+          {navItems.map((item) => {
+            if ('isSection' in item && item.isSection) {
               return (
                 <div key={item.id} className="pt-6 pb-2">
                   <span className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">

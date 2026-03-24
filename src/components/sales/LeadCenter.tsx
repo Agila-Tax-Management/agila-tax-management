@@ -1,7 +1,7 @@
 ﻿// src/components/sales/LeadCenter.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, JSX } from 'react';
 import {
   Plus, Search, Filter, LayoutList, Columns3,
   Phone, Briefcase, User, MoreVertical, GripVertical,
