@@ -1,28 +1,39 @@
 // src/components/task-management/TaskManagementSidebar.tsx
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban,
+  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban, Settings2, Handshake, UserCog,
+  Building2, Calculator, Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { ALL_TASKS } from '@/lib/mock-task-management-data';
+import type { TaskSource } from '@/lib/mock-task-management-data';
+import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
 
 const activeTasks = ALL_TASKS.filter(t => t.status !== 'Done');
-const liaisonBadge = ALL_TASKS.filter(t => t.source === 'liaison' && t.status !== 'Done').length;
-const complianceBadge = ALL_TASKS.filter(t => t.source === 'compliance' && t.status !== 'Done').length;
 
-const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/task-management', badge: 0 },
-  {
-    id: 'section-tasks',
-    label: 'TASK VIEWS',
-    isSection: true,
-  },
-  { id: 'all-tasks', label: 'All Tasks', icon: FolderKanban, href: '/portal/task-management/tasks', badge: activeTasks.length },
-  { id: 'liaison-tasks', label: 'Liaison Tasks', icon: Truck, href: '/portal/task-management/liaison', badge: liaisonBadge },
-  { id: 'compliance-tasks', label: 'Compliance Tasks', icon: Shield, href: '/portal/task-management/compliance', badge: complianceBadge },
+const DEPT_TO_NAV_RAW: Array<{ aliases: string[]; route: string; icon: LucideIcon; source: TaskSource }> = [
+  { aliases: ['operations manager', 'om'],              route: '/portal/task-management/om',               icon: UserCog,    source: 'om' },
+  { aliases: ['client relations', 'client-relations'],  route: '/portal/task-management/client-relations', icon: Handshake,  source: 'client-relations' },
+  { aliases: ['liaison'],                               route: '/portal/task-management/liaison',          icon: Truck,      source: 'liaison' },
+  { aliases: ['compliance'],                            route: '/portal/task-management/compliance',       icon: Shield,     source: 'compliance' },
+  { aliases: ['admin', 'administration', 'administrator'], route: '/portal/task-management/admin',         icon: Building2,  source: 'admin' },
+  { aliases: ['accounting', 'accounts'],                route: '/portal/task-management/accounting',       icon: Calculator, source: 'accounting' },
+  { aliases: ['human resources', 'hr', 'human resource'], route: '/portal/task-management/hr',             icon: Users,      source: 'hr' },
 ];
+
+// Build a flat lowercase-keyed lookup map
+const DEPT_NAV_MAP = new Map<string, { route: string; icon: LucideIcon; source: TaskSource }>();
+for (const entry of DEPT_TO_NAV_RAW) {
+  const { aliases, ...cfg } = entry;
+  for (const alias of aliases) DEPT_NAV_MAP.set(alias, cfg);
+}
+
+function lookupDeptNav(name: string) {
+  return DEPT_NAV_MAP.get(name.toLowerCase().trim());
+}
 
 interface TaskManagementSidebarProps {
   isOpen: boolean;
@@ -32,6 +43,29 @@ interface TaskManagementSidebarProps {
 export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { departments } = useTaskDepartments();
+
+  const navItems = useMemo(() => {
+    const deptItems = departments.map(dept => {
+      const cfg = lookupDeptNav(dept.name);
+      const badge = cfg
+        ? ALL_TASKS.filter(t => t.source === cfg.source && t.status !== 'Done').length
+        : 0;
+      return {
+        id: `dept-${dept.id}`,
+        label: dept.name,
+        icon: (cfg?.icon ?? FolderKanban) as LucideIcon,
+        href: cfg?.route ?? `/portal/task-management/tasks?dept=${dept.id}`,
+        badge,
+      };
+    });
+    return [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard as LucideIcon, href: '/portal/task-management', badge: 0 },
+      { id: 'section-depts', label: 'DEPARTMENTS', isSection: true as const },
+      { id: 'all-tasks', label: 'All Tasks', icon: FolderKanban as LucideIcon, href: '/portal/task-management/tasks', badge: activeTasks.length },
+      ...deptItems,
+    ];
+  }, [departments]);
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -104,6 +138,21 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
             );
           })}
         </nav>
+
+        {/* Footer — Settings shortcut */}
+        <div className="shrink-0 border-t border-slate-200 p-3">
+          <button
+            onClick={() => handleNavigation('/portal/task-management/settings')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              pathname === '/portal/task-management/settings'
+                ? 'bg-[#0f766e]/10 text-[#0f766e] font-bold'
+                : 'text-slate-500 hover:bg-slate-50 font-medium'
+            }`}
+          >
+            <Settings2 size={18} />
+            <span className="text-sm">Task Settings</span>
+          </button>
+        </div>
       </aside>
     </>
   );

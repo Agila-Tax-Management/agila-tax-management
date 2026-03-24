@@ -6,12 +6,13 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import {
   X, Calendar, User, Tag, Send, Clock,
-  ChevronDown,
+  ChevronDown, Check, Plus, ChevronRight,
 } from 'lucide-react';
+import { SubtaskDetailModal } from './SubtaskDetailModal';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
 import { ALL_TEAM_MEMBERS, SOURCE_CONFIG } from '@/lib/mock-task-management-data';
 import type { UnifiedTask } from '@/lib/mock-task-management-data';
-import type { AOTaskStatus, AOTaskPriority, AOTaskComment } from '@/lib/types';
+import type { AOTaskStatus, AOTaskPriority, AOTaskComment, AOTaskSubtask } from '@/lib/types';
 
 const STATUS_OPTIONS: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
 const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
@@ -48,6 +49,9 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
+  const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   // Adjust state during render when task prop changes
   const [prevTask, setPrevTask] = useState(task);
@@ -56,6 +60,9 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
     setEditingTask(task);
     setNewComment('');
     setConfirmDelete(false);
+    setSelectedSubtaskId(null);
+    setIsSubtaskModalOpen(false);
+    setNewSubtaskTitle('');
   }
 
   useEffect(() => {
@@ -121,7 +128,63 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
 
   const isOverdue = editingTask.status !== 'Done' && new Date(editingTask.dueDate) < new Date('2026-03-12');
 
+  const handleToggleSubtask = (subtaskId: string) => {
+    const updated = {
+      ...editingTask,
+      subtasks: (editingTask.subtasks ?? []).map(s =>
+        s.id === subtaskId ? { ...s, completed: !s.completed } : s
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+    setEditingTask(updated);
+    onUpdate(updated);
+  };
+
+  const handleUpdateSubtask = (updatedSubtask: AOTaskSubtask) => {
+    const updated = {
+      ...editingTask,
+      subtasks: (editingTask.subtasks ?? []).map(s =>
+        s.id === updatedSubtask.id ? updatedSubtask : s
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+    setEditingTask(updated);
+    onUpdate(updated);
+  };
+
+  const handleDeleteSubtask = (subtaskId: string) => {
+    const updated = {
+      ...editingTask,
+      subtasks: (editingTask.subtasks ?? []).filter(s => s.id !== subtaskId),
+      updatedAt: new Date().toISOString(),
+    };
+    setEditingTask(updated);
+    onUpdate(updated);
+  };
+
+  const handleAddSubtask = () => {
+    if (!newSubtaskTitle.trim()) return;
+    const subtask: AOTaskSubtask = {
+      id: `st-${crypto.randomUUID()}`,
+      title: newSubtaskTitle.trim(),
+      completed: false,
+      createdAt: new Date().toISOString(),
+      comments: [],
+    };
+    const updated = {
+      ...editingTask,
+      subtasks: [...(editingTask.subtasks ?? []), subtask],
+      updatedAt: new Date().toISOString(),
+    };
+    setEditingTask(updated);
+    onUpdate(updated);
+    setNewSubtaskTitle('');
+  };
+
+  const selectedSubtask = (editingTask.subtasks ?? []).find(s => s.id === selectedSubtaskId);
+
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
@@ -276,6 +339,81 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
               </div>
             )}
 
+            {/* Subtasks */}
+            <div className="mb-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                Subtasks
+                {editingTask.subtasks && editingTask.subtasks.length > 0 && (
+                  <span className="ml-2 font-semibold text-slate-500 normal-case text-[10px]">
+                    {editingTask.subtasks.filter(s => s.completed).length}/{editingTask.subtasks.length}
+                  </span>
+                )}
+              </p>
+              {editingTask.subtasks && editingTask.subtasks.length > 0 && (
+                <div className="mb-3">
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((editingTask.subtasks.filter(s => s.completed).length / editingTask.subtasks.length) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                {(editingTask.subtasks ?? []).map(subtask => {
+                  const subtaskAssignee = ALL_TEAM_MEMBERS.find(m => m.id === subtask.assigneeId);
+                  return (
+                    <button
+                      key={subtask.id}
+                      onClick={() => { setSelectedSubtaskId(subtask.id); setIsSubtaskModalOpen(true); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition text-left group"
+                    >
+                      <div
+                        role="checkbox"
+                        aria-checked={subtask.completed}
+                        onClick={e => { e.stopPropagation(); handleToggleSubtask(subtask.id); }}
+                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition cursor-pointer ${
+                          subtask.completed
+                            ? 'bg-emerald-500 border-emerald-500'
+                            : 'border-slate-300 hover:border-emerald-400'
+                        }`}
+                      >
+                        {subtask.completed && <Check size={10} className="text-white" />}
+                      </div>
+                      <span className={`flex-1 text-xs font-medium ${
+                        subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'
+                      }`}>
+                        {subtask.title}
+                      </span>
+                      {subtaskAssignee && (
+                        <div className="w-5 h-5 bg-[#0f766e] rounded-full flex items-center justify-center shrink-0">
+                          <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
+                        </div>
+                      )}
+                      <ChevronRight size={12} className="text-slate-300 group-hover:text-slate-500 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  value={newSubtaskTitle}
+                  onChange={e => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddSubtask()}
+                  placeholder="Add a subtask…"
+                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#0f766e] bg-white"
+                />
+                <Button
+                  onClick={handleAddSubtask}
+                  disabled={!newSubtaskTitle.trim()}
+                  className="px-2.5 bg-[#0f766e] text-white hover:bg-[#0d6560] shrink-0"
+                >
+                  <Plus size={12} />
+                </Button>
+              </div>
+            </div>
+
             {/* Meta */}
             <div className="pt-4 border-t border-slate-100 space-y-1">
               <p className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10} /> Created {formatDateTime(editingTask.createdAt)}</p>
@@ -355,5 +493,19 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
         </div>
       </div>
     </div>
+    {isSubtaskModalOpen && selectedSubtask && (
+      <SubtaskDetailModal
+        subtask={selectedSubtask}
+        parentTaskTitle={editingTask.title}
+        sourceInfo={sourceInfo}
+        teamMembers={ALL_TEAM_MEMBERS}
+        accentColor="#0f766e"
+        isOpen={isSubtaskModalOpen}
+        onClose={() => setIsSubtaskModalOpen(false)}
+        onUpdate={handleUpdateSubtask}
+        onDelete={subtaskId => { handleDeleteSubtask(subtaskId); setIsSubtaskModalOpen(false); }}
+      />
+    )}
+    </>
   );
 }

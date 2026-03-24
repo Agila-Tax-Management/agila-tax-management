@@ -123,8 +123,7 @@ export function MyTask() {
 
   const isOverdue = (t: AOTask) => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-11');
 
-  // src/components/liaison/MyTask.tsx
-  const getGroupLabel = (task: AOTask): string => {
+  const getGroupLabel = (task: AOTask) => {
     if (groupBy === 'assignee') return getAssignee(task.assigneeId).name;
     if (groupBy === 'company') return getClientName(task.clientId);
     return 'All Tasks';

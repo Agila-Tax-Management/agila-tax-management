@@ -1,44 +1,61 @@
+// src/components/task-management/SharedTaskDetailPage.tsx
 'use client';
 
 import React, { useState } from 'react';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
+import { useRouter } from 'next/navigation';
 import {
-  X, Calendar, User, Tag, Send, Clock,
+  ArrowLeft, Calendar, Tag, Send, Clock,
   ChevronDown, Check, Plus, ChevronRight,
 } from 'lucide-react';
-import { SubtaskDetailModal } from '@/components/task-management/SubtaskDetailModal';
-import { AO_TEAM_MEMBERS, CURRENT_AO } from '@/lib/mock-ao-data';
+import { SubtaskDetailModal } from './SubtaskDetailModal';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
-import type { AOTask, AOTaskStatus, AOTaskPriority, AOTaskComment, AOTaskSubtask } from '@/lib/types';
+import type { AOTask, AOTaskStatus, AOTaskPriority, AOTaskComment, AOTaskSubtask, AOTeamMember } from '@/lib/types';
+
+export interface SourceInfo {
+  label: string;
+  bg: string;
+  textColor: string;
+  color: string;
+}
+
+export interface SharedTaskDetailPageProps {
+  task: AOTask;
+  teamMembers: AOTeamMember[];
+  currentUser: { id: string; name: string };
+  accentColor: string;
+  sourceInfo?: SourceInfo;
+  onUpdate?: (updated: AOTask) => void;
+}
 
 const STATUS_OPTIONS: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
 const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 const STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warning' | 'success'; color: string }> = {
-  'To Do': { variant: 'neutral', color: 'bg-slate-500' },
-  'In Progress': { variant: 'info', color: 'bg-blue-500' },
-  'Review': { variant: 'warning', color: 'bg-amber-500' },
-  'Done': { variant: 'success', color: 'bg-emerald-500' },
+  'To Do':       { variant: 'neutral', color: 'bg-slate-500'   },
+  'In Progress': { variant: 'info',    color: 'bg-blue-500'    },
+  'Review':      { variant: 'warning', color: 'bg-amber-500'   },
+  'Done':        { variant: 'success', color: 'bg-emerald-500' },
 };
 
 const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
-  Low: { variant: 'neutral' },
-  Medium: { variant: 'info' },
-  High: { variant: 'warning' },
-  Urgent: { variant: 'danger' },
+  Low:    { variant: 'neutral' },
+  Medium: { variant: 'info'    },
+  High:   { variant: 'warning' },
+  Urgent: { variant: 'danger'  },
 };
 
-interface TaskDetailsModalProps {
-  task: AOTask;
-  isOpen: boolean;
-  onClose: () => void;
-  onUpdate: (updated: AOTask) => void;
-  onDelete: (taskId: string) => void;
-}
-
-export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailsModalProps) {
-  const [editingTask, setEditingTask] = useState<AOTask>(task);
+export function SharedTaskDetailPage({
+  task: initialTask,
+  teamMembers,
+  currentUser,
+  accentColor,
+  sourceInfo,
+  onUpdate,
+}: SharedTaskDetailPageProps): React.ReactNode {
+  const router = useRouter();
+  const [editingTask, setEditingTask] = useState<AOTask>(initialTask);
   const [newComment, setNewComment] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
@@ -48,47 +65,27 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
   const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
-  React.useEffect(() => {
-    setEditingTask(task);
-    setNewComment('');
-    setConfirmDelete(false);
-    setSelectedSubtaskId(null);
-    setIsSubtaskModalOpen(false);
-    setNewSubtaskTitle('');
-  }, [task]);
-
-  React.useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
   const clientName = INITIAL_CLIENTS.find(c => c.id === editingTask.clientId)?.businessName ?? 'Unknown';
-  const assignee = AO_TEAM_MEMBERS.find(m => m.id === editingTask.assigneeId);
+  const assignee   = teamMembers.find(m => m.id === editingTask.assigneeId);
+  const isOverdue  = editingTask.status !== 'Done' && new Date(editingTask.dueDate) < new Date();
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatDateTime = (d: string) =>
+    new Date(d).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  const update = (next: AOTask) => { setEditingTask(next); onUpdate?.(next); };
 
   const handleStatusChange = (status: AOTaskStatus) => {
-    const updated = { ...editingTask, status, updatedAt: new Date().toISOString() };
-    setEditingTask(updated);
-    onUpdate(updated);
+    update({ ...editingTask, status, updatedAt: new Date().toISOString() });
     setShowStatusDropdown(false);
   };
-
   const handlePriorityChange = (priority: AOTaskPriority) => {
-    const updated = { ...editingTask, priority, updatedAt: new Date().toISOString() };
-    setEditingTask(updated);
-    onUpdate(updated);
+    update({ ...editingTask, priority, updatedAt: new Date().toISOString() });
     setShowPriorityDropdown(false);
   };
-
   const handleAssigneeChange = (assigneeId: string) => {
-    const updated = { ...editingTask, assigneeId, updatedAt: new Date().toISOString() };
-    setEditingTask(updated);
-    onUpdate(updated);
+    update({ ...editingTask, assigneeId, updatedAt: new Date().toISOString() });
     setShowAssigneeDropdown(false);
   };
 
@@ -96,67 +93,44 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
     if (!newComment.trim()) return;
     const comment: AOTaskComment = {
       id: `c-${Date.now()}`,
-      authorId: CURRENT_AO.id,
-      authorName: CURRENT_AO.name,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
       content: newComment.trim(),
       createdAt: new Date().toISOString(),
     };
-    const updated = {
+    update({
       ...editingTask,
       comments: [...editingTask.comments, comment],
       updatedAt: new Date().toISOString(),
-    };
-    setEditingTask(updated);
-    onUpdate(updated);
+    });
     setNewComment('');
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-PH', {
-      month: 'short', day: 'numeric', year: 'numeric',
-    });
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('en-PH', {
-      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-    });
-  };
-
-  const isOverdue = editingTask.status !== 'Done' && new Date(editingTask.dueDate) < new Date('2026-03-11');
-
   const handleToggleSubtask = (subtaskId: string) => {
-    const updated = {
+    update({
       ...editingTask,
       subtasks: (editingTask.subtasks ?? []).map(s =>
         s.id === subtaskId ? { ...s, completed: !s.completed } : s
       ),
       updatedAt: new Date().toISOString(),
-    };
-    setEditingTask(updated);
-    onUpdate(updated);
+    });
   };
 
-  const handleUpdateSubtask = (updatedSubtask: AOTaskSubtask) => {
-    const updated = {
+  const handleUpdateSubtask = (updated: AOTaskSubtask) => {
+    update({
       ...editingTask,
-      subtasks: (editingTask.subtasks ?? []).map(s =>
-        s.id === updatedSubtask.id ? updatedSubtask : s
-      ),
+      subtasks: (editingTask.subtasks ?? []).map(s => s.id === updated.id ? updated : s),
       updatedAt: new Date().toISOString(),
-    };
-    setEditingTask(updated);
-    onUpdate(updated);
+    });
   };
 
   const handleDeleteSubtask = (subtaskId: string) => {
-    const updated = {
+    update({
       ...editingTask,
       subtasks: (editingTask.subtasks ?? []).filter(s => s.id !== subtaskId),
       updatedAt: new Date().toISOString(),
-    };
-    setEditingTask(updated);
-    onUpdate(updated);
+    });
+    setIsSubtaskModalOpen(false);
   };
 
   const handleAddSubtask = () => {
@@ -168,13 +142,11 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
       createdAt: new Date().toISOString(),
       comments: [],
     };
-    const updated = {
+    update({
       ...editingTask,
       subtasks: [...(editingTask.subtasks ?? []), subtask],
       updatedAt: new Date().toISOString(),
-    };
-    setEditingTask(updated);
-    onUpdate(updated);
+    });
     setNewSubtaskTitle('');
   };
 
@@ -182,41 +154,63 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+      <div className="animate-in fade-in duration-500 pb-20">
+
+        {/* Back nav + title */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-6 py-4 mb-6">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition mb-3"
+          >
+            <ArrowLeft size={15} /> Back to Tasks
+          </button>
           <div className="flex items-center gap-3 min-w-0">
             <div className={`w-3 h-3 rounded-full shrink-0 ${STATUS_CONFIG[editingTask.status].color}`} />
-            <h2 className="text-lg font-bold text-slate-900 truncate">{editingTask.title}</h2>
+            <h1 className="text-xl font-black text-slate-900 truncate">{editingTask.title}</h1>
+            {sourceInfo && (
+              <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${sourceInfo.bg} ${sourceInfo.textColor}`}>
+                {sourceInfo.label}
+              </span>
+            )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition shrink-0">
-            <X size={18} />
-          </button>
         </div>
 
-        {/* Body - Two columns */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* Two-column body */}
+        <div className="flex gap-6 items-start">
+
           {/* Left: Details */}
-          <div className="flex-1 p-6 overflow-y-auto border-r border-slate-100">
+          <div className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-6">
+
             {/* Client */}
-            <div className="mb-6">
+            <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Client</p>
               <p className="text-sm font-bold text-slate-800">{clientName}</p>
             </div>
 
             {/* Description */}
-            <div className="mb-6">
+            <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Description</p>
-              <p className="text-sm text-slate-600 leading-relaxed">{editingTask.description}</p>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                {editingTask.description || <span className="italic text-slate-400">No description.</span>}
+              </p>
             </div>
 
+            {/* Department badge — only when sourceInfo is provided */}
+            {sourceInfo && (
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Department</p>
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${sourceInfo.bg} ${sourceInfo.textColor}`}>
+                  <div className={`w-2 h-2 rounded-full ${sourceInfo.color}`} />
+                  {sourceInfo.label}
+                </span>
+              </div>
+            )}
+
             {/* Status */}
-            <div className="mb-6 relative">
+            <div className="relative">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status</p>
               <button
-                onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowPriorityDropdown(false); setShowAssigneeDropdown(false); }}
+                onClick={() => { setShowStatusDropdown(v => !v); setShowPriorityDropdown(false); setShowAssigneeDropdown(false); }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
               >
                 <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[editingTask.status].color}`} />
@@ -229,7 +223,8 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
                     <button
                       key={s}
                       onClick={() => handleStatusChange(s)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${s === editingTask.status ? 'font-bold text-[#25238e]' : 'text-slate-700'}`}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${s === editingTask.status ? 'font-bold' : 'text-slate-700'}`}
+                      style={s === editingTask.status ? { color: accentColor } : undefined}
                     >
                       <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[s].color}`} />
                       {s}
@@ -240,10 +235,10 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
             </div>
 
             {/* Priority */}
-            <div className="mb-6 relative">
+            <div className="relative">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Priority</p>
               <button
-                onClick={() => { setShowPriorityDropdown(!showPriorityDropdown); setShowStatusDropdown(false); setShowAssigneeDropdown(false); }}
+                onClick={() => { setShowPriorityDropdown(v => !v); setShowStatusDropdown(false); setShowAssigneeDropdown(false); }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
               >
                 <Badge variant={PRIORITY_CONFIG[editingTask.priority].variant} className="text-[10px]">{editingTask.priority}</Badge>
@@ -265,13 +260,16 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
             </div>
 
             {/* Assignee */}
-            <div className="mb-6 relative">
+            <div className="relative">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Assignee</p>
               <button
-                onClick={() => { setShowAssigneeDropdown(!showAssigneeDropdown); setShowStatusDropdown(false); setShowPriorityDropdown(false); }}
+                onClick={() => { setShowAssigneeDropdown(v => !v); setShowStatusDropdown(false); setShowPriorityDropdown(false); }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
               >
-                <div className="w-6 h-6 bg-[#25238e] rounded-full flex items-center justify-center">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: accentColor }}
+                >
                   <span className="text-[9px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
                 </div>
                 <span className="text-sm font-bold text-slate-700">{assignee?.name ?? 'Unassigned'}</span>
@@ -279,13 +277,14 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
               </button>
               {showAssigneeDropdown && (
                 <div className="absolute z-20 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-56">
-                  {AO_TEAM_MEMBERS.map(m => (
+                  {teamMembers.map(m => (
                     <button
                       key={m.id}
                       onClick={() => handleAssigneeChange(m.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${m.id === editingTask.assigneeId ? 'font-bold text-[#25238e]' : 'text-slate-700'}`}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${m.id === editingTask.assigneeId ? 'font-bold' : 'text-slate-700'}`}
+                      style={m.id === editingTask.assigneeId ? { color: accentColor } : undefined}
                     >
-                      <div className="w-6 h-6 bg-slate-600 rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 bg-slate-600 rounded-full flex items-center justify-center shrink-0">
                         <span className="text-[9px] font-bold text-white">{m.avatar}</span>
                       </div>
                       <div className="text-left">
@@ -299,7 +298,7 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
             </div>
 
             {/* Due Date */}
-            <div className="mb-6">
+            <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Due Date</p>
               <div className="flex items-center gap-2">
                 <Calendar size={14} className={isOverdue ? 'text-rose-500' : 'text-slate-400'} />
@@ -312,7 +311,7 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
 
             {/* Tags */}
             {editingTask.tags.length > 0 && (
-              <div className="mb-6">
+              <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tags</p>
                 <div className="flex flex-wrap gap-1.5">
                   {editingTask.tags.map(tag => (
@@ -325,7 +324,7 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
             )}
 
             {/* Subtasks */}
-            <div className="mb-6">
+            <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Subtasks
                 {editingTask.subtasks && editingTask.subtasks.length > 0 && (
@@ -346,7 +345,7 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
               )}
               <div className="space-y-1.5">
                 {(editingTask.subtasks ?? []).map(subtask => {
-                  const subtaskAssignee = AO_TEAM_MEMBERS.find(m => m.id === subtask.assigneeId);
+                  const subtaskAssignee = teamMembers.find(m => m.id === subtask.assigneeId);
                   return (
                     <button
                       key={subtask.id}
@@ -365,13 +364,14 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
                       >
                         {subtask.completed && <Check size={10} className="text-white" />}
                       </div>
-                      <span className={`flex-1 text-xs font-medium ${
-                        subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'
-                      }`}>
+                      <span className={`flex-1 text-xs font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
                         {subtask.title}
                       </span>
                       {subtaskAssignee && (
-                        <div className="w-5 h-5 bg-[#25238e] rounded-full flex items-center justify-center shrink-0">
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: accentColor }}
+                        >
                           <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
                         </div>
                       )}
@@ -387,26 +387,37 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
                   onChange={e => setNewSubtaskTitle(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddSubtask()}
                   placeholder="Add a subtask…"
-                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#25238e] bg-white"
+                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
                 />
-                <Button
+                <button
                   onClick={handleAddSubtask}
                   disabled={!newSubtaskTitle.trim()}
-                  className="px-2.5 bg-[#25238e] text-white hover:bg-[#1a1868] shrink-0"
+                  className="p-2 text-white rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  style={{ backgroundColor: accentColor }}
                 >
                   <Plus size={12} />
-                </Button>
+                </button>
               </div>
             </div>
 
-            {/* Meta */}
-            <div className="pt-4 border-t border-slate-100 space-y-1">
-              <p className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10} /> Created {formatDateTime(editingTask.createdAt)}</p>
-              <p className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10} /> Updated {formatDateTime(editingTask.updatedAt)}</p>
+            {/* Timestamps */}
+            <div className="pt-4 border-t border-slate-100 flex gap-6">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Created</p>
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Clock size={11} /> {formatDate(editingTask.createdAt)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Updated</p>
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Clock size={11} /> {formatDateTime(editingTask.updatedAt)}
+                </p>
+              </div>
             </div>
 
             {/* Delete */}
-            <div className="pt-4 mt-4 border-t border-slate-100">
+            <div className="pt-4 border-t border-slate-100">
               {!confirmDelete ? (
                 <Button variant="ghost" className="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50" onClick={() => setConfirmDelete(true)}>
                   Delete Task
@@ -414,7 +425,7 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-rose-600 font-bold">Are you sure?</span>
-                  <Button variant="ghost" className="text-xs text-rose-600 hover:bg-rose-50 font-bold" onClick={() => { onDelete(editingTask.id); onClose(); }}>
+                  <Button variant="ghost" className="text-xs text-rose-600 hover:bg-rose-50 font-bold" onClick={() => router.back()}>
                     Yes, Delete
                   </Button>
                   <Button variant="ghost" className="text-xs" onClick={() => setConfirmDelete(false)}>
@@ -425,71 +436,82 @@ export function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete }: 
             </div>
           </div>
 
-          {/* Right: Comments / Notes */}
-          <div className="w-80 flex flex-col bg-slate-50">
-            <div className="p-4 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <User size={14} className="text-slate-500" />
-                <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">Comments &amp; Notes</h3>
-              </div>
+          {/* Right: Comments */}
+          <div
+            className="w-80 shrink-0 bg-white rounded-xl border border-slate-100 shadow-sm flex flex-col sticky top-4"
+            style={{ maxHeight: 'calc(100vh - 6rem)' }}
+          >
+            <div className="px-5 py-4 border-b border-slate-100 shrink-0">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Comments
+                {editingTask.comments.length > 0 && (
+                  <span className="ml-2 font-semibold text-slate-500 normal-case">({editingTask.comments.length})</span>
+                )}
+              </p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {editingTask.comments.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-8">No comments yet. Add the first note.</p>
+                <p className="text-xs text-slate-400 italic text-center py-6">No comments yet.</p>
               )}
-              {editingTask.comments.map(comment => {
-                const author = AO_TEAM_MEMBERS.find(m => m.id === comment.authorId);
-                return (
-                  <div key={comment.id} className="bg-white p-3 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-6 h-6 bg-[#25238e] rounded-full flex items-center justify-center">
-                        <span className="text-[9px] font-bold text-white">{author?.avatar ?? comment.authorName.split(' ').map(n => n[0]).join('')}</span>
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">{comment.authorName}</span>
-                      <span className="text-[10px] text-slate-400 ml-auto">{formatDateTime(comment.createdAt)}</span>
-                    </div>
-                    <p className="text-xs text-slate-600 leading-relaxed">{comment.content}</p>
+              {editingTask.comments.map(c => (
+                <div key={c.id} className="flex gap-2.5">
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    <span className="text-[8px] font-bold text-white">
+                      {c.authorName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </span>
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 mb-0.5">
+                      <span className="text-xs font-bold text-slate-800">{c.authorName}</span>
+                      <span className="text-[10px] text-slate-400">{formatDateTime(c.createdAt)}</span>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">{c.content}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="p-4 border-t border-slate-200 shrink-0">
+            <div className="p-4 border-t border-slate-100 shrink-0">
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                  placeholder="Add a comment..."
-                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#25238e] bg-white"
+                  placeholder="Add a comment…"
+                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
                 />
-                <Button
+                <button
                   onClick={handleAddComment}
                   disabled={!newComment.trim()}
-                  className="bg-[#25238e] hover:bg-[#1a1868] text-white px-3 shrink-0"
+                  className="p-2 text-white rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: accentColor }}
                 >
-                  <Send size={14} />
-                </Button>
+                  <Send size={13} />
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    {isSubtaskModalOpen && selectedSubtask && (
-      <SubtaskDetailModal
-        subtask={selectedSubtask}
-        parentTaskTitle={editingTask.title}
-        teamMembers={AO_TEAM_MEMBERS}
-        accentColor="#25238e"
-        isOpen={isSubtaskModalOpen}
-        onClose={() => setIsSubtaskModalOpen(false)}
-        onUpdate={handleUpdateSubtask}
-        onDelete={subtaskId => { handleDeleteSubtask(subtaskId); setIsSubtaskModalOpen(false); }}
-      />
-    )}
+
+      {selectedSubtask && (
+        <SubtaskDetailModal
+          subtask={selectedSubtask}
+          parentTaskTitle={editingTask.title}
+          sourceInfo={sourceInfo}
+          teamMembers={teamMembers}
+          accentColor={accentColor}
+          isOpen={isSubtaskModalOpen}
+          onClose={() => { setIsSubtaskModalOpen(false); setSelectedSubtaskId(null); }}
+          onUpdate={handleUpdateSubtask}
+          onDelete={handleDeleteSubtask}
+        />
+      )}
     </>
   );
 }
