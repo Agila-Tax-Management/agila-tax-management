@@ -9,6 +9,9 @@ import { logLeadHistory } from "@/lib/lead-history";
 const LEAD_INCLUDE = {
   status: { select: { id: true, name: true, color: true, sequence: true, isOnboarding: true, isConverted: true } },
   assignedAgent: { select: { id: true, name: true, email: true } },
+  servicePlans: { select: { id: true, name: true, serviceRate: true, recurring: true } },
+  serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true } },
+  promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true, promoFor: true } },
 } as const;
 
 /**
@@ -70,10 +73,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const { servicePlanIds, serviceOneTimeIds, promoId, ...leadData } = parsed.data;
+
   const lead = await prisma.lead.create({
     data: {
-      ...parsed.data,
+      ...leadData,
       statusId,
+      ...(promoId ? { promoId } : {}),
+      ...(servicePlanIds?.length ? { servicePlans: { connect: servicePlanIds.map((id) => ({ id })) } } : {}),
+      ...(serviceOneTimeIds?.length ? { serviceOneTimePlans: { connect: serviceOneTimeIds.map((id) => ({ id })) } } : {}),
     },
     include: LEAD_INCLUDE,
   });

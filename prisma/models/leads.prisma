@@ -3,7 +3,7 @@ enum LeadChangeType {
     STATUS_CHANGED
     DETAILS_UPDATED
     SCHEDULE_UPDATED
-    
+
     // Document Generation & Signing
     INVOICE_GENERATED
     CONTRACT_GENERATED
@@ -11,7 +11,7 @@ enum LeadChangeType {
     TSA_GENERATED
     TSA_SIGNED
     JOB_ORDER_GENERATED
-    
+
     // Account & Conversion
     ACCOUNT_CREATED
     CONVERTED
@@ -19,40 +19,40 @@ enum LeadChangeType {
 
 // ─── Lead Status (Dynamic CRM Workflow) ──────────────────────────
 model LeadStatus {
-    id          Int      @id @default(autoincrement())
-    name        String   // e.g., "Pending", "Contacted", "Onboarding", "Converted"
-    color       String?
-    
+    id    Int     @id @default(autoincrement())
+    name  String // e.g., "Pending", "Contacted", "Onboarding", "Converted"
+    color String?
+
     // Order of the workflow stages on the Kanban board
-    sequence    Int      @default(0) 
+    sequence Int @default(0)
 
     // Logic Flags
-    isDefault    Boolean  @default(false) // Leads automatically land here
-    isOnboarding Boolean  @default(false) // Stage where TSA/Job Orders are prepared
-    isConverted  Boolean  @default(false) // Terminal stage; triggers Client portal creation
+    isDefault    Boolean @default(false) // Leads automatically land here
+    isOnboarding Boolean @default(false) // Stage where TSA/Job Orders are prepared
+    isConverted  Boolean @default(false) // Terminal stage; triggers Client portal creation
 
-    leads       Lead[]
+    leads Lead[]
 
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@map("lead_status")
 }
 
 // ─── Lead (The Prospect) ─────────────────────────────────────────
 model Lead {
-    id              Int      @id @default(autoincrement())
+    id Int @id @default(autoincrement())
 
     // ─── Core Information ───
-    firstName       String
-    middleName      String?
-    lastName        String
-    businessName    String?
-    contactNumber   String?
-    businessType    String   @default("Not Specified")
-    leadSource      String   @default("Facebook")
-    address         String?
-    notes           String?  @db.Text
+    firstName     String
+    middleName    String?
+    lastName      String
+    businessName  String?
+    contactNumber String?
+    businessType  String  @default("Not Specified")
+    leadSource    String  @default("Facebook")
+    address       String?
+    notes         String? @db.Text
 
     // ─── Social / Source Specifics ───
     facebookSenderId String?
@@ -60,59 +60,63 @@ model Lead {
     facebookName     String?
 
     // ─── Dynamic Workflow ───
-    statusId        Int
-    status          LeadStatus @relation(fields: [statusId], references: [id])
+    statusId Int
+    status   LeadStatus @relation(fields: [statusId], references: [id])
 
     // ─── Scheduling & Engagements ───
-    isCallRequest         Boolean   @default(false)
-    phoneCallSchedule     DateTime?
+    isCallRequest     Boolean   @default(false)
+    phoneCallSchedule DateTime?
 
-    isOfficeVisit         Boolean   @default(false)
-    officeVisitSchedule   DateTime?
+    isOfficeVisit       Boolean   @default(false)
+    officeVisitSchedule DateTime?
 
-    isClientVisit         Boolean   @default(false)
-    clientVisitSchedule   DateTime?
-    clientVisitLocation   String?
+    isClientVisit       Boolean   @default(false)
+    clientVisitSchedule DateTime?
+    clientVisitLocation String?
 
-    isVirtualMeeting      Boolean   @default(false)
+    isVirtualMeeting       Boolean   @default(false)
     virtualMeetingSchedule DateTime?
 
     // ─── Onboarding & Conversion Pipeline ───
-    onboardingSchedule    DateTime?
+    onboardingSchedule DateTime?
 
     // Pipeline Checklist Flags
-    isCreatedInvoice      Boolean   @default(false)
-    isCreatedContract     Boolean   @default(false)
-    isSignedTSA           Boolean   @default(false)
-    isCreatedJobOrder     Boolean   @default(false)
-    
+    isCreatedInvoice  Boolean @default(false)
+    isCreatedContract Boolean @default(false)
+    isSignedTSA       Boolean @default(false)
+    isCreatedJobOrder Boolean @default(false)
+
     // ─── NEW: Account Provisioning Flag ───
-    isAccountCreated      Boolean   @default(false)
-    
+    isAccountCreated Boolean @default(false)
+
     // Document URLs
-    signedContractUrl     String?
-    signedTsaUrl          String?   
-    signedJobOrderUrl     String?   
+    signedContractUrl String?
+    signedTsaUrl      String?
+    signedJobOrderUrl String?
 
     // Link to the newly created, inactive Client entity upon conversion
-    convertedClientId     Int?      @unique
-    convertedClient       Client?   @relation(fields: [convertedClientId], references: [id], onDelete: SetNull)
+    convertedClientId Int?    @unique
+    convertedClient   Client? @relation(fields: [convertedClientId], references: [id], onDelete: SetNull)
 
-    assignedAgentId       String?
-    assignedAgent         User?     @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+    assignedAgentId String?
+    assignedAgent   User?   @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
 
     // ─── Services Availed / Interested In ───
-    servicePlans          ServicePlan[]
-    serviceOneTimePlans   ServiceOneTime[]
+    servicePlans        ServicePlan[]
+    serviceOneTimePlans ServiceOneTime[]
+
+    // ─── Applied Promo (max 1 per lead) ───
+    promoId Int?
+    promo   Promo? @relation(fields: [promoId], references: [id], onDelete: SetNull)
 
     // ─── Timeline & Logs ───
-    comments              LeadComment[]
-    historyLogs           LeadHistory[]
+    comments    LeadComment[]
+    historyLogs LeadHistory[]
 
-    invoices      Invoice[]
+    invoices Invoice[]
 
-    createdAt             DateTime  @default(now())
-    updatedAt             DateTime  @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@index([statusId])
     @@map("lead")
@@ -120,19 +124,19 @@ model Lead {
 
 // ─── Lead Comment (Internal CRM Notes) ───────────────────────────
 model LeadComment {
-    id          Int      @id @default(autoincrement())
-    
-    leadId      Int
-    lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+    id Int @id @default(autoincrement())
+
+    leadId Int
+    lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
     // Strictly internal ERP users logging updates
-    authorId    String
-    author      User     @relation(fields: [authorId], references: [id])
+    authorId String
+    author   User   @relation(fields: [authorId], references: [id])
 
-    comment     String   @db.Text
+    comment String @db.Text
 
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@index([leadId])
     @@map("lead_comment")
@@ -140,24 +144,24 @@ model LeadComment {
 
 // ─── Lead History (CRM Timeline Ledger) ──────────────────────────
 model LeadHistory {
-    id          String   @id @default(cuid())
+    id String @id @default(cuid())
 
-    leadId      Int
-    lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+    leadId Int
+    lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
     // Strictly internal ERP users acting on leads
-    actorId     String
-    actor       User     @relation(fields: [actorId], references: [id])
+    actorId String
+    actor   User   @relation(fields: [actorId], references: [id])
 
-    changeType  LeadChangeType
+    changeType LeadChangeType
 
     // Text snapshots (e.g., oldValue: "Pending", newValue: "Contacted")
-    oldValue    String?  @db.Text
-    newValue    String?  @db.Text
+    oldValue String? @db.Text
+    newValue String? @db.Text
 
-    createdAt   DateTime @default(now())
+    createdAt DateTime @default(now())
 
     @@index([leadId])
-    @@index([leadId, createdAt(sort: Desc)]) 
+    @@index([leadId, createdAt(sort: Desc)])
     @@map("lead_history")
 }

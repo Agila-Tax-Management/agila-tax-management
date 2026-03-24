@@ -11,6 +11,9 @@ type Params = { params: Promise<{ id: string }> };
 const LEAD_INCLUDE = {
   status: { select: { id: true, name: true, color: true, sequence: true, isOnboarding: true, isConverted: true } },
   assignedAgent: { select: { id: true, name: true, email: true } },
+  servicePlans: { select: { id: true, name: true, serviceRate: true, recurring: true } },
+  serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true } },
+  promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true, promoFor: true } },
   comments: {
     include: { author: { select: { id: true, name: true, image: true } } },
     orderBy: { createdAt: "asc" as const },
@@ -69,9 +72,17 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     );
   }
 
+  const { servicePlanIds, serviceOneTimeIds, promoId, ...leadData } = parsed.data;
+
   const lead = await prisma.lead.update({
     where: { id: leadId },
-    data: parsed.data,
+    data: {
+      ...leadData,
+      // promoId: undefined keeps existing; null clears it; a number sets it
+      ...(promoId !== undefined ? { promoId: promoId ?? null } : {}),
+      ...(servicePlanIds !== undefined ? { servicePlans: { set: servicePlanIds.map((id) => ({ id })) } } : {}),
+      ...(serviceOneTimeIds !== undefined ? { serviceOneTimePlans: { set: serviceOneTimeIds.map((id) => ({ id })) } } : {}),
+    },
     include: LEAD_INCLUDE,
   });
 

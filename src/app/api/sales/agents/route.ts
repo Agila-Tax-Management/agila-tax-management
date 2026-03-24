@@ -13,7 +13,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 
   const users = await prisma.user.findMany({
     where: { active: true },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, image: true },
     orderBy: { name: "asc" },
   });
 

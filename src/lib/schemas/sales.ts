@@ -189,10 +189,11 @@ export const createLeadSchema = z.object({
   notes: z.string().optional().nullable(),
   statusId: z.number().int().positive().optional(),
   assignedAgentId: z.string().optional().nullable(),
+  // Services Interested In
+  servicePlanIds: z.array(z.number().int().positive()).default([]).optional(),
+  serviceOneTimeIds: z.array(z.number().int().positive()).default([]).optional(),
+  promoId: z.number().int().positive().optional().nullable(),
   // Scheduling & Engagements
-  isCallRequest: z.boolean().default(false).optional(),
-  phoneCallSchedule: z.string().datetime({ offset: true }).optional().nullable(),
-  isOfficeVisit: z.boolean().default(false).optional(),
   officeVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
   isClientVisit: z.boolean().default(false).optional(),
   clientVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
@@ -215,10 +216,11 @@ export const updateLeadSchema = z.object({
   statusId: z.number().int().positive().optional(),
   assignedAgentId: z.string().optional().nullable(),
   isAccountCreated: z.boolean().optional(),
+  // Services Interested In
+  servicePlanIds: z.array(z.number().int().positive()).optional(),
+  serviceOneTimeIds: z.array(z.number().int().positive()).optional(),
+  promoId: z.number().int().positive().optional().nullable(),
   // Scheduling & Engagements
-  isCallRequest: z.boolean().optional(),
-  phoneCallSchedule: z.string().datetime({ offset: true }).optional().nullable(),
-  isOfficeVisit: z.boolean().optional(),
   officeVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
   isClientVisit: z.boolean().optional(),
   clientVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
