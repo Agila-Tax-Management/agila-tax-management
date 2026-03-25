@@ -24,13 +24,8 @@ interface ContractFormLocal {
   status: string;
   startDate: string;
   endDate: string;
-  rateType: 'MONTHLY' | 'DAILY';
-  monthlyRate: string;
-  dailyRate: string;
-  disbursedMethod: string;
-  payType: string;
+  workingHoursPerWeek: string;
   scheduleId: string;
-  bankDetails: string;
   notes: string;
 }
 
@@ -40,31 +35,20 @@ const DEFAULT_FORM: ContractFormLocal = {
   status: 'DRAFT',
   startDate: '',
   endDate: '',
-  rateType: 'MONTHLY',
-  monthlyRate: '',
-  dailyRate: '',
-  disbursedMethod: '',
-  payType: 'FIXED_PAY',
+  workingHoursPerWeek: '',
   scheduleId: '',
-  bankDetails: '',
   notes: '',
 };
 
 function mapToForm(c: ContractRecord): ContractFormLocal {
-  const hasDailyOnly = !c.monthlyRate && !!c.dailyRate;
   return {
     employmentId: String(c.employmentId),
     contractType: c.contractType,
     status: c.status,
     startDate: c.startDate ? c.startDate.slice(0, 10) : '',
     endDate: c.endDate ? c.endDate.slice(0, 10) : '',
-    rateType: hasDailyOnly ? 'DAILY' : 'MONTHLY',
-    monthlyRate: c.monthlyRate ?? '',
-    dailyRate: c.dailyRate ?? '',
-    disbursedMethod: c.disbursedMethod ?? '',
-    payType: c.payType ?? 'FIXED_PAY',
+    workingHoursPerWeek: c.workingHoursPerWeek != null ? String(c.workingHoursPerWeek) : '',
     scheduleId: c.scheduleId ? String(c.scheduleId) : '',
-    bankDetails: c.bankDetails ?? '',
     notes: c.notes ?? '',
   };
 }
@@ -126,14 +110,8 @@ export function ContractFormModal({
             status: form.status,
             contractStart: form.startDate,
             contractEnd: form.endDate || null,
-            monthlyRate: form.rateType === 'MONTHLY' ? (form.monthlyRate || null) : null,
-            dailyRate: form.rateType === 'DAILY' ? (form.dailyRate || null) : null,
-            hourlyRate: null,
-            disbursedMethod: form.disbursedMethod || null,
-            payType: form.payType || null,
-            workingHoursPerWeek: 0,
+            workingHoursPerWeek: form.workingHoursPerWeek ? parseInt(form.workingHoursPerWeek, 10) : null,
             scheduleId: form.scheduleId ? parseInt(form.scheduleId, 10) : null,
-            bankDetails: form.bankDetails || null,
             notes: form.notes || null,
           }),
         });
@@ -147,14 +125,8 @@ export function ContractFormModal({
             status: form.status,
             contractStart: form.startDate,
             contractEnd: form.endDate || null,
-            monthlyRate: form.rateType === 'MONTHLY' ? (form.monthlyRate || null) : null,
-            dailyRate: form.rateType === 'DAILY' ? (form.dailyRate || null) : null,
-            hourlyRate: null,
-            disbursedMethod: form.disbursedMethod || null,
-            payType: form.payType || null,
-            workingHoursPerWeek: 0,
+            workingHoursPerWeek: form.workingHoursPerWeek ? parseInt(form.workingHoursPerWeek, 10) : null,
             scheduleId: form.scheduleId ? parseInt(form.scheduleId, 10) : null,
-            bankDetails: form.bankDetails || null,
             notes: form.notes || null,
           }),
         });
@@ -258,50 +230,16 @@ export function ContractFormModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Rate Type</label>
-            <select
-              className={modalSelectClass}
-              value={form.rateType}
-              onChange={(e) => set('rateType', e.target.value as 'MONTHLY' | 'DAILY')}
-            >
-              <option value="MONTHLY">Monthly Rate</option>
-              <option value="DAILY">Daily Rate</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-              {form.rateType === 'MONTHLY' ? 'Monthly Rate (₱)' : 'Daily Rate (₱)'}
-            </label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Working Hours / Week</label>
             <input
               type="number"
               className={modalInputClass}
-              value={form.rateType === 'MONTHLY' ? form.monthlyRate : form.dailyRate}
-              onChange={(e) =>
-                form.rateType === 'MONTHLY'
-                  ? set('monthlyRate', e.target.value)
-                  : set('dailyRate', e.target.value)
-              }
-              placeholder="0.00"
+              value={form.workingHoursPerWeek}
+              onChange={(e) => set('workingHoursPerWeek', e.target.value)}
+              placeholder="e.g. 40"
               min="0"
+              max="168"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Pay Type</label>
-            <select className={modalSelectClass} value={form.payType} onChange={(e) => set('payType', e.target.value)}>
-              <option value="FIXED_PAY">Fixed Pay</option>
-              <option value="VARIABLE_PAY">Variable Pay</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Disbursement Method</label>
-            <select className={modalSelectClass} value={form.disbursedMethod} onChange={(e) => set('disbursedMethod', e.target.value)}>
-              <option value="">Select method</option>
-              <option value="CASH_SALARY">Cash Salary</option>
-              <option value="FUND_TRANSFER">Fund Transfer</option>
-            </select>
           </div>
 
           <div className="sm:col-span-2">
@@ -337,17 +275,6 @@ export function ContractFormModal({
                 </div>
               );
             })()}
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Bank Details</label>
-            <input
-              type="text"
-              className={modalInputClass}
-              value={form.bankDetails}
-              onChange={(e) => set('bankDetails', e.target.value)}
-              placeholder="Bank name, account number"
-            />
           </div>
 
           <div className="sm:col-span-2">

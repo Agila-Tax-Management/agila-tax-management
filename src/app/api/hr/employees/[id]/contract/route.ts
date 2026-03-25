@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createContractSchema, updateContractSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import type { ContractType, ContractStatus, DisbursedMethod } from "@/generated/prisma/client";
+import type { ContractType, ContractStatus } from "@/generated/prisma/client";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -86,12 +86,6 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       status: d.status as ContractStatus,
       contractStart: new Date(d.contractStart),
       contractEnd: d.contractEnd ? new Date(d.contractEnd) : null,
-      monthlyRate: d.monthlyRate ? parseFloat(d.monthlyRate) : null,
-      dailyRate: d.dailyRate ? parseFloat(d.dailyRate) : null,
-      hourlyRate: d.hourlyRate ? parseFloat(d.hourlyRate) : null,
-      disbursedMethod: (d.disbursedMethod as DisbursedMethod) ?? null,
-      payType: d.payType ?? null,
-      bankDetails: d.bankDetails ?? null,
       scheduleId: d.scheduleId ?? null,
       workingHoursPerWeek: d.workingHoursPerWeek ?? null,
       signedDate: d.signedDate ? new Date(d.signedDate) : null,
@@ -159,12 +153,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
       status: d.status ? (d.status as ContractStatus) : undefined,
       contractStart: d.contractStart ? new Date(d.contractStart) : undefined,
       contractEnd: d.contractEnd ? new Date(d.contractEnd) : undefined,
-      monthlyRate: d.monthlyRate !== undefined ? (d.monthlyRate ? parseFloat(d.monthlyRate) : null) : undefined,
-      dailyRate: d.dailyRate !== undefined ? (d.dailyRate ? parseFloat(d.dailyRate) : null) : undefined,
-      hourlyRate: d.hourlyRate !== undefined ? (d.hourlyRate ? parseFloat(d.hourlyRate) : null) : undefined,
-      disbursedMethod: d.disbursedMethod ? (d.disbursedMethod as DisbursedMethod) : undefined,
-      payType: d.payType ?? undefined,
-      bankDetails: d.bankDetails !== undefined ? d.bankDetails : undefined,
       scheduleId: d.scheduleId !== undefined ? d.scheduleId : undefined,
       workingHoursPerWeek: d.workingHoursPerWeek !== undefined ? d.workingHoursPerWeek : undefined,
       signedDate: d.signedDate ? new Date(d.signedDate) : undefined,

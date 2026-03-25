@@ -79,14 +79,28 @@ interface Step3Data {
   status: string;
   contractStart: string;
   contractEnd: string;
-  monthlyRate: string;
-  dailyRate: string;
-  hourlyRate: string;
-  disbursedMethod: string;
-  payType: string;
-  bankDetails: string;
   workingHoursPerWeek: string;
   notes: string;
+}
+
+type RateType = 'DAILY' | 'MONTHLY';
+type SalaryFrequency = 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
+type PayType = 'FIXED_PAY' | 'VARIABLE_PAY';
+type DisbursementType = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'E_WALLET';
+
+interface Step3CompensationData {
+  baseRate: string;
+  allowanceRate: string;
+  rateType: RateType;
+  frequency: SalaryFrequency;
+  payType: PayType;
+  disbursementType: DisbursementType;
+  bankDetails: string;
+  isPaidRestDays: boolean;
+  restDaysPerWeek: number;
+  deductSss: boolean;
+  deductPhilhealth: boolean;
+  deductPagibig: boolean;
 }
 
 interface Step4Data {
@@ -113,6 +127,28 @@ const WEEK_DAYS = [
   { dayOfWeek: 6, label: 'Saturday' },
   { dayOfWeek: 0, label: 'Sunday' },
 ];
+
+function getDoleFactor(isPaidRestDays: boolean, restDaysPerWeek: number): number {
+  if (isPaidRestDays) return 365;
+  if (restDaysPerWeek === 2) return 261;
+  if (restDaysPerWeek === 1) return 313;
+  return 393.8;
+}
+
+const DEFAULT_S3C: Step3CompensationData = {
+  baseRate: '',
+  allowanceRate: '',
+  rateType: 'DAILY',
+  frequency: 'TWICE_A_MONTH',
+  payType: 'VARIABLE_PAY',
+  disbursementType: 'CASH',
+  bankDetails: '',
+  isPaidRestDays: false,
+  restDaysPerWeek: 1,
+  deductSss: false,
+  deductPhilhealth: false,
+  deductPagibig: false,
+};
 
 const DEFAULT_STEP4: Step4Data = {
   scheduleMode: 'new',
@@ -181,9 +217,10 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
 
   const [s3, setS3] = useState<Step3Data>({
     contractType: '', status: 'DRAFT', contractStart: '', contractEnd: '',
-    monthlyRate: '', dailyRate: '', hourlyRate: '', disbursedMethod: '',
-    payType: 'Variable Pay', bankDetails: '', workingHoursPerWeek: '', notes: '',
+    workingHoursPerWeek: '', notes: '',
   });
+
+  const [s3c, setS3c] = useState<Step3CompensationData>(DEFAULT_S3C);
 
   const [s4, setS4] = useState<Step4Data>(DEFAULT_STEP4);
 
@@ -250,8 +287,8 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
       setS2({ clientId: '', departmentId: '', positionId: '', employmentType: '',
                employeeLevelId: '', hireDate: '', regularizationDate: '' });
       setS3({ contractType: '', status: 'DRAFT', contractStart: '', contractEnd: '',
-               monthlyRate: '', dailyRate: '', hourlyRate: '', disbursedMethod: '',
-               payType: 'Variable Pay', bankDetails: '', workingHoursPerWeek: '', notes: '' });
+               workingHoursPerWeek: '', notes: '' });
+      setS3c(DEFAULT_S3C);
       setS4(DEFAULT_STEP4);
       setEmpNoConflict(false);
       setUserSearch('');
@@ -414,7 +451,8 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/hr/employees/${createdEmployeeId}/contract`, {
+      // ── 1. Create the contract ──────────────────────────────────
+      const contractRes = await fetch(`/api/hr/employees/${createdEmployeeId}/contract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -423,26 +461,53 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
           status: s3.status,
           contractStart: s3.contractStart,
           contractEnd: s3.contractEnd || null,
-          monthlyRate: s3.monthlyRate || null,
-          dailyRate: s3.dailyRate || null,
-          hourlyRate: s3.hourlyRate || null,
-          disbursedMethod: s3.disbursedMethod || null,
-          payType: s3.payType || null,
-          bankDetails: s3.bankDetails || null,
           workingHoursPerWeek: s3.workingHoursPerWeek ? parseInt(s3.workingHoursPerWeek, 10) : null,
           notes: s3.notes || null,
         }),
       });
 
-      const data = (await res.json()) as { data?: { id: number }; error?: string };
-      if (!res.ok) {
-        error('Failed to save contract', data.error ?? 'An error occurred.');
+      const contractData = (await contractRes.json()) as { data?: { id: number }; error?: string };
+      if (!contractRes.ok) {
+        error('Failed to save contract', contractData.error ?? 'An error occurred.');
         setLoading(false);
         return;
       }
 
-      setCreatedContractId(data.data!.id);
-      success('Contract saved', 'Employee contract has been recorded.');
+      const newContractId = contractData.data!.id;
+      setCreatedContractId(newContractId);
+
+      // ── 2. Create the compensation (if baseRate is provided) ────
+      if (s3c.baseRate.trim()) {
+        const compRes = await fetch(`/api/hr/employees/${createdEmployeeId}/compensation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractId: newContractId,
+            baseRate: s3c.baseRate,
+            allowanceRate: s3c.allowanceRate || '0',
+            rateType: s3c.rateType,
+            frequency: s3c.frequency,
+            payType: s3c.payType,
+            disbursementType: s3c.disbursementType,
+            bankDetails: s3c.bankDetails || null,
+            isPaidRestDays: s3c.isPaidRestDays,
+            restDaysPerWeek: s3c.restDaysPerWeek,
+            deductSss: s3c.deductSss,
+            deductPhilhealth: s3c.deductPhilhealth,
+            deductPagibig: s3c.deductPagibig,
+            deductTax: false,
+          }),
+        });
+
+        const compData = (await compRes.json()) as { data?: unknown; error?: string };
+        if (!compRes.ok) {
+          error('Failed to save compensation', compData.error ?? 'An error occurred.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      success('Contract saved', 'Employee contract and compensation have been recorded.');
       setStep(4);
     } catch {
       error('Network error', 'Could not connect to the server. Please try again.');
@@ -828,89 +893,265 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
           </div>
         )}
 
-        {/* ── Step 3: Contract ────────────────────────────────────── */}
-        {step === 3 && (
-          <div className="space-y-5">
-            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Contract</h3>
-            <p className="text-xs text-muted-foreground -mt-3">This step is optional — you can skip and add it later.</p>
+        {/* ── Step 3: Contract & Compensation ──────────────────── */}
+        {step === 3 && (() => {
+          /** Live-computed compensation values */
+          const baseRateNum = parseFloat(s3c.baseRate) || 0;
+          const allowanceRateNum = parseFloat(s3c.allowanceRate) || 0;
+          const doleFactor = getDoleFactor(s3c.isPaidRestDays, s3c.restDaysPerWeek);
+          const calcDailyRate = baseRateNum === 0 ? 0
+            : s3c.rateType === 'DAILY' ? baseRateNum : (baseRateNum * 12) / doleFactor;
+          const calcMonthlyRate = baseRateNum === 0 ? 0
+            : s3c.rateType === 'MONTHLY' ? baseRateNum : (baseRateNum * doleFactor) / 12;
+          const fmtRate = (v: number) =>
+            `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-            {!createdEmploymentId && (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-4 py-3">
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  No employment record found. Go back to step 2 to add employment, or skip this step.
-                </p>
+          return (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Contract &amp; Compensation</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">This step is optional — you can skip and add it later.</p>
               </div>
-            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Contract Type <span className="text-red-500">*</span></label>
-                <select className={selectCls} value={s3.contractType}
-                  onChange={(e) => setS3((p) => ({ ...p, contractType: e.target.value }))}>
-                  <option value="">Select type</option>
-                  <option value="PROBATIONARY">Probationary</option>
-                  <option value="REGULAR">Regular</option>
-                  <option value="CONTRACTUAL">Contractual</option>
-                  <option value="PROJECT_BASED">Project Based</option>
-                  <option value="CONSULTANT">Consultant</option>
-                  <option value="INTERN">Intern</option>
-                </select>
+              {!createdEmploymentId && (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-4 py-3">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    No employment record found. Go back to step 2 to add employment, or skip this step.
+                  </p>
+                </div>
+              )}
+
+              {/* ── Contract Details ──────────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Contract Details</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Contract Type <span className="text-red-500">*</span></label>
+                    <select className={selectCls} value={s3.contractType}
+                      onChange={(e) => setS3((p) => ({ ...p, contractType: e.target.value }))}>
+                      <option value="">Select type</option>
+                      <option value="PROBATIONARY">Probationary</option>
+                      <option value="REGULAR">Regular</option>
+                      <option value="CONTRACTUAL">Contractual</option>
+                      <option value="PROJECT_BASED">Project Based</option>
+                      <option value="CONSULTANT">Consultant</option>
+                      <option value="INTERN">Intern</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Status</label>
+                    <select className={selectCls} value={s3.status}
+                      onChange={(e) => setS3((p) => ({ ...p, status: e.target.value }))}>
+                      <option value="DRAFT">Draft</option>
+                      <option value="ACTIVE">Active</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Start Date <span className="text-red-500">*</span></label>
+                    <input type="date" className={inputCls} value={s3.contractStart}
+                      onChange={(e) => setS3((p) => ({ ...p, contractStart: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>End Date</label>
+                    <input type="date" className={inputCls} value={s3.contractEnd}
+                      onChange={(e) => setS3((p) => ({ ...p, contractEnd: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Working Hours / Week</label>
+                    <input type="number" className={inputCls} value={s3.workingHoursPerWeek}
+                      onChange={(e) => setS3((p) => ({ ...p, workingHoursPerWeek: e.target.value }))} placeholder="40" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Notes</label>
+                    <textarea className={`${inputCls} resize-none`} rows={2} value={s3.notes}
+                      onChange={(e) => setS3((p) => ({ ...p, notes: e.target.value }))} />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Status</label>
-                <select className={selectCls} value={s3.status}
-                  onChange={(e) => setS3((p) => ({ ...p, status: e.target.value }))}>
-                  <option value="DRAFT">Draft</option>
-                  <option value="ACTIVE">Active</option>
-                </select>
+
+              {/* ── Basic Compensation ──────────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Basic Compensation</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Salary Rate (Contract Based) ₱</label>
+                    <input type="number" className={inputCls} value={s3c.baseRate}
+                      onChange={(e) => setS3c((p) => ({ ...p, baseRate: e.target.value }))}
+                      placeholder="e.g. 540.00" min="0" step="0.01" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Total Allowance (Contract Based) ₱</label>
+                    <input type="number" className={inputCls} value={s3c.allowanceRate}
+                      onChange={(e) => setS3c((p) => ({ ...p, allowanceRate: e.target.value }))}
+                      placeholder="0.00" min="0" step="0.01" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Start Date <span className="text-red-500">*</span></label>
-                <input type="date" className={inputCls} value={s3.contractStart}
-                  onChange={(e) => setS3((p) => ({ ...p, contractStart: e.target.value }))} />
+
+              {/* ── Salary Configuration ────────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Salary Configuration</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Agreed Salary Rate</label>
+                    <select className={selectCls} value={s3c.rateType}
+                      onChange={(e) => setS3c((p) => ({ ...p, rateType: e.target.value as RateType }))}>
+                      <option value="DAILY">Daily Rate</option>
+                      <option value="MONTHLY">Monthly Rate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Salary Frequency</label>
+                    <select className={selectCls} value={s3c.frequency}
+                      onChange={(e) => setS3c((p) => ({ ...p, frequency: e.target.value as SalaryFrequency }))}>
+                      <option value="ONCE_A_MONTH">Once a Month</option>
+                      <option value="TWICE_A_MONTH">Twice a Month</option>
+                      <option value="WEEKLY">Weekly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Pay Type</label>
+                    <select className={selectCls} value={s3c.payType}
+                      onChange={(e) => setS3c((p) => ({ ...p, payType: e.target.value as PayType }))}>
+                      <option value="VARIABLE_PAY">Variable Pay (Timesheet-based)</option>
+                      <option value="FIXED_PAY">Fixed Pay (No timesheet needed)</option>
+                    </select>
+                    {s3c.payType === 'VARIABLE_PAY' && (
+                      <p className="text-[11px] text-muted-foreground mt-1">Pay is computed from actual timesheet hours.</p>
+                    )}
+                    {s3c.payType === 'FIXED_PAY' && (
+                      <p className="text-[11px] text-muted-foreground mt-1">Pay is the fixed rate regardless of attendance.</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Disbursement Type</label>
+                    <select className={selectCls} value={s3c.disbursementType}
+                      onChange={(e) => setS3c((p) => ({ ...p, disbursementType: e.target.value as DisbursementType }))}>
+                      <option value="CASH">Cash</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                      <option value="CHEQUE">Cheque</option>
+                      <option value="E_WALLET">E-Wallet</option>
+                    </select>
+                  </div>
+                  {(s3c.disbursementType === 'BANK_TRANSFER' || s3c.disbursementType === 'CHEQUE' || s3c.disbursementType === 'E_WALLET') && (
+                    <div className="md:col-span-2">
+                      <label className={labelCls}>Bank / Account Details</label>
+                      <input className={inputCls} value={s3c.bankDetails}
+                        onChange={(e) => setS3c((p) => ({ ...p, bankDetails: e.target.value }))}
+                        placeholder="Bank name, account number" />
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>End Date</label>
-                <input type="date" className={inputCls} value={s3.contractEnd}
-                  onChange={(e) => setS3((p) => ({ ...p, contractEnd: e.target.value }))} />
+
+              {/* ── Rest Days Configuration ──────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Rest Days Configuration</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Paid on Rest Days</label>
+                    <div className="flex gap-4 mt-1">
+                      {[{ value: true, label: 'Yes' }, { value: false, label: 'No (Default)' }].map(({ value, label }) => (
+                        <label key={label} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="isPaidRestDays"
+                            checked={s3c.isPaidRestDays === value}
+                            onChange={() => setS3c((p) => ({ ...p, isPaidRestDays: value }))}
+                            className="h-4 w-4 accent-blue-600"
+                          />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Rest Days per Week</label>
+                    <select className={selectCls} value={s3c.restDaysPerWeek}
+                      onChange={(e) => setS3c((p) => ({ ...p, restDaysPerWeek: parseInt(e.target.value, 10) }))}>
+                      <option value={0}>0 rest days</option>
+                      <option value={1}>1 rest day</option>
+                      <option value={2}>2 rest days</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Monthly Rate (₱)</label>
-                <input type="number" className={inputCls} value={s3.monthlyRate}
-                  onChange={(e) => setS3((p) => ({ ...p, monthlyRate: e.target.value }))} placeholder="0.00" />
+
+              {/* ── Government Benefits Registration ─────────────────── */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Government Benefits Registration</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {([
+                    { key: 'deductSss' as const, label: 'SSS Registration' },
+                    { key: 'deductPagibig' as const, label: 'Pag-IBIG Registration' },
+                    { key: 'deductPhilhealth' as const, label: 'PhilHealth Registration' },
+                  ] as { key: keyof Pick<Step3CompensationData, 'deductSss' | 'deductPhilhealth' | 'deductPagibig'>; label: string }[]).map(({ key, label }) => (
+                    <div key={key}>
+                      <label className={labelCls}>{label}</label>
+                      <div className="flex gap-4 mt-1">
+                        {[{ value: true, label: 'Yes' }, { value: false, label: 'No' }].map(({ value, label: l }) => (
+                          <label key={l} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={key}
+                              checked={s3c[key] === value}
+                              onChange={() => setS3c((p) => ({ ...p, [key]: value }))}
+                              className="h-4 w-4 accent-blue-600"
+                            />
+                            <span className="text-sm text-foreground">{l}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Daily Rate (₱)</label>
-                <input type="number" className={inputCls} value={s3.dailyRate}
-                  onChange={(e) => setS3((p) => ({ ...p, dailyRate: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div>
-                <label className={labelCls}>Disbursement Method</label>
-                <select className={selectCls} value={s3.disbursedMethod}
-                  onChange={(e) => setS3((p) => ({ ...p, disbursedMethod: e.target.value }))}>
-                  <option value="">Select method</option>
-                  <option value="CASH_SALARY">Cash Salary</option>
-                  <option value="FUND_TRANSFER">Fund Transfer</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Working Hours/Week</label>
-                <input type="number" className={inputCls} value={s3.workingHoursPerWeek}
-                  onChange={(e) => setS3((p) => ({ ...p, workingHoursPerWeek: e.target.value }))} placeholder="40" />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Bank Details</label>
-                <input className={inputCls} value={s3.bankDetails}
-                  onChange={(e) => setS3((p) => ({ ...p, bankDetails: e.target.value }))} placeholder="Bank name, account number" />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Notes</label>
-                <textarea className={`${inputCls} resize-none`} rows={2} value={s3.notes}
-                  onChange={(e) => setS3((p) => ({ ...p, notes: e.target.value }))} />
-              </div>
+
+              {/* ── Calculated Rates (read-only) ──────────────────────── */}
+              {baseRateNum > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Calculated Rates</p>
+                  <div className="rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Salary Basis</p>
+                        <p className="text-sm font-bold text-foreground mt-0.5">{s3c.rateType === 'DAILY' ? 'Daily Rate' : 'Monthly Rate'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">DOLE Factor</p>
+                        <p className="text-sm font-bold text-foreground mt-0.5">{doleFactor}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Daily Rate</p>
+                        <p className="text-sm font-bold text-emerald-600 mt-0.5">{fmtRate(calcDailyRate)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Monthly Rate (EEMR)</p>
+                        <p className="text-sm font-bold text-emerald-600 mt-0.5">{fmtRate(calcMonthlyRate)}</p>
+                      </div>
+                    </div>
+                    {allowanceRateNum > 0 && (
+                      <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Allowance Rate</p>
+                        <p className="text-sm font-bold text-foreground mt-0.5">{fmtRate(allowanceRateNum)}</p>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      Formula: {s3c.rateType === 'DAILY'
+                        ? `Monthly = (${fmtRate(calcDailyRate)} × ${doleFactor}) ÷ 12`
+                        : `Daily = (${fmtRate(calcMonthlyRate)} × 12) ÷ ${doleFactor}`}
+                    </p>
+                  </div>
+                  {s3c.baseRate.trim() && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Note: Saving will activate this compensation and deactivate any previous active compensation for this contract.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Step 4: Work Schedule ────────────────────────────────── */}
         {step === 4 && (

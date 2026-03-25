@@ -73,16 +73,34 @@ export interface ContractRecord {
   contractType: string;
   startDate: string;
   endDate: string | null;
-  monthlyRate: string | null;
-  dailyRate: string | null;
-  hourlyRate: string | null;
-  payType: string | null;
-  disbursedMethod: string | null;
   status: string;
   scheduleId: number | null;
   workingHoursPerWeek: number | null;
-  bankDetails: string | null;
   notes: string | null;
+}
+
+export interface CompensationRecord {
+  id: string;
+  contractId: number;
+  baseRate: string;
+  allowanceRate: string;
+  rateType: 'DAILY' | 'MONTHLY';
+  frequency: 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
+  payType: 'FIXED_PAY' | 'VARIABLE_PAY';
+  disbursementType: 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'E_WALLET';
+  bankDetails: string | null;
+  isPaidRestDays: boolean;
+  restDaysPerWeek: number;
+  doleFactor: string;
+  deductSss: boolean;
+  deductPhilhealth: boolean;
+  deductPagibig: boolean;
+  deductTax: boolean;
+  calculatedDailyRate: string;
+  calculatedMonthlyRate: string;
+  isActive: boolean;
+  effectiveDate: string;
+  createdAt: string;
 }
 
 export interface ContractFormState {

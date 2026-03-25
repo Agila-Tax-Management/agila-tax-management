@@ -39,6 +39,29 @@ enum CashAdvanceStatus {
     CANCELLED
 }
 
+enum SalaryRateType {
+    DAILY
+    MONTHLY
+}
+
+enum SalaryFrequency {
+    ONCE_A_MONTH
+    TWICE_A_MONTH
+    WEEKLY
+}
+
+enum PayType {
+    FIXED_PAY
+    VARIABLE_PAY
+}
+
+enum DisbursementType {
+    CASH
+    BANK_TRANSFER
+    CHEQUE
+    E_WALLET
+}
+
 // ─── Company / Client Holiday Calendar ────────────────────────────
 model Holiday {
     id          Int      @id @default(autoincrement())
@@ -127,6 +150,51 @@ model Timesheet {
     @@unique([employeeId, date]) 
     @@index([clientId])
     @@map("timesheet")
+}
+
+// ─── Employee Compensation (DOLE-Compliant Configuration) ─────────
+model EmployeeCompensation {
+    id                  String   @id @default(cuid())
+    
+    // ─── Linked directly to the specific Contract ───
+    contractId          Int
+    contract            EmployeeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+    
+    // ─── Basic Compensation (From your UI) ───
+    baseRate            Decimal  @db.Decimal(10, 2) 
+    allowanceRate       Decimal  @db.Decimal(10, 2) @default(0.00)
+    
+    // ─── Salary Configuration ───
+    rateType            SalaryRateType    @default(DAILY)
+    frequency           SalaryFrequency   @default(TWICE_A_MONTH)
+    payType             PayType           @default(VARIABLE_PAY)
+    disbursementType    DisbursementType  @default(CASH)
+    bankDetails         String?
+
+    // ─── Rest Days & DOLE Factor Logic ───
+    isPaidRestDays      Boolean  @default(false)
+    restDaysPerWeek     Int      @default(1) 
+    doleFactor          Decimal  @db.Decimal(5, 2) 
+
+    // ─── Government Benefits Toggles (Moved from Contract) ───
+    deductSss           Boolean  @default(false)
+    deductPhilhealth    Boolean  @default(false)
+    deductPagibig       Boolean  @default(false)
+    deductTax           Boolean  @default(false)
+
+    // ─── Calculated Rates (The outputs for Payslip generation) ───
+    calculatedDailyRate   Decimal  @db.Decimal(10, 2)
+    calculatedMonthlyRate Decimal  @db.Decimal(10, 2)
+
+    // ─── State ───
+    isActive            Boolean  @default(true)
+    effectiveDate       DateTime @default(now()) @db.Date
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([contractId, isActive])
+    @@map("employee_compensation")
 }
 
 // ─── Payroll Period ───────────────────────────────────────────────
