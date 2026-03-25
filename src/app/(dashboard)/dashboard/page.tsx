@@ -25,11 +25,11 @@ const PORTALS = [
   { id: 'liaison',    title: 'Liaison Portal',        description: 'Coordinate government agency tasks and schedules.',  href: '/portal/liaison',    icon: <Building2 />,   color: 'bg-amber-600',   stats: { label: 'Active Tasks', value: '15' } },
   { id: 'hr',         title: 'HR Portal',             description: 'Manage employees, onboarding, and company policies.',href: '/portal/hr',         icon: <UserCheck />,   color: 'bg-teal-600',    stats: { label: 'Employees', value: '52' } },
   { id: 'ao',         title: 'Account Officer Portal', description: 'Oversee client accounts and service delivery.',     href: '/portal/account-officer', icon: <Briefcase />, color: 'bg-violet-600', stats: { label: 'Clients Managed', value: '86' } },
-  { id: 'task-mgmt',   title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
+  { id: 'task-mgmt',  title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
+  { id: 'crm',        title: 'Client Gateway System', description: 'Client portal and self-service gateway.',            href: '/portal/client-gateway',  icon: <Users />,     color: 'bg-blue-500',    stats: { label: 'Active Clients', value: '0' } },
 ];
 
 const APP_SYSTEMS = [
-  { id: 'crm',     title: 'CRM System',        description: 'Customer relationship management',        href: '/dashboard/crm',       icon: <Users />,    color: 'bg-blue-500'   },
   { id: 'sop',    title: 'Standard Operating Procedures (SOPPs)',   description: 'Company document storage',                href: '/dashboard/sop',      icon: <BookOpen />, color: 'bg-emerald-500' },
   { id: 'reports', title: 'Reports Engine',      description: 'Generate and export business reports',    href: '/dashboard/reports',   icon: <BarChart3 />,color: 'bg-purple-500' },
   { id: 'web',     title: 'Company Website',     description: 'Manage the public website',               href: 'https://agilaworkspace.com', icon: <Globe />, color: 'bg-slate-700', external: true },

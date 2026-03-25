@@ -26,10 +26,11 @@ model User {
 
   assignedLeads Lead[] @relation("AssignedAgent")
 
-  activityLogs      ActivityLog[]      @relation("InternalUserLogs")
-  notifications     Notification[]     @relation("UserNotifications")
-  taskConversations TaskConversation[]
-  taskHistoryLogs   TaskHistory[]
+  activityLogs    ActivityLog[]  @relation("InternalUserLogs")
+  notifications   Notification[] @relation("UserNotifications")
+  taskConversations      TaskConversation[]
+  taskHistoryLogs        TaskHistory[]
+  subtaskHistoryLogs     TaskSubtaskHistory[] @relation("SubtaskHistoryActor")
 
   leadComments    LeadComment[]
   leadHistoryLogs LeadHistory[]

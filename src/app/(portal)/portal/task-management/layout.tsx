@@ -6,7 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { TaskManagementSidebar } from '@/components/task-management/TaskManagementSidebar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { Button } from '@/components/UI/button';
+import { PortalBreadcrumb } from '@/components/UI/PortalBreadcrumb';
 import { RoleProvider } from '@/lib/role-context';
+import { TaskDepartmentsProvider } from '@/context/TaskDepartmentsContext';
 import { Menu, User, ArrowLeft } from 'lucide-react';
 
 export default function TaskManagementLayout({ children }: { children: React.ReactNode }) {
@@ -22,6 +24,7 @@ export default function TaskManagementLayout({ children }: { children: React.Rea
   }, []);
 
   return (
+    <TaskDepartmentsProvider>
     <RoleProvider>
       <div className="flex h-screen overflow-hidden bg-slate-50">
         <TaskManagementSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -43,6 +46,10 @@ export default function TaskManagementLayout({ children }: { children: React.Rea
               >
                 <ArrowLeft size={16} className="mr-1" /> {isRoot ? 'Main Hub' : 'Back'}
               </Button>
+              <span className="hidden sm:block text-slate-300 select-none">|</span>
+              <div className="hidden sm:flex min-w-0">
+                <PortalBreadcrumb />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -62,5 +69,6 @@ export default function TaskManagementLayout({ children }: { children: React.Rea
         </div>
       </div>
     </RoleProvider>
+    </TaskDepartmentsProvider>
   );
 }

@@ -1,5 +1,5 @@
-import { LiaisonTaskBoard } from '@/components/liaison/LiaisonTaskBoard';
+import { TaskManagementBoard } from '@/components/task-management/TaskManagementBoard';
 
 export default function TasksDashboardPage() {
-  return <LiaisonTaskBoard />;
+  return <TaskManagementBoard sourceFilter="liaison" />;
 }

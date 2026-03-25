@@ -842,6 +842,132 @@ async function main(): Promise<void> {
     }
     console.log(`  ✓ 2 sample leads seeded`);
   }
+    // ── 11. Seed Sample Tasks ─────────────────────────────────────────
+  const superAdminUser = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
+  const superAdminEmployee = superAdminUser
+    ? await prisma.employee.findFirst({ where: { userId: superAdminUser.id } })
+    : null;
+
+  const DEPT_TASK_SEEDS: Array<{
+    deptName: string;
+    tasks: Array<{ name: string; description: string; priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"; daysFromNow: number }>;
+  }> = [
+    {
+      deptName: "Client Relations",
+      tasks: [
+        { name: "Client Escalation – ABC Enterprises", description: "Follow up on escalated client concern and coordinate resolution timeline with all departments.", priority: "URGENT", daysFromNow: 3 },
+        { name: "Monthly Performance Review – March 2026", description: "Review KPIs and output metrics for the Client Relations department.", priority: "HIGH", daysFromNow: 6 },
+        { name: "Client Retention Follow-up – Santos General Merchandise", description: "Conduct quarterly check-in call and document client satisfaction status.", priority: "NORMAL", daysFromNow: 12 },
+      ],
+    },
+    {
+      deptName: "Liaison",
+      tasks: [
+        { name: "BIR TIN Registration – New Client Onboarding", description: "Process TIN registration for newly onboarded client. Prepare all required BIR documents before submission to the RDO.", priority: "HIGH", daysFromNow: 5 },
+        { name: "Mayor's Permit Renewal – Cebu City LGU", description: "Follow up on Mayor's Permit renewal at City Hall. Bring OR from initial payment and all supporting documents.", priority: "URGENT", daysFromNow: 4 },
+        { name: "SSS / PhilHealth / Pag-IBIG Registration – New Employee", description: "Process government benefit registrations for newly hired employees across SSS, PhilHealth, and Pag-IBIG.", priority: "NORMAL", daysFromNow: 10 },
+      ],
+    },
+    {
+      deptName: "Compliance",
+      tasks: [
+        { name: "BIR 1701Q Q1 2026 Filing", description: "Prepare and file the BIR 1701Q quarterly income tax return for Q1 2026. Reconcile books with CAS before submission.", priority: "URGENT", daysFromNow: 21 },
+        { name: "BIR 2550M VAT Filing – March 2026", description: "File monthly VAT return (BIR Form 2550M) for March 2026. Deadline is 20th day of the following month.", priority: "HIGH", daysFromNow: 26 },
+        { name: "Audited Financial Statements – FY2025", description: "Complete the AFS for FY2025. Coordinate with external auditor for audit notes and final sign-off.", priority: "URGENT", daysFromNow: 36 },
+        { name: "Pag-IBIG Monthly Remittance – March", description: "Submit Pag-IBIG Fund contribution remittances for all enrolled employees for March 2026.", priority: "NORMAL", daysFromNow: 8 },
+      ],
+    },
+    {
+      deptName: "Operations",
+      tasks: [
+        { name: "Q1 2026 Compliance Summary Report", description: "Compile Q1 summary of all compliance filings and outstanding deadlines for management presentation.", priority: "URGENT", daysFromNow: 16 },
+        { name: "April Cross-Department Coordination Meeting", description: "Schedule and facilitate the cross-department planning session for April priorities. Prepare agenda and invite all team leads.", priority: "HIGH", daysFromNow: 9 },
+        { name: "Process Improvement Review – Liaison Workflow", description: "Evaluate the current liaison field reporting process and identify bottlenecks for Q2 improvement.", priority: "NORMAL", daysFromNow: 20 },
+      ],
+    },
+    {
+      deptName: "Accounting",
+      tasks: [
+        { name: "Petty Cash Fund Replenishment – March", description: "Process and document PCF replenishment for March 2026 expenses. Attach all liquidation receipts.", priority: "NORMAL", daysFromNow: 5 },
+        { name: "Client Invoice Batch – March 2026", description: "Generate and send out invoices to all active clients for services rendered in March.", priority: "HIGH", daysFromNow: 8 },
+        { name: "Payroll Reconciliation – March 2026", description: "Reconcile payroll figures against attendance and HR-approved adjustments before final release.", priority: "HIGH", daysFromNow: 7 },
+      ],
+    },
+    {
+      deptName: "Human Resources",
+      tasks: [
+        { name: "Leave Request Processing – March", description: "Review and approve all pending leave applications filed for the month of March.", priority: "NORMAL", daysFromNow: 4 },
+        { name: "Payroll Run – March 2026", description: "Prepare and release payroll for all active employees for the March 2026 pay period.", priority: "HIGH", daysFromNow: 7 },
+        { name: "201 File Audit – Q1 2026", description: "Verify completeness of all employee 201 files. Flag missing documents and follow up with concerned staff.", priority: "NORMAL", daysFromNow: 15 },
+      ],
+    },
+    {
+      deptName: "Administration",
+      tasks: [
+        { name: "Office Supplies Procurement – Q1", description: "Consolidate office supply requests from all departments and place the Q1 order with approved vendors.", priority: "LOW", daysFromNow: 14 },
+        { name: "Lease Renewal Negotiation", description: "Coordinate with building management regarding office lease renewal terms and new rate proposal.", priority: "HIGH", daysFromNow: 30 },
+      ],
+    },
+    {
+      deptName: "IT",
+      tasks: [
+        { name: "Server Backup Verification – March", description: "Verify all automated server and database backups completed successfully for the month of March.", priority: "HIGH", daysFromNow: 2 },
+        { name: "Employee Workstation Setup – New Hire", description: "Configure workstation, user accounts, email, and system access permissions for incoming employee.", priority: "NORMAL", daysFromNow: 7 },
+        { name: "Security Patch Deployment – Q1", description: "Apply pending OS and application security patches across all workstations and servers.", priority: "HIGH", daysFromNow: 10 },
+      ],
+    },
+  ];
+
+  let taskCount = 0;
+  const now = new Date();
+
+  for (const group of DEPT_TASK_SEEDS) {
+    const dept = await prisma.department.findFirst({
+      where: { clientId: atmsClient.id, name: group.deptName },
+    });
+    if (!dept) continue;
+
+    const entryStatus = await prisma.departmentTaskStatus.findFirst({
+      where: { departmentId: dept.id, isEntryStep: true },
+      orderBy: { statusOrder: "asc" },
+    });
+
+    for (const t of group.tasks) {
+      const dueDate = new Date(now);
+      dueDate.setDate(dueDate.getDate() + t.daysFromNow);
+
+      const existing = await prisma.task.findFirst({
+        where: { name: t.name, currentDepartmentId: dept.id },
+      });
+      if (existing) continue;
+
+      const task = await prisma.task.create({
+        data: {
+          name: t.name,
+          description: t.description,
+          priority: t.priority,
+          currentDepartmentId: dept.id,
+          currentStatusId: entryStatus?.id ?? null,
+          assignedToId: superAdminEmployee?.id ?? null,
+          dueDate,
+        },
+      });
+
+      if (superAdminUser) {
+        await prisma.taskHistory.create({
+          data: {
+            taskId: task.id,
+            actorId: superAdminUser.id,
+            changeType: "CREATED",
+            newValue: t.name,
+          },
+        });
+      }
+
+      taskCount++;
+    }
+  }
+  console.log(`  ✓ ${taskCount} sample tasks seeded across departments`);
 }
 
 main()

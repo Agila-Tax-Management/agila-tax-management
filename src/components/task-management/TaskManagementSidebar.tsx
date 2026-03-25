@@ -1,28 +1,42 @@
 // src/components/task-management/TaskManagementSidebar.tsx
 'use client';
 
-import React from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { useMemo, useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban,
+  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban, Settings2, Handshake, UserCog,
+  Building2, Calculator, Users, Monitor,
+  type LucideIcon,
 } from 'lucide-react';
-import { ALL_TASKS } from '@/lib/mock-task-management-data';
+import type { TaskSource } from '@/lib/mock-task-management-data';
+import { SOURCE_CONFIG } from '@/lib/mock-task-management-data';
+import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
 
-const activeTasks = ALL_TASKS.filter(t => t.status !== 'Done');
-const liaisonBadge = ALL_TASKS.filter(t => t.source === 'liaison' && t.status !== 'Done').length;
-const complianceBadge = ALL_TASKS.filter(t => t.source === 'compliance' && t.status !== 'Done').length;
-
-const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/task-management', badge: 0 },
-  {
-    id: 'section-tasks',
-    label: 'TASK VIEWS',
-    isSection: true,
-  },
-  { id: 'all-tasks', label: 'All Tasks', icon: FolderKanban, href: '/portal/task-management/tasks', badge: activeTasks.length },
-  { id: 'liaison-tasks', label: 'Liaison Tasks', icon: Truck, href: '/portal/task-management/liaison', badge: liaisonBadge },
-  { id: 'compliance-tasks', label: 'Compliance Tasks', icon: Shield, href: '/portal/task-management/compliance', badge: complianceBadge },
+const DEPT_TO_NAV_RAW: Array<{ aliases: string[]; route: string; icon: LucideIcon; source: TaskSource }> = [
+  { aliases: ['operations', 'operations manager', 'om'], route: '/portal/task-management/operations',         icon: UserCog,    source: 'om' },
+  { aliases: ['client relations', 'client-relations'],   route: '/portal/task-management/client-relations', icon: Handshake,  source: 'client-relations' },
+  { aliases: ['liaison'],                                route: '/portal/task-management/liaison',          icon: Truck,      source: 'liaison' },
+  { aliases: ['compliance'],                             route: '/portal/task-management/compliance',       icon: Shield,     source: 'compliance' },
+  { aliases: ['admin', 'administration', 'administrator'], route: '/portal/task-management/admin',          icon: Building2,  source: 'admin' },
+  { aliases: ['accounting', 'accounts'],                 route: '/portal/task-management/accounting',       icon: Calculator, source: 'accounting' },
+  { aliases: ['human resources', 'hr', 'human resource'], route: '/portal/task-management/hr',              icon: Users,      source: 'hr' },
+  { aliases: ['it', 'information technology', 'it department'], route: '/portal/task-management/it',        icon: Monitor,    source: 'it' },
 ];
+
+// Build a flat lowercase-keyed lookup map
+const DEPT_NAV_MAP = new Map<string, { route: string; icon: LucideIcon; source: TaskSource }>();
+for (const entry of DEPT_TO_NAV_RAW) {
+  const { aliases, ...cfg } = entry;
+  for (const alias of aliases) DEPT_NAV_MAP.set(alias, cfg);
+}
+
+function lookupDeptNav(name: string) {
+  return DEPT_NAV_MAP.get(name.toLowerCase().trim());
+}
+
+type SectionItem = { id: string; label: string; isSection: true };
+type NavItem   = { id: string; label: string; icon: LucideIcon; href: string; badge: number; isSection?: never };
+type SidebarItem = SectionItem | NavItem;
 
 interface TaskManagementSidebarProps {
   isOpen: boolean;
@@ -32,6 +46,58 @@ interface TaskManagementSidebarProps {
 export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { departments } = useTaskDepartments();
+
+  // ── Real task counts from API ──────────────────────────────────────
+  const [deptActiveCounts, setDeptActiveCounts] = useState<Map<number, number>>(new Map());
+  const [totalActiveCount, setTotalActiveCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/tasks')
+      .then(r => r.ok ? r.json() : null)
+      .then((json: { data: Array<{ currentStatus: { name: string } | null; currentDepartment: { id: number } | null }> } | null) => {
+        if (!json) return;
+        const active = json.data.filter(t => {
+          const name = t.currentStatus?.name?.toLowerCase() ?? '';
+          return !name.includes('done') && !name.includes('complet');
+        });
+        setTotalActiveCount(active.length);
+        const map = new Map<number, number>();
+        for (const t of active) {
+          if (t.currentDepartment?.id) {
+            map.set(t.currentDepartment.id, (map.get(t.currentDepartment.id) ?? 0) + 1);
+          }
+        }
+        setDeptActiveCounts(map);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const navItems = useMemo((): SidebarItem[] => {
+    const seenRoutes = new Set<string>();
+    const deptItems: NavItem[] = [];
+    for (const dept of departments) {
+      const cfg = lookupDeptNav(dept.name);
+      const href = cfg?.route ?? `/portal/task-management/tasks?dept=${dept.id}`;
+      if (seenRoutes.has(href)) continue;
+      seenRoutes.add(href);
+      const badge = deptActiveCounts.get(dept.id) ?? 0;
+      deptItems.push({
+        id: `dept-${dept.id}`,
+        label: cfg ? SOURCE_CONFIG[cfg.source]?.label ?? dept.name : dept.name,
+        icon: (cfg?.icon ?? FolderKanban) as LucideIcon,
+        href,
+        badge,
+      });
+    }
+    return [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard as LucideIcon, href: '/portal/task-management', badge: 0 },
+      { id: 'section-depts', label: 'DEPARTMENTS', isSection: true as const },
+      { id: 'all-tasks', label: 'All Tasks', icon: FolderKanban as LucideIcon, href: '/portal/task-management/tasks', badge: totalActiveCount },
+      ...deptItems,
+    ];
+  }, [departments, deptActiveCounts, totalActiveCount]);
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -67,8 +133,8 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-          {NAV_ITEMS.map((item) => {
-            if (item.isSection) {
+          {navItems.map((item) => {
+            if ('isSection' in item && item.isSection) {
               return (
                 <div key={item.id} className="pt-6 pb-2">
                   <span className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -78,8 +144,21 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
               );
             }
 
-            const isActive = pathname === item.href;
             const Icon = item.icon;
+
+            // All Tasks is active only when on /tasks with no dept query param.
+            // Dept-fallback items (href has ?dept=) are active when pathname AND dept param both match.
+            // All other items use exact pathname match.
+            let isActive: boolean;
+            if (item.href.includes('?dept=')) {
+              const [hrefPath, hrefQuery] = item.href.split('?');
+              const hrefDeptId = new URLSearchParams(hrefQuery).get('dept');
+              isActive = pathname === hrefPath && searchParams.get('dept') === hrefDeptId;
+            } else if (item.id === 'all-tasks') {
+              isActive = pathname === item.href && !searchParams.get('dept');
+            } else {
+              isActive = pathname === item.href;
+            }
 
             return (
               <button
@@ -104,6 +183,21 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
             );
           })}
         </nav>
+
+        {/* Footer — Settings shortcut */}
+        <div className="shrink-0 border-t border-slate-200 p-3">
+          <button
+            onClick={() => handleNavigation('/portal/task-management/settings')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              pathname === '/portal/task-management/settings'
+                ? 'bg-[#0f766e]/10 text-[#0f766e] font-bold'
+                : 'text-slate-500 hover:bg-slate-50 font-medium'
+            }`}
+          >
+            <Settings2 size={18} />
+            <span className="text-sm">Task Settings</span>
+          </button>
+        </div>
       </aside>
     </>
   );

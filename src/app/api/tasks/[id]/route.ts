@@ -1,0 +1,252 @@
+// src/app/api/tasks/[id]/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import prisma from "@/lib/db";
+import { getSessionWithAccess } from "@/lib/session";
+import { logActivity, getRequestMeta } from "@/lib/activity-log";
+
+const taskInclude = {
+  client: { select: { id: true, businessName: true } },
+  template: { select: { id: true, name: true } },
+  currentDepartment: { select: { id: true, name: true } },
+  currentStatus: { select: { id: true, name: true, color: true } },
+  assignedTo: {
+    select: { id: true, firstName: true, lastName: true, employeeNo: true },
+  },
+  subtasks: {
+    orderBy: { order: "asc" as const },
+    include: {
+      department: { select: { id: true, name: true } },
+      assignedTo: { select: { id: true, firstName: true, lastName: true } },
+      status: { select: { id: true, name: true, color: true, isExitStep: true } },
+    },
+  },
+  conversations: {
+    orderBy: { createdAt: "asc" as const },
+    include: {
+      author: { select: { id: true, name: true, image: true } },
+    },
+  },
+  historyLogs: {
+    orderBy: { createdAt: "desc" as const },
+    take: 20,
+    include: {
+      actor: { select: { id: true, name: true } },
+    },
+  },
+} as const;
+
+const patchTaskSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  clientId: z.number().int().positive().nullable().optional(),
+  templateId: z.number().int().positive().nullable().optional(),
+  currentDepartmentId: z.number().int().positive().nullable().optional(),
+  currentStatusId: z.number().int().positive().nullable().optional(),
+  assignedToId: z.number().int().positive().nullable().optional(),
+  priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
+  daysDue: z.number().int().positive().nullable().optional(),
+  dueDate: z.string().datetime({ offset: true }).nullable().optional(),
+  currentRouteOrder: z.number().int().min(1).optional(),
+});
+
+type Params = { params: Promise<{ id: string }> };
+
+/**
+ * GET /api/tasks/[id]
+ */
+export async function GET(_request: NextRequest, { params }: Params): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const taskId = Number(id);
+  if (isNaN(taskId)) return NextResponse.json({ error: "Invalid task ID" }, { status: 400 });
+
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: taskInclude });
+  if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+
+  return NextResponse.json({ data: task });
+}
+
+/**
+ * PATCH /api/tasks/[id]
+ * Updates any combination of task fields; auto-logs history entries.
+ */
+export async function PATCH(request: NextRequest, { params }: Params): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const taskId = Number(id);
+  if (isNaN(taskId)) return NextResponse.json({ error: "Invalid task ID" }, { status: 400 });
+
+  const existing = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: {
+      currentDepartment: { select: { name: true } },
+      currentStatus: { select: { name: true } },
+      assignedTo: { select: { firstName: true, lastName: true } },
+    },
+  });
+  if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = patchTaskSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Validation failed" },
+      { status: 400 }
+    );
+  }
+
+  const { dueDate, ...rest } = parsed.data;
+  const updateData = {
+    ...rest,
+    ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+  };
+
+  const updated = await prisma.task.update({
+    where: { id: taskId },
+    data: updateData,
+    include: taskInclude,
+  });
+
+  // Build history log entries for each changed field
+  const PRIORITY_LABELS: Record<string, string> = {
+    LOW: "Low", NORMAL: "Medium", HIGH: "High", URGENT: "Urgent",
+  };
+
+  const historyEntries: {
+    taskId: number;
+    actorId: string;
+    changeType: "STATUS_CHANGED" | "DEPARTMENT_CHANGED" | "ASSIGNEE_CHANGED" | "PRIORITY_CHANGED" | "DUE_DATE_CHANGED" | "DETAILS_UPDATED";
+    oldValue?: string;
+    newValue?: string;
+  }[] = [];
+
+  if (rest.currentStatusId !== undefined && rest.currentStatusId !== existing.currentStatusId) {
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "STATUS_CHANGED",
+      oldValue: existing.currentStatus?.name ?? undefined,
+      newValue: updated.currentStatus?.name ?? undefined,
+    });
+  }
+  if (rest.currentDepartmentId !== undefined && rest.currentDepartmentId !== existing.currentDepartmentId) {
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "DEPARTMENT_CHANGED",
+      oldValue: existing.currentDepartment?.name ?? undefined,
+      newValue: updated.currentDepartment?.name ?? undefined,
+    });
+  }
+  if (rest.assignedToId !== undefined && rest.assignedToId !== existing.assignedToId) {
+    const oldName = existing.assignedTo
+      ? `${existing.assignedTo.firstName} ${existing.assignedTo.lastName}`
+      : undefined;
+    const newAssignee = updated.assignedTo;
+    const newName = newAssignee
+      ? `${newAssignee.firstName} ${newAssignee.lastName}`
+      : undefined;
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "ASSIGNEE_CHANGED",
+      oldValue: oldName,
+      newValue: newName,
+    });
+  }
+  if (rest.priority !== undefined && rest.priority !== existing.priority) {
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "PRIORITY_CHANGED",
+      oldValue: PRIORITY_LABELS[existing.priority] ?? existing.priority,
+      newValue: PRIORITY_LABELS[rest.priority] ?? rest.priority,
+    });
+  }
+  if (dueDate !== undefined) {
+    const oldDate = existing.dueDate
+      ? new Date(existing.dueDate).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+      : undefined;
+    const newDate = dueDate
+      ? new Date(dueDate).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+      : undefined;
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "DUE_DATE_CHANGED",
+      oldValue: oldDate,
+      newValue: newDate,
+    });
+  }
+  if (rest.name !== undefined || rest.description !== undefined) {
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "DETAILS_UPDATED",
+      newValue: rest.name ?? existing.name,
+    });
+  }
+
+  // Await history creation so the re-fetched logs include the new entries
+  if (historyEntries.length > 0) {
+    await prisma.taskHistory.createMany({ data: historyEntries });
+  }
+
+  // Re-fetch fresh history so the response includes just-created entries
+  const freshHistory = await prisma.taskHistory.findMany({
+    where: { taskId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    include: { actor: { select: { id: true, name: true } } },
+  });
+
+  void logActivity({
+    userId: session.user.id,
+    action: "UPDATED",
+    entity: "Task",
+    entityId: String(taskId),
+    description: `Updated task "${updated.name}"`,
+    ...getRequestMeta(request),
+  });
+
+  return NextResponse.json({ data: { ...updated, historyLogs: freshHistory } });
+}
+
+/**
+ * DELETE /api/tasks/[id]
+ */
+export async function DELETE(request: NextRequest, { params }: Params): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const taskId = Number(id);
+  if (isNaN(taskId)) return NextResponse.json({ error: "Invalid task ID" }, { status: 400 });
+
+  const existing = await prisma.task.findUnique({ where: { id: taskId }, select: { name: true } });
+  if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+
+  await prisma.task.delete({ where: { id: taskId } });
+
+  void logActivity({
+    userId: session.user.id,
+    action: "DELETED",
+    entity: "Task",
+    entityId: String(taskId),
+    description: `Deleted task "${existing.name}"`,
+    ...getRequestMeta(request),
+  });
+
+  return NextResponse.json({ data: { id: taskId } });
+}
