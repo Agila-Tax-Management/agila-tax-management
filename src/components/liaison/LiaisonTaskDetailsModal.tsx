@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import {
-  X, Calendar, User, Tag, Send, Clock,
-  ChevronDown,
+  X, Calendar, Tag, Send, Clock,
+  ChevronDown, MessageSquare,
 } from 'lucide-react';
 import { LIAISON_TEAM, CURRENT_LIAISON } from '@/lib/mock-liaison-data';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -130,7 +130,7 @@ export function LiaisonTaskDetailsModal({ task, isOpen, onClose, onUpdate, onDel
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left: Details */}
-          <div className="flex-1 p-6 overflow-y-auto border-r border-slate-100">
+          <div className="w-3/5 p-6 overflow-y-auto border-r border-slate-100">
             <div className="mb-6">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Client</p>
               <p className="text-sm font-bold text-slate-800">{clientName}</p>
@@ -274,49 +274,67 @@ export function LiaisonTaskDetailsModal({ task, isOpen, onClose, onUpdate, onDel
           </div>
 
           {/* Right: Comments */}
-          <div className="w-80 flex flex-col bg-slate-50">
+          <div className="w-2/5 flex flex-col bg-slate-50">
+            {/* Header */}
             <div className="p-4 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <User size={14} className="text-slate-500" />
-                <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">Comments &amp; Notes</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={13} className="text-slate-500" />
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">Comments</h3>
+                </div>
+                {editingTask.comments.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                    <MessageSquare size={9} /> {editingTask.comments.length}
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {editingTask.comments.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-8">No comments yet. Add the first note.</p>
+                <div className="flex flex-col items-center justify-center py-10 gap-2">
+                  <MessageSquare size={28} className="text-slate-200" />
+                  <p className="text-xs text-slate-400">No comments yet. Be the first!</p>
+                </div>
               )}
               {editingTask.comments.map(comment => {
-                const author = LIAISON_TEAM.find(m => m.id === comment.authorId);
+                const initials = comment.authorName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
                 return (
-                  <div key={comment.id} className="bg-white p-3 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-6 h-6 bg-violet-600 rounded-full flex items-center justify-center">
-                        <span className="text-[9px] font-bold text-white">{author?.avatar ?? comment.authorName.split(' ').map(n => n[0]).join('')}</span>
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">{comment.authorName}</span>
-                      <span className="text-[10px] text-slate-400 ml-auto">{formatDateTime(comment.createdAt)}</span>
+                  <div key={comment.id} className="flex gap-2.5">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm"
+                      style={{ backgroundColor: '#7c3aed' }}
+                    >
+                      {initials}
                     </div>
-                    <p className="text-xs text-slate-600 leading-relaxed">{comment.content}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-xs font-bold text-slate-800">{comment.authorName}</span>
+                        <span className="text-[10px] text-slate-400">{formatDateTime(comment.createdAt)}</span>
+                      </div>
+                      <div className="bg-white border border-slate-100 rounded-xl rounded-tl-sm px-3 py-2">
+                        <p className="text-xs text-slate-700 leading-relaxed">{comment.content}</p>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
 
             <div className="p-4 border-t border-slate-200 shrink-0">
-              <div className="flex gap-2">
-                <input
-                  type="text"
+              <div className="flex gap-2 items-end">
+                <textarea
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                  placeholder="Add a comment..."
-                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleAddComment())}
+                  placeholder="Write a comment… (Enter to send)"
+                  rows={2}
+                  className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none leading-relaxed"
                 />
                 <Button
                   onClick={handleAddComment}
                   disabled={!newComment.trim()}
-                  className="bg-violet-600 hover:bg-violet-700 text-white px-3 shrink-0"
+                  className="bg-violet-600 hover:bg-violet-700 text-white px-3 shrink-0 mb-0.5"
                 >
                   <Send size={14} />
                 </Button>

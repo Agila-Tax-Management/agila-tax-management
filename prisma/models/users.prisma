@@ -30,6 +30,7 @@ model User {
   notifications   Notification[] @relation("UserNotifications")
   taskConversations      TaskConversation[]
   taskHistoryLogs        TaskHistory[]
+  subtaskHistoryLogs     TaskSubtaskHistory[] @relation("SubtaskHistoryActor")
 
   leadComments          LeadComment[]
   leadHistoryLogs       LeadHistory[]

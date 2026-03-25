@@ -1,7 +1,7 @@
 ﻿// src/components/task-management/TaskManagementBoard.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -14,33 +14,87 @@ import {
   Loader2, X,
 } from 'lucide-react';
 import {
-  ALL_TASKS, ALL_TEAM_MEMBERS, SOURCE_CONFIG,
+  ALL_TEAM_MEMBERS, SOURCE_CONFIG,
 } from '@/lib/mock-task-management-data';
 import type { UnifiedTask, TaskSource } from '@/lib/mock-task-management-data';
-import { INITIAL_CLIENTS } from '@/lib/mock-clients';
 import type { AOTaskPriority } from '@/lib/types';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
+import { useToast } from '@/context/ToastContext';
 
-// Map board source keys → API department names
+// ── API task shape returned by GET /api/tasks ──────────────────────
+interface ApiTask {
+  id: number;
+  name: string;
+  description: string | null;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' | null;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  client: { id: number; businessName: string } | null;
+  currentDepartment: { id: number; name: string } | null;
+  currentStatus: { id: number; name: string; color: string } | null;
+  assignedTo: { id: number; firstName: string; lastName: string } | null;
+  subtasks: Array<{ id: number; name: string; status: { isExitStep: boolean } | null }>;
+}
+
+const DB_PRIORITY_MAP: Record<string, AOTaskPriority> = {
+  LOW: 'Low', NORMAL: 'Medium', HIGH: 'High', URGENT: 'Urgent',
+};
+const PRIORITY_TO_DB: Record<AOTaskPriority, string> = {
+  Low: 'LOW', Medium: 'NORMAL', High: 'HIGH', Urgent: 'URGENT',
+};
+
+function mapApiTask(t: ApiTask): UnifiedTask {
+  return {
+    id: String(t.id),
+    title: t.name,
+    description: t.description ?? '',
+    status: (t.currentStatus?.name ?? 'To Do') as UnifiedTask['status'],
+    priority: DB_PRIORITY_MAP[t.priority ?? 'NORMAL'] ?? 'Medium',
+    source: (() => {
+      const raw = t.currentDepartment?.name ?? '';
+      const lower = raw.toLowerCase().trim();
+      const match = DEPT_NAME_TO_SOURCE_MAP.find(e => e.aliases.some(a => a === lower));
+      return match?.source ?? 'om';
+    })(),
+    clientId: String(t.client?.id ?? ''),
+    assigneeId: String(t.assignedTo?.id ?? ''),
+    dueDate: t.dueDate ?? new Date().toISOString(),
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+    comments: [],
+    tags: [],
+    subtasks: t.subtasks.map(s => ({
+      id: String(s.id),
+      title: s.name,
+      completed: s.status?.isExitStep ?? false,
+      createdAt: new Date().toISOString(),
+    })),
+  };
+}
+
+// Map board source keys → API department names (must match actual DB dept names)
 const SOURCE_TO_DEPT_NAME: Record<TaskSource, string> = {
-  'om':               'Operations Manager',
+  'om':               'Operations',
   'client-relations': 'Client Relations',
   'liaison':          'Liaison',
   'compliance':       'Compliance',
-  'admin':            'Admin',
+  'admin':            'Administration',
   'accounting':       'Accounting',
   'hr':               'Human Resources',
+  'it':               'IT',
 };
 
 // Reverse map — API department name → board source key (case-insensitive)
 const DEPT_NAME_TO_SOURCE_MAP: Array<{ aliases: string[]; source: TaskSource }> = [
-  { aliases: ['operations manager', 'om'],                source: 'om' },
+  { aliases: ['operations', 'operations manager', 'om'],  source: 'om' },
   { aliases: ['client relations', 'client-relations'],    source: 'client-relations' },
   { aliases: ['liaison'],                                 source: 'liaison' },
   { aliases: ['compliance'],                              source: 'compliance' },
   { aliases: ['admin', 'administration', 'administrator'], source: 'admin' },
   { aliases: ['accounting', 'accounts'],                  source: 'accounting' },
   { aliases: ['human resources', 'hr', 'human resource'], source: 'hr' },
+  { aliases: ['it', 'information technology', 'it department'], source: 'it' },
 ];
 const _deptSourceLookup = new Map<string, TaskSource>();
 for (const { aliases, source } of DEPT_NAME_TO_SOURCE_MAP) {
@@ -71,7 +125,7 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
 };
 
 type ViewMode = 'list' | 'kanban';
-const DEPT_SOURCES_DEFAULT: TaskSource[] = ['om', 'client-relations', 'liaison', 'compliance', 'admin', 'accounting', 'hr'];
+const DEPT_SOURCES_DEFAULT: TaskSource[] = ['om', 'client-relations', 'liaison', 'compliance', 'admin', 'accounting', 'hr', 'it'];
 
 interface TaskManagementBoardProps {
   sourceFilter?: TaskSource;
@@ -88,7 +142,11 @@ interface TemplateItem {
 export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) {
   const router = useRouter();
   const { departments } = useTaskDepartments();
-  const [tasks, setTasks]             = useState<UnifiedTask[]>(ALL_TASKS);
+  const { error: toastError } = useToast();
+  const [tasks, setTasks]             = useState<UnifiedTask[]>([]);
+  const [isLoading, setIsLoading]     = useState(true);
+  const [clientNameMap, setClientNameMap] = useState<Map<string, string>>(new Map());
+  const [assigneeNameMap, setAssigneeNameMap] = useState<Map<string, string>>(new Map());
   const [viewMode, setViewMode]       = useState<ViewMode>('kanban');
   const [search, setSearch]           = useState('');
   const [filterStatus, setFilterStatus]     = useState<string>('all');
@@ -111,7 +169,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   // â”€â”€â”€ Form state â”€â”€â”€
   const [newTitle, setNewTitle]           = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newClientId, setNewClientId]     = useState(INITIAL_CLIENTS[0]?.id ?? '');
+  const [newClientId, setNewClientId]     = useState('');
   const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>(ALL_TEAM_MEMBERS[0] ? [ALL_TEAM_MEMBERS[0].id] : []);
   const [newPriority, setNewPriority]     = useState<AOTaskPriority>('Medium');
   const [newDueDate, setNewDueDate]       = useState('');
@@ -178,10 +236,43 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     return sorted.length > 0 ? sorted : DEFAULT_STATUSES;
   }, [newSource, departments, DEFAULT_STATUSES]);
 
+  // ── Fetch tasks from API ──────────────────────────────────────────
+  const fetchTasks = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      let url = '/api/tasks';
+      if (sourceFilter && departments.length > 0) {
+        const deptName = SOURCE_TO_DEPT_NAME[sourceFilter];
+        const dept = departments.find(d => d.name === deptName);
+        if (dept) url += `?departmentId=${dept.id}`;
+      }
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const json = await res.json() as { data: ApiTask[] };
+      const mapped = json.data.map(mapApiTask);
+      setTasks(mapped);
+      // Build lookup maps for client and assignee names
+      const cMap = new Map<string, string>();
+      const aMap = new Map<string, string>();
+      for (const t of json.data) {
+        if (t.client) cMap.set(String(t.client.id), t.client.businessName);
+        if (t.assignedTo) aMap.set(String(t.assignedTo.id), `${t.assignedTo.firstName} ${t.assignedTo.lastName}`);
+      }
+      setClientNameMap(cMap);
+      setAssigneeNameMap(aMap);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sourceFilter, departments]);
+
+  useEffect(() => {
+    void fetchTasks();
+  }, [fetchTasks]);
+
   const getClientName = (clientId: string) =>
-    INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName
+    clientNameMap.get(clientId)
     ?? localClients.find(c => c.id === clientId)?.name
-    ?? 'Unknown';
+    ?? (clientId ? `Client #${clientId}` : '—');
 
   const applyTemplate = (tpl: TemplateItem) => {
     setNewTitle(tpl.name);
@@ -214,12 +305,20 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       .then(d => { setTemplateList(Array.isArray(d.data) ? (d.data as TemplateItem[]) : []); setTemplatesLoading(false); })
       .catch(() => setTemplatesLoading(false));
   };
-  const getAssignee = (assigneeId: string) =>
-    ALL_TEAM_MEMBERS.find(m => m.id === assigneeId);
+  const getAssignee = (assigneeId: string) => {
+    const fromMock = ALL_TEAM_MEMBERS.find(m => m.id === assigneeId);
+    if (fromMock) return fromMock;
+    const name = assigneeNameMap.get(assigneeId);
+    if (name) {
+      const initials = name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+      return { id: assigneeId, name, email: '', avatar: initials, department: '' };
+    }
+    return undefined;
+  };
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
   const isOverdue = (t: UnifiedTask) =>
-    t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-23');
+    t.status !== 'Done' && new Date(t.dueDate) < new Date();
 
   const filteredTasks = useMemo(() => tasks.filter(t => {
     const matchSearch   = search === '' ||
@@ -238,8 +337,14 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     const mapped = departments
       .map(d => deptNameToSource(d.name))
       .filter((s): s is TaskSource => !!s);
-    const missing = DEPT_SOURCES_DEFAULT.filter(s => !mapped.includes(s));
-    return [...mapped, ...missing];
+    // Deduplicate — multiple DB depts can map to the same source key
+    const seen = new Set<TaskSource>();
+    const deduped: TaskSource[] = [];
+    for (const s of mapped) {
+      if (!seen.has(s)) { seen.add(s); deduped.push(s); }
+    }
+    const missing = DEPT_SOURCES_DEFAULT.filter(s => !seen.has(s));
+    return [...deduped, ...missing];
   }, [departments]);
 
   const tasksByDept = useMemo(() => {
@@ -250,32 +355,37 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
 
   // â”€â”€â”€ CRUD â”€â”€â”€
 
-  const handleCreateTask = () => {
+  const handleCreateTask = async () => {
     if (!newTitle.trim() || !newDueDate) return;
     if (isNewClient && !newClientNameInput.trim()) return;
-    let resolvedClientId = newClientId;
-    if (isNewClient && newClientNameInput.trim()) {
-      resolvedClientId = `local-${crypto.randomUUID()}`;
-      setLocalClients(prev => [...prev, { id: resolvedClientId, name: newClientNameInput.trim() }]);
-    }
-    const task: UnifiedTask = {
-      id: `task-${crypto.randomUUID()}`,
-      title: newTitle.trim(), description: newDescription.trim(),
-      status: newStatus as UnifiedTask['status'], priority: newPriority,
-      clientId: resolvedClientId, assigneeId: newAssigneeIds[0] ?? '',
-      dueDate: newDueDate,
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      comments: [],
-      tags: newTags.split(',').map(t => t.trim()).filter(Boolean),
-      source: newSource,
+
+    const deptName = SOURCE_TO_DEPT_NAME[newSource];
+    const dept = departments.find(d => d.name === deptName);
+    const statusEntry = selectedDeptStatuses.find(s => s.name === newStatus);
+
+    const body: Record<string, unknown> = {
+      name: newTitle.trim(),
+      description: newDescription.trim() || undefined,
+      priority: PRIORITY_TO_DB[newPriority],
+      dueDate: new Date(`${newDueDate}T00:00:00+08:00`).toISOString(),
+      ...(dept ? { currentDepartmentId: dept.id } : {}),
+      ...(statusEntry && statusEntry.id > 0 ? { currentStatusId: statusEntry.id } : {}),
     };
-    setTasks(prev => [task, ...prev]);
-    resetCreateForm();
-    setIsCreateModalOpen(false);
+
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      await fetchTasks();
+      resetCreateForm();
+      setIsCreateModalOpen(false);
+    }
   };
   const resetCreateForm = () => {
     setNewTitle(''); setNewDescription('');
-    setNewClientId(INITIAL_CLIENTS[0]?.id ?? '');
+    setNewClientId('');
     setNewAssigneeIds(ALL_TEAM_MEMBERS[0] ? [ALL_TEAM_MEMBERS[0].id] : []);
     setNewPriority('Medium'); setNewDueDate(''); setNewTags('');
     setNewSource(sourceFilter ?? 'client-relations');
@@ -290,11 +400,36 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   /** Change a task's source dept + status (cross-dept horizontal kanban / flat kanban) */
   const handleCardDrop = (targetSrc: TaskSource, targetStatus: string) => {
     if (!draggedTaskId) return;
+
+    // Check if target is an exit step and subtasks are incomplete
+    const targetStatusObj = dynamicStatuses.find(s => s.name === targetStatus);
+    if (targetStatusObj?.isExitStep) {
+      const task = tasks.find(t => t.id === draggedTaskId);
+      const subs = task?.subtasks ?? [];
+      if (subs.length > 0 && !subs.every(s => s.completed)) {
+        toastError('Cannot move to Done', 'All subtasks must be completed before marking this task as done.');
+        setDraggedTaskId(null);
+        return;
+      }
+    }
+    // Optimistic local update
     setTasks(prev => prev.map(t =>
       t.id === draggedTaskId
         ? { ...t, source: targetSrc, status: targetStatus as UnifiedTask['status'], updatedAt: new Date().toISOString() }
         : t
     ));
+    // Persist status change to API
+    const numericId = Number(draggedTaskId);
+    if (!isNaN(numericId)) {
+      const statusId = dynamicStatuses.find(s => s.name === targetStatus)?.id;
+      if (statusId && statusId > 0) {
+        void fetch(`/api/tasks/${numericId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentStatusId: statusId }),
+        });
+      }
+    }
     setDraggedTaskId(null);
   };
 
@@ -387,9 +522,12 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   };
 
   /* â”€â”€â”€ Flat 4-column kanban (single dept page or OM tab) â”€â”€â”€ */
-  const renderFlatKanban = (srcTasks: UnifiedTask[], src: TaskSource) => (
+  const renderFlatKanban = (srcTasks: UnifiedTask[], src: TaskSource) => {
+    const extraStatuses = [...new Set(srcTasks.map(t => t.status).filter(s => !STATUS_ORDER.includes(s)))];
+    const allStatuses = [...STATUS_ORDER, ...extraStatuses];
+    return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {STATUS_ORDER.map(status => {
+      {allStatuses.map(status => {
         const columnTasks = srcTasks.filter(t => t.status === status);
         return (
           <div
@@ -425,7 +563,8 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
         );
       })}
     </div>
-  );
+    );
+  };
 
   /* â”€â”€â”€ Grouped list section renderer â”€â”€â”€ */
   const renderListSection = (src: TaskSource) => {
@@ -433,6 +572,8 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     const deptTasks = tasksByDept[src] ?? [];
     const isCollapsed = !!collapsedDepts[src];
     const activeDeptTasks = deptTasks.filter(t => t.status !== 'Done').length;
+    const extraStatusesInDept = [...new Set(deptTasks.map(t => t.status).filter(s => !STATUS_ORDER.includes(s)))];
+    const allStatusesForDept = [...STATUS_ORDER, ...extraStatusesInDept];
     return (
       <Card key={src} className="border-none shadow-sm overflow-hidden">
         {/* Dept header */}
@@ -455,7 +596,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
             {deptTasks.length === 0 ? (
               <div className="py-10 text-center text-sm text-slate-400 font-medium">No tasks match your filters.</div>
             ) : (
-              STATUS_ORDER.map(status => {
+              allStatusesForDept.map(status => {
                 const statusTasks = deptTasks.filter(t => t.status === status);
                 if (statusTasks.length === 0) return null;
                 return (
@@ -492,6 +633,14 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       </Card>
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 size={32} className="animate-spin text-[#0f766e]" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -680,7 +829,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                   className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#0f766e] hover:border-slate-300 transition-colors"
                 >
                   <span className="truncate text-slate-700">
-                    {INITIAL_CLIENTS.find(c => c.id === newClientId)?.businessName ?? 'Select a client…'}
+                    {localClients.find(c => c.id === newClientId)?.name ?? 'Select a client…'}
                   </span>
                   <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform ${clientDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -701,7 +850,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                         </div>
                       </div>
                       <div className="max-h-44 overflow-y-auto">
-                        {INITIAL_CLIENTS.filter(c => c.businessName.toLowerCase().includes(clientSearch.toLowerCase())).map(c => (
+                        {localClients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).map(c => (
                           <button
                             key={c.id}
                             type="button"
@@ -710,11 +859,11 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                               newClientId === c.id ? 'bg-teal-50 text-teal-700 font-semibold' : 'text-slate-700'
                             }`}
                           >
-                            {c.businessName}
+                            {c.name}
                           </button>
                         ))}
-                        {INITIAL_CLIENTS.filter(c => c.businessName.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
-                          <p className="text-xs text-slate-400 text-center py-4">No clients found</p>
+                        {localClients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-4">No clients found. Use &quot;New Client&quot; to add one.</p>
                         )}
                       </div>
                       <div className="border-t border-slate-100 p-2">
@@ -848,7 +997,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
               <option value="client-relations">Client Relations</option>
               <option value="compliance">Compliance</option>
               <option value="liaison">Liaison</option>
-              <option value="om">Operations Manager</option>
+              <option value="om">Operations</option>
               <option value="admin">Admin</option>
               <option value="accounting">Accounting</option>
               <option value="hr">Human Resources</option>

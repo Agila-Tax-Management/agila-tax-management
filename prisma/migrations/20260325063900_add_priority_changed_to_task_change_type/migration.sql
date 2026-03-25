@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "TaskChangeType" ADD VALUE 'PRIORITY_CHANGED';
