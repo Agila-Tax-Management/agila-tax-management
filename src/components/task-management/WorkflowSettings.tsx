@@ -1098,16 +1098,14 @@ export function WorkflowSettings(): React.ReactNode {
   // ── Drag-to-reorder ──────────────────────────────────────────────
   const handleDrop = (targetId: number) => {
     if (!draggingId || draggingId === targetId) return;
-    setAllDepartments(prev => {
-      const next = [...prev];
-      const fromIdx = next.findIndex(d => d.id === draggingId);
-      const toIdx = next.findIndex(d => d.id === targetId);
-      if (fromIdx === -1 || toIdx === -1) return prev;
-      const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
-      reorderDepts(next.map(d => d.id));
-      return next;
-    });
+    const next = [...allDepartments];
+    const fromIdx = next.findIndex(d => d.id === draggingId);
+    const toIdx = next.findIndex(d => d.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setAllDepartments(next);
+    reorderDepts(next.map(d => d.id));
   };
 
   // ── Dept CRUD ────────────────────────────────────────────────────

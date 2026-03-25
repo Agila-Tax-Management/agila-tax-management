@@ -7,11 +7,12 @@ import { Button } from '@/components/UI/button';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Calendar, Tag, Send, Clock,
-  ChevronDown, Check, Plus, ChevronRight,
+  ChevronDown, Check, Plus, ChevronRight, History, MessageSquare,
 } from 'lucide-react';
-import { SubtaskDetailModal } from './SubtaskDetailModal';
+import { SubtaskDetailModal, type ActivityEntry } from './SubtaskDetailModal';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
-import type { AOTask, AOTaskStatus, AOTaskPriority, AOTaskComment, AOTaskSubtask, AOTeamMember } from '@/lib/types';
+import { useToast } from '@/context/ToastContext';
+import type { AOTask, AOTaskStatus, AOTaskPriority, AOTaskSubtask, AOTeamMember } from '@/lib/types';
 
 export interface SourceInfo {
   label: string;
@@ -20,24 +21,51 @@ export interface SourceInfo {
   color: string;
 }
 
+export interface DeptStatus {
+  id: number;
+  name: string;
+  color: string | null;
+  isEntryStep: boolean;
+  isExitStep: boolean;
+}
+
+export interface ConversationEntry {
+  id: number;
+  message: string;
+  createdAt: string;
+  author: { id: string; name: string; image: string | null };
+}
+
+export interface TaskHistoryEntry {
+  id: string;
+  changeType: string;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+  actor: { id: string; name: string };
+}
+
 export interface SharedTaskDetailPageProps {
   task: AOTask;
+  taskId?: number;
   teamMembers: AOTeamMember[];
   currentUser: { id: string; name: string };
   accentColor: string;
   sourceInfo?: SourceInfo;
+  deptStatuses?: DeptStatus[];
+  initialConversations?: ConversationEntry[];
+  initialHistoryLogs?: TaskHistoryEntry[];
   onUpdate?: (updated: AOTask) => void;
 }
 
-const STATUS_OPTIONS: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
-const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
-
-const STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warning' | 'success'; color: string }> = {
-  'To Do':       { variant: 'neutral', color: 'bg-slate-500'   },
-  'In Progress': { variant: 'info',    color: 'bg-blue-500'    },
-  'Review':      { variant: 'warning', color: 'bg-amber-500'   },
-  'Done':        { variant: 'success', color: 'bg-emerald-500' },
+const DEFAULT_STATUS_COLORS: Record<string, string> = {
+  'to do':       '#64748b',
+  'in progress': '#3b82f6',
+  'review':      '#f59e0b',
+  'done':        '#10b981',
 };
+
+const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
   Low:    { variant: 'neutral' },
@@ -46,17 +74,46 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
   Urgent: { variant: 'danger'  },
 };
 
+const PRIORITY_TO_DB: Record<AOTaskPriority, string> = {
+  Low: 'LOW', Medium: 'NORMAL', High: 'HIGH', Urgent: 'URGENT',
+};
+
+function getStatusColor(statusName: string, deptStatuses?: DeptStatus[]): string {
+  const dbStatus = deptStatuses?.find(s => s.name === statusName);
+  if (dbStatus?.color) return dbStatus.color;
+  return DEFAULT_STATUS_COLORS[statusName.toLowerCase()] ?? '#64748b';
+}
+
+function formatHistoryChange(entry: TaskHistoryEntry): string {
+  switch (entry.changeType) {
+    case 'STATUS_CHANGED':   return `Changed status: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
+    case 'PRIORITY_CHANGED': return `Changed priority: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
+    case 'ASSIGNEE_CHANGED': return `Changed assignee: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
+    case 'DUE_DATE_CHANGED': return `Updated due date to ${entry.newValue ?? '—'}`;
+    case 'CREATED':          return 'Task created';
+    default:                 return entry.changeType.replace(/_/g, ' ').toLowerCase();
+  }
+}
+
 export function SharedTaskDetailPage({
   task: initialTask,
+  taskId,
   teamMembers,
   currentUser,
   accentColor,
   sourceInfo,
+  deptStatuses,
+  initialConversations = [],
+  initialHistoryLogs = [],
   onUpdate,
 }: SharedTaskDetailPageProps): React.ReactNode {
   const router = useRouter();
+  const { error: toastError } = useToast();
   const [editingTask, setEditingTask] = useState<AOTask>(initialTask);
+  const [conversations, setConversations] = useState<ConversationEntry[]>(initialConversations);
+  const [historyLogs, setHistoryLogs] = useState<TaskHistoryEntry[]>(initialHistoryLogs);
   const [newComment, setNewComment] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
@@ -64,6 +121,29 @@ export function SharedTaskDetailPage({
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
   const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [isDueDateEditing, setIsDueDateEditing] = useState(false);
+  // Activity logs keyed by subtask ID — persists across modal open/close and parent re-renders
+  const [subtaskActivityLogs, setSubtaskActivityLogs] = useState<Record<string, ActivityEntry[]>>({});
+
+  const handleAddSubtaskActivity = (kind: ActivityEntry['kind'], message: string) => {
+    if (!selectedSubtaskId) return;
+    const entry: ActivityEntry = {
+      id: `al-${Date.now()}-${Math.random()}`,
+      kind,
+      message,
+      actorName: currentUser.name,
+      createdAt: new Date().toISOString(),
+    };
+    setSubtaskActivityLogs(prev => ({
+      ...prev,
+      [selectedSubtaskId]: [...(prev[selectedSubtaskId] ?? []), entry],
+    }));
+  };
+
+  const statusOptions: string[] = (deptStatuses && deptStatuses.length > 0)
+    ? deptStatuses.map(s => s.name)
+    : ['To Do', 'In Progress', 'Review', 'Done'];
 
   const clientName = INITIAL_CLIENTS.find(c => c.id === editingTask.clientId)?.businessName ?? 'Unknown';
   const assignee   = teamMembers.find(m => m.id === editingTask.assigneeId);
@@ -76,41 +156,123 @@ export function SharedTaskDetailPage({
 
   const update = (next: AOTask) => { setEditingTask(next); onUpdate?.(next); };
 
-  const handleStatusChange = (status: AOTaskStatus) => {
-    update({ ...editingTask, status, updatedAt: new Date().toISOString() });
-    setShowStatusDropdown(false);
-  };
-  const handlePriorityChange = (priority: AOTaskPriority) => {
-    update({ ...editingTask, priority, updatedAt: new Date().toISOString() });
-    setShowPriorityDropdown(false);
-  };
-  const handleAssigneeChange = (assigneeId: string) => {
-    update({ ...editingTask, assigneeId, updatedAt: new Date().toISOString() });
-    setShowAssigneeDropdown(false);
+  /** PATCH /api/tasks/:id and refresh history logs from the response. */
+  const patchTask = async (body: Record<string, unknown>): Promise<boolean> => {
+    if (!taskId) return true;
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return false;
+    const json = await res.json() as { data?: { historyLogs?: TaskHistoryEntry[] } };
+    if (json.data?.historyLogs) {
+      setHistoryLogs(json.data.historyLogs);
+    }
+    return true;
   };
 
-  const handleAddComment = () => {
+  const handleStatusChange = async (statusName: string) => {
+    setShowStatusDropdown(false);
+    const dbStatus = deptStatuses?.find(s => s.name === statusName);
+    if (taskId && dbStatus) {
+      setIsSaving(true);
+      const ok = await patchTask({ currentStatusId: dbStatus.id });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update status', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, status: statusName as AOTaskStatus, updatedAt: new Date().toISOString() });
+  };
+
+  const handlePriorityChange = async (priority: AOTaskPriority) => {
+    setShowPriorityDropdown(false);
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchTask({ priority: PRIORITY_TO_DB[priority] });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update priority', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, priority, updatedAt: new Date().toISOString() });
+  };
+
+  const handleAssigneeChange = async (assigneeId: string) => {
+    setShowAssigneeDropdown(false);
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchTask({ assignedToId: Number(assigneeId) });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update assignee', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, assigneeId, updatedAt: new Date().toISOString() });
+  };
+
+  const handleDueDateChange = async (dateValue: string) => {
+    setIsDueDateEditing(false);
+    if (!dateValue) return;
+    const iso = new Date(dateValue + 'T00:00:00').toISOString();
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchTask({ dueDate: iso });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update due date', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, dueDate: iso, updatedAt: new Date().toISOString() });
+  };
+
+  const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    const comment: AOTaskComment = {
-      id: `c-${Date.now()}`,
-      authorId: currentUser.id,
-      authorName: currentUser.name,
-      content: newComment.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    update({
-      ...editingTask,
-      comments: [...editingTask.comments, comment],
-      updatedAt: new Date().toISOString(),
-    });
+    if (taskId) {
+      setIsSaving(true);
+      const res = await fetch(`/api/tasks/${taskId}/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: newComment.trim() }),
+      });
+      setIsSaving(false);
+      if (!res.ok) { toastError('Failed to post comment', 'Please try again.'); return; }
+      const json = await res.json() as { data?: { id: number; message: string; createdAt: string; author: { id: string; name: string; image: string | null } } };
+      if (json.data) {
+        setConversations(prev => [...prev, {
+          id: json.data!.id,
+          message: json.data!.message,
+          createdAt: json.data!.createdAt,
+          author: json.data!.author,
+        }]);
+      }
+    } else {
+      setConversations(prev => [...prev, {
+        id: Date.now(),
+        message: newComment.trim(),
+        createdAt: new Date().toISOString(),
+        author: { id: currentUser.id, name: currentUser.name, image: null },
+      }]);
+    }
     setNewComment('');
   };
 
-  const handleToggleSubtask = (subtaskId: string) => {
+  const handleToggleSubtask = async (subtaskId: string) => {
+    const sub = (editingTask.subtasks ?? []).find(s => s.id === subtaskId);
+    if (!sub) return;
+    const newCompleted = !sub.completed;
+    if (taskId) {
+      const exitStatus  = deptStatuses?.find(s => s.isExitStep);
+      const entryStatus = deptStatuses?.find(s => s.isEntryStep);
+      const newStatusId = newCompleted ? exitStatus?.id : entryStatus?.id;
+      if (newStatusId !== undefined) {
+        setIsSaving(true);
+        const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ statusId: newStatusId }),
+        });
+        setIsSaving(false);
+        if (!res.ok) { toastError('Failed to update subtask', 'Please try again.'); return; }
+      }
+    }
     update({
       ...editingTask,
       subtasks: (editingTask.subtasks ?? []).map(s =>
-        s.id === subtaskId ? { ...s, completed: !s.completed } : s
+        s.id === subtaskId ? { ...s, completed: newCompleted } : s
       ),
       updatedAt: new Date().toISOString(),
     });
@@ -124,7 +286,13 @@ export function SharedTaskDetailPage({
     });
   };
 
-  const handleDeleteSubtask = (subtaskId: string) => {
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    if (taskId) {
+      setIsSaving(true);
+      const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, { method: 'DELETE' });
+      setIsSaving(false);
+      if (!res.ok) { toastError('Failed to delete subtask', 'Please try again.'); return; }
+    }
     update({
       ...editingTask,
       subtasks: (editingTask.subtasks ?? []).filter(s => s.id !== subtaskId),
@@ -133,8 +301,38 @@ export function SharedTaskDetailPage({
     setIsSubtaskModalOpen(false);
   };
 
-  const handleAddSubtask = () => {
+  const handleAddSubtask = async () => {
     if (!newSubtaskTitle.trim()) return;
+    if (taskId) {
+      const entryStatus = deptStatuses?.find(s => s.isEntryStep);
+      setIsAddingSubtask(true);
+      const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newSubtaskTitle.trim(),
+          ...(entryStatus ? { statusId: entryStatus.id } : {}),
+        }),
+      });
+      setIsAddingSubtask(false);
+      if (!res.ok) { toastError('Failed to add subtask', 'Please try again.'); return; }
+      const json = await res.json() as { data?: { id: number; name: string; createdAt: string } };
+      if (json.data) {
+        update({
+          ...editingTask,
+          subtasks: [...(editingTask.subtasks ?? []), {
+            id: String(json.data.id),
+            title: json.data.name,
+            completed: false,
+            createdAt: json.data.createdAt,
+          }],
+          updatedAt: new Date().toISOString(),
+        });
+        setNewSubtaskTitle('');
+        return;
+      }
+    }
+    // Local-only fallback (no taskId)
     const subtask: AOTaskSubtask = {
       id: `st-${crypto.randomUUID()}`,
       title: newSubtaskTitle.trim(),
@@ -150,14 +348,39 @@ export function SharedTaskDetailPage({
     setNewSubtaskTitle('');
   };
 
+  const handleDeleteTask = async () => {
+    if (taskId) {
+      setIsSaving(true);
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      setIsSaving(false);
+      if (!res.ok) { toastError('Failed to delete task', 'Please try again.'); setConfirmDelete(false); return; }
+    }
+    router.push('/portal/task-management');
+  };
+
+  // Build unified activity feed sorted chronologically
+  type ActivityItem =
+    | { kind: 'conversation'; id: number;  createdAt: string; message: string; author: { id: string; name: string; image: string | null } }
+    | { kind: 'history';      id: string;  createdAt: string; changeType: string; oldValue: string | null; newValue: string | null; actor: { id: string; name: string } };
+
+  const activityFeed: ActivityItem[] = [
+    ...conversations.map(c => ({ kind: 'conversation' as const, id: c.id, createdAt: c.createdAt, message: c.message, author: c.author })),
+    ...historyLogs
+      .filter(h => h.changeType !== 'COMMENT_ADDED')
+      .map(h => ({ kind: 'history' as const, id: h.id, createdAt: h.createdAt, changeType: h.changeType, oldValue: h.oldValue, newValue: h.newValue, actor: h.actor })),
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
   const selectedSubtask = (editingTask.subtasks ?? []).find(s => s.id === selectedSubtaskId);
+  const dueDateInputValue = editingTask.dueDate
+    ? new Date(editingTask.dueDate).toISOString().slice(0, 10)
+    : '';
 
   return (
     <>
-      <div className="animate-in fade-in duration-500 pb-20">
+      <div className="animate-in fade-in duration-500 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" style={{ height: 'calc(100vh - 6rem)' }}>
 
-        {/* Back nav + title */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-6 py-4 mb-6">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 shrink-0">
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition mb-3"
@@ -165,21 +388,27 @@ export function SharedTaskDetailPage({
             <ArrowLeft size={15} /> Back to Tasks
           </button>
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-3 h-3 rounded-full shrink-0 ${STATUS_CONFIG[editingTask.status].color}`} />
+            <div
+              className="w-3 h-3 rounded-full shrink-0"
+              style={{ backgroundColor: getStatusColor(editingTask.status, deptStatuses) }}
+            />
             <h1 className="text-xl font-black text-slate-900 truncate">{editingTask.title}</h1>
             {sourceInfo && (
               <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${sourceInfo.bg} ${sourceInfo.textColor}`}>
                 {sourceInfo.label}
               </span>
             )}
+            {isSaving && (
+              <span className="text-[10px] text-slate-400 font-medium animate-pulse ml-2">Saving…</span>
+            )}
           </div>
         </div>
 
         {/* Two-column body */}
-        <div className="flex gap-6 items-start">
+        <div className="flex flex-1 overflow-hidden min-h-0">
 
           {/* Left: Details */}
-          <div className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-6">
+          <div className="w-3/5 p-6 overflow-y-auto border-r border-slate-100 space-y-6">
 
             {/* Client */}
             <div>
@@ -195,7 +424,7 @@ export function SharedTaskDetailPage({
               </p>
             </div>
 
-            {/* Department badge — only when sourceInfo is provided */}
+            {/* Department badge */}
             {sourceInfo && (
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Department</p>
@@ -213,20 +442,26 @@ export function SharedTaskDetailPage({
                 onClick={() => { setShowStatusDropdown(v => !v); setShowPriorityDropdown(false); setShowAssigneeDropdown(false); }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
               >
-                <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[editingTask.status].color}`} />
+                <div
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: getStatusColor(editingTask.status, deptStatuses) }}
+                />
                 <span className="text-sm font-bold text-slate-700">{editingTask.status}</span>
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
               {showStatusDropdown && (
                 <div className="absolute z-20 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-44">
-                  {STATUS_OPTIONS.map(s => (
+                  {statusOptions.map(s => (
                     <button
                       key={s}
-                      onClick={() => handleStatusChange(s)}
+                      onClick={() => void handleStatusChange(s)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${s === editingTask.status ? 'font-bold' : 'text-slate-700'}`}
                       style={s === editingTask.status ? { color: accentColor } : undefined}
                     >
-                      <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[s].color}`} />
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: getStatusColor(s, deptStatuses) }}
+                      />
                       {s}
                     </button>
                   ))}
@@ -249,7 +484,7 @@ export function SharedTaskDetailPage({
                   {PRIORITY_OPTIONS.map(p => (
                     <button
                       key={p}
-                      onClick={() => handlePriorityChange(p)}
+                      onClick={() => void handlePriorityChange(p)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${p === editingTask.priority ? 'font-bold' : ''}`}
                     >
                       <Badge variant={PRIORITY_CONFIG[p].variant} className="text-[10px]">{p}</Badge>
@@ -280,7 +515,7 @@ export function SharedTaskDetailPage({
                   {teamMembers.map(m => (
                     <button
                       key={m.id}
-                      onClick={() => handleAssigneeChange(m.id)}
+                      onClick={() => void handleAssigneeChange(m.id)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${m.id === editingTask.assigneeId ? 'font-bold' : 'text-slate-700'}`}
                       style={m.id === editingTask.assigneeId ? { color: accentColor } : undefined}
                     >
@@ -300,13 +535,30 @@ export function SharedTaskDetailPage({
             {/* Due Date */}
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Due Date</p>
-              <div className="flex items-center gap-2">
-                <Calendar size={14} className={isOverdue ? 'text-rose-500' : 'text-slate-400'} />
-                <span className={`text-sm font-bold ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
-                  {formatDate(editingTask.dueDate)}
-                  {isOverdue && ' (Overdue)'}
-                </span>
-              </div>
+              {isDueDateEditing ? (
+                <input
+                  type="date"
+                  defaultValue={dueDateInputValue}
+                  autoFocus
+                  onBlur={e => void handleDueDateChange(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void handleDueDateChange((e.target as HTMLInputElement).value);
+                    if (e.key === 'Escape') setIsDueDateEditing(false);
+                  }}
+                  className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
+                />
+              ) : (
+                <button
+                  onClick={() => setIsDueDateEditing(true)}
+                  className="flex items-center gap-2 hover:opacity-70 transition"
+                >
+                  <Calendar size={14} className={isOverdue ? 'text-rose-500' : 'text-slate-400'} />
+                  <span className={`text-sm font-bold ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
+                    {formatDate(editingTask.dueDate)}
+                    {isOverdue && ' (Overdue)'}
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* Tags */}
@@ -325,14 +577,16 @@ export function SharedTaskDetailPage({
 
             {/* Subtasks */}
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                Subtasks
-                {editingTask.subtasks && editingTask.subtasks.length > 0 && (
-                  <span className="ml-2 font-semibold text-slate-500 normal-case text-[10px]">
-                    {editingTask.subtasks.filter(s => s.completed).length}/{editingTask.subtasks.length}
-                  </span>
-                )}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Subtasks
+                  {editingTask.subtasks && editingTask.subtasks.length > 0 && (
+                    <span className="ml-2 font-semibold text-slate-500 normal-case text-[10px]">
+                      {editingTask.subtasks.filter(s => s.completed).length}/{editingTask.subtasks.length} done
+                    </span>
+                  )}
+                </p>
+              </div>
               {editingTask.subtasks && editingTask.subtasks.length > 0 && (
                 <div className="mb-3">
                   <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -343,55 +597,123 @@ export function SharedTaskDetailPage({
                   </div>
                 </div>
               )}
-              <div className="space-y-1.5">
-                {(editingTask.subtasks ?? []).map(subtask => {
-                  const subtaskAssignee = teamMembers.find(m => m.id === subtask.assigneeId);
-                  return (
-                    <button
-                      key={subtask.id}
-                      onClick={() => { setSelectedSubtaskId(subtask.id); setIsSubtaskModalOpen(true); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition text-left group"
-                    >
-                      <div
-                        role="checkbox"
-                        aria-checked={subtask.completed}
-                        onClick={e => { e.stopPropagation(); handleToggleSubtask(subtask.id); }}
-                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition cursor-pointer ${
-                          subtask.completed
-                            ? 'bg-emerald-500 border-emerald-500'
-                            : 'border-slate-300 hover:border-emerald-400'
-                        }`}
-                      >
-                        {subtask.completed && <Check size={10} className="text-white" />}
-                      </div>
-                      <span className={`flex-1 text-xs font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                        {subtask.title}
-                      </span>
-                      {subtaskAssignee && (
-                        <div
-                          className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: accentColor }}
-                        >
-                          <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
-                        </div>
-                      )}
-                      <ChevronRight size={12} className="text-slate-300 group-hover:text-slate-500 shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mt-2 flex gap-2">
+
+              {/* Table */}
+              {(editingTask.subtasks ?? []).length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden mb-3">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-6" />
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtask</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Due Date</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Assignee</th>
+                        <th className="w-6" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(editingTask.subtasks ?? []).map(subtask => {
+                        const subtaskAssignee = teamMembers.find(m => m.id === subtask.assigneeId);
+                        const isOverdueSubtask = !subtask.completed && !!subtask.dueDate && new Date(subtask.dueDate) < new Date();
+                        return (
+                          <tr
+                            key={subtask.id}
+                            className="hover:bg-slate-50 transition cursor-pointer group"
+                            onClick={() => {
+                              setSelectedSubtaskId(subtask.id);
+                              setIsSubtaskModalOpen(true);
+                              if (taskId) {
+                                void fetch(`/api/tasks/${taskId}/subtasks/${subtask.id}/history`)
+                                  .then(r => r.ok ? r.json() : null)
+                                  .then((json: { data: Array<{ id: string; kind: string; message: string; createdAt: string; actor: { id: string; name: string } }> } | null) => {
+                                    if (json?.data) {
+                                      setSubtaskActivityLogs(prev => ({
+                                        ...prev,
+                                        [subtask.id]: json.data.map(e => ({
+                                          id: e.id,
+                                          kind: e.kind as ActivityEntry['kind'],
+                                          message: e.message,
+                                          actorName: e.actor.name,
+                                          createdAt: e.createdAt,
+                                        })),
+                                      }));
+                                    }
+                                  });
+                              }
+                            }}
+                          >
+                            {/* Checkbox */}
+                            <td className="px-3 py-2.5">
+                              <div
+                                role="checkbox"
+                                aria-checked={subtask.completed}
+                                onClick={e => { e.stopPropagation(); void handleToggleSubtask(subtask.id); }}
+                                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition cursor-pointer ${
+                                  subtask.completed
+                                    ? 'bg-emerald-500 border-emerald-500'
+                                    : 'border-slate-300 hover:border-emerald-400'
+                                }`}
+                              >
+                                {subtask.completed && <Check size={10} className="text-white" />}
+                              </div>
+                            </td>
+                            {/* Title */}
+                            <td className="px-3 py-2.5">
+                              <span className={`font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                {subtask.title}
+                              </span>
+                            </td>
+                            {/* Due Date */}
+                            <td className="px-3 py-2.5 hidden sm:table-cell">
+                              {subtask.dueDate ? (
+                                <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${isOverdueSubtask ? 'text-red-500' : 'text-slate-500'}`}>
+                                  <Calendar size={11} />
+                                  {new Date(subtask.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-[11px]">—</span>
+                              )}
+                            </td>
+                            {/* Assignee */}
+                            <td className="px-3 py-2.5 hidden sm:table-cell">
+                              {subtaskAssignee ? (
+                                <div className="flex items-center gap-1.5">
+                                  <div
+                                    className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                                    style={{ backgroundColor: accentColor }}
+                                  >
+                                    <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
+                                  </div>
+                                  <span className="text-[11px] font-medium text-slate-600 truncate max-w-25">{subtaskAssignee.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 text-[11px]">Unassigned</span>
+                              )}
+                            </td>
+                            {/* Chevron */}
+                            <td className="px-3 py-2.5">
+                              <ChevronRight size={12} className="text-slate-300 group-hover:text-slate-500 transition" />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={newSubtaskTitle}
                   onChange={e => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddSubtask()}
+                  onKeyDown={e => e.key === 'Enter' && void handleAddSubtask()}
                   placeholder="Add a subtask…"
                   className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
                 />
                 <button
-                  onClick={handleAddSubtask}
-                  disabled={!newSubtaskTitle.trim()}
+                  onClick={() => void handleAddSubtask()}
+                  disabled={!newSubtaskTitle.trim() || isAddingSubtask}
                   className="p-2 text-white rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                   style={{ backgroundColor: accentColor }}
                 >
@@ -425,7 +747,7 @@ export function SharedTaskDetailPage({
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-rose-600 font-bold">Are you sure?</span>
-                  <Button variant="ghost" className="text-xs text-rose-600 hover:bg-rose-50 font-bold" onClick={() => router.back()}>
+                  <Button variant="ghost" className="text-xs text-rose-600 hover:bg-rose-50 font-bold" onClick={() => void handleDeleteTask()}>
                     Yes, Delete
                   </Button>
                   <Button variant="ghost" className="text-xs" onClick={() => setConfirmDelete(false)}>
@@ -437,58 +759,92 @@ export function SharedTaskDetailPage({
           </div>
 
           {/* Right: Comments */}
-          <div
-            className="w-80 shrink-0 bg-white rounded-xl border border-slate-100 shadow-sm flex flex-col sticky top-4"
-            style={{ maxHeight: 'calc(100vh - 6rem)' }}
-          >
+          <div className="w-2/5 shrink-0 flex flex-col bg-slate-50">
+            {/* Header with tab counts */}
             <div className="px-5 py-4 border-b border-slate-100 shrink-0">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Comments
-                {editingTask.comments.length > 0 && (
-                  <span className="ml-2 font-semibold text-slate-500 normal-case">({editingTask.comments.length})</span>
-                )}
-              </p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={13} className="text-slate-400" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comments</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {conversations.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                      <MessageSquare size={9} /> {conversations.length}
+                    </span>
+                  )}
+                  {historyLogs.filter(h => h.changeType !== 'COMMENT_ADDED').length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-[10px] font-bold text-amber-600">
+                      <History size={9} /> {historyLogs.filter(h => h.changeType !== 'COMMENT_ADDED').length}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {editingTask.comments.length === 0 && (
-                <p className="text-xs text-slate-400 italic text-center py-6">No comments yet.</p>
-              )}
-              {editingTask.comments.map(c => (
-                <div key={c.id} className="flex gap-2.5">
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ backgroundColor: accentColor }}
-                  >
-                    <span className="text-[8px] font-bold text-white">
-                      {c.authorName.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 mb-0.5">
-                      <span className="text-xs font-bold text-slate-800">{c.authorName}</span>
-                      <span className="text-[10px] text-slate-400">{formatDateTime(c.createdAt)}</span>
-                    </div>
-                    <p className="text-xs text-slate-600 leading-relaxed">{c.content}</p>
-                  </div>
+              {activityFeed.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-10 gap-2">
+                  <MessageSquare size={28} className="text-slate-200" />
+                  <p className="text-xs text-slate-400">No comments yet. Be the first!</p>
                 </div>
-              ))}
+              )}
+              {activityFeed.map(item => {
+                if (item.kind === 'conversation') {
+                  const initials = item.author.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                  return (
+                    <div key={`c-${item.id}`} className="flex gap-2.5">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        {initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <span className="text-xs font-bold text-slate-800">{item.author.name}</span>
+                          <span className="text-[10px] text-slate-400">{formatDateTime(item.createdAt)}</span>
+                        </div>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl rounded-tl-sm px-3 py-2">
+                          <p className="text-xs text-slate-700 leading-relaxed">{item.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                // History entry — compact changelog style
+                const initials = item.actor.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                return (
+                  <div key={`h-${item.id}`} className="flex gap-2.5 items-start">
+                    <div className="w-7 h-7 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <History size={12} className="text-amber-500" />
+                    </div>
+                    <div className="flex-1 min-w-0 pt-1">
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        <span className="font-bold text-slate-700">{item.actor.name}</span>
+                        {' '}{formatHistoryChange(item)}
+                      </p>
+                      <span className="text-[10px] text-slate-400">{formatDateTime(item.createdAt)}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="p-4 border-t border-slate-100 shrink-0">
-              <div className="flex gap-2">
-                <input
-                  type="text"
+              <div className="flex gap-2 items-end">
+                <textarea
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                  placeholder="Add a comment…"
-                  className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), void handleAddComment())}
+                  placeholder="Write a comment… (Enter to send)"
+                  rows={2}
+                  className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white resize-none leading-relaxed"
                 />
                 <button
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim()}
-                  className="p-2 text-white rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => void handleAddComment()}
+                  disabled={!newComment.trim() || isSaving}
+                  className="p-2.5 text-white rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0 mb-0.5"
                   style={{ backgroundColor: accentColor }}
                 >
                   <Send size={13} />
@@ -507,11 +863,18 @@ export function SharedTaskDetailPage({
           teamMembers={teamMembers}
           accentColor={accentColor}
           isOpen={isSubtaskModalOpen}
-          onClose={() => { setIsSubtaskModalOpen(false); setSelectedSubtaskId(null); }}
+          onClose={() => { setIsSubtaskModalOpen(false); }}
           onUpdate={handleUpdateSubtask}
           onDelete={handleDeleteSubtask}
+          taskId={taskId}
+          deptStatuses={deptStatuses}
+          currentUser={currentUser}
+          activityLog={subtaskActivityLogs[selectedSubtaskId ?? ''] ?? []}
+          onAddActivity={handleAddSubtaskActivity}
         />
       )}
     </>
   );
 }
+
+

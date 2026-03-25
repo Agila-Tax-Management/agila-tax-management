@@ -6,15 +6,18 @@ import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 
 // ── Default task management departments & statuses ──────────────────────────
-// Matches the 4 operational departments used by the task board
-// (Operations Manager, Client Relations, Liaison, Compliance).
-// These are auto-created on first access so no manual seeding is needed.
+// Covers all 8 operational departments. Auto-created on first access if
+// they don't exist; default statuses are added to any dept with none.
 
 const DEFAULT_TASK_DEPARTMENTS = [
-  { name: "Operations Manager", description: "Cross-department oversight and escalation management" },
-  { name: "Client Relations",   description: "Account officer client communication and task coordination" },
-  { name: "Liaison",            description: "Government agency field work and permit processing" },
-  { name: "Compliance",         description: "BIR, SEC, and government compliance filings" },
+  { name: "Operations",      description: "Cross-department oversight and escalation management" },
+  { name: "Client Relations", description: "Account officer client communication and task coordination" },
+  { name: "Liaison",          description: "Government agency field work and permit processing" },
+  { name: "Compliance",       description: "BIR, SEC, and government compliance filings" },
+  { name: "Administration",   description: "Executive administration and system management" },
+  { name: "Accounting",       description: "Bookkeeping, payroll, and financial reporting" },
+  { name: "Human Resources",  description: "HR operations and employee management" },
+  { name: "IT",               description: "Information technology infrastructure and technical support" },
 ];
 
 const DEFAULT_STATUSES = [
@@ -24,24 +27,57 @@ const DEFAULT_STATUSES = [
   { name: "Done",        color: "#16a34a", isEntryStep: false, isExitStep: true,  statusOrder: 4 },
 ];
 
+// Legacy dept names that should be replaced by their canonical counterparts
+const LEGACY_DEPT_RENAMES: Record<string, string> = {
+  'Operations Manager': 'Operations',
+};
+
 async function ensureDefaultDepartments(clientId: number) {
   const existing = await prisma.department.findMany({
     where: { clientId },
-    select: { name: true },
+    include: { statuses: { select: { id: true } } },
   });
-  const existingNames = new Set(existing.map(d => d.name));
+  const existingByName = new Map(existing.map(d => [d.name, d]));
+
+  // ── Cleanup legacy department names ──────────────────────────────────────
+  for (const [oldName, newName] of Object.entries(LEGACY_DEPT_RENAMES)) {
+    const legacyDept = existingByName.get(oldName);
+    if (!legacyDept) continue;
+
+    const canonicalDept = existingByName.get(newName);
+    if (!canonicalDept) {
+      // Rename legacy → canonical (no conflict)
+      await prisma.department.update({
+        where: { id: legacyDept.id },
+        data: { name: newName },
+      });
+      existingByName.set(newName, { ...legacyDept, name: newName });
+    } else {
+      // Both exist — delete legacy (it has no seeded tasks; canonical is the correct one)
+      await prisma.departmentTaskStatus.deleteMany({ where: { departmentId: legacyDept.id } });
+      await prisma.department.delete({ where: { id: legacyDept.id } });
+    }
+    existingByName.delete(oldName);
+  }
 
   for (const td of DEFAULT_TASK_DEPARTMENTS) {
-    if (existingNames.has(td.name)) continue;
-
-    const dept = await prisma.department.create({
-      data: { clientId, name: td.name, description: td.description },
-    });
-
-    await prisma.departmentTaskStatus.createMany({
-      data: DEFAULT_STATUSES.map(st => ({ departmentId: dept.id, ...st })),
-      skipDuplicates: true,
-    });
+    const found = existingByName.get(td.name);
+    if (!found) {
+      // Create department + default statuses
+      const dept = await prisma.department.create({
+        data: { clientId, name: td.name, description: td.description },
+      });
+      await prisma.departmentTaskStatus.createMany({
+        data: DEFAULT_STATUSES.map(st => ({ departmentId: dept.id, ...st })),
+        skipDuplicates: true,
+      });
+    } else if (found.statuses.length === 0) {
+      // Dept exists but has no statuses — add defaults
+      await prisma.departmentTaskStatus.createMany({
+        data: DEFAULT_STATUSES.map(st => ({ departmentId: found.id, ...st })),
+        skipDuplicates: true,
+      });
+    }
   }
 }
 
