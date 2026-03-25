@@ -2,13 +2,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, User, Trash2, Save, ChevronDown } from 'lucide-react';
+import { Loader2, User, Trash2, Save, ChevronDown, UserPlus, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { BUSINESS_TYPES, LEAD_SOURCES } from '@/lib/constants';
 import { LeadHistoryTimeline, type LeadCommentEntry, type LeadHistoryEntry } from './LeadHistoryTimeline';
+import { ProvisionAccountModal } from './ProvisionAccountModal';
 
 interface LeadStatus {
   id: number;
@@ -98,6 +99,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const [loadingFull, setLoadingFull] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isProvisionOpen, setIsProvisionOpen] = useState(false);
   const [agents, setAgents] = useState<{ id: string; name: string | null; email: string; image: string | null }[]>([]);
   const [servicePlans, setServicePlans] = useState<{ id: number; name: string; serviceRate: string; recurring: string }[]>([]);
   const [serviceOneTime, setServiceOneTime] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
@@ -280,6 +282,21 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   };
 
   if (!lead) return null;
+
+  const handleCreateAccount = () => {
+    if (lead.servicePlans.length === 0 && lead.serviceOneTimePlans.length === 0) {
+      error(
+        'Cannot create account',
+        'No services or plans attached to this lead.',
+      );
+      return;
+    }
+    setIsProvisionOpen(true);
+  };
+
+  const handleProvisioned = (updatedLead: Lead) => {
+    onUpdated(updatedLead);
+  };
 
   const appliedPromo = selectedPromoId !== null ? (promos.find((p) => p.id === selectedPromoId) ?? null) : null;
   const selectedAgent = agents.find((a) => a.id === form.assignedAgentId) ?? null;
@@ -668,14 +685,32 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : <Trash2 size={14} className="mr-2" />}
               Delete Lead
             </Button>
-            <Button
-              onClick={() => { void handleSave(); }}
-              disabled={saving || deleting}
-              className="bg-[#25238e] text-white"
-            >
-              {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Save size={14} className="mr-2" />}
-              Save Changes
-            </Button>
+            <div className="flex items-center gap-2">
+              {lead.status.isOnboarding && (
+                lead.isAccountCreated ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold">
+                    <CheckCircle2 size={13} /> Account Created
+                  </span>
+                ) : (
+                  <Button
+                    onClick={handleCreateAccount}
+                    disabled={saving || deleting}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <UserPlus size={14} className="mr-2" />
+                    Create Account
+                  </Button>
+                )
+              )}
+              <Button
+                onClick={() => { void handleSave(); }}
+                disabled={saving || deleting}
+                className="bg-[#25238e] text-white"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Save size={14} className="mr-2" />}
+                Save Changes
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -697,6 +732,19 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
           )}
         </div>
       </div>
+
+      {/* Account Provisioning Modal */}
+      {isProvisionOpen && (
+        <ProvisionAccountModal
+          isOpen={isProvisionOpen}
+          onClose={() => setIsProvisionOpen(false)}
+          lead={lead}
+          onProvisioned={(updatedLead) => {
+            handleProvisioned(updatedLead);
+            setIsProvisionOpen(false);
+          }}
+        />
+      )}
     </Modal>
   );
 }

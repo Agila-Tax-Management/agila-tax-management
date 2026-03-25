@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo, JSX } from 'react';
 import {
   Plus, Search, Filter, LayoutList, Columns3,
   Phone, Briefcase, User, MoreVertical, GripVertical,
-  ArrowRightLeft, ChevronUp, ChevronDown, Loader2,
+  ArrowRightLeft, ChevronUp, ChevronDown, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -347,6 +347,11 @@ export function LeadCenter(): React.ReactNode {
                               <span className="flex items-center gap-2 text-xs text-foreground">
                                 <User size={11} className="text-emerald-500 shrink-0" />
                                 <span className="font-medium truncate">{lead.assignedAgent.name}</span>
+                              </span>
+                            )}
+                            {lead.isAccountCreated && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-semibold">
+                                <CheckCircle2 size={9} className="shrink-0" /> Account Created
                               </span>
                             )}
                           </div>
