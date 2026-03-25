@@ -252,3 +252,55 @@ export interface RecordPaymentInput {
   referenceNumber?: string;
   notes?: string;
 }
+
+// ── Subscription Module Types ─────────────────────────────────────
+
+export type BillingCycleType =
+  | 'MONTHLY'
+  | 'QUARTERLY'
+  | 'SEMI_ANNUALLY'
+  | 'ANNUALLY';
+
+export type SubscriptionChangeType =
+  | 'SUBSCRIPTION_CREATED'
+  | 'RATE_CHANGED'
+  | 'PLAN_CHANGED'
+  | 'PAUSED'
+  | 'REACTIVATED'
+  | 'CANCELLED';
+
+export interface ServicePlanOption {
+  id: number;
+  name: string;
+  serviceRate: number;
+}
+
+export interface SubscriptionHistoryRecord {
+  id: string;
+  changeType: SubscriptionChangeType;
+  oldValue: string | null;
+  newValue: string | null;
+  actorId: string | null;
+  actor: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface SubscriptionListRecord {
+  id: number;
+  clientId: number;
+  client: { id: number; businessName: string; clientNo: string | null };
+  servicePlanId: number;
+  servicePlan: { id: number; name: string; serviceRate: number };
+  billingCycle: BillingCycleType;
+  agreedRate: number;
+  effectiveDate: string;
+  nextBillingDate: string | null;
+  inactiveDate: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubscriptionDetailRecord extends SubscriptionListRecord {
+  historyLogs: SubscriptionHistoryRecord[];
+}
