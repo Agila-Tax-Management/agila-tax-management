@@ -199,7 +199,7 @@ export function ClientGatewayClientList(): React.ReactNode {
                       </td>
                       <td className="px-4 py-3.5">
                         <a
-                          href={client.portalLink}
+                          href={`${process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? ''}${client.portalLink}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
