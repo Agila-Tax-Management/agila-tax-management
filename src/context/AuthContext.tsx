@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export interface AttendanceLog {
   id: string;
@@ -33,41 +33,121 @@ interface AuthContextType {
   updateLunchStatus: (val: boolean) => void;
   updateClockInTime: (val: string | null) => void;
   updateLunchStartTime: (val: string | null) => void;
+  hasActiveContract: boolean;
+  hasActiveCompensation: boolean;
+  isLoadingEmployee: boolean;
 }
 
-const MOCK_LOGS: AttendanceLog[] = [
-  { id: 'LOG-010', date: 'Tue, Mar 10, 2026', isoDate: '2026-03-10', clockIn: '08:02:00', clockOut: '17:00:00', lunchStart: '12:01:00', lunchEnd: '13:00:00', totalHours: '7.95', status: 'Completed' },
-  { id: 'LOG-009', date: 'Mon, Mar 9, 2026',  isoDate: '2026-03-09', clockIn: '08:00:00', clockOut: '17:03:00', lunchStart: '12:00:00', lunchEnd: '13:02:00', totalHours: '8.02', status: 'Completed' },
-  { id: 'LOG-008', date: 'Fri, Mar 6, 2026',  isoDate: '2026-03-06', clockIn: '08:10:00', clockOut: '17:05:00', lunchStart: '12:05:00', lunchEnd: '13:00:00', totalHours: '7.83', status: 'Completed' },
-  { id: 'LOG-007', date: 'Thu, Mar 5, 2026',  isoDate: '2026-03-05', clockIn: '08:00:00', clockOut: '17:00:00', lunchStart: '12:00:00', lunchEnd: '13:00:00', totalHours: '8.00', status: 'Completed' },
-  { id: 'LOG-006', date: 'Wed, Mar 4, 2026',  isoDate: '2026-03-04', clockIn: '07:55:00', clockOut: '17:01:00', lunchStart: '12:00:00', lunchEnd: '12:55:00', totalHours: '8.02', status: 'Completed' },
-  { id: 'LOG-005', date: 'Tue, Mar 3, 2026',  isoDate: '2026-03-03', clockIn: '08:05:00', clockOut: '17:00:00', lunchStart: '12:02:00', lunchEnd: '13:00:00', totalHours: '7.88', status: 'Completed' },
-  { id: 'LOG-004', date: 'Mon, Mar 2, 2026',  isoDate: '2026-03-02', clockIn: '08:00:00', clockOut: '17:02:00', lunchStart: '12:00:00', lunchEnd: '13:00:00', totalHours: '8.03', status: 'Completed' },
-  { id: 'LOG-003', date: 'Fri, Feb 27, 2026', isoDate: '2026-02-27', clockIn: '07:45:00', clockOut: '17:02:00', lunchStart: '12:01:00', lunchEnd: '12:53:00', totalHours: '8.23', status: 'Completed' },
-  { id: 'LOG-002', date: 'Thu, Feb 26, 2026', isoDate: '2026-02-26', clockIn: '08:00:00', clockOut: '17:00:00', lunchStart: '12:00:00', lunchEnd: '13:04:00', totalHours: '7.93', status: 'Completed' },
-  { id: 'LOG-001', date: 'Wed, Feb 25, 2026', isoDate: '2026-02-25', clockIn: '08:00:00', clockOut: '17:01:00', lunchStart: '12:04:00', lunchEnd: '13:02:00', totalHours: '8.02', status: 'Completed' },
-];
+// ── Internal API types ───────────────────────────────────────────────────────
+interface ApiTimesheetRecord {
+  id: string;
+  isoDate: string;
+  status: string;
+  timeIn: string | null;
+  lunchStart: string | null;
+  lunchEnd: string | null;
+  timeOut: string | null;
+  regularHours: string;
+}
+
+interface TimesheetApiData {
+  employee: {
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    nameExtension: string | null;
+    employeeNo: string | null;
+    department: string | null;
+    position: string | null;
+  };
+  hasActiveContract: boolean;
+  hasActiveCompensation: boolean;
+  todayRecord: ApiTimesheetRecord | null;
+  records: ApiTimesheetRecord[];
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_SHORT   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function fmtLogDate(d: Date): string {
+  return `${DAY_SHORT[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function fmtTime(d: Date): string {
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2, '0'))
+    .join(':');
+}
+
+function mapApiRecord(r: ApiTimesheetRecord): AttendanceLog {
+  return {
+    id: r.id,
+    date: fmtLogDate(new Date(`${r.isoDate}T00:00:00`)),
+    isoDate: r.isoDate,
+    clockIn:    r.timeIn     ? fmtTime(new Date(r.timeIn))     : '-',
+    clockOut:   r.timeOut    ? fmtTime(new Date(r.timeOut))    : '-',
+    lunchStart: r.lunchStart ? fmtTime(new Date(r.lunchStart)) : '-',
+    lunchEnd:   r.lunchEnd   ? fmtTime(new Date(r.lunchEnd))   : '-',
+    totalHours: r.regularHours ?? '0.00',
+    status:     r.timeOut    ? 'Completed' : 'In Progress',
+  };
+}
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User>({
-    name: 'Genesis Esdrilon Jr.',
-    role: 'System Developer',
-    employeeId: 'EMP-10002',
-    department: 'Technology Department',
-    isClockedIn: false,
-    isOnLunch: false,
-    clockInTime: null,
-    lunchStartTime: null,
-  });
+  const [user,                  setUser]                  = useState<User | null>(null);
+  const [attendanceLogs,        setAttendanceLogs]        = useState<AttendanceLog[]>([]);
+  const [hasActiveContract,     setHasActiveContract]     = useState(false);
+  const [hasActiveCompensation, setHasActiveCompensation] = useState(false);
+  const [isLoadingEmployee,     setIsLoadingEmployee]     = useState(true);
 
-  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>(MOCK_LOGS);
+  /* eslint-disable react-hooks/set-state-in-effect -- Seeds real employee data from API after mount */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/dashboard/timesheet/me');
+        if (!res.ok || cancelled) { setIsLoadingEmployee(false); return; }
+        const json = (await res.json()) as { data?: TimesheetApiData };
+        if (cancelled) return;
+        const d = json.data;
+        if (!d) { setIsLoadingEmployee(false); return; }
+        const { employee, hasActiveContract: hac, hasActiveCompensation: hacp, todayRecord, records } = d;
+        const nameParts = [
+          employee.firstName,
+          employee.middleName ? `${employee.middleName[0]}.` : null,
+          employee.lastName,
+          employee.nameExtension,
+        ].filter(Boolean);
+        setUser({
+          name:          nameParts.join(' '),
+          role:          employee.position   ?? 'Employee',
+          employeeId:    employee.employeeNo ?? '',
+          department:    employee.department ?? '',
+          isClockedIn:   !!todayRecord?.timeIn && !todayRecord?.timeOut,
+          isOnLunch:     !!todayRecord?.lunchStart && !todayRecord?.lunchEnd,
+          clockInTime:   todayRecord?.timeIn    ?? null,
+          lunchStartTime:todayRecord?.lunchStart ?? null,
+        });
+        setHasActiveContract(hac);
+        setHasActiveCompensation(hacp);
+        setAttendanceLogs(records.map(mapApiRecord));
+      } catch {
+        // silent — UI handles null user
+      } finally {
+        if (!cancelled) setIsLoadingEmployee(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  const updateClockedIn = (val: boolean) => setUser(prev => ({ ...prev, isClockedIn: val }));
-  const updateLunchStatus = (val: boolean) => setUser(prev => ({ ...prev, isOnLunch: val }));
-  const updateClockInTime = (val: string | null) => setUser(prev => ({ ...prev, clockInTime: val }));
-  const updateLunchStartTime = (val: string | null) => setUser(prev => ({ ...prev, lunchStartTime: val }));
+  const updateClockedIn      = (val: boolean)       => setUser(p => p ? { ...p, isClockedIn:    val } : p);
+  const updateLunchStatus    = (val: boolean)       => setUser(p => p ? { ...p, isOnLunch:       val } : p);
+  const updateClockInTime    = (val: string | null) => setUser(p => p ? { ...p, clockInTime:     val } : p);
+  const updateLunchStartTime = (val: string | null) => setUser(p => p ? { ...p, lunchStartTime:  val } : p);
 
   return (
     <AuthContext.Provider value={{
@@ -78,6 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateLunchStatus,
       updateClockInTime,
       updateLunchStartTime,
+      hasActiveContract,
+      hasActiveCompensation,
+      isLoadingEmployee,
     }}>
       {children}
     </AuthContext.Provider>

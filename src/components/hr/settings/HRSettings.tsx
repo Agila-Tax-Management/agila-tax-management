@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CalendarClock, FileText, Layers } from 'lucide-react';
+import { CalendarClock, CalendarDays, Layers } from 'lucide-react';
 import { WorkingSchedulesSettingsTab } from './WorkingSchedulesSettingsTab';
-import { ContractsSettingsTab } from './ContractsSettingsTab';
+import { LeaveTypesSettingsTab } from './LeaveTypesSettingsTab';
 import { EmployeeLevelSettingsTab } from '@/components/hr/settings/EmployeeLevelSettingsTab';
 
-type SettingsTab = 'working-schedules' | 'contracts' | 'employee-level';
+type SettingsTab = 'working-schedules' | 'leave-types' | 'employee-level';
 
 const SETTINGS_TABS: { key: SettingsTab; label: string; icon: typeof CalendarClock }[] = [
   { key: 'working-schedules', label: 'Working Schedules', icon: CalendarClock },
-  { key: 'contracts', label: 'Contracts', icon: FileText },
+  { key: 'leave-types', label: 'Leave Types', icon: CalendarDays },
   { key: 'employee-level', label: 'Employee Level', icon: Layers },
 ];
 
@@ -45,7 +45,7 @@ export function HRSettings() {
 
       {activeTab === 'working-schedules' && <WorkingSchedulesSettingsTab />}
 
-      {activeTab === 'contracts' && <ContractsSettingsTab />}
+      {activeTab === 'leave-types' && <LeaveTypesSettingsTab />}
 
       {activeTab === 'employee-level' && <EmployeeLevelSettingsTab />}
     </div>

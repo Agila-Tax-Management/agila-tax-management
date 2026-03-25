@@ -132,12 +132,6 @@ export const createContractSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED"]).default("DRAFT"),
   contractStart: z.string().min(1, "Contract start date is required"),
   contractEnd: z.string().optional().nullable(),
-  monthlyRate: z.string().optional().nullable(),
-  dailyRate: z.string().optional().nullable(),
-  hourlyRate: z.string().optional().nullable(),
-  disbursedMethod: z.enum(["CASH_SALARY", "FUND_TRANSFER"]).optional().nullable(),
-  payType: z.string().optional().nullable(),
-  bankDetails: z.string().optional().nullable(),
   scheduleId: z.number().int().positive().optional().nullable(),
   workingHoursPerWeek: z.number().int().min(0).optional().nullable(),
   signedDate: z.string().optional().nullable(),
@@ -145,6 +139,27 @@ export const createContractSchema = z.object({
 });
 
 export const updateContractSchema = createContractSchema.omit({ employmentId: true }).partial();
+
+/* ─── Compensation (DOLE-compliant, linked to Contract) ───────── */
+
+export const createCompensationSchema = z.object({
+  contractId: z.number().int().positive("Contract is required"),
+  baseRate: z.string().min(1, "Base rate is required"),
+  allowanceRate: z.string().optional().default("0"),
+  rateType: z.enum(["DAILY", "MONTHLY"]).default("DAILY"),
+  frequency: z.enum(["ONCE_A_MONTH", "TWICE_A_MONTH", "WEEKLY"]).default("TWICE_A_MONTH"),
+  payType: z.enum(["FIXED_PAY", "VARIABLE_PAY"]).default("VARIABLE_PAY"),
+  disbursementType: z.enum(["CASH", "BANK_TRANSFER", "CHEQUE", "E_WALLET"]).default("CASH"),
+  bankDetails: z.string().optional().nullable(),
+  isPaidRestDays: z.boolean().default(false),
+  restDaysPerWeek: z.number().int().min(0).max(2).default(1),
+  deductSss: z.boolean().default(false),
+  deductPhilhealth: z.boolean().default(false),
+  deductPagibig: z.boolean().default(false),
+  deductTax: z.boolean().default(false),
+});
+
+export const updateCompensationSchema = createCompensationSchema.omit({ contractId: true }).partial();
 
 /* ─── Work Schedule (Step 4) ─────────────────────────────────────── */
 
@@ -207,6 +222,8 @@ export type CreateEmploymentInput = z.infer<typeof createEmploymentSchema>;
 export type UpdateEmploymentInput = z.infer<typeof updateEmploymentSchema>;
 export type CreateContractInput = z.infer<typeof createContractSchema>;
 export type UpdateContractInput = z.infer<typeof updateContractSchema>;
+export type CreateCompensationInput = z.infer<typeof createCompensationSchema>;
+export type UpdateCompensationInput = z.infer<typeof updateCompensationSchema>;
 export type CreateWorkScheduleInput = z.infer<typeof createWorkScheduleSchema>;
 export type UpsertAccessInput = z.infer<typeof upsertAccessSchema>;
 export type UpdateGovernmentIdsInput = z.infer<typeof updateGovernmentIdsSchema>;
