@@ -1,7 +1,7 @@
 'use client';
 
-import { BillingOverview } from '@/components/accounting/BillingOverview';
+import { BillingList } from './components/BillingList';
 
 export default function BillingPage() {
-  return <BillingOverview />;
+  return <BillingList />;
 }

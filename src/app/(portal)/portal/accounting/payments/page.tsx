@@ -1,7 +1,7 @@
 'use client';
 
-import { PaymentCenter } from '@/components/accounting/PaymentCenter';
+import { PaymentList } from './components/PaymentList';
 
 export default function PaymentsPage() {
-  return <PaymentCenter />;
+  return <PaymentList />;
 }
