@@ -9,6 +9,7 @@ import prisma from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 
 const updatePaymentSchema = z.object({
+  amount: z.number().positive('Amount must be greater than zero'),
   paymentDate: z.string().min(1, 'Payment date is required'),
   method: z.enum(['CASH', 'BANK_TRANSFER', 'CHECK', 'E_WALLET', 'CREDIT_CARD']),
   referenceNumber: z.string().optional().nullable(),
@@ -36,19 +37,36 @@ export async function updatePaymentAction(
     select: {
       id: true,
       paymentNumber: true,
+      amount: true,
       paymentDate: true,
       method: true,
       referenceNumber: true,
       notes: true,
       proofOfPaymentUrl: true,
+      allocations: { select: { amountApplied: true } },
     },
   });
   if (!existing) return { error: 'Payment not found' };
+
+  // Validate new amount against already-allocated total
+  const totalAllocated = existing.allocations.reduce(
+    (sum, a) => sum + Number(a.amountApplied),
+    0,
+  );
+  if (data.amount < totalAllocated - 0.001) {
+    return {
+      error: `Amount cannot be less than ₱${totalAllocated.toLocaleString('en-PH', { minimumFractionDigits: 2 })} (already applied to invoices).`,
+    };
+  }
 
   // Build human-readable diff summaries
   const oldParts: string[] = [];
   const newParts: string[] = [];
 
+  if (Number(existing.amount) !== data.amount) {
+    oldParts.push(`Amount: ₱${Number(existing.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+    newParts.push(`Amount: ₱${data.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+  }
   if (existing.method !== data.method) {
     oldParts.push(`Method: ${existing.method}`);
     newParts.push(`Method: ${data.method}`);
@@ -83,6 +101,8 @@ export async function updatePaymentAction(
       await tx.payment.update({
         where: { id: paymentId },
         data: {
+          amount: data.amount,
+          unusedAmount: data.amount - totalAllocated,
           paymentDate: new Date(data.paymentDate),
           method: data.method,
           referenceNumber: data.referenceNumber ?? null,

@@ -7,7 +7,7 @@ import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import {
-  ArrowLeft, CreditCard, Calendar, User, Hash,
+  CreditCard, Calendar, User, Hash,
   Wallet, FileText, Loader2, Banknote, Pencil,
   Upload, ImageIcon, Clock, ExternalLink,
 } from 'lucide-react';
@@ -126,22 +126,17 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
       <div className="max-w-7xl mx-auto animate-in fade-in duration-500 p-6 space-y-6">
         {/* Page header */}
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => router.back()} className="text-slate-500 hover:text-slate-700">
-              <ArrowLeft size={16} className="mr-1" /> Back
-            </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-foreground font-mono">{payment.paymentNumber}</h1>
-                <Badge variant={METHOD_BADGE[payment.method] ?? 'neutral'}>
-                  {METHOD_LABELS[payment.method] ?? payment.method}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Recorded on {fmtDateTime(payment.createdAt)}
-                {payment.recordedBy ? ` by ${payment.recordedBy.name}` : ''}
-              </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-foreground font-mono">{payment.paymentNumber}</h1>
+              <Badge variant={METHOD_BADGE[payment.method] ?? 'neutral'}>
+                {METHOD_LABELS[payment.method] ?? payment.method}
+              </Badge>
             </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Recorded on {fmtDateTime(payment.createdAt)}
+              {payment.recordedBy ? ` by ${payment.recordedBy.name}` : ''}
+            </p>
           </div>
 
           <Button

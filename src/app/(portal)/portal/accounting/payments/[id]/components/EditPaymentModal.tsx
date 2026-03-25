@@ -32,6 +32,7 @@ interface EditPaymentModalProps {
 export function EditPaymentModal({ isOpen, onClose, payment, onSaved }: EditPaymentModalProps): React.ReactNode {
   const { success, error: toastError } = useToast();
 
+  const [amount, setAmount] = useState(String(payment.amount));
   const [paymentDate, setPaymentDate] = useState(payment.paymentDate.split('T')[0]);
   const [method, setMethod] = useState<PaymentMethod>(payment.method);
   const [referenceNumber, setReferenceNumber] = useState(payment.referenceNumber ?? '');
@@ -48,6 +49,7 @@ export function EditPaymentModal({ isOpen, onClose, payment, onSaved }: EditPaym
   const [prevPaymentId, setPrevPaymentId] = useState(payment.id);
   if (payment.id !== prevPaymentId) {
     setPrevPaymentId(payment.id);
+    setAmount(String(payment.amount));
     setPaymentDate(payment.paymentDate.split('T')[0]);
     setMethod(payment.method);
     setReferenceNumber(payment.referenceNumber ?? '');
@@ -111,6 +113,7 @@ export function EditPaymentModal({ isOpen, onClose, payment, onSaved }: EditPaym
       }
 
       const result = await updatePaymentAction(payment.id, {
+        amount: parseFloat(amount),
         paymentDate,
         method,
         referenceNumber: referenceNumber.trim() || null,
@@ -140,6 +143,38 @@ export function EditPaymentModal({ isOpen, onClose, payment, onSaved }: EditPaym
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Payment Details" size="lg">
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+        {/* Amount */}
+        {(() => {
+          const totalAllocated = payment.allocations.reduce((s, a) => s + a.amountApplied, 0);
+          const amountNum = parseFloat(amount) || 0;
+          const isBelowMin = amountNum < totalAllocated - 0.001;
+          return (
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                Amount (₱) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                required
+                min="0.01"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                disabled={isLoading}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+              />
+              {totalAllocated > 0 && (
+                <p className={`mt-1.5 text-xs ${isBelowMin ? 'text-rose-500 font-medium' : 'text-muted-foreground'}`}>
+                  {isBelowMin
+                    ? `Amount cannot be less than ₱${totalAllocated.toLocaleString('en-PH', { minimumFractionDigits: 2 })} (total already applied to invoices).`
+                    : `₱${totalAllocated.toLocaleString('en-PH', { minimumFractionDigits: 2 })} is already applied to invoices.`}
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Payment Date */}
         <div>
           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">

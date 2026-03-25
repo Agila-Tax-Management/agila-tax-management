@@ -8,7 +8,7 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { Badge } from '@/components/UI/Badge';
 import {
-  ArrowLeft, ChevronDown, Loader2, Wand2, AlertCircle,
+  ChevronDown, Loader2, Wand2, AlertCircle,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { recordPaymentAction } from '../actions';
@@ -220,14 +220,9 @@ export function RecordPaymentForm(): React.ReactNode {
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => router.back()} className="text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={16} className="mr-1" /> Back
-        </Button>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Record Payment</h1>
-          <p className="text-sm text-muted-foreground">Apply a client payment to one or more invoices</p>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Record Payment</h1>
+        <p className="text-sm text-muted-foreground">Apply a client payment to one or more invoices</p>
       </div>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
