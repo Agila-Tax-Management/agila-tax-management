@@ -77,6 +77,13 @@ function InlineEdit({
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
 
+  // Keep draft in sync with prop when not actively editing
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value && !editing) {
+    setPrevValue(value);
+    setDraft(value);
+  }
+
   const save = async () => {
     if (!draft.trim() || draft === value) { setEditing(false); return; }
     setSaving(true);
@@ -140,7 +147,7 @@ function StatusRow({
   onDelete: () => void;
   onUpdate: (patch: Partial<DepartmentStatus>) => void;
 }) {
-  const { error } = useToast();
+  const { success, error } = useToast();
   const [deleting, setDeleting] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
 
@@ -164,9 +171,10 @@ function StatusRow({
       `/api/admin/settings/task-workflow/departments/${deptId}/statuses/${status.id}`,
       { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }
     );
-    const d = await res.json();
-    if (!res.ok) { error('Update failed', d.error); return; }
-    onUpdate({ name });
+    const d = await res.json() as { data?: DepartmentStatus; error?: string };
+    if (!res.ok) { error('Update failed', d.error ?? 'Unexpected error'); return; }
+    if (d.data) onUpdate(d.data);
+    success('Status renamed', `Status renamed to "${name}".`);
   };
 
   const handleColorChange = async (color: string) => {
@@ -174,9 +182,9 @@ function StatusRow({
       `/api/admin/settings/task-workflow/departments/${deptId}/statuses/${status.id}`,
       { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ color }) }
     );
-    const d = await res.json();
-    if (!res.ok) { error('Update failed', d.error); return; }
-    onUpdate({ color });
+    const d = await res.json() as { data?: DepartmentStatus; error?: string };
+    if (!res.ok) { error('Update failed', d.error ?? 'Unexpected error'); return; }
+    if (d.data) onUpdate(d.data);
   };
 
   return (
@@ -829,7 +837,7 @@ function DepartmentManager({
                         onMoveUp={() => moveStatus(dept.id, dept.statuses, idx, 'up')}
                         onMoveDown={() => moveStatus(dept.id, dept.statuses, idx, 'down')}
                         onDelete={() => { removeStatus(dept.id, st.id); onRefresh(); }}
-                        onUpdate={patch => { updateStatus(dept.id, st.id, patch); onRefresh(); }}
+                        onUpdate={patch => updateStatus(dept.id, st.id, patch)}
                       />
                     ))}
                   </div>
@@ -941,7 +949,9 @@ function DeptStatusPanel({
         ? { ...d, statuses: d.statuses.map(s => s.id === statusId ? { ...s, ...patch } : s) }
         : d
     ));
-    onRefresh();
+    // Do not call onRefresh() for rename/color changes — that triggers
+    // ensureDefaultDepartments via GET, which can insert default statuses
+    // into departments that happen to have 0 task statuses at that moment.
   };
 
   const removeStatus = (statusId: number) => {
@@ -1199,7 +1209,11 @@ export function WorkflowSettings(): React.ReactNode {
         ? { ...d, statuses: d.statuses.map(s => s.id === statusId ? { ...s, ...patch } : s) }
         : d
     ));
-    refresh();
+    // Do NOT call refresh() here — it triggers ensureDefaultDepartments on every
+    // GET, which re-creates any default status names that were renamed (e.g.
+    // renaming "To Do" → "test do" would cause "To Do" to be re-inserted at the
+    // bottom on the next GET because the (departmentId, name) unique constraint
+    // no longer blocks it). Context sync happens on next structural change or mount.
   };
 
   const removeStatus = (deptId: number, statusId: number) => {

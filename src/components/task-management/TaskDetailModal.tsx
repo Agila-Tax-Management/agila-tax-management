@@ -8,7 +8,7 @@ import {
   X, Calendar, User, Tag, Send, Clock,
   ChevronDown, Check, Plus, ChevronRight,
 } from 'lucide-react';
-import { SubtaskDetailModal } from './SubtaskDetailModal';
+import { ActivityEntry, SubtaskDetailModal } from './SubtaskDetailModal';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
 import { ALL_TEAM_MEMBERS, SOURCE_CONFIG } from '@/lib/mock-task-management-data';
 import type { UnifiedTask } from '@/lib/mock-task-management-data';
@@ -345,7 +345,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
                 Subtasks
                 {editingTask.subtasks && editingTask.subtasks.length > 0 && (
                   <span className="ml-2 font-semibold text-slate-500 normal-case text-[10px]">
-                    {editingTask.subtasks.filter(s => s.completed).length}/{editingTask.subtasks.length}
+                    {editingTask.subtasks.filter(s => s.completed).length}/{editingTask.subtasks.length} done
                   </span>
                 )}
               </p>
@@ -359,42 +359,87 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
                   </div>
                 </div>
               )}
-              <div className="space-y-1.5">
-                {(editingTask.subtasks ?? []).map(subtask => {
-                  const subtaskAssignee = ALL_TEAM_MEMBERS.find(m => m.id === subtask.assigneeId);
-                  return (
-                    <button
-                      key={subtask.id}
-                      onClick={() => { setSelectedSubtaskId(subtask.id); setIsSubtaskModalOpen(true); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition text-left group"
-                    >
-                      <div
-                        role="checkbox"
-                        aria-checked={subtask.completed}
-                        onClick={e => { e.stopPropagation(); handleToggleSubtask(subtask.id); }}
-                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition cursor-pointer ${
-                          subtask.completed
-                            ? 'bg-emerald-500 border-emerald-500'
-                            : 'border-slate-300 hover:border-emerald-400'
-                        }`}
-                      >
-                        {subtask.completed && <Check size={10} className="text-white" />}
-                      </div>
-                      <span className={`flex-1 text-xs font-medium ${
-                        subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'
-                      }`}>
-                        {subtask.title}
-                      </span>
-                      {subtaskAssignee && (
-                        <div className="w-5 h-5 bg-[#0f766e] rounded-full flex items-center justify-center shrink-0">
-                          <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
-                        </div>
-                      )}
-                      <ChevronRight size={12} className="text-slate-300 group-hover:text-slate-500 shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
+
+              {/* Subtask table */}
+              {(editingTask.subtasks ?? []).length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden mb-3">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="w-8 px-3 py-2" />
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtask</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Due Date</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Assignee</th>
+                        <th className="w-6" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(editingTask.subtasks ?? []).map(subtask => {
+                        const subtaskAssignee = ALL_TEAM_MEMBERS.find(m => m.id === subtask.assigneeId);
+                        const isOverdueSubtask = !subtask.completed && !!subtask.dueDate && new Date(subtask.dueDate) < new Date();
+                        return (
+                          <tr
+                            key={subtask.id}
+                            className="hover:bg-slate-50 transition cursor-pointer group"
+                            onClick={() => { setSelectedSubtaskId(subtask.id); setIsSubtaskModalOpen(true); }}
+                          >
+                            {/* Checkbox */}
+                            <td className="px-3 py-2.5">
+                              <div
+                                role="checkbox"
+                                aria-checked={subtask.completed}
+                                onClick={e => { e.stopPropagation(); handleToggleSubtask(subtask.id); }}
+                                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition cursor-pointer ${
+                                  subtask.completed
+                                    ? 'bg-emerald-500 border-emerald-500'
+                                    : 'border-slate-300 hover:border-emerald-400'
+                                }`}
+                              >
+                                {subtask.completed && <Check size={10} className="text-white" />}
+                              </div>
+                            </td>
+                            {/* Title */}
+                            <td className="px-3 py-2.5">
+                              <span className={`font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                {subtask.title}
+                              </span>
+                            </td>
+                            {/* Due Date */}
+                            <td className="px-3 py-2.5 hidden sm:table-cell">
+                              {subtask.dueDate ? (
+                                <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${isOverdueSubtask ? 'text-red-500' : 'text-slate-500'}`}>
+                                  <Calendar size={11} />
+                                  {new Date(subtask.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-[11px]">—</span>
+                              )}
+                            </td>
+                            {/* Assignee */}
+                            <td className="px-3 py-2.5 hidden sm:table-cell">
+                              {subtaskAssignee ? (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-5 h-5 rounded-full bg-[#0f766e] flex items-center justify-center shrink-0">
+                                    <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
+                                  </div>
+                                  <span className="text-[11px] font-medium text-slate-600 truncate max-w-25">{subtaskAssignee.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 text-[11px]">Unassigned</span>
+                              )}
+                            </td>
+                            {/* Chevron */}
+                            <td className="px-3 py-2.5">
+                              <ChevronRight size={12} className="text-slate-300 group-hover:text-slate-500 transition" />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               <div className="mt-2 flex gap-2">
                 <input
                   type="text"
@@ -495,16 +540,17 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
     </div>
     {isSubtaskModalOpen && selectedSubtask && (
       <SubtaskDetailModal
-        subtask={selectedSubtask}
-        parentTaskTitle={editingTask.title}
-        sourceInfo={sourceInfo}
-        teamMembers={ALL_TEAM_MEMBERS}
-        accentColor="#0f766e"
-        isOpen={isSubtaskModalOpen}
-        onClose={() => setIsSubtaskModalOpen(false)}
-        onUpdate={handleUpdateSubtask}
-        onDelete={subtaskId => { handleDeleteSubtask(subtaskId); setIsSubtaskModalOpen(false); }}
-      />
+          subtask={selectedSubtask}
+          parentTaskTitle={editingTask.title}
+          sourceInfo={sourceInfo}
+          teamMembers={ALL_TEAM_MEMBERS}
+          accentColor="#0f766e"
+          isOpen={isSubtaskModalOpen}
+          onClose={() => setIsSubtaskModalOpen(false)}
+          onUpdate={handleUpdateSubtask}
+          onDelete={subtaskId => { handleDeleteSubtask(subtaskId); setIsSubtaskModalOpen(false); } } activityLog={[]} onAddActivity={function (kind: ActivityEntry['kind'], message: string): void {
+            throw new Error('Function not implemented.');
+          } }      />
     )}
     </>
   );

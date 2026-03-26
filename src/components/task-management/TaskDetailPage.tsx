@@ -6,7 +6,7 @@ import { SOURCE_CONFIG } from '@/lib/mock-task-management-data';
 import type { UnifiedTask, TaskSource } from '@/lib/mock-task-management-data';
 import type { AOTeamMember } from '@/lib/types';
 import { SharedTaskDetailPage } from './SharedTaskDetailPage';
-import type { ConversationEntry, TaskHistoryEntry } from './SharedTaskDetailPage';
+import type { ConversationEntry, TaskHistoryEntry, DeptWithStatuses } from './SharedTaskDetailPage';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
 import { authClient } from '@/lib/auth-client';
 
@@ -60,6 +60,18 @@ export function TaskDetailPage({ task, taskId, initialConversations, initialHist
   const dept = departments.find(d => d.name === deptName);
   const deptStatuses = dept?.statuses ?? [];
 
+  const allDeptStatuses: DeptWithStatuses[] = departments.map(d => ({
+    id: d.id,
+    name: d.name,
+    statuses: d.statuses.map(s => ({
+      id: s.id,
+      name: s.name,
+      color: s.color,
+      isEntryStep: s.isEntryStep,
+      isExitStep: s.isExitStep,
+    })),
+  }));
+
   const currentUser = session?.user
     ? { id: session.user.id, name: session.user.name }
     : { id: '', name: 'You' };
@@ -73,6 +85,7 @@ export function TaskDetailPage({ task, taskId, initialConversations, initialHist
       accentColor="#0f766e"
       sourceInfo={SOURCE_CONFIG[task.source as TaskSource]}
       deptStatuses={deptStatuses}
+      allDeptStatuses={allDeptStatuses}
       initialConversations={initialConversations}
       initialHistoryLogs={initialHistoryLogs}
     />

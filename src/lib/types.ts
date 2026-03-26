@@ -152,6 +152,9 @@ export interface AOTaskSubtask {
   title: string;
   completed: boolean;
   assigneeId?: string;
+  assigneeName?: string;
+  department?: { id: number; name: string };
+  priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
   dueDate?: string;
   notes?: string;
   createdAt: string;
