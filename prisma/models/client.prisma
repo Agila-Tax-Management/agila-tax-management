@@ -72,6 +72,7 @@ model Client {
   shareholders CorporateShareholder[]
 
   lead Lead?
+  jobOrders   JobOrder[]
 
   activityLogs ActivityLog[]
 

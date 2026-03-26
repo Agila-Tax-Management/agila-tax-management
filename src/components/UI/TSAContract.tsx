@@ -98,7 +98,60 @@ export const TurnoverSuccessModal: React.FC<TurnoverSuccessModalProps> = ({
   }, [isOpen]);
 
   const clientPlanDetails = clientData.planDetails;
-  const basePlanData = clientPlanDetails ? PLAN_DATA[clientPlanDetails.basePlan] : null;
+  const basePlanData = clientPlanDetails
+    ? (PLAN_DATA[clientPlanDetails.basePlan as keyof typeof PLAN_DATA] ?? null)
+    : null;
+
+  async function generateTermsOfService() {
+    try {
+      const [{ pdf }, { TSAContractPDF, buildContractData }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/UI/TSAContractPDF'),
+      ]);
+      const headerSrc = `${window.location.origin}/images/header.webp`;
+      const contractData = buildContractData(clientData, allServices, basePlanData, headerSrc);
+      const el = React.createElement(TSAContractPDF, { data: contractData }) as Parameters<typeof pdf>[0];
+      const blob = await pdf(el).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error('Failed to generate TOS PDF', err);
+      alert('Failed to generate the contract PDF. Please try again.');
+    }
+  }
+
+  function generateInvoice() {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const planPrice = clientPlanDetails?.customPrice ?? '—';
+    const planName = basePlanData?.displayName ?? clientData.selectedPlan ?? 'Custom Plan';
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Temporary Invoice - ${clientData.clientNo}</title>
+    <style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:auto;color:#1e293b}
+    h1{color:#25238e;border-bottom:3px solid #25238e;padding-bottom:10px}
+    table{width:100%;border-collapse:collapse;margin-top:20px}
+    th{background:#25238e;color:#fff;padding:10px;text-align:left}
+    td{padding:10px;border-bottom:1px solid #e2e8f0}
+    .total{font-weight:bold;font-size:1.1em}</style></head><body>
+    <img src="/images/header.webp" style="width:100%;max-height:120px;object-fit:contain;margin-bottom:16px" />
+    <h1>TEMPORARY INVOICE</h1>
+    <p><strong>Invoice Date:</strong> ${dateStr}</p>
+    <p><strong>Client No.:</strong> ${clientData.clientNo}</p>
+    <p><strong>Business Name:</strong> ${clientData.businessName}</p>
+    <p><strong>Authorized Rep.:</strong> ${clientData.authorizedRep}</p>
+    <table><thead><tr><th>Description</th><th>Amount (Php)</th></tr></thead>
+    <tbody><tr><td>${planName} — Monthly Subscription</td><td>${planPrice}</td></tr></tbody>
+    <tfoot><tr><td class="total">Total Monthly</td><td class="total">${planPrice}</td></tr></tfoot>
+    </table>
+    <p style="margin-top:30px;font-size:11pt;color:#64748b">This is a temporary invoice subject to final billing confirmation.</p>
+    </body></html>`;
+    downloadDocument(html, `Invoice_${clientData.clientNo}.html`);
+  }
+
+  function downloadBoth() {
+    generateInvoice();
+    void generateTermsOfService();
+  }
 
   return (
     <Modal 
