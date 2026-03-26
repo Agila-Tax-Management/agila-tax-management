@@ -27,6 +27,7 @@ const PORTALS = [
   { id: 'ao',         title: 'Account Officer Portal', description: 'Oversee client accounts and service delivery.',     href: '/portal/account-officer', icon: <Briefcase />, color: 'bg-violet-600', stats: { label: 'Clients Managed', value: '86' } },
   { id: 'task-mgmt',  title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
   { id: 'crm',        title: 'Client Gateway System', description: 'Client portal and self-service gateway.',            href: '/portal/client-gateway',  icon: <Users />,     color: 'bg-blue-500',    stats: { label: 'Active Clients', value: '0' } },
+  { id: 'operation',  title: 'Operations Portal',     description: 'Manage active clients, requirements, and operations tasks.', href: '/portal/operation', icon: <Zap />,       color: 'bg-amber-600',   stats: { label: 'Active Clients', value: '0' } },
 ];
 
 const APP_SYSTEMS = [
