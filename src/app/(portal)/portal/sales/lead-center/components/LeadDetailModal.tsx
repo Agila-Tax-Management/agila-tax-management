@@ -2,60 +2,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, User, Trash2, Save, ChevronDown } from 'lucide-react';
+import { Loader2, User, Trash2, Save, ChevronDown, UserPlus, CheckCircle2, ExternalLink, Clock, FileText } from 'lucide-react';
 import Image from 'next/image';
 import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { BUSINESS_TYPES, LEAD_SOURCES } from '@/lib/constants';
 import { LeadHistoryTimeline, type LeadCommentEntry, type LeadHistoryEntry } from './LeadHistoryTimeline';
+import { ProvisionAccountModal } from './ProvisionAccountModal';
+import { CreateJobOrderModal } from './CreateJobOrderModal';
+import type { Lead, LeadStatus, LeadPromo } from './lead-types';
 
-interface LeadStatus {
-  id: number;
-  name: string;
-  color: string | null;
-  sequence: number;
-  isOnboarding: boolean;
-  isConverted: boolean;
-}
-
-interface AssignedAgent { id: string; name: string; email: string; }
-interface LeadServicePlan { id: number; name: string; serviceRate: string; recurring: string; }
-interface LeadServiceOneTime { id: number; name: string; serviceRate: string; }
-interface LeadPromo { id: number; name: string; code: string | null; discountType: 'PERCENTAGE' | 'FIXED'; discountRate: string; promoFor: 'SERVICE_PLAN' | 'SERVICE_ONE_TIME' | 'BOTH'; }
-
-export interface Lead {
-  id: number;
-  firstName: string;
-  middleName: string | null;
-  lastName: string;
-  businessName: string | null;
-  contactNumber: string | null;
-  businessType: string;
-  leadSource: string;
-  address: string | null;
-  notes: string | null;
-  statusId: number;
-  status: LeadStatus;
-  assignedAgentId: string | null;
-  assignedAgent: AssignedAgent | null;
-  isAccountCreated: boolean;
-  isCallRequest: boolean;
-  phoneCallSchedule: string | null;
-  isOfficeVisit: boolean;
-  officeVisitSchedule: string | null;
-  isClientVisit: boolean;
-  clientVisitSchedule: string | null;
-  clientVisitLocation: string | null;
-  isVirtualMeeting: boolean;
-  virtualMeetingSchedule: string | null;
-  onboardingSchedule: string | null;
-  servicePlans: LeadServicePlan[];
-  serviceOneTimePlans: LeadServiceOneTime[];
-  promo: LeadPromo | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { Lead } from './lead-types';
 
 interface FullLead extends Lead {
   comments: LeadCommentEntry[];
@@ -98,6 +56,12 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const [loadingFull, setLoadingFull] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isProvisionOpen, setIsProvisionOpen] = useState(false);
+  const [isJobOrderOpen, setIsJobOrderOpen] = useState(false);
+  const [tsaUrl, setTsaUrl] = useState('');
+  const [tsaEditMode, setTsaEditMode] = useState(false);
+  const [savingTsa, setSavingTsa] = useState(false);
+  const [signingTsa, setSigningTsa] = useState(false);
   const [agents, setAgents] = useState<{ id: string; name: string | null; email: string; image: string | null }[]>([]);
   const [servicePlans, setServicePlans] = useState<{ id: number; name: string; serviceRate: string; recurring: string }[]>([]);
   const [serviceOneTime, setServiceOneTime] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
@@ -188,6 +152,8 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
     setSelectedPlanId(l.servicePlans[0]?.id ?? null);
     setSelectedOneTimeIds(l.serviceOneTimePlans.map((s) => s.id));
     setSelectedPromoId(l.promo?.id ?? null);
+    setTsaUrl(l.signedTsaUrl ?? '');
+    setTsaEditMode(false);
   }, []);
 
   useEffect(() => {
@@ -281,8 +247,66 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
 
   if (!lead) return null;
 
+  const handleCreateAccount = () => {
+    if (lead.servicePlans.length === 0 && lead.serviceOneTimePlans.length === 0) {
+      error(
+        'Cannot create account',
+        'No services or plans attached to this lead.',
+      );
+      return;
+    }
+    setIsProvisionOpen(true);
+  };
+
+  const handleProvisioned = (updatedLead: Lead) => {
+    onUpdated(updatedLead);
+  };
+
+  const handleSaveTsaUrl = async () => {
+    if (!lead) return;
+    setSavingTsa(true);
+    try {
+      const res = await fetch(`/api/sales/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signedTsaUrl: tsaUrl.trim() || null }),
+      });
+      const data = (await res.json()) as { data?: Lead; error?: string };
+      if (!res.ok) { error('Save failed', data.error ?? 'Could not save TSA URL.'); return; }
+      success('TSA URL saved', 'The TSA document URL has been saved.');
+      onUpdated(data.data!);
+      setTsaEditMode(false);
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setSavingTsa(false);
+    }
+  };
+
+  const handleSignTsa = async () => {
+    if (!lead) return;
+    setSigningTsa(true);
+    try {
+      const res = await fetch(`/api/sales/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isSignedTSA: true }),
+      });
+      const data = (await res.json()) as { data?: Lead; error?: string };
+      if (!res.ok) { error('Failed', data.error ?? 'Could not mark TSA as signed.'); return; }
+      success('TSA Signed', 'The TSA has been marked as signed and recorded in the timeline.');
+      onUpdated(data.data!);
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setSigningTsa(false);
+    }
+  };
+
   const appliedPromo = selectedPromoId !== null ? (promos.find((p) => p.id === selectedPromoId) ?? null) : null;
   const selectedAgent = agents.find((a) => a.id === form.assignedAgentId) ?? null;
+  const primaryInvoice = (fullLead ?? lead).invoices?.[0] ?? null;
+  const invoicePaid = primaryInvoice?.status === 'PAID';
   const filteredPromos = promos
     .filter((p) =>
       p.promoFor === 'BOTH' ||
@@ -657,6 +681,93 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
             )}
           </div>
 
+          {/* Pipeline Documents — TSA */}
+          <div className="border-t border-border pt-5">
+            <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-3">
+              Pipeline Documents
+            </h4>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                Signed TSA URL
+              </label>
+              {lead.isSignedTSA ? (
+                /* ── Signed & locked ── */
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5">
+                  <a
+                    href={lead.signedTsaUrl ?? '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 text-sm text-blue-600 hover:underline truncate"
+                  >
+                    {lead.signedTsaUrl}
+                  </a>
+                  <ExternalLink size={12} className="text-blue-600 shrink-0" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[11px] font-semibold shrink-0">
+                    <CheckCircle2 size={10} /> TSA Signed
+                  </span>
+                </div>
+              ) : lead.signedTsaUrl && !tsaEditMode ? (
+                /* ── Has URL, not signed, view mode ── */
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5">
+                  <a
+                    href={lead.signedTsaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 text-sm text-blue-600 hover:underline truncate"
+                  >
+                    {lead.signedTsaUrl}
+                  </a>
+                  <ExternalLink size={12} className="text-blue-600 shrink-0" />
+                  <button
+                    type="button"
+                    onClick={() => setTsaEditMode(true)}
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border transition-colors shrink-0"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleSignTsa(); }}
+                    disabled={signingTsa}
+                    className="text-xs font-semibold px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 shrink-0 flex items-center gap-1"
+                  >
+                    {signingTsa ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                    Signed
+                  </button>
+                </div>
+              ) : (
+                /* ── No URL or edit mode — show input + save ── */
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    className={inputClass}
+                    placeholder="https://drive.google.com/..."
+                    value={tsaUrl}
+                    onChange={(e) => setTsaUrl(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { void handleSaveTsaUrl(); }}
+                    disabled={savingTsa || !tsaUrl.trim()}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#25238e] text-white hover:bg-[#1e1c7a] disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                  >
+                    {savingTsa ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                    Save
+                  </button>
+                  {lead.signedTsaUrl && tsaEditMode && (
+                    <button
+                      type="button"
+                      onClick={() => { setTsaUrl(lead.signedTsaUrl ?? ''); setTsaEditMode(false); }}
+                      className="text-xs text-muted-foreground px-2 py-1 rounded-lg border border-border hover:text-foreground transition-colors shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Footer actions */}
           <div className="flex justify-between items-center pt-3 border-t border-border">
             <Button
@@ -668,14 +779,49 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : <Trash2 size={14} className="mr-2" />}
               Delete Lead
             </Button>
-            <Button
-              onClick={() => { void handleSave(); }}
-              disabled={saving || deleting}
-              className="bg-[#25238e] text-white"
-            >
-              {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Save size={14} className="mr-2" />}
-              Save Changes
-            </Button>
+            <div className="flex items-center gap-2">
+            {lead.status.isOnboarding && (
+                lead.isAccountCreated ? (
+                  invoicePaid ? (
+                    lead.isCreatedJobOrder ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
+                        <CheckCircle2 size={13} /> Job Order Created
+                      </span>
+                    ) : (
+                      <Button
+                        onClick={() => setIsJobOrderOpen(true)}
+                        disabled={saving || deleting}
+                        className="bg-violet-600 hover:bg-violet-700 text-white"
+                      >
+                        <FileText size={14} className="mr-2" />
+                        Create Job Order
+                      </Button>
+                    )
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+                      <Clock size={13} /> Waiting for Payment
+                    </span>
+                  )
+                ) : (
+                  <Button
+                    onClick={handleCreateAccount}
+                    disabled={saving || deleting}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <UserPlus size={14} className="mr-2" />
+                    Create Account
+                  </Button>
+                )
+              )}
+              <Button
+                onClick={() => { void handleSave(); }}
+                disabled={saving || deleting}
+                className="bg-[#25238e] text-white"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Save size={14} className="mr-2" />}
+                Save Changes
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -697,6 +843,32 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
           )}
         </div>
       </div>
+
+      {/* Account Provisioning Modal */}
+      {isProvisionOpen && (
+        <ProvisionAccountModal
+          isOpen={isProvisionOpen}
+          onClose={() => setIsProvisionOpen(false)}
+          lead={lead}
+          onProvisioned={(updatedLead) => {
+            handleProvisioned(updatedLead);
+            setIsProvisionOpen(false);
+          }}
+        />
+      )}
+
+      {/* Create Job Order Modal */}
+      {isJobOrderOpen && (
+        <CreateJobOrderModal
+          isOpen={isJobOrderOpen}
+          onClose={() => setIsJobOrderOpen(false)}
+          lead={lead}
+          onCreated={(updatedLead: Lead) => {
+            onUpdated(updatedLead);
+            setIsJobOrderOpen(false);
+          }}
+        />
+      )}
     </Modal>
   );
 }

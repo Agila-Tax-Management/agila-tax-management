@@ -366,6 +366,31 @@ async function openInvoicePDF(invoice: InvoiceRecord) {
 - `Employee` model has extended personal info: `nameExtension`, `username`, `personalEmail`, `placeOfBirth`, `civilStatus`, `citizenship`, `educationalBackground`, `school`, `course`, `yearGraduated`, `certifications` — all optional
 - `Employee` has a `softDelete Boolean @default(false)` flag alongside `active`
 
+### Database Transactions (`prisma.$transaction`)
+
+- Wrap all **multi-step mutations** in a single `prisma.$transaction(async (tx) => { ... })` to guarantee full atomicity — all writes roll back on any failure
+- Inside the callback, use `tx` (not `prisma`) for every DB operation
+- **Sequential code generation** (e.g., `INV-YYYY-XXXX`, `PAY-YYYY-XXXX`) must be done **inside** the transaction to prevent duplicates:
+  ```typescript
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const latest = await tx.invoice.findFirst({
+    where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: 'desc' },
+    select: { invoiceNumber: true },
+  });
+  let nextSeq = 1;
+  if (latest) {
+    const parts = latest.invoiceNumber.split('-');
+    const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+    if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+  }
+  const invoiceNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  ```
+- `revalidatePath` calls must be placed **after** the transaction resolves — never inside it
+- `logActivity` and `notify` (fire-and-forget) must also be called **outside** the transaction
+- Only use transactions where atomicity genuinely matters (multi-record mutations). Single-record operations do not need `$transaction`
+
 ---
 
 ## Form Validation (Zod)

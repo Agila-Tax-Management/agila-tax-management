@@ -114,6 +114,7 @@ model Lead {
     historyLogs LeadHistory[]
 
     invoices Invoice[]
+    jobOrders   JobOrder[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

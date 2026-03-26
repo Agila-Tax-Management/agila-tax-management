@@ -26,11 +26,11 @@ model User {
 
   assignedLeads Lead[] @relation("AssignedAgent")
 
-  activityLogs    ActivityLog[]  @relation("InternalUserLogs")
-  notifications   Notification[] @relation("UserNotifications")
-  taskConversations      TaskConversation[]
-  taskHistoryLogs        TaskHistory[]
-  subtaskHistoryLogs     TaskSubtaskHistory[] @relation("SubtaskHistoryActor")
+  activityLogs       ActivityLog[]        @relation("InternalUserLogs")
+  notifications      Notification[]       @relation("UserNotifications")
+  taskConversations  TaskConversation[]
+  taskHistoryLogs    TaskHistory[]
+  subtaskHistoryLogs TaskSubtaskHistory[] @relation("SubtaskHistoryActor")
 
   leadComments    LeadComment[]
   leadHistoryLogs LeadHistory[]
@@ -48,6 +48,11 @@ model User {
   payslipsPrepared     Payslip[] @relation("PayslipPreparer")
   payslipsApproved     Payslip[] @relation("PayslipApprover")
   acknowledgedPayslips Payslip[] @relation("PayslipAcknowledger")
+
+  preparedJobOrders          JobOrder[] @relation("JobOrderPreparer")
+  accountManagerJobOrders    JobOrder[] @relation("JobOrderAccountManager")
+  operationsManagerJobOrders JobOrder[] @relation("JobOrderOperationsManager")
+  executiveJobOrders         JobOrder[] @relation("JobOrderExecutive")
 
   @@unique([email])
   @@map("user")
