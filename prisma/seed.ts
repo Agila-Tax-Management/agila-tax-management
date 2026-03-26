@@ -629,47 +629,17 @@ const TASK_TEMPLATES: TaskTemplateSeed[] = [
     ],
   },
   {
-    name: "BIR 1701Q – Quarterly Income Tax Return",
-    description: "Quarterly preparation and filing of BIR Form 1701Q for self-employed and professional clients.",
-    deptName: "Compliance",
-    daysDue: 60,
-    subtasks: [
-      { name: "Gather income and expense records",  description: "Collect all income statements, expense reports, and supporting documents for the quarter.", subtaskOrder: 1, priority: "HIGH",   daysDue: 7  },
-      { name: "Compute taxable income",             description: "Apply applicable deductions and compute net taxable income per the Tax Code.", subtaskOrder: 2, priority: "HIGH",   daysDue: 14 },
-      { name: "Prepare BIR Form 1701Q",             description: "Populate the quarterly income tax return with verified financial data.", subtaskOrder: 3, priority: "HIGH",   daysDue: 20 },
-      { name: "Senior accountant review",           description: "Supervisor validates computation and form before submission.", subtaskOrder: 4, priority: "NORMAL", daysDue: 25 },
-      { name: "E-file via eBIR Forms / eFPS",       description: "Submit the validated form through eBIR Forms or eFPS portal.", subtaskOrder: 5, priority: "URGENT", daysDue: 60 },
-      { name: "Pay quarterly tax due",              description: "Process payment and retain proof of payment for client records.", subtaskOrder: 6, priority: "URGENT", daysDue: 60 },
-      { name: "Send confirmation to client",        description: "Email the eFiling confirmation and payment receipt to the client for their records.", subtaskOrder: 7, priority: "NORMAL", daysDue: 61 },
-    ],
-  },
-  {
-    name: "BIR TIN Registration – New Business",
-    description: "End-to-end processing of BIR TIN and Certificate of Registration (COR) for a newly registered business.",
-    deptName: "Liaison",
-    daysDue: 10,
-    subtasks: [
-      { name: "Collect client documents",                description: "Gather DTI/SEC registration, valid ID, lease contract, and other required BIR documents.", subtaskOrder: 1, priority: "HIGH",   daysDue: 1  },
-      { name: "Fill out BIR Form 1901/1903",             description: "Complete the appropriate BIR registration form based on the business entity type.", subtaskOrder: 2, priority: "HIGH",   daysDue: 2  },
-      { name: "Submit to corresponding RDO",             description: "Submit registration forms and supporting documents to the Revenue District Office.", subtaskOrder: 3, priority: "URGENT", daysDue: 3  },
-      { name: "Pay registration fee and DST",            description: "Pay the P500 registration fee and Documentary Stamp Tax at the accredited bank.", subtaskOrder: 4, priority: "HIGH",   daysDue: 3  },
-      { name: "Claim Certificate of Registration",       description: "Follow up and claim the COR (BIR Form 2303) from the RDO.", subtaskOrder: 5, priority: "NORMAL", daysDue: 8  },
-      { name: "Purchase and register Books of Accounts", description: "Buy official Books of Accounts and have them stamped/registered at the RDO.", subtaskOrder: 6, priority: "NORMAL", daysDue: 9  },
-      { name: "File with client records",                description: "Scan and archive TIN, COR, and stamped books in the client's compliance folder.", subtaskOrder: 7, priority: "NORMAL", daysDue: 10 },
-    ],
-  },
-  {
     name: "Mayor's Permit Renewal",
     description: "Annual renewal of the Local Government Unit (LGU) Business Permit / Mayor's Permit.",
     deptName: "Liaison",
     daysDue: 15,
     subtasks: [
-      { name: "Gather renewal requirements",    description: "Collect previous year's permit, barangay clearance, and supporting documents required by the LGU.", subtaskOrder: 1, priority: "HIGH",   daysDue: 2  },
-      { name: "Secure barangay clearance",      description: "Obtain updated Barangay Business Clearance from the client's barangay hall.", subtaskOrder: 2, priority: "HIGH",   daysDue: 5  },
-      { name: "Submit application to City Hall",description: "File renewal application with all required documents at the BPLO.", subtaskOrder: 3, priority: "URGENT", daysDue: 8  },
-      { name: "Pay renewal fees",               description: "Pay all assessed fees including business tax, regulatory fees, and miscellaneous charges.", subtaskOrder: 4, priority: "URGENT", daysDue: 8  },
-      { name: "Claim renewed Mayor's Permit",   description: "Pick up the renewed Mayor's Permit / Business Permit certificate from the BPLO.", subtaskOrder: 5, priority: "NORMAL", daysDue: 14 },
-      { name: "File and deliver to client",     description: "Scan the permit, archive in client records, and deliver the original to the client.", subtaskOrder: 6, priority: "NORMAL", daysDue: 15 },
+      { name: "Gather renewal requirements",     description: "Collect previous year's permit, barangay clearance, and supporting documents required by the LGU.", subtaskOrder: 1, priority: "HIGH",   daysDue: 2  },
+      { name: "Secure barangay clearance",       description: "Obtain updated Barangay Business Clearance from the client's barangay hall.", subtaskOrder: 2, priority: "HIGH",   daysDue: 5  },
+      { name: "Submit application to City Hall", description: "File renewal application with all required documents at the BPLO.", subtaskOrder: 3, priority: "URGENT", daysDue: 8  },
+      { name: "Pay renewal fees",                description: "Pay all assessed fees including business tax, regulatory fees, and miscellaneous charges.", subtaskOrder: 4, priority: "URGENT", daysDue: 8  },
+      { name: "Claim renewed Mayor's Permit",    description: "Pick up the renewed Mayor's Permit / Business Permit certificate from the BPLO.", subtaskOrder: 5, priority: "NORMAL", daysDue: 14 },
+      { name: "File and deliver to client",      description: "Scan the permit, archive in client records, and deliver the original to the client.", subtaskOrder: 6, priority: "NORMAL", daysDue: 15 },
     ],
   },
 ];
@@ -996,7 +966,7 @@ async function main(): Promise<void> {
     if (!dept) continue;
 
     let template = await prisma.taskTemplate.findFirst({
-      where: { departmentId: dept.id, name: tmpl.name },
+      where: { name: tmpl.name },
     });
 
     if (!template) {
@@ -1004,7 +974,6 @@ async function main(): Promise<void> {
         data: {
           name: tmpl.name,
           description: tmpl.description,
-          departmentId: dept.id,
           daysDue: tmpl.daysDue,
         },
       });
@@ -1016,13 +985,28 @@ async function main(): Promise<void> {
       });
     }
 
+    // Upsert the department route for this template
+    let route = await prisma.taskTemplateRoute.findUnique({
+      where: { templateId_departmentId: { templateId: template.id, departmentId: dept.id } },
+    });
+    if (!route) {
+      route = await prisma.taskTemplateRoute.create({
+        data: {
+          templateId: template.id,
+          departmentId: dept.id,
+          routeOrder: 1,
+          daysDue: tmpl.daysDue,
+        },
+      });
+    }
+
     for (const sub of tmpl.subtasks) {
       const existingSub = await prisma.taskTemplateSubtask.findFirst({
-        where: { templateId: template.id, name: sub.name },
+        where: { routeId: route.id, name: sub.name },
       });
       if (!existingSub) {
         await prisma.taskTemplateSubtask.create({
-          data: { templateId: template.id, ...sub },
+          data: { routeId: route.id, ...sub },
         });
       } else {
         await prisma.taskTemplateSubtask.update({
@@ -1130,67 +1114,17 @@ async function main(): Promise<void> {
     tasks: Array<{ name: string; description: string; priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"; daysFromNow: number }>;
   }> = [
     {
-      deptName: "Client Relations",
+      deptName: "Compliance",
       tasks: [
-        { name: "Client Escalation – ABC Enterprises", description: "Follow up on escalated client concern and coordinate resolution timeline with all departments.", priority: "URGENT", daysFromNow: 3 },
-        { name: "Monthly Performance Review – March 2026", description: "Review KPIs and output metrics for the Client Relations department.", priority: "HIGH", daysFromNow: 6 },
-        { name: "Client Retention Follow-up – Santos General Merchandise", description: "Conduct quarterly check-in call and document client satisfaction status.", priority: "NORMAL", daysFromNow: 12 },
+        { name: "BIR 2550M VAT Filing – March 2026", description: "File monthly VAT return (BIR Form 2550M) for March 2026. Deadline is 20th day of the following month.", priority: "HIGH", daysFromNow: 26 },
+        { name: "BIR 1701Q Q1 2026 Filing", description: "Prepare and file the BIR 1701Q quarterly income tax return for Q1 2026. Reconcile books with CAS before submission.", priority: "URGENT", daysFromNow: 21 },
       ],
     },
     {
       deptName: "Liaison",
       tasks: [
-        { name: "BIR TIN Registration – New Client Onboarding", description: "Process TIN registration for newly onboarded client. Prepare all required BIR documents before submission to the RDO.", priority: "HIGH", daysFromNow: 5 },
         { name: "Mayor's Permit Renewal – Cebu City LGU", description: "Follow up on Mayor's Permit renewal at City Hall. Bring OR from initial payment and all supporting documents.", priority: "URGENT", daysFromNow: 4 },
-        { name: "SSS / PhilHealth / Pag-IBIG Registration – New Employee", description: "Process government benefit registrations for newly hired employees across SSS, PhilHealth, and Pag-IBIG.", priority: "NORMAL", daysFromNow: 10 },
-      ],
-    },
-    {
-      deptName: "Compliance",
-      tasks: [
-        { name: "BIR 1701Q Q1 2026 Filing", description: "Prepare and file the BIR 1701Q quarterly income tax return for Q1 2026. Reconcile books with CAS before submission.", priority: "URGENT", daysFromNow: 21 },
-        { name: "BIR 2550M VAT Filing – March 2026", description: "File monthly VAT return (BIR Form 2550M) for March 2026. Deadline is 20th day of the following month.", priority: "HIGH", daysFromNow: 26 },
-        { name: "Audited Financial Statements – FY2025", description: "Complete the AFS for FY2025. Coordinate with external auditor for audit notes and final sign-off.", priority: "URGENT", daysFromNow: 36 },
-        { name: "Pag-IBIG Monthly Remittance – March", description: "Submit Pag-IBIG Fund contribution remittances for all enrolled employees for March 2026.", priority: "NORMAL", daysFromNow: 8 },
-      ],
-    },
-    {
-      deptName: "Operations",
-      tasks: [
-        { name: "Q1 2026 Compliance Summary Report", description: "Compile Q1 summary of all compliance filings and outstanding deadlines for management presentation.", priority: "URGENT", daysFromNow: 16 },
-        { name: "April Cross-Department Coordination Meeting", description: "Schedule and facilitate the cross-department planning session for April priorities. Prepare agenda and invite all team leads.", priority: "HIGH", daysFromNow: 9 },
-        { name: "Process Improvement Review – Liaison Workflow", description: "Evaluate the current liaison field reporting process and identify bottlenecks for Q2 improvement.", priority: "NORMAL", daysFromNow: 20 },
-      ],
-    },
-    {
-      deptName: "Accounting",
-      tasks: [
-        { name: "Petty Cash Fund Replenishment – March", description: "Process and document PCF replenishment for March 2026 expenses. Attach all liquidation receipts.", priority: "NORMAL", daysFromNow: 5 },
-        { name: "Client Invoice Batch – March 2026", description: "Generate and send out invoices to all active clients for services rendered in March.", priority: "HIGH", daysFromNow: 8 },
-        { name: "Payroll Reconciliation – March 2026", description: "Reconcile payroll figures against attendance and HR-approved adjustments before final release.", priority: "HIGH", daysFromNow: 7 },
-      ],
-    },
-    {
-      deptName: "Human Resources",
-      tasks: [
-        { name: "Leave Request Processing – March", description: "Review and approve all pending leave applications filed for the month of March.", priority: "NORMAL", daysFromNow: 4 },
-        { name: "Payroll Run – March 2026", description: "Prepare and release payroll for all active employees for the March 2026 pay period.", priority: "HIGH", daysFromNow: 7 },
-        { name: "201 File Audit – Q1 2026", description: "Verify completeness of all employee 201 files. Flag missing documents and follow up with concerned staff.", priority: "NORMAL", daysFromNow: 15 },
-      ],
-    },
-    {
-      deptName: "Administration",
-      tasks: [
-        { name: "Office Supplies Procurement – Q1", description: "Consolidate office supply requests from all departments and place the Q1 order with approved vendors.", priority: "LOW", daysFromNow: 14 },
-        { name: "Lease Renewal Negotiation", description: "Coordinate with building management regarding office lease renewal terms and new rate proposal.", priority: "HIGH", daysFromNow: 30 },
-      ],
-    },
-    {
-      deptName: "IT",
-      tasks: [
-        { name: "Server Backup Verification – March", description: "Verify all automated server and database backups completed successfully for the month of March.", priority: "HIGH", daysFromNow: 2 },
-        { name: "Employee Workstation Setup – New Hire", description: "Configure workstation, user accounts, email, and system access permissions for incoming employee.", priority: "NORMAL", daysFromNow: 7 },
-        { name: "Security Patch Deployment – Q1", description: "Apply pending OS and application security patches across all workstations and servers.", priority: "HIGH", daysFromNow: 10 },
+        { name: "BIR TIN Registration – New Client Onboarding", description: "Process TIN registration for newly onboarded client. Prepare all required BIR documents before submission to the RDO.", priority: "HIGH", daysFromNow: 5 },
       ],
     },
   ];

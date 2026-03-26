@@ -26,15 +26,11 @@ model TaskTemplate {
     name        String // e.g., "BIR Registration"
     description String?
 
-    // 🟢 The template belongs strictly to ONE department
-    departmentId Int
-    department   Department @relation("DepartmentTemplates", fields: [departmentId], references: [id])
-
-    // Expected days to complete this task
+    // Expected days to complete the full multi-department workflow
     daysDue Int?
 
-    subtasks TaskTemplateSubtask[]
-    tasks    Task[]
+    departmentRoutes    TaskTemplateRoute[]
+    tasks               Task[]
 
     servicePlans        ServicePlan[]
     serviceOneTimePlans ServiceOneTime[]
@@ -42,17 +38,38 @@ model TaskTemplate {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    @@index([departmentId])
     @@map("task_template")
+}
+
+// ─── Task Template Route (One department step in the workflow) ─────
+model TaskTemplateRoute {
+    id         Int          @id @default(autoincrement())
+    templateId Int
+    template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+    departmentId Int
+    department   Department @relation("DepartmentTemplateRoutes", fields: [departmentId], references: [id])
+
+    routeOrder Int @default(1)
+    daysDue    Int?
+
+    subtasks TaskTemplateSubtask[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([templateId, departmentId])
+    @@index([templateId])
+    @@map("task_template_route")
 }
 
 // ─── Task Template Subtask (Blueprint Checklists) ─────────────────
 model TaskTemplateSubtask {
     id Int @id @default(autoincrement())
 
-    // 🟢 Links directly to the Template
-    templateId Int
-    template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+    // 🟢 Links to a specific route (department step), not the template directly
+    routeId Int
+    route   TaskTemplateRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
     name        String
     description String?
@@ -65,7 +82,7 @@ model TaskTemplateSubtask {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    @@index([templateId])
+    @@index([routeId])
     @@map("task_template_subtask")
 }
 

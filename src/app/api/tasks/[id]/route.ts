@@ -8,8 +8,8 @@ import { logActivity, getRequestMeta } from "@/lib/activity-log";
 const taskInclude = {
   client: { select: { id: true, businessName: true } },
   template: { select: { id: true, name: true } },
-  currentDepartment: { select: { id: true, name: true } },
-  currentStatus: { select: { id: true, name: true, color: true } },
+  department: { select: { id: true, name: true } },
+  status: { select: { id: true, name: true, color: true } },
   assignedTo: {
     select: { id: true, firstName: true, lastName: true, employeeNo: true },
   },
@@ -18,7 +18,6 @@ const taskInclude = {
     include: {
       department: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true } },
-      status: { select: { id: true, name: true, color: true, isExitStep: true } },
     },
   },
   conversations: {
@@ -41,13 +40,12 @@ const patchTaskSchema = z.object({
   description: z.string().nullable().optional(),
   clientId: z.number().int().positive().nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
-  currentDepartmentId: z.number().int().positive().nullable().optional(),
-  currentStatusId: z.number().int().positive().nullable().optional(),
+  departmentId: z.number().int().positive().nullable().optional(),
+  statusId: z.number().int().positive().nullable().optional(),
   assignedToId: z.number().int().positive().nullable().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   daysDue: z.number().int().positive().nullable().optional(),
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),
-  currentRouteOrder: z.number().int().min(1).optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -84,8 +82,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
   const existing = await prisma.task.findUnique({
     where: { id: taskId },
     include: {
-      currentDepartment: { select: { name: true } },
-      currentStatus: { select: { name: true } },
+      department: { select: { name: true } },
+      status: { select: { name: true } },
       assignedTo: { select: { firstName: true, lastName: true } },
     },
   });
@@ -131,22 +129,22 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     newValue?: string;
   }[] = [];
 
-  if (rest.currentStatusId !== undefined && rest.currentStatusId !== existing.currentStatusId) {
+  if (rest.statusId !== undefined && rest.statusId !== existing.statusId) {
     historyEntries.push({
       taskId,
       actorId: session.user.id,
       changeType: "STATUS_CHANGED",
-      oldValue: existing.currentStatus?.name ?? undefined,
-      newValue: updated.currentStatus?.name ?? undefined,
+      oldValue: existing.status?.name ?? undefined,
+      newValue: updated.status?.name ?? undefined,
     });
   }
-  if (rest.currentDepartmentId !== undefined && rest.currentDepartmentId !== existing.currentDepartmentId) {
+  if (rest.departmentId !== undefined && rest.departmentId !== existing.departmentId) {
     historyEntries.push({
       taskId,
       actorId: session.user.id,
       changeType: "DEPARTMENT_CHANGED",
-      oldValue: existing.currentDepartment?.name ?? undefined,
-      newValue: updated.currentDepartment?.name ?? undefined,
+      oldValue: existing.department?.name ?? undefined,
+      newValue: updated.department?.name ?? undefined,
     });
   }
   if (rest.assignedToId !== undefined && rest.assignedToId !== existing.assignedToId) {

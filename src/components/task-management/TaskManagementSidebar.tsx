@@ -4,35 +4,10 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Shield, Truck, FolderKanban, Settings2, Handshake, UserCog,
-  Building2, Calculator, Users, Monitor,
+  LayoutDashboard, ClipboardList, FolderKanban, Settings2,
   type LucideIcon,
 } from 'lucide-react';
-import type { TaskSource } from '@/lib/mock-task-management-data';
-import { SOURCE_CONFIG } from '@/lib/mock-task-management-data';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
-
-const DEPT_TO_NAV_RAW: Array<{ aliases: string[]; route: string; icon: LucideIcon; source: TaskSource }> = [
-  { aliases: ['operations', 'operations manager', 'om'], route: '/portal/task-management/operations',         icon: UserCog,    source: 'om' },
-  { aliases: ['client relations', 'client-relations'],   route: '/portal/task-management/client-relations', icon: Handshake,  source: 'client-relations' },
-  { aliases: ['liaison'],                                route: '/portal/task-management/liaison',          icon: Truck,      source: 'liaison' },
-  { aliases: ['compliance'],                             route: '/portal/task-management/compliance',       icon: Shield,     source: 'compliance' },
-  { aliases: ['admin', 'administration', 'administrator'], route: '/portal/task-management/admin',          icon: Building2,  source: 'admin' },
-  { aliases: ['accounting', 'accounts'],                 route: '/portal/task-management/accounting',       icon: Calculator, source: 'accounting' },
-  { aliases: ['human resources', 'hr', 'human resource'], route: '/portal/task-management/hr',              icon: Users,      source: 'hr' },
-  { aliases: ['it', 'information technology', 'it department'], route: '/portal/task-management/it',        icon: Monitor,    source: 'it' },
-];
-
-// Build a flat lowercase-keyed lookup map
-const DEPT_NAV_MAP = new Map<string, { route: string; icon: LucideIcon; source: TaskSource }>();
-for (const entry of DEPT_TO_NAV_RAW) {
-  const { aliases, ...cfg } = entry;
-  for (const alias of aliases) DEPT_NAV_MAP.set(alias, cfg);
-}
-
-function lookupDeptNav(name: string) {
-  return DEPT_NAV_MAP.get(name.toLowerCase().trim());
-}
 
 type SectionItem = { id: string; label: string; isSection: true };
 type NavItem   = { id: string; label: string; icon: LucideIcon; href: string; badge: number; isSection?: never };
@@ -75,22 +50,13 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
   }, []);
 
   const navItems = useMemo((): SidebarItem[] => {
-    const seenRoutes = new Set<string>();
-    const deptItems: NavItem[] = [];
-    for (const dept of departments) {
-      const cfg = lookupDeptNav(dept.name);
-      const href = cfg?.route ?? `/portal/task-management/tasks?dept=${dept.id}`;
-      if (seenRoutes.has(href)) continue;
-      seenRoutes.add(href);
-      const badge = deptActiveCounts.get(dept.id) ?? 0;
-      deptItems.push({
-        id: `dept-${dept.id}`,
-        label: cfg ? SOURCE_CONFIG[cfg.source]?.label ?? dept.name : dept.name,
-        icon: (cfg?.icon ?? FolderKanban) as LucideIcon,
-        href,
-        badge,
-      });
-    }
+    const deptItems: NavItem[] = departments.map(dept => ({
+      id: `dept-${dept.id}`,
+      label: dept.name,
+      icon: FolderKanban as LucideIcon,
+      href: `/portal/task-management/tasks?dept=${dept.id}`,
+      badge: deptActiveCounts.get(dept.id) ?? 0,
+    }));
     return [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard as LucideIcon, href: '/portal/task-management', badge: 0 },
       { id: 'section-depts', label: 'DEPARTMENTS', isSection: true as const },

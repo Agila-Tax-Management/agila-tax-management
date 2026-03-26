@@ -228,7 +228,8 @@ const s = StyleSheet.create({
 /* ── Helpers ─────────────────────────────────────────────────────── */
 function fmt(val: string | number): string {
   const n = typeof val === 'string' ? parseFloat(val) : val;
-  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Use 'PHP ' instead of ₱ — Helvetica does not include the peso glyph (U+20B1)
+  return 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtDate(val: string | null | undefined): string {
@@ -261,10 +262,10 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
   const showSubtotals = subscriptionItems.length > 0 && oneTimeItems.length > 0;
 
   const sigs = [
-    { role: 'Prepared By',              name: jo.preparedBy?.name,       date: jo.datePrepared },
-    { role: 'Account Manager',          name: jo.accountManager?.name,   date: jo.dateAccountManagerAck },
-    { role: 'Account Officer',          name: jo.operationsManager?.name,date: jo.dateOperationsManagerAck },
-    { role: 'Approved by (Executive)',  name: jo.executive?.name,        date: jo.dateExecutiveAck },
+    { role: 'Prepared By',              name: jo.preparedBy?.name,        date: jo.datePrepared },
+    { role: 'Operations Manager',       name: jo.operationsManager?.name, date: jo.dateOperationsManagerAck },
+    { role: 'Account Officer',          name: jo.accountManager?.name,    date: jo.dateAccountManagerAck },
+    { role: 'Approved by (Executive)',  name: jo.executive?.name,         date: jo.dateExecutiveAck },
   ];
 
   return (
@@ -338,7 +339,7 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
                     : '—'}
                 </Text>
                 <Text style={[s.td, s.tdIndigo, s.cTotal]}>
-                  ₱{parseFloat(item.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  PHP {parseFloat(item.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </Text>
                 <Text style={[s.tdMuted, s.cRemarks]}>{item.remarks ?? '—'}</Text>
               </View>
@@ -347,7 +348,7 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
               <View style={s.subtotalRow}>
                 <Text style={s.subtotalLabel}>Subtotal</Text>
                 <Text style={s.subtotalValue}>
-                  ₱{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  PHP {subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </Text>
                 <View style={s.cRemarks} />
               </View>
@@ -378,7 +379,7 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
                     : '—'}
                 </Text>
                 <Text style={[s.td, s.tdIndigo, s.cTotal]}>
-                  ₱{parseFloat(item.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  PHP {parseFloat(item.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </Text>
                 <Text style={[s.tdMuted, s.cRemarks]}>{item.remarks ?? '—'}</Text>
               </View>
@@ -387,7 +388,7 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
               <View style={s.subtotalRow}>
                 <Text style={s.subtotalLabel}>Subtotal</Text>
                 <Text style={s.subtotalValue}>
-                  ₱{otTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  PHP {otTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </Text>
                 <View style={s.cRemarks} />
               </View>

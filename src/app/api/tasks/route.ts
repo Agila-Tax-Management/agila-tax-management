@@ -8,8 +8,8 @@ import { logActivity, getRequestMeta } from "@/lib/activity-log";
 const taskInclude = {
   client: { select: { id: true, businessName: true } },
   template: { select: { id: true, name: true } },
-  currentDepartment: { select: { id: true, name: true } },
-  currentStatus: { select: { id: true, name: true, color: true } },
+  department: { select: { id: true, name: true } },
+  status: { select: { id: true, name: true, color: true } },
   assignedTo: {
     select: {
       id: true,
@@ -23,7 +23,6 @@ const taskInclude = {
     include: {
       department: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true } },
-      status: { select: { id: true, name: true, color: true, isExitStep: true } },
     },
   },
 } as const;
@@ -33,8 +32,8 @@ const createTaskSchema = z.object({
   description: z.string().optional(),
   clientId: z.number().int().positive().optional(),
   templateId: z.number().int().positive().optional(),
-  currentDepartmentId: z.number().int().positive().optional(),
-  currentStatusId: z.number().int().positive().optional(),
+  departmentId: z.number().int().positive().optional(),
+  statusId: z.number().int().positive().optional(),
   assignedToId: z.number().int().positive().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   daysDue: z.number().int().positive().optional(),
@@ -59,8 +58,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const tasks = await prisma.task.findMany({
     where: {
-      ...(departmentId ? { currentDepartmentId: Number(departmentId) } : {}),
-      ...(statusId ? { currentStatusId: Number(statusId) } : {}),
+      ...(departmentId ? { departmentId: Number(departmentId) } : {}),
+      ...(statusId ? { statusId: Number(statusId) } : {}),
       ...(priority ? { priority: priority as "LOW" | "NORMAL" | "HIGH" | "URGENT" } : {}),
       ...(clientId ? { clientId: Number(clientId) } : {}),
       ...(assignedToId ? { assignedToId: Number(assignedToId) } : {}),
