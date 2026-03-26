@@ -7,7 +7,7 @@ import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { provisionLeadAccountAction } from '../actions';
-import type { Lead } from './LeadDetailModal';
+import type { Lead } from './lead-types';
 
 type BusinessEntity =
   | 'INDIVIDUAL'

@@ -43,8 +43,8 @@ model Employee {
     id Int @id @default(autoincrement())
 
     // ─── Dual Auth Links ───
-    userId       String?     @unique
-    user         User?       @relation(fields: [userId], references: [id])
+    userId String? @unique
+    user   User?   @relation(fields: [userId], references: [id])
 
     clientUserId String?     @unique
     clientUser   ClientUser? @relation(fields: [clientUserId], references: [id])
@@ -60,12 +60,12 @@ model Employee {
 
     email         String?
     personalEmail String?
-    birthDate    DateTime
-    placeOfBirth String?
-    gender       String
-    civilStatus  String?
-    citizenship  String?
-    phone        String
+    birthDate     DateTime
+    placeOfBirth  String?
+    gender        String
+    civilStatus   String?
+    citizenship   String?
+    phone         String
 
     // ─── Current Address ───
     currentStreet   String?
@@ -87,18 +87,18 @@ model Employee {
     course                String?
     yearGraduated         String?
     certifications        String?
-    
+
     active     Boolean @default(true)
     softDelete Boolean @default(false)
 
     // ─── Existing Relations ───
-    governmentIds  EmployeeGovernmentIds?
-    employments    EmployeeEmployment[]
-    requirements   EmployeeRequirement[]
-    appAccess      EmployeeAppAccess[]
-    
-    ledTeams       EmployeeTeam[]         @relation("TeamLeader")
-    managedReports EmployeeEmployment[]   @relation("ReportingManager")
+    governmentIds EmployeeGovernmentIds?
+    employments   EmployeeEmployment[]
+    requirements  EmployeeRequirement[]
+    appAccess     EmployeeAppAccess[]
+
+    ledTeams       EmployeeTeam[]       @relation("TeamLeader")
+    managedReports EmployeeEmployment[] @relation("ReportingManager")
 
     assignedTasks    Task[]        @relation("TaskAssignee")
     assignedSubtasks TaskSubtask[] @relation("SubtaskAssignee")
@@ -113,7 +113,7 @@ model Employee {
     leaveCredits      EmployeeLeaveCredit[]
     payslips          Payslip[]
     cashAdvances      CashAdvance[]
-    governmentLoans          GovernmentLoan[]
+    governmentLoans   GovernmentLoan[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -160,7 +160,7 @@ model EmployeeEmployment {
     department   Department? @relation(fields: [departmentId], references: [id])
 
     positionId Int?
-    position   Position?   @relation(fields: [positionId], references: [id])
+    position   Position? @relation(fields: [positionId], references: [id])
 
     teamId Int?
     team   EmployeeTeam? @relation(fields: [teamId], references: [id])
@@ -173,14 +173,13 @@ model EmployeeEmployment {
     employmentStatus EmploymentStatus @default(ACTIVE)
     employeeLevelId  Int?
     employeeLevel    EmployeeLevel?   @relation(fields: [employeeLevelId], references: [id])
-    
 
     hireDate           DateTime?
     regularizationDate DateTime?
     endDate            DateTime? // Maps to inactive_date
 
     // Replaces past_role boolean. If true, this is a historical record.
-    isPastRole         Boolean @default(false) 
+    isPastRole Boolean @default(false)
 
     contracts EmployeeContract[]
 
@@ -195,35 +194,34 @@ model EmployeeEmployment {
 // ─── Updated EmployeeContract ─────────────────────────────────────
 // Replace your existing EmployeeContract with this to hold salary/tax configs
 model EmployeeContract {
-    id                  Int @id @default(autoincrement())
+    id Int @id @default(autoincrement())
 
-    employmentId        Int
-    employment          EmployeeEmployment @relation(fields: [employmentId], references: [id])
+    employmentId Int
+    employment   EmployeeEmployment @relation(fields: [employmentId], references: [id])
 
     // ─── HR & Legal Details ───
-    contractType        ContractType
-    status              ContractStatus
+    contractType ContractType
+    status       ContractStatus
 
-    contractStart       DateTime
-    contractEnd         DateTime?
+    contractStart DateTime
+    contractEnd   DateTime?
 
-    scheduleId          Int?
-    schedule            WorkSchedule? @relation(fields: [scheduleId], references: [id])
+    scheduleId Int?
+    schedule   WorkSchedule? @relation(fields: [scheduleId], references: [id])
 
     workingHoursPerWeek Int?
     signedDate          DateTime?
-    notes               String? @db.Text
+    notes               String?   @db.Text
 
     // ─── THE CONNECTION TO PAYROLL MATH ───
-    compensations       EmployeeCompensation[]
+    compensations EmployeeCompensation[]
 
-    createdAt           DateTime @default(now())
-    updatedAt           DateTime @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@index([employmentId])
     @@map("employee_contract")
 }
-
 
 // ─── Work Schedule Templates ──────────────────────────────────────
 // Reusable schedule definitions (e.g. Office Hours, Night Shift).
@@ -299,17 +297,17 @@ model Department {
 
     name        String
     description String?
-    
+
     positions   Position[]
     employments EmployeeEmployment[]
 
     // ─── NEW: Task & Workflow Relations ───
-    templateRoutes TaskTemplateRoute[]    @relation("DepartmentTemplateRoutes")
-    statuses       DepartmentTaskStatus[] @relation("DepartmentStatuses")
-    activeTasks    Task[]                 @relation("TaskCurrentDepartment")
-    subtasks       TaskSubtask[]          @relation("SubtaskDepartment")
+    statuses  DepartmentTaskStatus[] @relation("DepartmentStatuses")
+    templates TaskTemplate[]         @relation("DepartmentTemplates")
+    tasks     Task[]                 @relation("TaskDepartment")
 
-    createdAt DateTime @default(now())
+    createdAt    DateTime      @default(now())
+    taskSubtasks TaskSubtask[]
 
     @@unique([clientId, name])
 }

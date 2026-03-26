@@ -22,6 +22,10 @@ const LEAD_INCLUDE = {
     include: { actor: { select: { id: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
+  invoices: {
+    select: { id: true, invoiceNumber: true, status: true },
+    orderBy: { issueDate: "asc" as const },
+  },
 } as const;
 
 /**
@@ -87,6 +91,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
   });
 
   const isStatusChange = !!(parsed.data.statusId && parsed.data.statusId !== existing.statusId);
+  const isTsaSigned = parsed.data.isSignedTSA === true && !existing.isSignedTSA;
   const action = isStatusChange ? "STATUS_CHANGE" : "UPDATED";
 
   // Log lead history entry
@@ -102,6 +107,13 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       changeType: "STATUS_CHANGED",
       oldValue: oldStatus?.name ?? String(existing.statusId),
       newValue: newStatus?.name ?? String(parsed.data.statusId),
+    });
+  } else if (isTsaSigned) {
+    void logLeadHistory({
+      leadId,
+      actorId: session.user.id,
+      changeType: "TSA_SIGNED",
+      newValue: lead.signedTsaUrl ?? "TSA document has been marked as signed",
     });
   } else {
     void logLeadHistory({

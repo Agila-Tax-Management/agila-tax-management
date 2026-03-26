@@ -12,6 +12,10 @@ const LEAD_INCLUDE = {
   servicePlans: { select: { id: true, name: true, serviceRate: true, recurring: true } },
   serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true } },
   promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true, promoFor: true } },
+  invoices: {
+    select: { id: true, invoiceNumber: true, status: true },
+    orderBy: { issueDate: "asc" as const },
+  },
 } as const;
 
 /**

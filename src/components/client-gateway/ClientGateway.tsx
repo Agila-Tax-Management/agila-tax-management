@@ -1,56 +1,64 @@
 // src/components/client-gateway/ClientGateway.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users, Search, Filter,
-  ExternalLink, Eye, Trash2, ChevronUp, ChevronDown, AlertCircle,
+  ExternalLink, Eye, Trash2, ChevronUp, ChevronDown, AlertCircle, Loader2,
 } from 'lucide-react';
-import {
-  MOCK_GATEWAY_CLIENTS,
-  type GatewayClient,
-  type ClientStatus,
-} from '@/lib/mock-client-gateway-data';
-import { ClientViewModal } from '@/components/client-gateway/ClientViewModal';
-import { ClientEditModal } from '@/components/client-gateway/ClientEditModal';
+import type { ClientListItem } from '@/types/client-gateway.types';
+import { useToast } from '@/context/ToastContext';
 
-type SortField = 'clientNumber' | 'businessName' | 'companyCode' | 'status' | 'createdAt';
+type SortField = 'clientNo' | 'businessName' | 'companyCode' | 'active' | 'createdAt';
 type SortDir   = 'asc' | 'desc';
-
-const STATUS_BADGE: Record<ClientStatus, string> = {
-  Active:    'bg-emerald-100 text-emerald-700 border border-emerald-200',
-  Inactive:  'bg-slate-100 text-slate-600 border border-slate-200',
-  Suspended: 'bg-red-100 text-red-700 border border-red-200',
-};
+type StatusFilter = 'All' | 'Active' | 'Inactive';
 
 export function ClientGateway(): React.ReactNode {
-  const [searchTerm, setSearchTerm]         = useState('');
-  const [statusFilter, setStatusFilter]     = useState<ClientStatus | 'All'>('All');
-  const [sortField, setSortField]           = useState<SortField>('clientNumber');
-  const [sortDir, setSortDir]               = useState<SortDir>('asc');
-  const [selectedClient, setSelectedClient] = useState<GatewayClient | null>(null);
-  const [viewOpen, setViewOpen]             = useState(false);
-  const [deleteTarget, setDeleteTarget]     = useState<GatewayClient | null>(null);
-  const [clients, setClients]               = useState<GatewayClient[]>(MOCK_GATEWAY_CLIENTS);
-  const [editTarget, setEditTarget]         = useState<GatewayClient | null>(null);
-  const [editOpen, setEditOpen]             = useState(false);
+  const router = useRouter();
+  const { error: toastError } = useToast();
+  const [clients, setClients]           = useState<ClientListItem[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [searchTerm, setSearchTerm]     = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
+  const [sortField, setSortField]       = useState<SortField>('clientNo');
+  const [sortDir, setSortDir]           = useState<SortDir>('asc');
+  const [deleteTarget, setDeleteTarget] = useState<ClientListItem | null>(null);
+  const [deleting, setDeleting]         = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/client-gateway/clients');
+        if (!res.ok) throw new Error('Failed to load clients');
+        const json = await res.json() as { data: ClientListItem[] };
+        setClients(json.data);
+      } catch {
+        toastError('Load failed', 'Could not fetch the client list.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [toastError]);
 
   const filteredClients = useMemo(() => {
     let list = clients;
-    if (statusFilter !== 'All') list = list.filter((c) => c.status === statusFilter);
+    if (statusFilter === 'Active') list = list.filter((c) => c.active);
+    if (statusFilter === 'Inactive') list = list.filter((c) => !c.active);
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       list = list.filter(
         (c) =>
           c.businessName.toLowerCase().includes(q) ||
-          c.clientNumber.toLowerCase().includes(q) ||
-          c.companyCode.toLowerCase().includes(q),
+          (c.clientNo ?? '').toLowerCase().includes(q) ||
+          (c.companyCode ?? '').toLowerCase().includes(q),
       );
     }
     list = [...list].sort((a, b) => {
-      const av = a[sortField] as string;
-      const bv = b[sortField] as string;
-      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      const av = (a[sortField] ?? '') as string;
+      const bv = (b[sortField] ?? '') as string;
+      if (sortField === 'active') return sortDir === 'asc' ? (a.active ? -1 : 1) : (a.active ? 1 : -1);
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     });
     return list;
   }, [clients, searchTerm, statusFilter, sortField, sortDir]);
@@ -71,10 +79,19 @@ export function ClientGateway(): React.ReactNode {
       : <ChevronDown size={12} className="text-[#25238e]" />;
   }
 
-  function handleDeleteConfirm() {
+  async function handleDeleteConfirm() {
     if (!deleteTarget) return;
-    setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-    setDeleteTarget(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/settings/clients/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      toastError('Delete failed', 'Could not delete this client.');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -89,10 +106,14 @@ export function ClientGateway(): React.ReactNode {
             </p>
           </div>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card border border-border text-xs font-semibold text-foreground">
-              <Users size={13} className="text-[#25238e]" />
-              {clients.length} Total
-            </div>
+            {loading ? (
+              <Loader2 size={16} className="animate-spin text-muted-foreground" />
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card border border-border text-xs font-semibold text-foreground">
+                <Users size={13} className="text-[#25238e]" />
+                {clients.length} Total
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -114,7 +135,7 @@ export function ClientGateway(): React.ReactNode {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Filter size={14} className="text-muted-foreground" />
-                {(['All', 'Active', 'Inactive', 'Suspended'] as const).map((s) => (
+                {(['All', 'Active', 'Inactive'] as const).map((s) => (
                   <button
                     key={s}
                     onClick={() => setStatusFilter(s)}
@@ -138,10 +159,10 @@ export function ClientGateway(): React.ReactNode {
                     <tr>
                       {(
                         [
-                          { label: 'Client #',   field: 'clientNumber' },
+                          { label: 'Client #',      field: 'clientNo'     },
                           { label: 'Business Name', field: 'businessName' },
-                          { label: 'Company Code',  field: 'companyCode' },
-                          { label: 'Status',        field: 'status' },
+                          { label: 'Company Code',  field: 'companyCode'  },
+                          { label: 'Status',        field: 'active'       },
                         ] as { label: string; field: SortField }[]
                       ).map(({ label, field }) => (
                         <th
@@ -173,22 +194,27 @@ export function ClientGateway(): React.ReactNode {
                       filteredClients.map((client) => (
                         <tr key={client.id} className="hover:bg-muted/30 transition-colors">
                           <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
-                            {client.clientNumber}
+                            {client.clientNo ?? '—'}
                           </td>
                           <td className="px-4 py-3">
-                            <span className="font-semibold text-foreground">{client.businessName}</span>
+                            <p className="font-semibold text-foreground">{client.businessName}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{client.businessEntity.replace(/_/g, ' ')}</p>
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                            {client.companyCode}
+                            {client.companyCode ?? '—'}
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_BADGE[client.status]}`}>
-                              {client.status}
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                              client.active
+                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}>
+                              {client.active ? 'Active' : 'Inactive'}
                             </span>
                           </td>
                           <td className="px-4 py-3">
                             <a
-                              href={`${process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? ''}${client.portalLink}`}
+                              href={`${process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? '/client-portal'}/${client.portalName}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
@@ -199,7 +225,7 @@ export function ClientGateway(): React.ReactNode {
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">
                               <button
-                                onClick={() => { setSelectedClient(client); setViewOpen(true); }}
+                                onClick={() => router.push(`/portal/client-gateway/clients/${client.id}`)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all"
                               >
                                 <Eye size={12} /> View
@@ -219,30 +245,11 @@ export function ClientGateway(): React.ReactNode {
                 </table>
               </div>
               <div className="px-4 py-2.5 border-t border-border bg-muted/30 text-xs text-muted-foreground">
-                Showing {filteredClients.length} of {clients.length} clients
+                {loading ? 'Loading…' : `Showing ${filteredClients.length} of ${clients.length} clients`}
               </div>
             </div>
           </div>
         </div>
-
-      {/* View Modal */}
-      <ClientViewModal
-        client={selectedClient}
-        isOpen={viewOpen}
-        onClose={() => setViewOpen(false)}
-        onEdit={(c) => { setViewOpen(false); setEditTarget(c); setEditOpen(true); }}
-      />
-
-      {/* Edit Modal */}
-      <ClientEditModal
-        client={editTarget}
-        isOpen={editOpen}
-        onClose={() => setEditOpen(false)}
-        onSave={(updated) => {
-          setClients((prev) => prev.map((c) => c.id === updated.id ? updated : c));
-          setEditOpen(false);
-        }}
-      />
 
       {/* Delete Confirm Modal */}
       {deleteTarget && (
@@ -259,7 +266,7 @@ export function ClientGateway(): React.ReactNode {
             </div>
             <p className="text-sm text-slate-700 mb-6">
               Are you sure you want to delete{' '}
-              <strong>{deleteTarget.businessName}</strong> ({deleteTarget.clientNumber})?
+              <strong>{deleteTarget.businessName}</strong>{deleteTarget.clientNo ? ` (${deleteTarget.clientNo})` : ''}?
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -270,14 +277,16 @@ export function ClientGateway(): React.ReactNode {
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors"
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
               >
+                {deleting ? <Loader2 size={14} className="animate-spin" /> : null}
                 Yes, Delete
               </button>
             </div>
           </div>
         </div>
-    )}
+      )}
     </div>
   );
 }

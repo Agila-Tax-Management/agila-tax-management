@@ -216,6 +216,9 @@ export const updateLeadSchema = z.object({
   statusId: z.number().int().positive().optional(),
   assignedAgentId: z.string().optional().nullable(),
   isAccountCreated: z.boolean().optional(),
+  // TSA Document
+  signedTsaUrl: z.string().url('Invalid URL format').optional().nullable(),
+  isSignedTSA: z.boolean().optional(),
   // Services Interested In
   servicePlanIds: z.array(z.number().int().positive()).optional(),
   serviceOneTimeIds: z.array(z.number().int().positive()).optional(),

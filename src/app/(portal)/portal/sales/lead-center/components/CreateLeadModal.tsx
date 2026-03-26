@@ -8,6 +8,7 @@ import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { BUSINESS_TYPES, LEAD_SOURCES } from '@/lib/constants';
+import type { Lead } from './lead-types';
 
 interface LeadStatus {
   id: number;
@@ -19,36 +20,6 @@ interface LeadStatus {
 }
 
 interface AssignedAgent { id: string; name: string; email: string; }
-
-interface Lead {
-  id: number;
-  firstName: string;
-  middleName: string | null;
-  lastName: string;
-  businessName: string | null;
-  contactNumber: string | null;
-  businessType: string;
-  leadSource: string;
-  address: string | null;
-  notes: string | null;
-  statusId: number;
-  status: LeadStatus;
-  assignedAgentId: string | null;
-  assignedAgent: AssignedAgent | null;
-  isAccountCreated: boolean;
-  isCallRequest: boolean;
-  phoneCallSchedule: string | null;
-  isOfficeVisit: boolean;
-  officeVisitSchedule: string | null;
-  isClientVisit: boolean;
-  clientVisitSchedule: string | null;
-  clientVisitLocation: string | null;
-  isVirtualMeeting: boolean;
-  virtualMeetingSchedule: string | null;
-  onboardingSchedule: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface CreateLeadModalProps {
   isOpen: boolean;

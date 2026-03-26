@@ -138,6 +138,7 @@ export async function provisionLeadAccountAction(
         data: {
           invoiceNumber,
           clientId: newClient.id,
+          leadId: leadId,
           status: 'UNPAID',
           dueDate,
         },

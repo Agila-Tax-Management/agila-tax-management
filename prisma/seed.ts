@@ -561,6 +561,132 @@ const CITIES = [
   { name: "Lapu-Lapu City",   province: "Cebu",  region: "Region VII – Central Visayas", zipCode: "6015" },
 ];
 
+/* ─── Department Task Statuses ────────────────────────────────────── */
+
+type TaskStatusSeed = {
+  name: string;
+  color: string;
+  statusOrder: number;
+  isEntryStep: boolean;
+  isExitStep: boolean;
+};
+
+const DEFAULT_TASK_STATUSES: TaskStatusSeed[] = [
+  { name: "Open",        color: "#6366f1", statusOrder: 1, isEntryStep: true,  isExitStep: false },
+  { name: "In Progress", color: "#f59e0b", statusOrder: 2, isEntryStep: false, isExitStep: false },
+  { name: "For Review",  color: "#0ea5e9", statusOrder: 3, isEntryStep: false, isExitStep: false },
+  { name: "Done",        color: "#22c55e", statusOrder: 4, isEntryStep: false, isExitStep: true  },
+];
+
+const DEPT_TASK_STATUSES: Record<string, TaskStatusSeed[]> = {
+  Compliance: [
+    { name: "Open",            color: "#6366f1", statusOrder: 1, isEntryStep: true,  isExitStep: false },
+    { name: "Gathering Docs",  color: "#f59e0b", statusOrder: 2, isEntryStep: false, isExitStep: false },
+    { name: "In Progress",     color: "#f97316", statusOrder: 3, isEntryStep: false, isExitStep: false },
+    { name: "For Review",      color: "#0ea5e9", statusOrder: 4, isEntryStep: false, isExitStep: false },
+    { name: "Client Approval", color: "#8b5cf6", statusOrder: 5, isEntryStep: false, isExitStep: false },
+    { name: "Submitted",       color: "#22c55e", statusOrder: 6, isEntryStep: false, isExitStep: true  },
+  ],
+  Liaison: [
+    { name: "Open",           color: "#6366f1", statusOrder: 1, isEntryStep: true,  isExitStep: false },
+    { name: "Scheduled",      color: "#f59e0b", statusOrder: 2, isEntryStep: false, isExitStep: false },
+    { name: "In Progress",    color: "#f97316", statusOrder: 3, isEntryStep: false, isExitStep: false },
+    { name: "Docs Submitted", color: "#0ea5e9", statusOrder: 4, isEntryStep: false, isExitStep: false },
+    { name: "Done",           color: "#22c55e", statusOrder: 5, isEntryStep: false, isExitStep: true  },
+  ],
+};
+
+/* ─── Task Templates ──────────────────────────────────────────────── */
+
+interface TaskTemplateSeed {
+  name: string;
+  description?: string;
+  deptName: string;
+  daysDue?: number;
+  subtasks: Array<{
+    name: string;
+    description?: string;
+    subtaskOrder: number;
+    priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+    daysDue?: number;
+  }>;
+}
+
+const TASK_TEMPLATES: TaskTemplateSeed[] = [
+  {
+    name: "BIR 2550M – Monthly VAT Return",
+    description: "Monthly preparation and filing of BIR Form 2550M (Monthly Value-Added Tax Declaration).",
+    deptName: "Compliance",
+    daysDue: 20,
+    subtasks: [
+      { name: "Gather sales and purchase invoices", description: "Collect all official receipts and sales invoices for the reporting month.", subtaskOrder: 1, priority: "HIGH",   daysDue: 3  },
+      { name: "Compute input and output VAT",       description: "Reconcile input VAT on purchases and output VAT on sales.", subtaskOrder: 2, priority: "HIGH",   daysDue: 5  },
+      { name: "Prepare BIR Form 2550M",             description: "Fill out the monthly VAT declaration form with verified figures.", subtaskOrder: 3, priority: "HIGH",   daysDue: 7  },
+      { name: "Supervisor review",                  description: "Senior accountant reviews the filled form before filing.", subtaskOrder: 4, priority: "NORMAL", daysDue: 10 },
+      { name: "E-file via eBIR Forms / eFPS",       description: "Submit the validated form through eBIR Forms or eFPS portal.", subtaskOrder: 5, priority: "URGENT", daysDue: 20 },
+      { name: "Pay corresponding VAT due",          description: "Process payment through AAB or online banking and secure payment confirmation.", subtaskOrder: 6, priority: "URGENT", daysDue: 20 },
+      { name: "Archive confirmation and receipt",   description: "Save eFiling confirmation and payment receipt in client records.", subtaskOrder: 7, priority: "NORMAL", daysDue: 21 },
+    ],
+  },
+  {
+    name: "BIR 1701Q – Quarterly Income Tax Return",
+    description: "Quarterly preparation and filing of BIR Form 1701Q for self-employed and professional clients.",
+    deptName: "Compliance",
+    daysDue: 60,
+    subtasks: [
+      { name: "Gather income and expense records",  description: "Collect all income statements, expense reports, and supporting documents for the quarter.", subtaskOrder: 1, priority: "HIGH",   daysDue: 7  },
+      { name: "Compute taxable income",             description: "Apply applicable deductions and compute net taxable income per the Tax Code.", subtaskOrder: 2, priority: "HIGH",   daysDue: 14 },
+      { name: "Prepare BIR Form 1701Q",             description: "Populate the quarterly income tax return with verified financial data.", subtaskOrder: 3, priority: "HIGH",   daysDue: 20 },
+      { name: "Senior accountant review",           description: "Supervisor validates computation and form before submission.", subtaskOrder: 4, priority: "NORMAL", daysDue: 25 },
+      { name: "E-file via eBIR Forms / eFPS",       description: "Submit the validated form through eBIR Forms or eFPS portal.", subtaskOrder: 5, priority: "URGENT", daysDue: 60 },
+      { name: "Pay quarterly tax due",              description: "Process payment and retain proof of payment for client records.", subtaskOrder: 6, priority: "URGENT", daysDue: 60 },
+      { name: "Send confirmation to client",        description: "Email the eFiling confirmation and payment receipt to the client for their records.", subtaskOrder: 7, priority: "NORMAL", daysDue: 61 },
+    ],
+  },
+  {
+    name: "BIR TIN Registration – New Business",
+    description: "End-to-end processing of BIR TIN and Certificate of Registration (COR) for a newly registered business.",
+    deptName: "Liaison",
+    daysDue: 10,
+    subtasks: [
+      { name: "Collect client documents",                description: "Gather DTI/SEC registration, valid ID, lease contract, and other required BIR documents.", subtaskOrder: 1, priority: "HIGH",   daysDue: 1  },
+      { name: "Fill out BIR Form 1901/1903",             description: "Complete the appropriate BIR registration form based on the business entity type.", subtaskOrder: 2, priority: "HIGH",   daysDue: 2  },
+      { name: "Submit to corresponding RDO",             description: "Submit registration forms and supporting documents to the Revenue District Office.", subtaskOrder: 3, priority: "URGENT", daysDue: 3  },
+      { name: "Pay registration fee and DST",            description: "Pay the P500 registration fee and Documentary Stamp Tax at the accredited bank.", subtaskOrder: 4, priority: "HIGH",   daysDue: 3  },
+      { name: "Claim Certificate of Registration",       description: "Follow up and claim the COR (BIR Form 2303) from the RDO.", subtaskOrder: 5, priority: "NORMAL", daysDue: 8  },
+      { name: "Purchase and register Books of Accounts", description: "Buy official Books of Accounts and have them stamped/registered at the RDO.", subtaskOrder: 6, priority: "NORMAL", daysDue: 9  },
+      { name: "File with client records",                description: "Scan and archive TIN, COR, and stamped books in the client's compliance folder.", subtaskOrder: 7, priority: "NORMAL", daysDue: 10 },
+    ],
+  },
+  {
+    name: "Mayor's Permit Renewal",
+    description: "Annual renewal of the Local Government Unit (LGU) Business Permit / Mayor's Permit.",
+    deptName: "Liaison",
+    daysDue: 15,
+    subtasks: [
+      { name: "Gather renewal requirements",    description: "Collect previous year's permit, barangay clearance, and supporting documents required by the LGU.", subtaskOrder: 1, priority: "HIGH",   daysDue: 2  },
+      { name: "Secure barangay clearance",      description: "Obtain updated Barangay Business Clearance from the client's barangay hall.", subtaskOrder: 2, priority: "HIGH",   daysDue: 5  },
+      { name: "Submit application to City Hall",description: "File renewal application with all required documents at the BPLO.", subtaskOrder: 3, priority: "URGENT", daysDue: 8  },
+      { name: "Pay renewal fees",               description: "Pay all assessed fees including business tax, regulatory fees, and miscellaneous charges.", subtaskOrder: 4, priority: "URGENT", daysDue: 8  },
+      { name: "Claim renewed Mayor's Permit",   description: "Pick up the renewed Mayor's Permit / Business Permit certificate from the BPLO.", subtaskOrder: 5, priority: "NORMAL", daysDue: 14 },
+      { name: "File and deliver to client",     description: "Scan the permit, archive in client records, and deliver the original to the client.", subtaskOrder: 6, priority: "NORMAL", daysDue: 15 },
+    ],
+  },
+];
+
+/* ─── Service Inclusions ──────────────────────────────────────────── */
+
+const SERVICE_INCLUSIONS = [
+  { name: "BIR Monthly VAT Filing (2550M)",   category: "Tax Filing",   description: "Monthly filing of BIR Form 2550M VAT declaration" },
+  { name: "BIR Quarterly Income Tax (1701Q)", category: "Tax Filing",   description: "Quarterly filing of BIR Form 1701Q income tax return" },
+  { name: "BIR Withholding Tax (1601C)",      category: "Tax Filing",   description: "Monthly filing of BIR Form 1601C expanded withholding tax" },
+  { name: "Bookkeeping",                      category: "Accounting",   description: "Monthly recording and reconciliation of financial transactions" },
+  { name: "Payroll Processing",               category: "Payroll",      description: "Computation and preparation of employee payroll" },
+  { name: "Government Remittances",           category: "Compliance",   description: "Monthly SSS, PhilHealth, and Pag-IBIG contribution remittances" },
+  { name: "BIR TIN Registration",             category: "Registration", description: "TIN application and Certificate of Registration processing" },
+  { name: "Business Permit Renewal",          category: "Licensing",    description: "Annual Mayor's Permit / LGU Business Permit renewal" },
+];
+
 async function main(): Promise<void> {
   // ── 1. Seed Company (Agila — the internal company) ───────────────
   const atmsClient = await prisma.client.upsert({
@@ -842,7 +968,158 @@ async function main(): Promise<void> {
     }
     console.log(`  ✓ 2 sample leads seeded`);
   }
-    // ── 11. Seed Sample Tasks ─────────────────────────────────────────
+
+  // ── 10.5. Seed Department Task Statuses ──────────────────────────
+  const allDepts = await prisma.department.findMany({
+    where: { clientId: atmsClient.id },
+    select: { id: true, name: true },
+  });
+
+  let statusCreatedCount = 0;
+  for (const dept of allDepts) {
+    const statuses = DEPT_TASK_STATUSES[dept.name] ?? DEFAULT_TASK_STATUSES;
+    for (const s of statuses) {
+      await prisma.departmentTaskStatus.upsert({
+        where: { departmentId_name: { departmentId: dept.id, name: s.name } },
+        update: { color: s.color, statusOrder: s.statusOrder, isEntryStep: s.isEntryStep, isExitStep: s.isExitStep },
+        create: { departmentId: dept.id, ...s },
+      });
+      statusCreatedCount++;
+    }
+  }
+  console.log(`  ✓ Department task statuses seeded (${statusCreatedCount} across ${allDepts.length} departments)`);
+
+  // ── 10.6. Seed Task Templates & Subtasks ─────────────────────────
+  let templateCount = 0;
+  for (const tmpl of TASK_TEMPLATES) {
+    const dept = allDepts.find((d) => d.name === tmpl.deptName);
+    if (!dept) continue;
+
+    let template = await prisma.taskTemplate.findFirst({
+      where: { departmentId: dept.id, name: tmpl.name },
+    });
+
+    if (!template) {
+      template = await prisma.taskTemplate.create({
+        data: {
+          name: tmpl.name,
+          description: tmpl.description,
+          departmentId: dept.id,
+          daysDue: tmpl.daysDue,
+        },
+      });
+      templateCount++;
+    } else {
+      await prisma.taskTemplate.update({
+        where: { id: template.id },
+        data: { description: tmpl.description, daysDue: tmpl.daysDue },
+      });
+    }
+
+    for (const sub of tmpl.subtasks) {
+      const existingSub = await prisma.taskTemplateSubtask.findFirst({
+        where: { templateId: template.id, name: sub.name },
+      });
+      if (!existingSub) {
+        await prisma.taskTemplateSubtask.create({
+          data: { templateId: template.id, ...sub },
+        });
+      } else {
+        await prisma.taskTemplateSubtask.update({
+          where: { id: existingSub.id },
+          data: { subtaskOrder: sub.subtaskOrder, priority: sub.priority, daysDue: sub.daysDue },
+        });
+      }
+    }
+  }
+  console.log(`  ✓ ${templateCount} task templates seeded with subtasks`);
+
+  // ── 10.7. Seed Service Inclusions, Service Plan & One-Time Service ─
+  for (const inc of SERVICE_INCLUSIONS) {
+    await prisma.serviceInclusion.upsert({
+      where: { name: inc.name },
+      update: { category: inc.category, description: inc.description },
+      create: inc,
+    });
+  }
+  console.log(`  ✓ ${SERVICE_INCLUSIONS.length} service inclusions seeded`);
+
+  const birOffice   = await prisma.governmentOffice.findUnique({ where: { code: "BIR" } });
+  const mayorOffice = await prisma.governmentOffice.findUnique({ where: { code: "MAYOR" } });
+  const cebuCity    = await prisma.city.findUnique({ where: { name: "Cebu City" } });
+
+  const vatTemplate = await prisma.taskTemplate.findFirst({ where: { name: "BIR 2550M – Monthly VAT Return" } });
+  const tinTemplate = await prisma.taskTemplate.findFirst({ where: { name: "BIR TIN Registration – New Business" } });
+
+  // Service Plan: Starter VAT Monthly
+  const existingPlan = await prisma.servicePlan.findFirst({ where: { name: "Starter VAT Monthly Plan" } });
+  if (!existingPlan) {
+    await prisma.servicePlan.create({
+      data: {
+        name: "Starter VAT Monthly Plan",
+        description: "Essential monthly tax compliance package for VAT-registered sole proprietors and professionals. Covers monthly VAT filing, withholding tax, bookkeeping, and government remittances.",
+        recurring: "MONTHLY",
+        serviceRate: 3500,
+        status: "ACTIVE",
+        taskTemplateId: vatTemplate?.id ?? undefined,
+        governmentOffices: birOffice   ? { connect: [{ id: birOffice.id }] }   : undefined,
+        cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
+        inclusions: {
+          connect: [
+            "BIR Monthly VAT Filing (2550M)",
+            "BIR Quarterly Income Tax (1701Q)",
+            "BIR Withholding Tax (1601C)",
+            "Bookkeeping",
+            "Government Remittances",
+          ].map((name) => ({ name })),
+        },
+      },
+    });
+    console.log("  ✓ Service plan 'Starter VAT Monthly Plan' seeded");
+  }
+
+  // One-Time Service: BIR TIN Registration
+  const existingOneTime = await prisma.serviceOneTime.findFirst({ where: { name: "BIR TIN Registration (New Business)" } });
+  if (!existingOneTime) {
+    await prisma.serviceOneTime.create({
+      data: {
+        name: "BIR TIN Registration (New Business)",
+        description: "End-to-end processing of BIR TIN application and Certificate of Registration (COR) for newly registered businesses. Includes form preparation, RDO submission, and Books of Accounts registration.",
+        serviceRate: 1500,
+        status: "ACTIVE",
+        taskTemplateId: tinTemplate?.id ?? undefined,
+        governmentOffices: birOffice  ? { connect: [{ id: birOffice.id }] }  : undefined,
+        cities:            cebuCity   ? { connect: [{ id: cebuCity.id }] }   : undefined,
+        inclusions: {
+          connect: [{ name: "BIR TIN Registration" }],
+        },
+      },
+    });
+    console.log("  ✓ One-time service 'BIR TIN Registration (New Business)' seeded");
+  }
+
+  // One-Time Service: Mayor's Permit Renewal
+  const permitTemplate = await prisma.taskTemplate.findFirst({ where: { name: "Mayor's Permit Renewal" } });
+  const existingPermitService = await prisma.serviceOneTime.findFirst({ where: { name: "Mayor's Permit Renewal (Annual)" } });
+  if (!existingPermitService) {
+    await prisma.serviceOneTime.create({
+      data: {
+        name: "Mayor's Permit Renewal (Annual)",
+        description: "Annual renewal of the LGU Business Permit / Mayor's Permit. Includes barangay clearance processing, BPLO submission, fee payment, and permit delivery to the client.",
+        serviceRate: 1200,
+        status: "ACTIVE",
+        taskTemplateId: permitTemplate?.id ?? undefined,
+        governmentOffices: mayorOffice ? { connect: [{ id: mayorOffice.id }] } : undefined,
+        cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
+        inclusions: {
+          connect: [{ name: "Business Permit Renewal" }],
+        },
+      },
+    });
+    console.log("  ✓ One-time service 'Mayor's Permit Renewal (Annual)' seeded");
+  }
+
+  // ── 11. Seed Sample Tasks ─────────────────────────────────────────
   const superAdminUser = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
   const superAdminEmployee = superAdminUser
     ? await prisma.employee.findFirst({ where: { userId: superAdminUser.id } })
@@ -937,7 +1214,7 @@ async function main(): Promise<void> {
       dueDate.setDate(dueDate.getDate() + t.daysFromNow);
 
       const existing = await prisma.task.findFirst({
-        where: { name: t.name, currentDepartmentId: dept.id },
+        where: { name: t.name, departmentId: dept.id },
       });
       if (existing) continue;
 
@@ -946,8 +1223,8 @@ async function main(): Promise<void> {
           name: t.name,
           description: t.description,
           priority: t.priority,
-          currentDepartmentId: dept.id,
-          currentStatusId: entryStatus?.id ?? null,
+          departmentId: dept.id,
+          statusId: entryStatus?.id ?? null,
           assignedToId: superAdminEmployee?.id ?? null,
           dueDate,
         },
