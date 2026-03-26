@@ -72,6 +72,7 @@ export interface Lead {
   serviceOneTimePlans: LeadServiceOneTime[];
   promo: LeadPromo | null;
   invoices: { id: string; invoiceNumber: string; status: string }[];
+  jobOrders: { id: string; jobOrderNumber: string }[];
   createdAt: string;
   updatedAt: string;
 }

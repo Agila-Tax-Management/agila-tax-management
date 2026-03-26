@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, FileText, Briefcase, Phone, User } from 'lucide-react';
 import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
@@ -17,6 +18,7 @@ interface CreateJobOrderModalProps {
 
 export function CreateJobOrderModal({ isOpen, onClose, lead, onCreated }: CreateJobOrderModalProps): React.ReactNode {
   const { success, error } = useToast();
+  const router = useRouter();
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,6 +37,7 @@ export function CreateJobOrderModal({ isOpen, onClose, lead, onCreated }: Create
       }
       success('Job Order Created', `Job order has been generated for ${lead.firstName} ${lead.lastName}.`);
       onCreated(data.data!);
+      router.push('/portal/sales/job-orders');
     } catch {
       error('Network error', 'Could not connect to the server.');
     } finally {
@@ -49,7 +52,7 @@ export function CreateJobOrderModal({ isOpen, onClose, lead, onCreated }: Create
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Job Order" size="lg">
-      <div className="space-y-5 py-1">
+      <div className="space-y-5 p-4">
         {/* Lead Info */}
         <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
           <div className="flex items-center gap-2">
