@@ -34,7 +34,13 @@ interface ApiTask {
   currentDepartment: { id: number; name: string } | null;
   currentStatus: { id: number; name: string; color: string } | null;
   assignedTo: { id: number; firstName: string; lastName: string } | null;
-  subtasks: Array<{ id: number; name: string; status: { isExitStep: boolean } | null }>;
+  subtasks: Array<{
+    id: number;
+    name: string;
+    dueDate: string | null;
+    assignedTo: { id: number; firstName: string; lastName: string } | null;
+    status: { isExitStep: boolean } | null;
+  }>;
 }
 
 const DB_PRIORITY_MAP: Record<string, AOTaskPriority> = {
@@ -68,6 +74,8 @@ function mapApiTask(t: ApiTask): UnifiedTask {
       id: String(s.id),
       title: s.name,
       completed: s.status?.isExitStep ?? false,
+      dueDate: s.dueDate ?? undefined,
+      assigneeId: s.assignedTo ? String(s.assignedTo.id) : undefined,
       createdAt: new Date().toISOString(),
     })),
   };
@@ -139,6 +147,13 @@ interface TemplateItem {
   departmentRoutes: Array<{ routeOrder: number; department: { name: string } }>;
 }
 
+interface BoardEmployee {
+  id: string;
+  name: string;
+  avatar: string;
+  department: string;
+}
+
 export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) {
   const router = useRouter();
   const { departments } = useTaskDepartments();
@@ -170,7 +185,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   const [newTitle, setNewTitle]           = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newClientId, setNewClientId]     = useState('');
-  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>(ALL_TEAM_MEMBERS[0] ? [ALL_TEAM_MEMBERS[0].id] : []);
+  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
   const [newPriority, setNewPriority]     = useState<AOTaskPriority>('Medium');
   const [newDueDate, setNewDueDate]       = useState('');
   const [newTags, setNewTags]             = useState('');
@@ -185,6 +200,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   // Assignee dropdown
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch]             = useState('');
+  const [boardEmployees, setBoardEmployees]             = useState<BoardEmployee[]>([]);
   // Template dropdown
   const [templateList, setTemplateList]                 = useState<TemplateItem[]>([]);
   const [templatesLoading, setTemplatesLoading]         = useState(false);
@@ -304,6 +320,25 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       .then(r => r.json())
       .then(d => { setTemplateList(Array.isArray(d.data) ? (d.data as TemplateItem[]) : []); setTemplatesLoading(false); })
       .catch(() => setTemplatesLoading(false));
+    fetch('/api/hr/clients')
+      .then(r => r.json())
+      .then((d: { data?: Array<{ id: number; businessName: string }> }) => {
+        setLocalClients((d.data ?? []).map(c => ({ id: String(c.id), name: c.businessName })));
+      })
+      .catch(() => { /* non-critical */ });
+    fetch('/api/hr/employees')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { data?: Array<{ id: number; firstName: string; lastName: string; department?: { name: string } }> } | null) => {
+        if (d?.data) {
+          setBoardEmployees(d.data.map(e => ({
+            id: String(e.id),
+            name: `${e.firstName} ${e.lastName}`,
+            avatar: `${e.firstName[0]}${e.lastName[0]}`.toUpperCase(),
+            department: e.department?.name ?? '',
+          })));
+        }
+      })
+      .catch(() => { /* non-critical */ });
   };
   const getAssignee = (assigneeId: string) => {
     const fromMock = ALL_TEAM_MEMBERS.find(m => m.id === assigneeId);
@@ -370,6 +405,9 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       dueDate: new Date(`${newDueDate}T00:00:00+08:00`).toISOString(),
       ...(dept ? { currentDepartmentId: dept.id } : {}),
       ...(statusEntry && statusEntry.id > 0 ? { currentStatusId: statusEntry.id } : {}),
+      ...(newClientId ? { clientId: parseInt(newClientId, 10) } : {}),
+      ...(selectedTemplateId !== null ? { templateId: selectedTemplateId } : {}),
+      ...(newAssigneeIds[0] ? { assignedToId: parseInt(newAssigneeIds[0], 10) } : {}),
     };
 
     const res = await fetch('/api/tasks', {
@@ -386,7 +424,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   const resetCreateForm = () => {
     setNewTitle(''); setNewDescription('');
     setNewClientId('');
-    setNewAssigneeIds(ALL_TEAM_MEMBERS[0] ? [ALL_TEAM_MEMBERS[0].id] : []);
+    setNewAssigneeIds([]);
     setNewPriority('Medium'); setNewDueDate(''); setNewTags('');
     setNewSource(sourceFilter ?? 'client-relations');
     setNewStatus('To Do');
@@ -1019,7 +1057,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                   <span className="text-slate-400 text-sm">Select assignees…</span>
                 ) : (
                   newAssigneeIds.map(id => {
-                    const m = ALL_TEAM_MEMBERS.find(x => x.id === id);
+                    const m = boardEmployees.find(x => x.id === id);
                     return m ? (
                       <span key={id} className="flex items-center gap-1 bg-teal-50 text-teal-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                         <span className="w-4 h-4 bg-teal-700 rounded-full text-[8px] font-black text-white flex items-center justify-center shrink-0">{m.avatar}</span>
@@ -1054,7 +1092,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                       </div>
                     </div>
                     <div className="max-h-48 overflow-y-auto">
-                      {ALL_TEAM_MEMBERS.filter(m =>
+                      {boardEmployees.filter(m =>
                         m.name.toLowerCase().includes(assigneeSearch.toLowerCase()) ||
                         m.department.toLowerCase().includes(assigneeSearch.toLowerCase())
                       ).map(m => {
@@ -1087,7 +1125,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                           </button>
                         );
                       })}
-                      {ALL_TEAM_MEMBERS.filter(m => m.name.toLowerCase().includes(assigneeSearch.toLowerCase())).length === 0 && (
+                      {boardEmployees.filter(m => m.name.toLowerCase().includes(assigneeSearch.toLowerCase())).length === 0 && (
                         <p className="text-xs text-slate-400 text-center py-4">No members found</p>
                       )}
                     </div>

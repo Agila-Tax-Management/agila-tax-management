@@ -63,18 +63,15 @@ async function ensureDefaultDepartments(clientId: number) {
   for (const td of DEFAULT_TASK_DEPARTMENTS) {
     const found = existingByName.get(td.name);
     if (!found) {
-      // Create department + default statuses
+      // Department does not exist yet — create it with default statuses.
+      // Existing departments are NEVER modified here: their statuses are
+      // fully managed by admins via WorkflowSettings and the PATCH/DELETE
+      // API routes, so we must not overwrite or re-insert anything.
       const dept = await prisma.department.create({
         data: { clientId, name: td.name, description: td.description },
       });
       await prisma.departmentTaskStatus.createMany({
         data: DEFAULT_STATUSES.map(st => ({ departmentId: dept.id, ...st })),
-        skipDuplicates: true,
-      });
-    } else if (found.statuses.length === 0) {
-      // Dept exists but has no statuses — add defaults
-      await prisma.departmentTaskStatus.createMany({
-        data: DEFAULT_STATUSES.map(st => ({ departmentId: found.id, ...st })),
         skipDuplicates: true,
       });
     }

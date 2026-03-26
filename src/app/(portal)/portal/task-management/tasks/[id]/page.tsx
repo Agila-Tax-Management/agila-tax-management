@@ -45,6 +45,7 @@ export default async function TaskDetailRoute({
         include: {
           status: { select: { id: true, name: true, isExitStep: true } },
           assignedTo: { select: { id: true, firstName: true, lastName: true } },
+          department: { select: { id: true, name: true } },
         },
       },
       conversations: {
@@ -81,6 +82,9 @@ export default async function TaskDetailRoute({
       completed: s.status?.isExitStep ?? false,
       notes: s.description ?? undefined,
       assigneeId: s.assignedTo ? String(s.assignedTo.id) : undefined,
+      assigneeName: s.assignedTo ? `${s.assignedTo.firstName} ${s.assignedTo.lastName}` : undefined,
+      department: s.department ?? undefined,
+      priority: DB_PRIORITY_MAP[s.priority] ?? 'Medium',
       dueDate: s.dueDate?.toISOString() ?? undefined,
       createdAt: new Date().toISOString(),
     })),

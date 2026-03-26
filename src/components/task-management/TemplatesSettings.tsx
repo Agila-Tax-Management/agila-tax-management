@@ -3,10 +3,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, FileText, Clock, Users, ChevronRight,
+  Plus, FileText, Clock, Users, ChevronRight, ChevronLeft,
   Trash2, Search, Briefcase, Copy,
   X, Check, AlertTriangle, Loader2,
-  ArrowUp, ArrowDown, ListChecks, ChevronDown, ChevronUp, Minus,
+  ArrowUp, ArrowDown, ListChecks, ChevronDown, ChevronUp, Minus, Pencil,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
@@ -72,6 +72,33 @@ interface ApiTemplate {
   serviceOneTimePlans: ApiLinkedOneTime[];
 }
 
+// ── Draft types (wizard local state) ─────────────────────────────
+
+interface DraftSubtask {
+  tempId:      string;
+  name:        string;
+  description: string;
+  priority:    TPriority;
+  daysDue:     string;
+}
+
+interface DraftRoute {
+  tempId:         string;
+  departmentId:   number;
+  departmentName: string;
+  daysDue:        string;
+  subtasks:       DraftSubtask[];
+}
+
+interface DraftTaskSubtask {
+  tempId:      string;
+  name:        string;
+  description: string;
+  priority:    TPriority;
+  daysDue:     string;
+  routeTempId: string; // which route (department step) this subtask belongs to
+}
+
 // ── Constants ─────────────────────────────────────────────────────
 
 const PRIORITIES: TPriority[] = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
@@ -126,95 +153,451 @@ function DeleteModal({
   );
 }
 
-// ── Create Template Modal ─────────────────────────────────────────
+// ── Create Template Modal (2-step Wizard) ────────────────────────
 
 function CreateTemplateModal({ onCreated, onClose }: {
   onCreated: (t: ApiTemplate) => void;
   onClose: () => void;
 }) {
   const { success, error } = useToast();
-  const [name, setName]           = useState('');
-  const [description, setDesc]    = useState('');
-  const [daysDue, setDaysDue]     = useState('');
-  const [saving, setSaving]       = useState(false);
+  const { departments: allDepartments } = useTaskDepartments();
 
-  const handleSubmit = async () => {
+  // Step
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Step 1 — Template info
+  const [name, setName]        = useState('');
+  const [description, setDesc] = useState('');
+  const [daysDue, setDaysDue]  = useState('');
+
+  // Step 2 — Department routes (local draft)
+  const [routes, setRoutes]           = useState<DraftRoute[]>([]);
+  const [addDeptId, setAddDeptId]     = useState('');
+  const [addDeptDays, setAddDeptDays] = useState('');
+  const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
+
+  // Step 3 — Task-level subtasks
+  const [taskSubtasks, setTaskSubtasks] = useState<DraftTaskSubtask[]>([]);
+
+  const [saving, setSaving] = useState(false);
+
+  const usedDeptIds = new Set(routes.map(r => r.departmentId));
+  const availDepts  = allDepartments.filter(d => !usedDeptIds.has(d.id));
+
+  // ── Route helpers ─────────────────────────────────────────────
+
+  const addRoute = () => {
+    if (!addDeptId) return;
+    const dept = allDepartments.find(d => d.id === parseInt(addDeptId, 10));
+    if (!dept) return;
+    const tempId = crypto.randomUUID();
+    setRoutes(prev => [...prev, {
+      tempId,
+      departmentId:   dept.id,
+      departmentName: dept.name,
+      daysDue: addDeptDays,
+      subtasks: [],
+    }]);
+    setAddDeptId('');
+    setAddDeptDays('');
+    setExpandedRoute(tempId);
+  };
+
+  const removeRoute = (tempId: string) => {
+    setRoutes(prev => prev.filter(r => r.tempId !== tempId));
+    if (expandedRoute === tempId) setExpandedRoute(null);
+  };
+
+  const moveRoute = (tempId: string, dir: 'up' | 'down') => {
+    const idx     = routes.findIndex(r => r.tempId === tempId);
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= routes.length) return;
+    const next = [...routes];
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    setRoutes(next);
+  };
+
+  // ── Task-level subtask helpers ────────────────────────────────
+
+  const addTaskSubtask = () => {
+    if (routes.length === 0) return;
+    setTaskSubtasks(prev => [...prev, {
+      tempId: crypto.randomUUID(),
+      name: '',
+      description: '',
+      priority: 'NORMAL' as TPriority,
+      daysDue: '',
+      routeTempId: routes[0].tempId,
+    }]);
+  };
+
+  const updateTaskSubtask = (id: string, patch: Partial<DraftTaskSubtask>) => {
+    setTaskSubtasks(prev => prev.map(s => s.tempId === id ? { ...s, ...patch } : s));
+  };
+
+  const removeTaskSubtask = (id: string) => {
+    setTaskSubtasks(prev => prev.filter(s => s.tempId !== id));
+  };
+
+  // ── Submit ─────────────────────────────────────────────────────
+
+  const handleCreate = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch(BASE, {
+      // 1. Create template
+      const tplRes  = await fetch(BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim(),
+          name:        name.trim(),
           description: description.trim() || undefined,
-          daysDue: daysDue ? parseInt(daysDue, 10) : undefined,
+          daysDue:     daysDue ? parseInt(daysDue, 10) : undefined,
         }),
       });
-      const data = await res.json() as { data?: ApiTemplate; error?: string };
-      if (!res.ok) { error('Failed', data.error ?? 'Could not create template'); return; }
+      const tplData = await tplRes.json() as { data?: ApiTemplate; error?: string };
+      if (!tplRes.ok) { error('Failed', tplData.error ?? 'Could not create template'); return; }
+
+      const tpl        = tplData.data!;
+      const apiRoutes: ApiRoute[] = [];
+
+      // 2. Add routes + their subtasks sequentially
+      for (const draft of routes) {
+        const routeRes  = await fetch(`${BASE}/${tpl.id}/routes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            departmentId: draft.departmentId,
+            daysDue:      draft.daysDue ? parseInt(draft.daysDue, 10) : undefined,
+          }),
+        });
+        const routeData = await routeRes.json() as { data?: ApiRoute; error?: string };
+        if (!routeRes.ok) {
+          error('Partial failure', routeData.error ?? `Could not add route for ${draft.departmentName}`);
+          continue;
+        }
+
+        const createdRoute = routeData.data!;
+        const apiSubtasks: ApiSubtask[] = [];
+
+        apiRoutes.push({ ...createdRoute, subtasks: apiSubtasks });
+      }
+
+      // 3. Add task-level subtasks (mapped via routeTempId → createdRoute.id)
+      const routeTempToApiId = new Map(routes.map((draft, i) => [draft.tempId, apiRoutes[i]?.id]));
+      for (const sub of taskSubtasks.filter(s => s.name.trim())) {
+        const routeApiId = routeTempToApiId.get(sub.routeTempId);
+        if (!routeApiId) continue;
+        await fetch(`${BASE}/${tpl.id}/routes/${routeApiId}/subtasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name:        sub.name.trim(),
+            description: sub.description.trim() || undefined,
+            priority:    sub.priority,
+            daysDue:     sub.daysDue ? parseInt(sub.daysDue, 10) : undefined,
+          }),
+        });
+      }
+
       success('Created', `"${name.trim()}" template has been created.`);
-      onCreated(data.data!);
+      onCreated({ ...tpl, departmentRoutes: apiRoutes });
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Render ─────────────────────────────────────────────────────
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[calc(100vh-48px)]">
+
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-          <h2 className="font-black text-slate-900 text-base">New Template</h2>
+          <div>
+            <h2 className="font-black text-slate-900 text-base">New Template</h2>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${step === 1 ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700'}`}>1</span>
+              <span className="text-[10px] text-slate-400">Info</span>
+              <ChevronRight size={10} className="text-slate-300" />
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${step === 2 ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>2</span>
+              <span className="text-[10px] text-slate-400">Route</span>
+              <ChevronRight size={10} className="text-slate-300" />
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${step === 3 ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>3</span>
+              <span className="text-[10px] text-slate-400">Subtasks</span>
+            </div>
+          </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <X size={18} />
           </button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Template Name *</label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. BIR Registration Pipeline"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+
+        {/* ── Step 1: Template Info ──────────────────────────── */}
+        {step === 1 && (
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Template Name *</label>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. BIR Registration Pipeline"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Description</label>
+              <textarea
+                value={description}
+                onChange={e => setDesc(e.target.value)}
+                placeholder="What workflow does this template define?"
+                rows={3}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Total Days Due</label>
+              <input
+                type="number"
+                min={1}
+                value={daysDue}
+                onChange={e => setDaysDue(e.target.value)}
+                placeholder="e.g. 30"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
           </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Description</label>
-            <textarea
-              value={description}
-              onChange={e => setDesc(e.target.value)}
-              placeholder="What workflow does this template define?"
-              rows={3}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-            />
+        )}
+
+        {/* ── Step 2: Department Routes ──────────────────────── */}
+        {step === 2 && (
+          <div className="overflow-y-auto flex-1 p-6 space-y-4">
+
+            {/* Route list */}
+            {routes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-slate-200 rounded-xl">
+                <Users size={24} className="text-slate-300 mb-2" />
+                <p className="text-xs text-slate-400 font-medium">No route steps yet</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Add departments below to define the workflow order.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {routes.map((route, idx) => (
+                    <div key={route.tempId} className="border border-slate-200 rounded-xl overflow-hidden">
+
+                      {/* Step row */}
+                      <div className="flex items-center gap-2 px-3 py-2.5 bg-white">
+                        <span className="w-6 h-6 rounded-full bg-teal-50 text-teal-700 text-[11px] font-black flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="flex-1 font-bold text-sm text-slate-800 min-w-0 truncate">{route.departmentName}</span>
+
+                        {/* days due */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Clock size={11} className="text-slate-400" />
+                          <input
+                            type="number"
+                            min={1}
+                            value={route.daysDue}
+                            onChange={e => setRoutes(prev => prev.map(r => r.tempId === route.tempId ? { ...r, daysDue: e.target.value } : r))}
+                            placeholder="days"
+                            className="w-16 border border-slate-200 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                          <span className="text-[10px] text-slate-400">d</span>
+                        </div>
+
+                        {/* placeholder so structure is preserved */}
+                        <button
+                          onClick={() => setExpandedRoute(expandedRoute === route.tempId ? null : route.tempId)}
+                          className="hidden"
+                        />
+
+                        {/* up / down */}
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button onClick={() => moveRoute(route.tempId, 'up')} disabled={idx === 0}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-30">
+                            <ArrowUp size={12} />
+                          </button>
+                          <button onClick={() => moveRoute(route.tempId, 'down')} disabled={idx === routes.length - 1}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-30">
+                            <ArrowDown size={12} />
+                          </button>
+                        </div>
+
+                        {/* remove */}
+                        <button onClick={() => removeRoute(route.tempId)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0">
+                          <Minus size={13} />
+                        </button>
+                      </div>
+                    </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add department step */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Add Department Step</p>
+              {availDepts.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">All departments are already in the route.</p>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={addDeptId}
+                    onChange={e => setAddDeptId(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  >
+                    <option value="">Select department…</option>
+                    {availDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    value={addDeptDays}
+                    onChange={e => setAddDeptDays(e.target.value)}
+                    placeholder="Days (opt.)"
+                    className="w-24 border border-slate-200 rounded-lg px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                  <button
+                    onClick={addRoute}
+                    disabled={!addDeptId}
+                    className="px-4 py-2 text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white rounded-xl transition-colors disabled:opacity-40 inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    <Plus size={12} /> Add Step
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+        )}
+
+        {/* ── Step 3: Subtasks ───────────────────────────────── */}
+        {step === 3 && (
+          <div className="overflow-y-auto flex-1 p-6 space-y-4">
+            {routes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-slate-200 rounded-xl">
+                <ListChecks size={24} className="text-slate-300 mb-2" />
+                <p className="text-xs text-slate-400 font-medium">No route steps defined</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Go back to Step 2 and add at least one department.</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[11px] text-slate-500">Add subtasks for this task template. Each subtask is assigned to a department step so it shows up in the right workflow stage.</p>
+
+                {taskSubtasks.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-6 text-center border-2 border-dashed border-slate-200 rounded-xl">
+                    <ListChecks size={22} className="text-slate-300 mb-2" />
+                    <p className="text-xs text-slate-400 font-medium">No subtasks yet</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Click &ldquo;Add Subtask&rdquo; below to get started.</p>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {taskSubtasks.map((sub, idx) => (
+                    <div key={sub.tempId} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-teal-50 text-teal-700 text-[10px] font-black flex items-center justify-center shrink-0">{idx + 1}</span>
+                        <input
+                          value={sub.name}
+                          onChange={e => updateTaskSubtask(sub.tempId, { name: e.target.value })}
+                          placeholder="Subtask name *"
+                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        />
+                        <button onClick={() => removeTaskSubtask(sub.tempId)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0">
+                          <X size={12} />
+                        </button>
+                      </div>
+                      <textarea
+                        value={sub.description}
+                        onChange={e => updateTaskSubtask(sub.tempId, { description: e.target.value })}
+                        rows={2}
+                        placeholder="Description (optional)"
+                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+                      />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select
+                          value={sub.priority}
+                          onChange={e => updateTaskSubtask(sub.tempId, { priority: e.target.value as TPriority })}
+                          className="flex-1 min-w-25 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        >
+                          {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
+                        </select>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Clock size={10} className="text-slate-400" />
+                          <input
+                            type="number"
+                            min={1}
+                            value={sub.daysDue}
+                            onChange={e => updateTaskSubtask(sub.tempId, { daysDue: e.target.value })}
+                            placeholder="Days due"
+                            className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Users size={10} className="text-slate-400" />
+                          <select
+                            value={sub.routeTempId}
+                            onChange={e => updateTaskSubtask(sub.tempId, { routeTempId: e.target.value })}
+                            className="flex-1 min-w-30 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          >
+                            {routes.map(r => <option key={r.tempId} value={r.tempId}>{r.departmentName}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={addTaskSubtask}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-teal-700 hover:bg-teal-50 rounded-xl border border-dashed border-teal-200 transition-colors"
+                >
+                  <Plus size={12} /> Add Subtask
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-slate-100 shrink-0">
           <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Total Days Due</label>
-            <input
-              type="number"
-              min={1}
-              value={daysDue}
-              onChange={e => setDaysDue(e.target.value)}
-              placeholder="e.g. 30"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+            {step > 1 && (
+              <button
+                onClick={() => setStep((step - 1) as 1 | 2 | 3)}
+                className="px-4 py-2 text-sm font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
+              >
+                <ChevronLeft size={14} /> Back
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose}
+              className="px-4 py-2 text-sm font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+            {step < 3 ? (
+              <button
+                onClick={() => setStep((step + 1) as 2 | 3)}
+                disabled={step === 1 ? !name.trim() : false}
+                className="px-5 py-2 text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white rounded-xl transition-colors disabled:opacity-40 inline-flex items-center gap-2"
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            ) : (
+              <button
+                onClick={handleCreate}
+                disabled={saving}
+                className="px-5 py-2 text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white rounded-xl transition-colors disabled:opacity-40 inline-flex items-center gap-2"
+              >
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                Create
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 shrink-0">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!name.trim() || saving}
-            className="px-5 py-2 text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white rounded-xl transition-colors disabled:opacity-40 inline-flex items-center gap-2"
-          >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-            Create
-          </button>
-        </div>
+
       </div>
     </div>
   );
@@ -673,10 +1056,7 @@ function EditTemplateModal({
             ) : (
               <div className="space-y-2">
                 {sortedRoutes.map((route, idx) => {
-                  const isExpanded        = expandedRouteId === route.id;
                   const isConfirmRemove   = confirmRemoveRouteId === route.id;
-                  const addForm           = addSubtaskForms[route.id];
-                  const totalSubs         = route.subtasks.length;
 
                   return (
                     <div key={route.id} className="border border-slate-200 rounded-xl overflow-hidden">
@@ -707,15 +1087,6 @@ function EditTemplateModal({
                           />
                           <span className="text-[10px] text-slate-400">d</span>
                         </div>
-
-                        {/* Subtasks toggle */}
-                        <button
-                          onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 text-[11px] font-bold transition-colors shrink-0"
-                        >
-                          <ListChecks size={12} /> {totalSubs}
-                          {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                        </button>
 
                         {/* Up / Down */}
                         <div className="flex items-center gap-0.5 shrink-0">
@@ -761,163 +1132,6 @@ function EditTemplateModal({
                           </button>
                         )}
                       </div>
-
-                      {/* Expanded subtasks */}
-                      {isExpanded && (
-                        <div className="border-t border-slate-100 bg-slate-50 px-3 py-3 space-y-2">
-                          {route.subtasks.length === 0 && !addForm?.open && (
-                            <p className="text-[11px] text-slate-400 text-center py-1">No subtasks for this step yet.</p>
-                          )}
-
-                          {route.subtasks.map(sub => {
-                            const isEditThis   = editingSubtask?.subtaskId === sub.id && editingSubtask?.routeId === route.id;
-                            const isDelConfirm = confirmDeleteSubtask?.subtaskId === sub.id;
-
-                            if (isEditThis && editingSubtask) {
-                              return (
-                                <div key={sub.id} className="bg-white border border-teal-200 rounded-lg p-3 space-y-2">
-                                  <input
-                                    value={editingSubtask.name}
-                                    onChange={e => setEditingSubtask(p => p ? { ...p, name: e.target.value } : null)}
-                                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                  />
-                                  <textarea
-                                    value={editingSubtask.description}
-                                    onChange={e => setEditingSubtask(p => p ? { ...p, description: e.target.value } : null)}
-                                    rows={2}
-                                    placeholder="Description (optional)"
-                                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
-                                  />
-                                  <div className="flex items-center gap-2">
-                                    <select
-                                      value={editingSubtask.priority}
-                                      onChange={e => setEditingSubtask(p => p ? { ...p, priority: e.target.value as TPriority } : null)}
-                                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    >
-                                      {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
-                                    </select>
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      value={editingSubtask.daysDue}
-                                      onChange={e => setEditingSubtask(p => p ? { ...p, daysDue: e.target.value } : null)}
-                                      placeholder="Days due"
-                                      className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                    <button
-                                      onClick={saveEditSubtask}
-                                      disabled={!editingSubtask.name.trim() || editingSubtask.saving}
-                                      className="px-3 py-1.5 text-xs font-bold bg-teal-700 text-white rounded-lg hover:bg-teal-800 disabled:opacity-40 inline-flex items-center gap-1"
-                                    >
-                                      {editingSubtask.saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save
-                                    </button>
-                                    <button
-                                      onClick={() => setEditingSubtask(null)}
-                                      className="px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div key={sub.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-slate-100">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${PRIORITY_COLOR[sub.priority]}`}>
-                                  {PRIORITY_LABEL[sub.priority]}
-                                </span>
-                                <span className="flex-1 text-xs text-slate-700 font-medium min-w-0 truncate">{sub.name}</span>
-                                {sub.daysDue !== null && (
-                                  <span className="text-[10px] text-slate-400 shrink-0">{sub.daysDue}d</span>
-                                )}
-                                {isDelConfirm ? (
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <span className="text-[10px] text-red-600 font-bold">Delete?</span>
-                                    <button
-                                      onClick={() => deleteSubtask(route.id, sub.id)}
-                                      className="px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded hover:bg-red-700"
-                                    >
-                                      Yes
-                                    </button>
-                                    <button
-                                      onClick={() => setConfirmDeleteSubtask(null)}
-                                      className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 rounded hover:bg-slate-200"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-0.5 shrink-0">
-                                    <button
-                                      onClick={() => setConfirmDeleteSubtask({ routeId: route.id, subtaskId: sub.id })}
-                                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-
-                          {/* Add subtask form */}
-                          {addForm?.open ? (
-                            <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-2">
-                              <input
-                                value={addForm.name}
-                                onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], name: e.target.value } }))}
-                                placeholder="Subtask name *"
-                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                              />
-                              <textarea
-                                value={addForm.description}
-                                onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], description: e.target.value } }))}
-                                rows={2}
-                                placeholder="Description (optional)"
-                                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
-                              />
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={addForm.priority}
-                                  onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], priority: e.target.value as TPriority } }))}
-                                  className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                >
-                                  {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
-                                </select>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={addForm.daysDue}
-                                  onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], daysDue: e.target.value } }))}
-                                  placeholder="Days due"
-                                  className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                                <button
-                                  onClick={() => saveAddSubtask(route.id)}
-                                  disabled={!addForm.name.trim() || addForm.saving}
-                                  className="px-3 py-1.5 text-xs font-bold bg-teal-700 text-white rounded-lg hover:bg-teal-800 disabled:opacity-40 inline-flex items-center gap-1"
-                                >
-                                  {addForm.saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Add
-                                </button>
-                                <button
-                                  onClick={() => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], open: false } }))}
-                                  className="px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => openAddSubtask(route.id)}
-                              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-teal-700 hover:bg-teal-50 rounded-lg border border-dashed border-teal-200 transition-colors"
-                            >
-                              <Plus size={12} /> Add Subtask
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -958,6 +1172,204 @@ function EditTemplateModal({
                 </div>
               )}
             </div>
+          </section>
+
+          {/* ── Subtasks ─────────────────────────────────────── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtasks</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {tpl.departmentRoutes.reduce((n, r) => n + r.subtasks.length, 0)} subtask{tpl.departmentRoutes.reduce((n, r) => n + r.subtasks.length, 0) !== 1 ? 's' : ''} across all steps
+                </p>
+              </div>
+              {sortedRoutes.length > 0 && (
+                <button
+                  onClick={() => {
+                    const firstRoute = sortedRoutes[0];
+                    openAddSubtask(firstRoute.id);
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors"
+                >
+                  <Plus size={12} /> Add Subtask
+                </button>
+              )}
+            </div>
+
+            {sortedRoutes.length === 0 ? (
+              <p className="text-[11px] text-slate-400 italic px-1">Add department steps first to enable subtasks.</p>
+            ) : tpl.departmentRoutes.every(r => r.subtasks.length === 0) ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center border-2 border-dashed border-slate-200 rounded-xl">
+                <ListChecks size={22} className="text-slate-300 mb-2" />
+                <p className="text-xs text-slate-400 font-medium">No subtasks yet</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Click &ldquo;Add Subtask&rdquo; to create the first one.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {sortedRoutes.flatMap(route =>
+                  route.subtasks.map(sub => {
+                    const isEditThis   = editingSubtask?.subtaskId === sub.id && editingSubtask?.routeId === route.id;
+                    const isDelConfirm = confirmDeleteSubtask?.subtaskId === sub.id;
+
+                    if (isEditThis && editingSubtask) {
+                      return (
+                        <div key={sub.id} className="bg-white border border-teal-200 rounded-xl p-3 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full shrink-0">{route.department.name}</span>
+                          </div>
+                          <input
+                            value={editingSubtask.name}
+                            onChange={e => setEditingSubtask(p => p ? { ...p, name: e.target.value } : null)}
+                            className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          />
+                          <textarea
+                            value={editingSubtask.description}
+                            onChange={e => setEditingSubtask(p => p ? { ...p, description: e.target.value } : null)}
+                            rows={2}
+                            placeholder="Description (optional)"
+                            className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+                          />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <select
+                              value={editingSubtask.priority}
+                              onChange={e => setEditingSubtask(p => p ? { ...p, priority: e.target.value as TPriority } : null)}
+                              className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            >
+                              {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
+                            </select>
+                            <input
+                              type="number"
+                              min={1}
+                              value={editingSubtask.daysDue}
+                              onChange={e => setEditingSubtask(p => p ? { ...p, daysDue: e.target.value } : null)}
+                              placeholder="Days due"
+                              className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                            <button
+                              onClick={saveEditSubtask}
+                              disabled={!editingSubtask.name.trim() || editingSubtask.saving}
+                              className="px-3 py-1.5 text-xs font-bold bg-teal-700 text-white rounded-lg hover:bg-teal-800 disabled:opacity-40 inline-flex items-center gap-1"
+                            >
+                              {editingSubtask.saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save
+                            </button>
+                            <button
+                              onClick={() => setEditingSubtask(null)}
+                              className="px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={sub.id} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">{route.department.name}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${PRIORITY_COLOR[sub.priority]}`}>
+                          {PRIORITY_LABEL[sub.priority]}
+                        </span>
+                        <span className="flex-1 text-xs text-slate-700 font-medium min-w-0 truncate">{sub.name}</span>
+                        {sub.daysDue !== null && (
+                          <span className="text-[10px] text-slate-400 inline-flex items-center gap-0.5 shrink-0">
+                            <Clock size={9} /> {sub.daysDue}d
+                          </span>
+                        )}
+                        {isDelConfirm ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-red-600 font-bold">Delete?</span>
+                            <button onClick={() => deleteSubtask(route.id, sub.id)} className="px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded hover:bg-red-700">Yes</button>
+                            <button onClick={() => setConfirmDeleteSubtask(null)} className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 rounded hover:bg-slate-200">No</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={() => startEdit(route.id, sub)} className="p-1 rounded text-slate-400 hover:text-teal-700 hover:bg-teal-50 transition-colors">
+                              <Pencil size={12} />
+                            </button>
+                            <button onClick={() => setConfirmDeleteSubtask({ routeId: route.id, subtaskId: sub.id })} className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* Add subtask form (shown for a specific route) */}
+            {sortedRoutes.map(route => {
+              const addForm = addSubtaskForms[route.id];
+              if (!addForm?.open) return null;
+              return (
+                <div key={route.id} className="mt-3 bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">{route.department.name}</span>
+                    <span className="text-[10px] text-slate-400">New subtask</span>
+                  </div>
+                  {/* Route selector */}
+                  <select
+                    value={route.id}
+                    onChange={e => {
+                      const newRouteId = parseInt(e.target.value, 10);
+                      const form = addSubtaskForms[route.id];
+                      setAddSubtaskForms(prev => {
+                        const next = { ...prev };
+                        delete next[route.id];
+                        return { ...next, [newRouteId]: { ...(form ?? { name: '', description: '', priority: 'NORMAL' as TPriority, daysDue: '' }), open: true, saving: false } };
+                      });
+                    }}
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  >
+                    {sortedRoutes.map(r => <option key={r.id} value={r.id}>{r.department.name}</option>)}
+                  </select>
+                  <input
+                    value={addForm.name}
+                    onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], name: e.target.value } }))}
+                    placeholder="Subtask name *"
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                  <textarea
+                    value={addForm.description}
+                    onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], description: e.target.value } }))}
+                    rows={2}
+                    placeholder="Description (optional)"
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={addForm.priority}
+                      onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], priority: e.target.value as TPriority } }))}
+                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    >
+                      {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      value={addForm.daysDue}
+                      onChange={e => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], daysDue: e.target.value } }))}
+                      placeholder="Days due"
+                      className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    />
+                    <button
+                      onClick={() => saveAddSubtask(route.id)}
+                      disabled={!addForm.name.trim() || addForm.saving}
+                      className="px-3 py-1.5 text-xs font-bold bg-teal-700 text-white rounded-lg hover:bg-teal-800 disabled:opacity-40 inline-flex items-center gap-1"
+                    >
+                      {addForm.saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Add
+                    </button>
+                    <button
+                      onClick={() => setAddSubtaskForms(prev => ({ ...prev, [route.id]: { ...prev[route.id], open: false } }))}
+                      className="px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </section>
 
           {/* ── Linked Services ──────────────────────────────── */}

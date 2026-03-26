@@ -7,7 +7,7 @@ import { Button } from '@/components/UI/button';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Calendar, Tag, Send, Clock,
-  ChevronDown, Check, Plus, ChevronRight, History, MessageSquare,
+  ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search,
 } from 'lucide-react';
 import { SubtaskDetailModal, type ActivityEntry } from './SubtaskDetailModal';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -27,6 +27,12 @@ export interface DeptStatus {
   color: string | null;
   isEntryStep: boolean;
   isExitStep: boolean;
+}
+
+export interface DeptWithStatuses {
+  id: number;
+  name: string;
+  statuses: DeptStatus[];
 }
 
 export interface ConversationEntry {
@@ -53,6 +59,7 @@ export interface SharedTaskDetailPageProps {
   accentColor: string;
   sourceInfo?: SourceInfo;
   deptStatuses?: DeptStatus[];
+  allDeptStatuses?: DeptWithStatuses[];
   initialConversations?: ConversationEntry[];
   initialHistoryLogs?: TaskHistoryEntry[];
   onUpdate?: (updated: AOTask) => void;
@@ -103,6 +110,7 @@ export function SharedTaskDetailPage({
   accentColor,
   sourceInfo,
   deptStatuses,
+  allDeptStatuses,
   initialConversations = [],
   initialHistoryLogs = [],
   onUpdate,
@@ -117,6 +125,8 @@ export function SharedTaskDetailPage({
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
+  const [statusDeptId, setStatusDeptId] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
   const [isSubtaskModalOpen, setIsSubtaskModalOpen] = useState(false);
@@ -140,10 +150,6 @@ export function SharedTaskDetailPage({
       [selectedSubtaskId]: [...(prev[selectedSubtaskId] ?? []), entry],
     }));
   };
-
-  const statusOptions: string[] = (deptStatuses && deptStatuses.length > 0)
-    ? deptStatuses.map(s => s.name)
-    : ['To Do', 'In Progress', 'Review', 'Done'];
 
   const clientName = INITIAL_CLIENTS.find(c => c.id === editingTask.clientId)?.businessName ?? 'Unknown';
   const assignee   = teamMembers.find(m => m.id === editingTask.assigneeId);
@@ -172,16 +178,16 @@ export function SharedTaskDetailPage({
     return true;
   };
 
-  const handleStatusChange = async (statusName: string) => {
+  const handleStatusChange = async (status: DeptStatus, deptId: number) => {
     setShowStatusDropdown(false);
-    const dbStatus = deptStatuses?.find(s => s.name === statusName);
-    if (taskId && dbStatus) {
+    setStatusDeptId(null);
+    if (taskId) {
       setIsSaving(true);
-      const ok = await patchTask({ currentStatusId: dbStatus.id });
+      const ok = await patchTask({ currentStatusId: status.id, currentDepartmentId: deptId });
       setIsSaving(false);
       if (!ok) { toastError('Failed to update status', 'Please try again.'); return; }
     }
-    update({ ...editingTask, status: statusName as AOTaskStatus, updatedAt: new Date().toISOString() });
+    update({ ...editingTask, status: status.name as AOTaskStatus, updatedAt: new Date().toISOString() });
   };
 
   const handlePriorityChange = async (priority: AOTaskPriority) => {
@@ -197,6 +203,7 @@ export function SharedTaskDetailPage({
 
   const handleAssigneeChange = async (assigneeId: string) => {
     setShowAssigneeDropdown(false);
+    setAssigneeSearchQuery('');
     if (taskId) {
       setIsSaving(true);
       const ok = await patchTask({ assignedToId: Number(assigneeId) });
@@ -439,7 +446,7 @@ export function SharedTaskDetailPage({
             <div className="relative">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status</p>
               <button
-                onClick={() => { setShowStatusDropdown(v => !v); setShowPriorityDropdown(false); setShowAssigneeDropdown(false); }}
+                onClick={() => { setShowStatusDropdown(v => !v); setStatusDeptId(null); setShowPriorityDropdown(false); setShowAssigneeDropdown(false); }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
               >
                 <div
@@ -450,21 +457,59 @@ export function SharedTaskDetailPage({
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
               {showStatusDropdown && (
-                <div className="absolute z-20 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-44">
-                  {statusOptions.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => void handleStatusChange(s)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${s === editingTask.status ? 'font-bold' : 'text-slate-700'}`}
-                      style={s === editingTask.status ? { color: accentColor } : undefined}
-                    >
-                      <div
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: getStatusColor(s, deptStatuses) }}
-                      />
-                      {s}
-                    </button>
-                  ))}
+                <div className="absolute z-20 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden w-52">
+                  {statusDeptId === null ? (
+                    <div>
+                      <p className="px-3 pt-2.5 pb-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Select Department</p>
+                      <div className="pb-1">
+                        {(allDeptStatuses ?? []).map(dept => (
+                          <button
+                            key={dept.id}
+                            onClick={() => setStatusDeptId(dept.id)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 transition text-sm text-slate-700"
+                          >
+                            <span className="font-medium">{dept.name}</span>
+                            <ChevronRight size={13} className="text-slate-400" />
+                          </button>
+                        ))}
+                        {(allDeptStatuses ?? []).length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-3 px-3">No departments available</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (() => {
+                    const drill = (allDeptStatuses ?? []).find(d => d.id === statusDeptId);
+                    return (
+                      <div>
+                        <button
+                          onClick={() => setStatusDeptId(null)}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                        >
+                          <ChevronLeft size={13} />
+                          {drill?.name}
+                        </button>
+                        <div className="py-1">
+                          {(drill?.statuses ?? []).map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => void handleStatusChange(s, statusDeptId)}
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${s.name === editingTask.status ? 'font-bold' : 'text-slate-700'}`}
+                              style={s.name === editingTask.status ? { color: accentColor } : undefined}
+                            >
+                              <div
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: s.color ?? '#64748b' }}
+                              />
+                              {s.name}
+                            </button>
+                          ))}
+                          {(drill?.statuses ?? []).length === 0 && (
+                            <p className="text-xs text-slate-400 text-center py-3 px-3">No statuses in this department</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -511,23 +556,43 @@ export function SharedTaskDetailPage({
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
               {showAssigneeDropdown && (
-                <div className="absolute z-20 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-56">
-                  {teamMembers.map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => void handleAssigneeChange(m.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${m.id === editingTask.assigneeId ? 'font-bold' : 'text-slate-700'}`}
-                      style={m.id === editingTask.assigneeId ? { color: accentColor } : undefined}
-                    >
-                      <div className="w-6 h-6 bg-slate-600 rounded-full flex items-center justify-center shrink-0">
-                        <span className="text-[9px] font-bold text-white">{m.avatar}</span>
-                      </div>
-                      <div className="text-left">
-                        <p className="text-sm">{m.name}</p>
-                        <p className="text-[10px] text-slate-400">{m.department}</p>
-                      </div>
-                    </button>
-                  ))}
+                <div className="absolute z-20 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden w-64">
+                  <div className="p-2 border-b border-slate-100">
+                    <div className="relative">
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        autoFocus
+                        value={assigneeSearchQuery}
+                        onChange={e => setAssigneeSearchQuery(e.target.value)}
+                        placeholder="Search employees…"
+                        className="w-full pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f766e]"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto py-1">
+                    {teamMembers.filter(m =>
+                      m.name.toLowerCase().includes(assigneeSearchQuery.toLowerCase()) ||
+                      m.department.toLowerCase().includes(assigneeSearchQuery.toLowerCase())
+                    ).map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => void handleAssigneeChange(m.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 transition ${m.id === editingTask.assigneeId ? 'font-bold' : 'text-slate-700'}`}
+                        style={m.id === editingTask.assigneeId ? { color: accentColor } : undefined}
+                      >
+                        <div className="w-6 h-6 bg-slate-600 rounded-full flex items-center justify-center shrink-0">
+                          <span className="text-[9px] font-bold text-white">{m.avatar}</span>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm">{m.name}</p>
+                          <p className="text-[10px] text-slate-400">{m.department}</p>
+                        </div>
+                      </button>
+                    ))}
+                    {teamMembers.filter(m => m.name.toLowerCase().includes(assigneeSearchQuery.toLowerCase())).length === 0 && (
+                      <p className="text-xs text-slate-400 text-center py-3">No employees found</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -659,9 +724,16 @@ export function SharedTaskDetailPage({
                             </td>
                             {/* Title */}
                             <td className="px-3 py-2.5">
-                              <span className={`font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                                {subtask.title}
-                              </span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className={`font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                  {subtask.title}
+                                </span>
+                                {subtask.department && (
+                                  <span className="inline-flex items-center self-start text-[9px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                                    {subtask.department.name}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             {/* Due Date */}
                             <td className="px-3 py-2.5 hidden sm:table-cell">
@@ -685,6 +757,18 @@ export function SharedTaskDetailPage({
                                     <span className="text-[8px] font-bold text-white">{subtaskAssignee.avatar}</span>
                                   </div>
                                   <span className="text-[11px] font-medium text-slate-600 truncate max-w-25">{subtaskAssignee.name}</span>
+                                </div>
+                              ) : subtask.assigneeName ? (
+                                <div className="flex items-center gap-1.5">
+                                  <div
+                                    className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                                    style={{ backgroundColor: accentColor }}
+                                  >
+                                    <span className="text-[8px] font-bold text-white">
+                                      {subtask.assigneeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] font-medium text-slate-600 truncate max-w-25">{subtask.assigneeName}</span>
                                 </div>
                               ) : (
                                 <span className="text-slate-300 text-[11px]">Unassigned</span>

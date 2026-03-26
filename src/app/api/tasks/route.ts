@@ -113,6 +113,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     include: taskInclude,
   });
 
+  // ── Instantiate template subtasks ──────────────────────────────────
+  // When a templateId is supplied, clone all TaskTemplateSubtasks (across
+  // all routes) into live TaskSubtask records attached to this new task.
+  if (parsed.data.templateId) {
+    const templateRoutes = await prisma.taskTemplateRoute.findMany({
+      where: { templateId: parsed.data.templateId },
+      orderBy: { routeOrder: "asc" },
+      include: {
+        subtasks: { orderBy: { subtaskOrder: "asc" } },
+      },
+    });
+
+    const taskStartDate = task.dueDate ? new Date(task.dueDate) : null;
+
+    const subtaskData = templateRoutes.flatMap((route, _routeIdx) =>
+      route.subtasks.map((tSub, subIdx) => ({
+        parentTaskId: task.id,
+        departmentId: route.departmentId,
+        name: tSub.name,
+        description: tSub.description ?? null,
+        priority: tSub.priority,
+        order: tSub.subtaskOrder ?? subIdx + 1,
+        daysDue: tSub.daysDue ?? null,
+        // Compute a due date from daysDue relative to task creation date
+        dueDate:
+          tSub.daysDue && taskStartDate
+            ? new Date(
+                taskStartDate.getTime() + tSub.daysDue * 24 * 60 * 60 * 1000
+              )
+            : null,
+      }))
+    );
+
+    if (subtaskData.length > 0) {
+      await prisma.taskSubtask.createMany({ data: subtaskData });
+    }
+  }
+
+  // Re-fetch the task so the response includes the newly created subtasks
+  const taskWithSubtasks = parsed.data.templateId
+    ? await prisma.task.findUnique({ where: { id: task.id }, include: taskInclude })
+    : task;
+
   void logActivity({
     userId: session.user.id,
     action: "CREATED",
@@ -132,5 +175,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  return NextResponse.json({ data: task }, { status: 201 });
+  return NextResponse.json({ data: taskWithSubtasks ?? task }, { status: 201 });
 }
