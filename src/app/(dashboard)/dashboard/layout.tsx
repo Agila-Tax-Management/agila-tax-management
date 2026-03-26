@@ -64,6 +64,7 @@ const PORTAL_ITEMS = [
   { href: '/portal/account-officer', label: 'Account Officer', icon: Briefcase  },
   { href: '/portal/hr',              label: 'HR',              icon: UserCheck  },
   { href: '/portal/task-management', label: 'Task Management', icon: UserCheck  },
+  { href: '/portal/operation',       label: 'Operations',       icon: Building2  },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

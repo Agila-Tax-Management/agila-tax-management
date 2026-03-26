@@ -13,6 +13,7 @@ const MODULE_LABELS: Record<string, string> = {
   liaison: 'Liaison Portal',
   'account-officer': 'Account Officer Portal',
   'task-management': 'Task Management Portal',
+  'operation': 'Operations Portal',
 };
 
 function toLabel(segment: string): string {
