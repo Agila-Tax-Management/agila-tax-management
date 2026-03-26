@@ -264,6 +264,10 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
 
   const handleSaveTsaUrl = async () => {
     if (!lead) return;
+    if (lead.servicePlans.length === 0 && lead.serviceOneTimePlans.length === 0) {
+      error('Cannot save TSA', 'Please attach at least one service or plan to this lead first.');
+      return;
+    }
     setSavingTsa(true);
     try {
       const res = await fetch(`/api/sales/leads/${lead.id}`, {
@@ -782,24 +786,32 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
             <div className="flex items-center gap-2">
             {lead.status.isOnboarding && (
                 lead.isAccountCreated ? (
-                  invoicePaid ? (
+                  lead.isSignedTSA && invoicePaid ? (
                     lead.isCreatedJobOrder ? (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
                         <CheckCircle2 size={13} /> Job Order Created
+                        {(fullLead ?? lead).jobOrders?.[0] && (
+                          <a
+                            href="/portal/sales/job-orders"
+                            className="ml-1.5 underline underline-offset-2 hover:text-violet-900 dark:hover:text-violet-200 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View &rarr;
+                          </a>
+                        )}
                       </span>
                     ) : (
-                      <Button
-                        onClick={() => setIsJobOrderOpen(true)}
-                        disabled={saving || deleting}
-                        className="bg-violet-600 hover:bg-violet-700 text-white"
-                      >
-                        <FileText size={14} className="mr-2" />
-                        Create Job Order
-                      </Button>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+                        <Clock size={13} /> Ready for Turn Over
+                      </span>
                     )
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-                      <Clock size={13} /> Waiting for Payment
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold ${
+                      invoicePaid
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
+                        : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
+                    }`}>
+                      <Clock size={13} /> {invoicePaid ? 'Ready for Turn Over' : 'Waiting for Payment'}
                     </span>
                   )
                 ) : (
@@ -812,6 +824,16 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                     Create Account
                   </Button>
                 )
+              )}
+              {lead.isAccountCreated && lead.isSignedTSA && invoicePaid && !lead.isCreatedJobOrder && (
+                <Button
+                  onClick={() => setIsJobOrderOpen(true)}
+                  disabled={saving || deleting}
+                  className="bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  <FileText size={14} className="mr-2" />
+                  Create Job Order
+                </Button>
               )}
               <Button
                 onClick={() => { void handleSave(); }}
@@ -839,6 +861,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               leadId={lead.id}
               initialComments={fullLead?.comments ?? []}
               initialHistory={fullLead?.historyLogs ?? []}
+              invoices={(fullLead ?? lead).invoices ?? []}
             />
           )}
         </div>

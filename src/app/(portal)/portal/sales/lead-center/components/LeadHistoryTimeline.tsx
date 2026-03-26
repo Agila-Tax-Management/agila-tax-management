@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, Loader2, MessageSquare, Clock } from 'lucide-react';
+import { Send, Loader2, MessageSquare, Clock, Receipt } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 
@@ -38,6 +38,7 @@ interface LeadHistoryTimelineProps {
   leadId: number;
   initialComments: LeadCommentEntry[];
   initialHistory: LeadHistoryEntry[];
+  invoices?: { id: string; invoiceNumber: string; status: string }[];
 }
 
 function formatChangeType(type: string): string {
@@ -68,7 +69,7 @@ function formatDate(iso: string): string {
   });
 }
 
-export function LeadHistoryTimeline({ leadId, initialComments, initialHistory }: LeadHistoryTimelineProps): React.ReactNode {
+export function LeadHistoryTimeline({ leadId, initialComments, initialHistory, invoices = [] }: LeadHistoryTimelineProps): React.ReactNode {
   const { error } = useToast();
   const [comments, setComments] = useState<LeadCommentEntry[]>(initialComments);
   const [history] = useState<LeadHistoryEntry[]>(initialHistory);
@@ -134,23 +135,56 @@ export function LeadHistoryTimeline({ leadId, initialComments, initialHistory }:
 
           // history item
           const h = item.data;
+          const isInvoiceEvent = h.changeType === 'INVOICE_GENERATED';
+          // Try to extract invoice number from newValue (e.g. "Generated initial onboarding invoice INV-2026-0001 — ...")
+          const invoiceNumberMatch = isInvoiceEvent ? (h.newValue ?? '').match(/(INV-\d{4}-\d{4,})/) : null;
+          const invoiceNumber = invoiceNumberMatch?.[1] ?? null;
+          const matchedInvoice = invoiceNumber ? invoices.find((inv) => inv.invoiceNumber === invoiceNumber) : null;
+
+          const statusColors: Record<string, string> = {
+            PAID: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+            UNPAID: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+            PARTIALLY_PAID: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+            OVERDUE: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+            VOID: 'bg-muted text-muted-foreground',
+            DRAFT: 'bg-muted text-muted-foreground',
+          };
+
           return (
             <div key={`h-${h.id}`} className="flex gap-2">
-              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                <Clock size={12} className="text-muted-foreground" />
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                isInvoiceEvent ? 'bg-blue-600/10' : 'bg-muted'
+              }`}>
+                {isInvoiceEvent
+                  ? <Receipt size={12} className="text-blue-600" />
+                  : <Clock size={12} className="text-muted-foreground" />
+                }
               </div>
               <div className="flex-1 min-w-0 pt-0.5">
                 <span className="text-xs text-muted-foreground">
                   <span className="font-semibold text-foreground">{h.actor.name}</span>
                   {' · '}
                   {formatChangeType(h.changeType)}
-                  {h.oldValue && h.newValue && (
+                  {h.oldValue && h.newValue && h.changeType === 'STATUS_CHANGED' && (
                     <span>
                       {' '}— <span className="line-through text-muted-foreground/60">{h.oldValue}</span>
                       {' → '}<span className="text-foreground font-medium">{h.newValue}</span>
                     </span>
                   )}
+                  {h.newValue && h.changeType !== 'STATUS_CHANGED' && !isInvoiceEvent && (
+                    <span className="text-foreground/80"> — {h.newValue}</span>
+                  )}
                 </span>
+                {isInvoiceEvent && invoiceNumber && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs font-mono font-bold text-foreground">{invoiceNumber}</span>
+                    {matchedInvoice && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusColors[matchedInvoice.status] ?? 'bg-muted text-muted-foreground'}`}>
+                        {matchedInvoice.status.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <p className="text-[10px] text-muted-foreground/70 mt-0.5">{formatDate(h.createdAt)}</p>
               </div>
             </div>

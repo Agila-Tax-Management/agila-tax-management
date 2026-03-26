@@ -26,6 +26,11 @@ const LEAD_INCLUDE = {
     select: { id: true, invoiceNumber: true, status: true },
     orderBy: { issueDate: "asc" as const },
   },
+  jobOrders: {
+    select: { id: true, jobOrderNumber: true },
+    orderBy: { createdAt: "asc" as const },
+    take: 1,
+  },
 } as const;
 
 const createJobOrderSchema = z.object({

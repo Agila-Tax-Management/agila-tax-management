@@ -349,19 +349,19 @@ export function LeadCenter(): React.ReactNode {
                                 <span className="font-medium truncate">{lead.assignedAgent.name}</span>
                               </span>
                             )}
-                            {lead.isAccountCreated && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-semibold">
-                                <CheckCircle2 size={9} className="shrink-0" /> Account Created
-                              </span>
-                            )}
-                            {lead.isAccountCreated && lead.isSignedTSA && lead.invoices.length > 0 && lead.invoices[0]!.status !== 'PAID' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-semibold">
-                                <Clock size={9} className="shrink-0" /> Waiting for Payment
+                            {lead.isAccountCreated && !lead.isCreatedJobOrder && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                lead.invoices?.[0]?.status === 'PAID'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                              }`}>
+                                <Clock size={9} className="shrink-0" />
+                                {lead.invoices?.[0]?.status === 'PAID' ? 'Ready for Turn Over' : 'Waiting for Payment'}
                               </span>
                             )}
                             {lead.isCreatedJobOrder && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 text-[10px] font-semibold">
-                                <CheckCircle2 size={9} className="shrink-0" /> Job Order Created
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
+                                <CheckCircle2 size={9} className="shrink-0" /> Converted
                               </span>
                             )}
                           </div>
