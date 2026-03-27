@@ -475,7 +475,7 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
               style={{ backgroundColor: getStatusColor(editingTask.status, deptStatuses) }}
             />
             {isEditingTitle ? (
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex flex-col gap-2 flex-1 min-w-0">
                 <input
                   autoFocus
                   value={editTitleValue}
@@ -486,8 +486,11 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
                   }}
                   className="flex-1 text-xl font-black border-b-2 border-[#0f766e] focus:outline-none bg-transparent text-slate-900 min-w-0"
                 />
+                <div className="flex gap-2">
                 <button onClick={() => void handleSaveTitle()} className="text-xs font-bold px-3 py-1.5 bg-[#0f766e] text-white rounded-lg hover:bg-[#0d6560] transition shrink-0">Save</button>
                 <button onClick={() => setIsEditingTitle(false)} className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition shrink-0">Cancel</button>
+                </div>
+                
               </div>
             ) : (
               <h1
