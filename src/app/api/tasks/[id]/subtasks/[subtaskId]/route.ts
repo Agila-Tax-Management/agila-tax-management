@@ -15,7 +15,7 @@ const patchSubtaskSchema = z.object({
   description: z.string().nullable().optional(),
   departmentId: z.number().int().positive().nullable().optional(),
   assignedToId: z.number().int().positive().nullable().optional(),
-  statusId: z.number().int().positive().nullable().optional(),
+  isCompleted: z.boolean().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   daysDue: z.number().int().positive().nullable().optional(),
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),
@@ -94,8 +94,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       description: true,
       assignedToId: true,
       assignedTo: { select: { firstName: true, lastName: true } },
-      statusId: true,
-      status: { select: { name: true, isExitStep: true } },
+      isCompleted: true,
       dueDate: true,
     },
   });
@@ -129,23 +128,14 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     include: {
       department: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true } },
-      status: { select: { id: true, name: true, color: true, isExitStep: true } },
     },
   });
 
   // Auto-create history entries for each changed field (mirrors main task PATCH behaviour)
   const historyMessages: string[] = [];
 
-  if (rest.statusId !== undefined && rest.statusId !== existing.statusId) {
-    const wasCompleted = existing.status?.isExitStep ?? false;
-    const isNowCompleted = subtask.status?.isExitStep ?? false;
-    if (wasCompleted !== isNowCompleted) {
-      historyMessages.push(isNowCompleted ? "Marked subtask as completed" : "Marked subtask as to do");
-    } else {
-      const oldStatus = existing.status?.name ?? "Unknown";
-      const newStatus = subtask.status?.name ?? "Unknown";
-      historyMessages.push(`Changed status: ${oldStatus} → ${newStatus}`);
-    }
+  if (rest.isCompleted !== undefined && rest.isCompleted !== existing.isCompleted) {
+    historyMessages.push(rest.isCompleted ? "Marked subtask as completed" : "Marked subtask as to do");
   }
   if (rest.assignedToId !== undefined && rest.assignedToId !== existing.assignedToId) {
     const oldName = existing.assignedTo

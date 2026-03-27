@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
+import { notifyMany } from "@/lib/notification";
 
 const createMessageSchema = z.object({
   message: z.string().min(1, "Message cannot be empty"),
@@ -46,7 +47,14 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
   const taskId = Number(id);
   if (isNaN(taskId)) return NextResponse.json({ error: "Invalid task ID" }, { status: 400 });
 
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true } });
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true,
+      name: true,
+      assignedTo: { select: { userId: true } },
+    },
+  });
   if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
   let body: unknown;
@@ -84,6 +92,30 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       newValue: parsed.data.message.slice(0, 200),
     },
   });
+
+  // Notify assigned employee and task creator
+  void (async () => {
+    const creatorLog = await prisma.activityLog.findFirst({
+      where: { entity: 'Task', entityId: String(taskId), action: 'CREATED' },
+      select: { userId: true },
+    });
+    const recipientIds = new Set<string>();
+    if (task?.assignedTo?.userId && task.assignedTo.userId !== session.user.id) {
+      recipientIds.add(task.assignedTo.userId);
+    }
+    if (creatorLog?.userId && creatorLog.userId !== session.user.id) {
+      recipientIds.add(creatorLog.userId);
+    }
+    if (recipientIds.size > 0) {
+      void notifyMany({
+        userIds: [...recipientIds],
+        type: 'TASK',
+        title: `New comment on "${task?.name ?? 'task'}"`,
+        message: `${session.user.name}: ${parsed.data.message.slice(0, 100)}`,
+        linkUrl: `/portal/task-management/tasks/${taskId}`,
+      });
+    }
+  })();
 
   return NextResponse.json({ data: message }, { status: 201 });
 }

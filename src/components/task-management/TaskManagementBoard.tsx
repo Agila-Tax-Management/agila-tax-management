@@ -168,10 +168,9 @@ function TaskManagementBoardInner() {
   const [newTitle, setNewTitle]           = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newClientId, setNewClientId]     = useState('');
-  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
+  const [newAssigneeId, setNewAssigneeId]                 = useState<string>('');
   const [newPriority, setNewPriority]     = useState<AOTaskPriority>('Medium');
   const [newDueDate, setNewDueDate]       = useState('');
-  const [newTags, setNewTags]             = useState('');
   const [newDeptId, setNewDeptId]         = useState<number | null>(null);
   const [newStatus, setNewStatus]         = useState('');
   // Client dropdown
@@ -305,8 +304,8 @@ function TaskManagementBoardInner() {
   const resetCreateForm = () => {
     setNewTitle(''); setNewDescription('');
     setNewClientId('');
-    setNewAssigneeIds([]);
-    setNewPriority('Medium'); setNewDueDate(''); setNewTags('');
+    setNewAssigneeId('');
+    setNewPriority('Medium'); setNewDueDate('');
     const defaultDeptId = activeDeptId ?? departments[0]?.id ?? null;
     setNewDeptId(defaultDeptId);
     const defaultDept = departments.find(d => d.id === defaultDeptId);
@@ -374,7 +373,7 @@ function TaskManagementBoardInner() {
       ...(statusEntry && statusEntry.id > 0 ? { statusId: statusEntry.id } : {}),
       ...(newClientId ? { clientId: parseInt(newClientId, 10) } : {}),
       ...(selectedTemplateId !== null ? { templateId: selectedTemplateId } : {}),
-      ...(newAssigneeIds[0] ? { assignedToId: parseInt(newAssigneeIds[0], 10) } : {}),
+      ...(newAssigneeId ? { assignedToId: parseInt(newAssigneeId, 10) } : {}),
     };
     const res = await fetch('/api/tasks', {
       method: 'POST',
@@ -416,7 +415,7 @@ function TaskManagementBoardInner() {
       void fetch(`/api/tasks/${numericId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statusId: statusId }),
+        body: JSON.stringify({ statusId: statusId, departmentId: deptId }),
       });
     }
     setDraggedTaskId(null);
@@ -986,39 +985,29 @@ function TaskManagementBoardInner() {
             </select>
           </div>
 
-          {/* 6. Assignee — multi-select searchable dropdown */}
+          {/* 6. Assignee — single searchable dropdown */}
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Assignee *</label>
             <div className="relative">
-              <div
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 onClick={() => setAssigneeDropdownOpen(v => !v)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setAssigneeDropdownOpen(v => !v); }}
-                className="w-full min-h-10 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-left flex items-center gap-2 flex-wrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0f766e] hover:border-slate-300 transition-colors"
+                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#0f766e] hover:border-slate-300 transition-colors"
               >
-                {newAssigneeIds.length === 0 ? (
-                  <span className="text-slate-400 text-sm">Select assignees…</span>
+                {newAssigneeId ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 bg-teal-700 rounded-full flex items-center justify-center shrink-0 text-[8px] font-black text-white">
+                      {boardEmployees.find(m => m.id === newAssigneeId)?.avatar ?? '?'}
+                    </div>
+                    <span className="text-slate-700 truncate">
+                      {boardEmployees.find(m => m.id === newAssigneeId)?.name ?? 'Unknown'}
+                    </span>
+                  </div>
                 ) : (
-                  newAssigneeIds.map(id => {
-                    const m = boardEmployees.find(x => x.id === id);
-                    return m ? (
-                      <span key={id} className="flex items-center gap-1 bg-teal-50 text-teal-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                        <span className="w-4 h-4 bg-teal-700 rounded-full text-[8px] font-black text-white flex items-center justify-center shrink-0">{m.avatar}</span>
-                        {m.name.split(' ')[0]}
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); setNewAssigneeIds(prev => prev.filter(x => x !== id)); }}
-                          className="ml-0.5 hover:text-teal-900 transition-colors"
-                        >
-                          <X size={10} />
-                        </button>
-                      </span>
-                    ) : null;
-                  })
+                  <span className="text-slate-400">Select an assignee…</span>
                 )}
-                <ChevronDown size={15} className={`ml-auto shrink-0 text-slate-400 transition-transform ${assigneeDropdownOpen ? 'rotate-180' : ''}`} />
-              </div>
+                <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform ${assigneeDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
               {assigneeDropdownOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setAssigneeDropdownOpen(false)} />
@@ -1040,21 +1029,15 @@ function TaskManagementBoardInner() {
                         m.name.toLowerCase().includes(assigneeSearch.toLowerCase()) ||
                         m.department.toLowerCase().includes(assigneeSearch.toLowerCase())
                       ).map(m => {
-                        const selected = newAssigneeIds.includes(m.id);
+                        const selected = newAssigneeId === m.id;
                         return (
                           <button
                             key={m.id}
                             type="button"
-                            onClick={() => setNewAssigneeIds(prev =>
-                              selected ? prev.filter(x => x !== m.id) : [...prev, m.id]
-                            )}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors ${
-                              selected ? 'bg-teal-50' : ''
-                            }`}
+                            onClick={() => { setNewAssigneeId(m.id); setAssigneeDropdownOpen(false); setAssigneeSearch(''); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors ${selected ? 'bg-teal-50' : ''}`}
                           >
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] font-black text-white ${
-                              selected ? 'bg-teal-700' : 'bg-slate-400'
-                            }`}>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] font-black text-white ${selected ? 'bg-teal-700' : 'bg-slate-400'}`}>
                               {m.avatar}
                             </div>
                             <div className="flex-1 text-left min-w-0">
@@ -1073,15 +1056,14 @@ function TaskManagementBoardInner() {
                         <p className="text-xs text-slate-400 text-center py-4">No members found</p>
                       )}
                     </div>
-                    {newAssigneeIds.length > 0 && (
-                      <div className="border-t border-slate-100 px-3 py-2 flex items-center justify-between">
-                        <span className="text-xs text-slate-500 font-medium">{newAssigneeIds.length} selected</span>
+                    {newAssigneeId && (
+                      <div className="border-t border-slate-100 px-3 py-2">
                         <button
                           type="button"
-                          onClick={() => setNewAssigneeIds([])}
-                          className="text-xs text-red-500 hover:text-red-700 font-semibold transition-colors"
+                          onClick={() => { setNewAssigneeId(''); setAssigneeDropdownOpen(false); }}
+                          className="text-xs text-rose-500 hover:text-rose-700 font-semibold transition-colors"
                         >
-                          Clear all
+                          Clear selection
                         </button>
                       </div>
                     )}
@@ -1121,12 +1103,6 @@ function TaskManagementBoardInner() {
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Due Date *</label>
             <Input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} />
-          </div>
-
-          {/* 9. Tags */}
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Tags (comma separated)</label>
-            <Input value={newTags} onChange={e => setNewTags(e.target.value)} placeholder="e.g. BIR, Filing" />
           </div>
 
           {/* Actions */}
