@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
   Settings, LogOut, ChevronLeft, ChevronRight, X, Menu,
   ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
-  Sun, Moon
+  Sun, Moon, User
 } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -17,8 +17,11 @@ import { useTheme } from '@/context/ThemeContext';
 import { authClient } from '@/lib/auth-client';
 
 
-function HeaderAvatar({ onClick }: { onClick: () => void }) {
+function ProfileDropdown() {
   const { data: sessionData } = authClient.useSession();
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const ref = React.useRef<HTMLDivElement>(null);
   const name = sessionData?.user?.name ?? '';
   const image = (sessionData?.user as { image?: string | null } | undefined)?.image ?? null;
   const initials = name
@@ -28,24 +31,75 @@ function HeaderAvatar({ onClick }: { onClick: () => void }) {
     .toUpperCase()
     .slice(0, 2) || '?';
 
+  /* eslint-disable react-hooks/set-state-in-effect -- closes dropdown on outside click */
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const navigate = (href: string) => {
+    setOpen(false);
+    router.push(href);
+  };
+
   return (
-    <button
-      onClick={onClick}
-      title="Profile"
-      className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-blue-600 text-white text-sm font-semibold shrink-0 hover:ring-2 hover:ring-blue-400 transition focus:outline-none focus:ring-2 focus:ring-blue-400"
-    >
-      {image ? (
-        <Image
-          src={image}
-          alt={name || 'Profile'}
-          width={36}
-          height={36}
-          className="object-cover w-full h-full"
-        />
-      ) : (
-        initials
+    <div className="relative" ref={ref}>
+      <button
+        title="Profile"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-blue-600 text-white text-sm font-semibold shrink-0 hover:ring-2 hover:ring-blue-400 transition focus:outline-none focus:ring-2 focus:ring-blue-400"
+      >
+        {image ? (
+          <Image
+            src={image}
+            alt={name || 'Profile'}
+            width={36}
+            height={36}
+            className="object-cover w-full h-full"
+          />
+        ) : (
+          initials
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-border bg-card shadow-lg py-1 z-50">
+          <button
+            onClick={() => navigate('/dashboard/profile')}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+          >
+            <User size={15} className="shrink-0 text-muted-foreground" />
+            Profile
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/settings')}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+          >
+            <Settings size={15} className="shrink-0 text-muted-foreground" />
+            Settings
+          </button>
+          <div className="my-1 border-t border-border" />
+          <button
+            onClick={async () => {
+              setOpen(false);
+              await authClient.signOut();
+              router.push('/sign-in');
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <LogOut size={15} className="shrink-0" />
+            Sign Out
+          </button>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -70,7 +124,6 @@ const PORTAL_ITEMS = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
-  const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
@@ -139,7 +192,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </Button>
               <NotificationDropdown />
-              <HeaderAvatar onClick={() => router.push('/dashboard/profile')} />
+              <ProfileDropdown />
             </div>
           </header>
 
@@ -299,32 +352,7 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
           </div>
         </nav>
 
-        {/* Footer */}
-        <div className="p-3 border-t border-sidebar-border shrink-0 space-y-1">
-          <button
-            onClick={() => navigate('/dashboard/settings')}
-            className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl transition
-              ${pathname.startsWith('/dashboard/settings')
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-            title={!isExpanded ? 'Settings' : undefined}
-          >
-            <Settings size={20} className="shrink-0" />
-            {isExpanded && <span className="text-sm font-medium">Settings</span>}
-          </button>
 
-          <button
-            onClick={async () => {
-              await authClient.signOut();
-              router.push('/sign-in');
-            }}
-            className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl text-red-400 hover:bg-red-900/20 transition`}
-            title={!isExpanded ? 'Sign Out' : undefined}
-          >
-            <LogOut size={20} className="shrink-0" />
-            {isExpanded && <span className="text-sm font-medium">Sign Out</span>}
-          </button>
-        </div>
       </aside>
     </>
   );
