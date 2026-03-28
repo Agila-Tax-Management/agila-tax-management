@@ -101,6 +101,7 @@ interface Step3CompensationData {
   deductSss: boolean;
   deductPhilhealth: boolean;
   deductPagibig: boolean;
+  pagibigType: 'REGULAR' | 'MINIMUM';
 }
 
 interface Step4Data {
@@ -148,6 +149,7 @@ const DEFAULT_S3C: Step3CompensationData = {
   deductSss: false,
   deductPhilhealth: false,
   deductPagibig: false,
+  pagibigType: 'REGULAR',
 };
 
 const DEFAULT_STEP4: Step4Data = {
@@ -495,6 +497,7 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
             deductSss: s3c.deductSss,
             deductPhilhealth: s3c.deductPhilhealth,
             deductPagibig: s3c.deductPagibig,
+            pagibigType: s3c.pagibigType,
             deductTax: false,
           }),
         });
@@ -1081,29 +1084,60 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
               <div className="space-y-3">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Government Benefits Registration</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {([
-                    { key: 'deductSss' as const, label: 'SSS Registration' },
-                    { key: 'deductPagibig' as const, label: 'Pag-IBIG Registration' },
-                    { key: 'deductPhilhealth' as const, label: 'PhilHealth Registration' },
-                  ] as { key: keyof Pick<Step3CompensationData, 'deductSss' | 'deductPhilhealth' | 'deductPagibig'>; label: string }[]).map(({ key, label }) => (
-                    <div key={key}>
-                      <label className={labelCls}>{label}</label>
-                      <div className="flex gap-4 mt-1">
-                        {[{ value: true, label: 'Yes' }, { value: false, label: 'No' }].map(({ value, label: l }) => (
-                          <label key={l} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={key}
-                              checked={s3c[key] === value}
-                              onChange={() => setS3c((p) => ({ ...p, [key]: value }))}
-                              className="h-4 w-4 accent-blue-600"
-                            />
-                            <span className="text-sm text-foreground">{l}</span>
-                          </label>
-                        ))}
-                      </div>
+                  {/* SSS */}
+                  <div>
+                    <label className={labelCls}>SSS Registration</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label: l }) => (
+                        <label key={l} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="aem-deductSss" checked={s3c.deductSss === value} onChange={() => setS3c((p) => ({ ...p, deductSss: value }))} className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{l}</span>
+                        </label>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+
+                  {/* PhilHealth */}
+                  <div>
+                    <label className={labelCls}>PhilHealth Registration</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label: l }) => (
+                        <label key={l} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="aem-deductPhilhealth" checked={s3c.deductPhilhealth === value} onChange={() => setS3c((p) => ({ ...p, deductPhilhealth: value }))} className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{l}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {s3c.deductPhilhealth && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">2.5% of monthly salary</p>
+                    )}
+                  </div>
+
+                  {/* Pag-IBIG */}
+                  <div>
+                    <label className={labelCls}>Pag-IBIG Registration</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label: l }) => (
+                        <label key={l} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="aem-deductPagibig" checked={s3c.deductPagibig === value} onChange={() => setS3c((p) => ({ ...p, deductPagibig: value }))} className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{l}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {s3c.deductPagibig && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-[11px] font-semibold text-muted-foreground">Contribution type:</p>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="aem-pagibigType" checked={s3c.pagibigType === 'REGULAR'} onChange={() => setS3c((p) => ({ ...p, pagibigType: 'REGULAR' }))} className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">Regular (2%)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="aem-pagibigType" checked={s3c.pagibigType === 'MINIMUM'} onChange={() => setS3c((p) => ({ ...p, pagibigType: 'MINIMUM' }))} className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">Minimum (₱200)</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createCompensationSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import type { SalaryRateType, SalaryFrequency, PayType, DisbursementType } from "@/generated/prisma/client";
+import type { SalaryRateType, SalaryFrequency, PayType, DisbursementType, PagibigContributionType } from "@/generated/prisma/client";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -121,6 +121,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       deductSss: d.deductSss,
       deductPhilhealth: d.deductPhilhealth,
       deductPagibig: d.deductPagibig,
+      pagibigType: d.pagibigType as PagibigContributionType,
       deductTax: d.deductTax,
       calculatedDailyRate,
       calculatedMonthlyRate,

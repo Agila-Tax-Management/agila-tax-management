@@ -62,6 +62,11 @@ enum DisbursementType {
     E_WALLET
 }
 
+enum PagibigContributionType {
+    REGULAR  // 2% of monthly compensation (employee + employer)
+    MINIMUM  // Flat ₱200/month (employee + employer)
+}
+
 // ─── Company / Client Holiday Calendar ────────────────────────────
 model Holiday {
     id          Int      @id @default(autoincrement())
@@ -180,6 +185,7 @@ model EmployeeCompensation {
     deductSss           Boolean  @default(false)
     deductPhilhealth    Boolean  @default(false)
     deductPagibig       Boolean  @default(false)
+    pagibigType         PagibigContributionType @default(REGULAR)
     deductTax           Boolean  @default(false)
 
     // ─── Calculated Rates (The outputs for Payslip generation) ───

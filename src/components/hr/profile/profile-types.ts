@@ -95,6 +95,7 @@ export interface CompensationRecord {
   deductSss: boolean;
   deductPhilhealth: boolean;
   deductPagibig: boolean;
+  pagibigType: 'REGULAR' | 'MINIMUM';
   deductTax: boolean;
   calculatedDailyRate: string;
   calculatedMonthlyRate: string;

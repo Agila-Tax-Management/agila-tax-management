@@ -32,7 +32,7 @@ enum PlaceType {
 
 model Client {
   id          Int     @id @default(autoincrement())
-  companyCode String? @unique // e.g., "comp-001"
+  companyCode String? @unique // e.g., "COMP-001" this will base on the name like "Acme Corporation" -> "ACME-001" so 4 letters + 3-digit sequence incremental the "001" is their main branch, if they have branches it will be "ACME-002", "ACME-003" and so on. This is for internal use and can be used in URLs or references instead of the numeric ID.
   clientNo    String? @unique // e.g., "2024-0001"
 
   portalName   String // Used for their BetterAuth login portal URL
