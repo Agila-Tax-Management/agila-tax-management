@@ -44,6 +44,10 @@ interface SubtaskDetailModalProps {
   /** Activity log entries — owned by the parent so they survive modal close/reopen */
   activityLog: ActivityEntry[];
   onAddActivity: (kind: ActivityEntry['kind'], message: string) => void;
+  /** List of departments for the department dropdown */
+  departments?: Array<{ id: number; name: string }>;
+  /** Called when parent task title is changed from within this modal */
+  onParentTitleUpdate?: (newTitle: string) => void;
 }
 
 export function SubtaskDetailModal({
@@ -61,6 +65,8 @@ export function SubtaskDetailModal({
   currentUser = { id: '', name: 'You' },
   activityLog,
   onAddActivity,
+  departments,
+  onParentTitleUpdate,
 }: SubtaskDetailModalProps): React.ReactNode {
   const { error: toastError } = useToast();
   const [editing, setEditing] = useState<AOTaskSubtask>(subtask);
@@ -69,6 +75,11 @@ export function SubtaskDetailModal({
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingParentTitle, setIsEditingParentTitle] = useState(false);
+  const [editParentTitleValue, setEditParentTitleValue] = useState('');
 
   // Reset editing state when a *different* subtask is opened (id changes).
   // activityLog lives in the parent — not reset here.
@@ -79,6 +90,11 @@ export function SubtaskDetailModal({
     setPendingNotes(subtask.notes ?? '');
     setNewComment('');
     setConfirmDelete(false);
+    setIsEditingTitle(false);
+    setEditTitleValue('');
+    setIsEditingNotes(false);
+    setIsEditingParentTitle(false);
+    setEditParentTitleValue('');
   }
 
   if (!isOpen) return null;
@@ -96,23 +112,66 @@ export function SubtaskDetailModal({
     return res.ok;
   };
 
+  const handleDepartmentChange = async (deptId: number | null) => {
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchSubtask({ departmentId: deptId });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update department', 'Please try again.'); return; }
+    }
+    const oldDept = departments?.find(d => d.id === editing.department?.id);
+    const newDept = departments?.find(d => d.id === deptId);
+    onAddActivity('change', `Changed department: ${oldDept?.name ?? 'None'} → ${newDept?.name ?? 'None'}`);
+    const updated: AOTaskSubtask = { ...editing, department: deptId ? (departments?.find(d => d.id === deptId) ?? undefined) : undefined };
+    setEditing(updated);
+    onUpdate(updated);
+  };
+
+  const handleSaveParentTitle = async () => {
+    const newTitle = editParentTitleValue.trim();
+    if (!newTitle || newTitle === parentTaskTitle) { setIsEditingParentTitle(false); return; }
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTitle }),
+      }).then(r => r.ok).catch(() => false);
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update task title', 'Please try again.'); return; }
+    }
+    onParentTitleUpdate?.(newTitle);
+    setIsEditingParentTitle(false);
+  };
+
   const handleToggleCompleted = async () => {
     const newCompleted = !editing.completed;
     if (taskId) {
-      const exitStatus  = deptStatuses?.find(s => s.isExitStep);
-      const entryStatus = deptStatuses?.find(s => s.isEntryStep);
-      const statusId = newCompleted ? exitStatus?.id : entryStatus?.id;
-      if (statusId !== undefined) {
-        setIsSaving(true);
-        const ok = await patchSubtask({ statusId });
-        setIsSaving(false);
-        if (!ok) { toastError('Failed to update subtask', 'Please try again.'); return; }
-      }
+      setIsSaving(true);
+      const ok = await patchSubtask({ isCompleted: newCompleted });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update subtask', 'Please try again.'); return; }
     }
     onAddActivity('change', newCompleted ? 'Marked subtask as completed' : 'Marked subtask as to do');
     const updated = { ...editing, completed: newCompleted };
     setEditing(updated);
     onUpdate(updated);
+  };
+
+  const handleSaveTitle = async () => {
+    const newTitle = editTitleValue.trim();
+    if (!newTitle || newTitle === editing.title) { setIsEditingTitle(false); return; }
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchSubtask({ name: newTitle });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update title', 'Please try again.'); return; }
+    }
+    const updated = { ...editing, title: newTitle };
+    setEditing(updated);
+    onUpdate(updated);
+    onAddActivity('change', `Renamed subtask to "${newTitle}"`);
+    setIsEditingTitle(false);
   };
 
   const handleNotesSave = async (notes: string) => {
@@ -219,9 +278,30 @@ export function SubtaskDetailModal({
             </button>
             <div className="min-w-0">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtask</p>
-              <h2 className={`text-base font-bold truncate ${editing.completed ? 'line-through text-slate-400' : 'text-slate-900'}`}>
-                {editing.title}
-              </h2>
+              {isEditingTitle ? (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <input
+                    autoFocus
+                    value={editTitleValue}
+                    onChange={e => setEditTitleValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') void handleSaveTitle();
+                      if (e.key === 'Escape') setIsEditingTitle(false);
+                    }}
+                    className="text-base font-bold border-b-2 border-[#0f766e] focus:outline-none bg-transparent text-slate-900 min-w-0 flex-1"
+                  />
+                  <button onClick={() => void handleSaveTitle()} className="text-xs font-bold text-emerald-600 hover:text-emerald-700 shrink-0">Save</button>
+                  <button onClick={() => setIsEditingTitle(false)} className="text-xs font-bold text-slate-400 hover:text-slate-600 shrink-0">Cancel</button>
+                </div>
+              ) : (
+                <h2
+                  className={`text-base font-bold truncate ${editing.completed ? 'line-through text-slate-400' : 'text-slate-900'} cursor-pointer`}
+                  onDoubleClick={() => { setEditTitleValue(editing.title); setIsEditingTitle(true); }}
+                  title="Double-click to edit"
+                >
+                  {editing.title}
+                </h2>
+              )}
             </div>
             {sourceInfo && (
               <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${sourceInfo.bg} ${sourceInfo.textColor}`}>
@@ -246,41 +326,98 @@ export function SubtaskDetailModal({
             {/* Parent Task */}
             <div className="mb-6">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Parent Task</p>
-              <div className="flex items-center gap-2">
-                <Layers size={14} className="text-slate-400 shrink-0" />
-                <p className="text-sm font-bold text-slate-700">{parentTaskTitle}</p>
-              </div>
+              {isEditingParentTitle ? (
+                <div className="space-y-2">
+                  <input
+                    autoFocus
+                    value={editParentTitleValue}
+                    onChange={e => setEditParentTitleValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') void handleSaveParentTitle();
+                      if (e.key === 'Escape') setIsEditingParentTitle(false);
+                    }}
+                    className="w-full text-sm font-bold border-b-2 border-[#0f766e] focus:outline-none bg-transparent text-slate-700"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => void handleSaveParentTitle()}
+                      className="text-xs font-bold px-3 py-1.5 bg-[#0f766e] text-white rounded-lg hover:bg-[#0d6560] transition"
+                    >Save</button>
+                    <button
+                      onClick={() => setIsEditingParentTitle(false)}
+                      className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                    >Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded-lg p-1 -m-1 transition"
+                  onDoubleClick={() => { setEditParentTitleValue(parentTaskTitle); setIsEditingParentTitle(true); }}
+                  title="Double-click to edit task title"
+                >
+                  <Layers size={14} className="text-slate-400 shrink-0" />
+                  <p className="text-sm font-bold text-slate-700">{parentTaskTitle}</p>
+                </div>
+              )}
             </div>
 
-            {/* Status */}
-            <div className="mb-6">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status</p>
-              <button
-                onClick={() => void handleToggleCompleted()}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                  editing.completed
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {editing.completed
-                  ? <CheckSquare size={13} className="text-emerald-500" />
-                  : <Square size={13} />}
-                {editing.completed ? 'Completed' : 'To Do'}
-              </button>
-            </div>
+            {/* Department */}
+            {departments && departments.length > 0 && (
+              <div className="mb-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Department</p>
+                <select
+                  value={editing.department?.id ?? ''}
+                  onChange={e => {
+                    const v = e.target.value;
+                    void handleDepartmentChange(v ? Number(v) : null);
+                  }}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0f766e]"
+                >
+                  <option value="">No department</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Notes */}
             <div className="mb-6">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Notes</p>
-              <textarea
-                value={pendingNotes}
-                onChange={e => setPendingNotes(e.target.value)}
-                onBlur={e => void handleNotesSave(e.target.value)}
-                rows={4}
-                placeholder="Add notes or details for this subtask…"
-                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0f766e] resize-none placeholder:text-slate-400"
-              />
+              {isEditingNotes ? (
+                <div className="space-y-2">
+                  <textarea
+                    autoFocus
+                    value={pendingNotes}
+                    onChange={e => setPendingNotes(e.target.value)}
+                    rows={4}
+                    placeholder="Add notes or details for this subtask…"
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0f766e] resize-none placeholder:text-slate-400"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { void handleNotesSave(pendingNotes); setIsEditingNotes(false); }}
+                      className="text-xs font-bold px-3 py-1.5 bg-[#0f766e] text-white rounded-lg hover:bg-[#0d6560] transition"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => { setPendingNotes(editing.notes ?? ''); setIsEditingNotes(false); }}
+                      className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  className="text-sm text-slate-600 leading-relaxed cursor-pointer hover:bg-slate-50 rounded-lg p-2 -m-1 transition min-h-16"
+                  onDoubleClick={() => setIsEditingNotes(true)}
+                  title="Double-click to edit notes"
+                >
+                  {pendingNotes || <span className="italic text-slate-400">No notes — double-click to add.</span>}
+                </p>
+              )}
             </div>
 
             {/* Assignee */}

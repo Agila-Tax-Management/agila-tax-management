@@ -302,9 +302,9 @@ model Department {
     employments EmployeeEmployment[]
 
     // ─── NEW: Task & Workflow Relations ───
-    statuses  DepartmentTaskStatus[] @relation("DepartmentStatuses")
-    templates TaskTemplate[]         @relation("DepartmentTemplates")
-    tasks     Task[]                 @relation("TaskDepartment")
+    statuses       DepartmentTaskStatus[] @relation("DepartmentStatuses")
+    templateRoutes TaskTemplateRoute[]    @relation("DepartmentTemplateRoutes")
+    tasks          Task[]                 @relation("TaskDepartment")
 
     createdAt    DateTime      @default(now())
     taskSubtasks TaskSubtask[]

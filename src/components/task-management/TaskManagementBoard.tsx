@@ -1,8 +1,8 @@
-﻿// src/components/task-management/TaskManagementBoard.tsx
+// src/components/task-management/TaskManagementBoard.tsx
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -13,12 +13,10 @@ import {
   Calendar, Tag, Filter, ChevronDown, ChevronRight,
   Loader2, X,
 } from 'lucide-react';
-import {
-  ALL_TEAM_MEMBERS, SOURCE_CONFIG,
-} from '@/lib/mock-task-management-data';
-import type { UnifiedTask, TaskSource } from '@/lib/mock-task-management-data';
+import { ALL_TEAM_MEMBERS } from '@/lib/mock-task-management-data';
+import type { UnifiedTask } from '@/lib/mock-task-management-data';
 import type { AOTaskPriority } from '@/lib/types';
-import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
+import { useTaskDepartments, type TaskApiDepartment, type TaskApiStatus } from '@/context/TaskDepartmentsContext';
 import { useToast } from '@/context/ToastContext';
 
 // ── API task shape returned by GET /api/tasks ──────────────────────
@@ -31,15 +29,15 @@ interface ApiTask {
   createdAt: string;
   updatedAt: string;
   client: { id: number; businessName: string } | null;
-  currentDepartment: { id: number; name: string } | null;
-  currentStatus: { id: number; name: string; color: string } | null;
+  department: { id: number; name: string } | null;
+  status: { id: number; name: string; color: string } | null;
   assignedTo: { id: number; firstName: string; lastName: string } | null;
   subtasks: Array<{
     id: number;
     name: string;
     dueDate: string | null;
     assignedTo: { id: number; firstName: string; lastName: string } | null;
-    status: { isExitStep: boolean } | null;
+    isCompleted: boolean;
   }>;
 }
 
@@ -50,19 +48,17 @@ const PRIORITY_TO_DB: Record<AOTaskPriority, string> = {
   Low: 'LOW', Medium: 'NORMAL', High: 'HIGH', Urgent: 'URGENT',
 };
 
-function mapApiTask(t: ApiTask): UnifiedTask {
+// Locally extended task with DB-sourced dept + status IDs
+type BoardTask = UnifiedTask & { deptId: number | null; statusId: number | null };
+
+function mapApiTask(t: ApiTask): BoardTask {
   return {
     id: String(t.id),
     title: t.name,
     description: t.description ?? '',
-    status: (t.currentStatus?.name ?? 'To Do') as UnifiedTask['status'],
+    status: (t.status?.name ?? 'To Do') as UnifiedTask['status'],
     priority: DB_PRIORITY_MAP[t.priority ?? 'NORMAL'] ?? 'Medium',
-    source: (() => {
-      const raw = t.currentDepartment?.name ?? '';
-      const lower = raw.toLowerCase().trim();
-      const match = DEPT_NAME_TO_SOURCE_MAP.find(e => e.aliases.some(a => a === lower));
-      return match?.source ?? 'om';
-    })(),
+    source: 'om', // dummy — kept only for UnifiedTask type compatibility
     clientId: String(t.client?.id ?? ''),
     assigneeId: String(t.assignedTo?.id ?? ''),
     dueDate: t.dueDate ?? new Date().toISOString(),
@@ -73,46 +69,16 @@ function mapApiTask(t: ApiTask): UnifiedTask {
     subtasks: t.subtasks.map(s => ({
       id: String(s.id),
       title: s.name,
-      completed: s.status?.isExitStep ?? false,
+      completed: s.isCompleted,
       dueDate: s.dueDate ?? undefined,
       assigneeId: s.assignedTo ? String(s.assignedTo.id) : undefined,
       createdAt: new Date().toISOString(),
     })),
+    deptId: t.department?.id ?? null,
+    statusId: t.status?.id ?? null,
   };
 }
 
-// Map board source keys → API department names (must match actual DB dept names)
-const SOURCE_TO_DEPT_NAME: Record<TaskSource, string> = {
-  'om':               'Operations',
-  'client-relations': 'Client Relations',
-  'liaison':          'Liaison',
-  'compliance':       'Compliance',
-  'admin':            'Administration',
-  'accounting':       'Accounting',
-  'hr':               'Human Resources',
-  'it':               'IT',
-};
-
-// Reverse map — API department name → board source key (case-insensitive)
-const DEPT_NAME_TO_SOURCE_MAP: Array<{ aliases: string[]; source: TaskSource }> = [
-  { aliases: ['operations', 'operations manager', 'om'],  source: 'om' },
-  { aliases: ['client relations', 'client-relations'],    source: 'client-relations' },
-  { aliases: ['liaison'],                                 source: 'liaison' },
-  { aliases: ['compliance'],                              source: 'compliance' },
-  { aliases: ['admin', 'administration', 'administrator'], source: 'admin' },
-  { aliases: ['accounting', 'accounts'],                  source: 'accounting' },
-  { aliases: ['human resources', 'hr', 'human resource'], source: 'hr' },
-  { aliases: ['it', 'information technology', 'it department'], source: 'it' },
-];
-const _deptSourceLookup = new Map<string, TaskSource>();
-for (const { aliases, source } of DEPT_NAME_TO_SOURCE_MAP) {
-  for (const alias of aliases) _deptSourceLookup.set(alias, source);
-}
-function deptNameToSource(name: string): TaskSource | undefined {
-  return _deptSourceLookup.get(name.toLowerCase().trim());
-}
-
-// Derive a badge variant from a status name for task rows
 type BadgeVariant = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
 function statusVariant(name: string): BadgeVariant {
   const lower = name.toLowerCase();
@@ -124,7 +90,6 @@ function statusVariant(name: string): BadgeVariant {
 }
 
 const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
-
 const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
   Low:    { variant: 'neutral' },
   Medium: { variant: 'info'    },
@@ -133,18 +98,13 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
 };
 
 type ViewMode = 'list' | 'kanban';
-const DEPT_SOURCES_DEFAULT: TaskSource[] = ['om', 'client-relations', 'liaison', 'compliance', 'admin', 'accounting', 'hr', 'it'];
-
-interface TaskManagementBoardProps {
-  sourceFilter?: TaskSource;
-}
 
 interface TemplateItem {
   id: number;
   name: string;
   description: string | null;
   daysDue: number | null;
-  departmentRoutes: Array<{ routeOrder: number; department: { name: string } }>;
+  departmentRoutes: Array<{ routeOrder: number; department: { id: number; name: string } }>;
 }
 
 interface BoardEmployee {
@@ -154,11 +114,36 @@ interface BoardEmployee {
   department: string;
 }
 
-export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) {
+const DEFAULT_STATUSES: TaskApiStatus[] = [
+  { id: -1, name: 'To Do',       color: '#64748b', statusOrder: 1, isEntryStep: true,  isExitStep: false },
+  { id: -2, name: 'In Progress', color: '#3b82f6', statusOrder: 2, isEntryStep: false, isExitStep: false },
+  { id: -3, name: 'For Review',  color: '#ca8a04', statusOrder: 3, isEntryStep: false, isExitStep: false },
+  { id: -4, name: 'Done',        color: '#16a34a', statusOrder: 4, isEntryStep: false, isExitStep: true  },
+];
+
+function getDeptStatuses(dept: TaskApiDepartment | undefined | null): TaskApiStatus[] {
+  if (!dept) return DEFAULT_STATUSES;
+  const sorted = [...dept.statuses].sort((a, b) => a.statusOrder - b.statusOrder);
+  return sorted.length > 0 ? sorted : DEFAULT_STATUSES;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Inner component (needs useSearchParams — must be inside Suspense)
+// ─────────────────────────────────────────────────────────────────
+function TaskManagementBoardInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const deptIdParam = searchParams.get('dept');
+  const activeDeptId: number | null = deptIdParam ? parseInt(deptIdParam, 10) : null;
   const { departments } = useTaskDepartments();
   const { error: toastError } = useToast();
-  const [tasks, setTasks]             = useState<UnifiedTask[]>([]);
+
+  const activeDept = useMemo(
+    () => (activeDeptId != null ? (departments.find(d => d.id === activeDeptId) ?? null) : null),
+    [activeDeptId, departments],
+  );
+
+  const [tasks, setTasks]             = useState<BoardTask[]>([]);
   const [isLoading, setIsLoading]     = useState(true);
   const [clientNameMap, setClientNameMap] = useState<Map<string, string>>(new Map());
   const [assigneeNameMap, setAssigneeNameMap] = useState<Map<string, string>>(new Map());
@@ -166,31 +151,28 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   const [search, setSearch]           = useState('');
   const [filterStatus, setFilterStatus]     = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<AOTaskPriority | 'all'>('all');
-  const [filterSource, setFilterSource]     = useState<TaskSource | 'all'>(sourceFilter ?? 'all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
-  // Collapsed dept sections (list view)
-  const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
-  const toggleDept = (src: TaskSource) =>
-    setCollapsedDepts(prev => ({ ...prev, [src]: !prev[src] }));
+  // Collapsed dept sections (list view) — keyed by deptId
+  const [collapsedDepts, setCollapsedDepts] = useState<Record<number, boolean>>({});
+  const toggleDept = (deptId: number) =>
+    setCollapsedDepts(prev => ({ ...prev, [deptId]: !prev[deptId] }));
 
-  // Collapsed status sections — keyed `"${src}-${status}"`
+  // Collapsed status sections — keyed `"${deptId}-${statusId}"`
   const [collapsedStatuses, setCollapsedStatuses] = useState<Record<string, boolean>>({});
   const toggleStatus = (key: string) =>
     setCollapsedStatuses(prev => ({ ...prev, [key]: !prev[key] }));
 
-  // â”€â”€â”€ Form state â”€â”€â”€
+  // ─── Form state ───
   const [newTitle, setNewTitle]           = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newClientId, setNewClientId]     = useState('');
-  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
+  const [newAssigneeId, setNewAssigneeId]                 = useState<string>('');
   const [newPriority, setNewPriority]     = useState<AOTaskPriority>('Medium');
   const [newDueDate, setNewDueDate]       = useState('');
-  const [newTags, setNewTags]             = useState('');
-  const [newSource, setNewSource]         = useState<TaskSource>(sourceFilter ?? 'client-relations');
-  const [newStatus, setNewStatus]         = useState('To Do');
+  const [newDeptId, setNewDeptId]         = useState<number | null>(null);
+  const [newStatus, setNewStatus]         = useState('');
   // Client dropdown
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [clientSearch, setClientSearch]             = useState('');
@@ -208,66 +190,42 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   const [templateSearch, setTemplateSearch]             = useState('');
   const [selectedTemplateId, setSelectedTemplateId]     = useState<number | null>(null);
 
-  // ─── Dynamic statuses from WorkflowSettings (via TaskDepartmentsContext) ───
-  const DEFAULT_STATUSES = useMemo(() => [
-    { id: -1, name: 'To Do',       color: '#64748b', statusOrder: 1, isEntryStep: true,  isExitStep: false },
-    { id: -2, name: 'In Progress', color: '#3b82f6', statusOrder: 2, isEntryStep: false, isExitStep: false },
-    { id: -3, name: 'For Review',  color: '#ca8a04', statusOrder: 3, isEntryStep: false, isExitStep: false },
-    { id: -4, name: 'Done',        color: '#16a34a', statusOrder: 4, isEntryStep: false, isExitStep: true  },
-  ], []);
+  // Reset default dept when URL param or departments change (adjust-during-render pattern)
+  const [prevActiveDeptId, setPrevActiveDeptId] = useState<number | null | undefined>(undefined);
+  if (prevActiveDeptId !== activeDeptId) {
+    setPrevActiveDeptId(activeDeptId);
+    setNewDeptId(activeDeptId ?? departments[0]?.id ?? null);
+  }
 
-  const dynamicStatuses = useMemo(() => {
-    if (departments.length === 0) return DEFAULT_STATUSES;
-    if (sourceFilter) {
-      const deptName = SOURCE_TO_DEPT_NAME[sourceFilter];
-      const dept = departments.find(d => d.name === deptName);
-      const sorted = (dept?.statuses ?? []).slice().sort((a, b) => a.statusOrder - b.statusOrder);
-      return sorted.length > 0 ? sorted : DEFAULT_STATUSES;
-    }
-    // All-tasks view: union of unique status names across all depts (first-seen order)
+  // ── Dynamic status options for filter bar ──────────────────────
+  const filterStatusOptions = useMemo(() => {
+    if (activeDept) return getDeptStatuses(activeDept);
     const seen = new Set<string>();
-    const result: typeof departments[0]['statuses'] = [];
-    for (const dept of departments) {
-      const statuses = dept.statuses.length > 0
-        ? dept.statuses.slice().sort((a, b) => a.statusOrder - b.statusOrder)
-        : DEFAULT_STATUSES;
-      for (const st of statuses) {
-        if (!seen.has(st.name)) { seen.add(st.name); result.push(st); }
+    const result: TaskApiStatus[] = [];
+    for (const d of departments) {
+      for (const s of getDeptStatuses(d)) {
+        if (!seen.has(s.name)) { seen.add(s.name); result.push(s); }
       }
     }
     return result.length > 0 ? result : DEFAULT_STATUSES;
-  }, [departments, sourceFilter, DEFAULT_STATUSES]);
+  }, [activeDept, departments]);
 
-  const STATUS_ORDER: string[] = useMemo(() => dynamicStatuses.map(s => s.name), [dynamicStatuses]);
-  const statusColorMap: Record<string, string> = useMemo(
-    () => Object.fromEntries(dynamicStatuses.map(s => [s.name, s.color ?? '#64748b'])),
-    [dynamicStatuses]
+  // Statuses for the dept selected in the create form
+  const selectedDeptStatuses = useMemo(
+    () => getDeptStatuses(departments.find(d => d.id === newDeptId)),
+    [newDeptId, departments],
   );
-
-  // Statuses available for the department currently selected in the Create form
-  const selectedDeptStatuses = useMemo(() => {
-    const deptName = SOURCE_TO_DEPT_NAME[newSource];
-    const dept = departments.find(d => d.name === deptName);
-    const sorted = (dept?.statuses ?? []).slice().sort((a, b) => a.statusOrder - b.statusOrder);
-    return sorted.length > 0 ? sorted : DEFAULT_STATUSES;
-  }, [newSource, departments, DEFAULT_STATUSES]);
 
   // ── Fetch tasks from API ──────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
     setIsLoading(true);
     try {
-      let url = '/api/tasks';
-      if (sourceFilter && departments.length > 0) {
-        const deptName = SOURCE_TO_DEPT_NAME[sourceFilter];
-        const dept = departments.find(d => d.name === deptName);
-        if (dept) url += `?departmentId=${dept.id}`;
-      }
+      const url = activeDeptId != null ? `/api/tasks?departmentId=${activeDeptId}` : '/api/tasks';
       const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json() as { data: ApiTask[] };
       const mapped = json.data.map(mapApiTask);
       setTasks(mapped);
-      // Build lookup maps for client and assignee names
       const cMap = new Map<string, string>();
       const aMap = new Map<string, string>();
       for (const t of json.data) {
@@ -279,7 +237,7 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     } finally {
       setIsLoading(false);
     }
-  }, [sourceFilter, departments]);
+  }, [activeDeptId]);
 
   useEffect(() => {
     void fetchTasks();
@@ -294,16 +252,13 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     setNewTitle(tpl.name);
     setNewDescription(tpl.description ?? '');
     const sortedRoutes = [...(tpl.departmentRoutes ?? [])].sort((a, b) => a.routeOrder - b.routeOrder);
-    const firstDeptName = sortedRoutes[0]?.department?.name;
-    if (firstDeptName && !sourceFilter) {
-      const src = deptNameToSource(firstDeptName);
-      if (src) {
-        setNewSource(src);
-        // Reset status to the first status of that department
-        const deptStatuses = departments
-          .find(d => d.name === SOURCE_TO_DEPT_NAME[src])?.statuses
-          .slice().sort((a, b) => a.statusOrder - b.statusOrder) ?? [];
-        setNewStatus(deptStatuses[0]?.name ?? 'To Do');
+    const firstDept = sortedRoutes[0]?.department;
+    if (firstDept && activeDeptId == null) {
+      const matchingDept = departments.find(d => d.id === firstDept.id);
+      if (matchingDept) {
+        setNewDeptId(matchingDept.id);
+        const statuses = getDeptStatuses(matchingDept);
+        setNewStatus(statuses[0]?.name ?? '');
       }
     }
     if (tpl.daysDue) {
@@ -314,6 +269,11 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
   };
 
   const openCreateModal = () => {
+    const defaultDeptId = activeDeptId ?? departments[0]?.id ?? null;
+    const defaultDept = departments.find(d => d.id === defaultDeptId);
+    const defaultStatuses = getDeptStatuses(defaultDept);
+    setNewDeptId(defaultDeptId);
+    setNewStatus(defaultStatuses[0]?.name ?? '');
     setIsCreateModalOpen(true);
     setTemplatesLoading(true);
     fetch('/api/admin/settings/task-workflow/templates')
@@ -340,6 +300,22 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       })
       .catch(() => { /* non-critical */ });
   };
+
+  const resetCreateForm = () => {
+    setNewTitle(''); setNewDescription('');
+    setNewClientId('');
+    setNewAssigneeId('');
+    setNewPriority('Medium'); setNewDueDate('');
+    const defaultDeptId = activeDeptId ?? departments[0]?.id ?? null;
+    setNewDeptId(defaultDeptId);
+    const defaultDept = departments.find(d => d.id === defaultDeptId);
+    setNewStatus(getDeptStatuses(defaultDept)[0]?.name ?? '');
+    setClientSearch(''); setClientDropdownOpen(false);
+    setIsNewClient(false); setNewClientNameInput('');
+    setAssigneeSearch(''); setAssigneeDropdownOpen(false);
+    setTemplateSearch(''); setTemplateDropdownOpen(false); setSelectedTemplateId(null);
+  };
+
   const getAssignee = (assigneeId: string) => {
     const fromMock = ALL_TEAM_MEMBERS.find(m => m.id === assigneeId);
     if (fromMock) return fromMock;
@@ -350,9 +326,10 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     }
     return undefined;
   };
+
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
-  const isOverdue = (t: UnifiedTask) =>
+  const isOverdue = (t: BoardTask) =>
     t.status !== 'Done' && new Date(t.dueDate) < new Date();
 
   const filteredTasks = useMemo(() => tasks.filter(t => {
@@ -362,54 +339,42 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       t.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()));
     const matchStatus   = filterStatus   === 'all' || t.status   === filterStatus;
     const matchPriority = filterPriority === 'all' || t.priority === filterPriority;
-    const matchSource   = filterSource   === 'all' || t.source   === filterSource;
-    return matchSearch && matchStatus && matchPriority && matchSource;
-  }), [tasks, search, filterStatus, filterPriority, filterSource]);
+    return matchSearch && matchStatus && matchPriority;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [tasks, search, filterStatus, filterPriority]);
 
-  // Dept display order — follows WorkflowSettings order (via TaskDepartmentsContext)
-  const contextDeptOrder = useMemo<TaskSource[]>(() => {
-    if (departments.length === 0) return DEPT_SOURCES_DEFAULT;
-    const mapped = departments
-      .map(d => deptNameToSource(d.name))
-      .filter((s): s is TaskSource => !!s);
-    // Deduplicate — multiple DB depts can map to the same source key
-    const seen = new Set<TaskSource>();
-    const deduped: TaskSource[] = [];
-    for (const s of mapped) {
-      if (!seen.has(s)) { seen.add(s); deduped.push(s); }
+  // Group tasks by deptId (numeric key)
+  const tasksByDeptId = useMemo(() => {
+    const map = new Map<number, BoardTask[]>();
+    for (const dept of departments) map.set(dept.id, []);
+    for (const task of filteredTasks) {
+      if (task.deptId != null) {
+        const arr = map.get(task.deptId) ?? [];
+        arr.push(task);
+        map.set(task.deptId, arr);
+      }
     }
-    const missing = DEPT_SOURCES_DEFAULT.filter(s => !seen.has(s));
-    return [...deduped, ...missing];
-  }, [departments]);
+    return map;
+  }, [filteredTasks, departments]);
 
-  const tasksByDept = useMemo(() => {
-    return Object.fromEntries(
-      contextDeptOrder.map(src => [src, filteredTasks.filter(t => t.source === src)])
-    ) as Record<TaskSource, UnifiedTask[]>;
-  }, [filteredTasks, contextDeptOrder]);
-
-  // â”€â”€â”€ CRUD â”€â”€â”€
-
+  // ─── CRUD ───
   const handleCreateTask = async () => {
     if (!newTitle.trim() || !newDueDate) return;
     if (isNewClient && !newClientNameInput.trim()) return;
 
-    const deptName = SOURCE_TO_DEPT_NAME[newSource];
-    const dept = departments.find(d => d.name === deptName);
+    const dept = departments.find(d => d.id === newDeptId);
     const statusEntry = selectedDeptStatuses.find(s => s.name === newStatus);
-
     const body: Record<string, unknown> = {
       name: newTitle.trim(),
       description: newDescription.trim() || undefined,
       priority: PRIORITY_TO_DB[newPriority],
       dueDate: new Date(`${newDueDate}T00:00:00+08:00`).toISOString(),
-      ...(dept ? { currentDepartmentId: dept.id } : {}),
-      ...(statusEntry && statusEntry.id > 0 ? { currentStatusId: statusEntry.id } : {}),
+      ...(dept ? { departmentId: dept.id } : {}),
+      ...(statusEntry && statusEntry.id > 0 ? { statusId: statusEntry.id } : {}),
       ...(newClientId ? { clientId: parseInt(newClientId, 10) } : {}),
       ...(selectedTemplateId !== null ? { templateId: selectedTemplateId } : {}),
-      ...(newAssigneeIds[0] ? { assignedToId: parseInt(newAssigneeIds[0], 10) } : {}),
+      ...(newAssigneeId ? { assignedToId: parseInt(newAssigneeId, 10) } : {}),
     };
-
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -421,26 +386,14 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       setIsCreateModalOpen(false);
     }
   };
-  const resetCreateForm = () => {
-    setNewTitle(''); setNewDescription('');
-    setNewClientId('');
-    setNewAssigneeIds([]);
-    setNewPriority('Medium'); setNewDueDate(''); setNewTags('');
-    setNewSource(sourceFilter ?? 'client-relations');
-    setNewStatus('To Do');
-    setClientSearch(''); setClientDropdownOpen(false);
-    setIsNewClient(false); setNewClientNameInput('');
-    setAssigneeSearch(''); setAssigneeDropdownOpen(false);
-    setTemplateSearch(''); setTemplateDropdownOpen(false); setSelectedTemplateId(null);
-  };
 
-  // â”€â”€â”€ Drag & Drop â”€â”€â”€
-  /** Change a task's source dept + status (cross-dept horizontal kanban / flat kanban) */
-  const handleCardDrop = (targetSrc: TaskSource, targetStatus: string) => {
+  // ─── Drag & Drop ───
+  const handleCardDrop = (deptId: number, statusId: number, statusName: string) => {
     if (!draggedTaskId) return;
 
-    // Check if target is an exit step and subtasks are incomplete
-    const targetStatusObj = dynamicStatuses.find(s => s.name === targetStatus);
+    // Check exit step — all subtasks must be complete
+    const dept = departments.find(d => d.id === deptId);
+    const targetStatusObj = dept?.statuses.find(s => s.id === statusId);
     if (targetStatusObj?.isExitStep) {
       const task = tasks.find(t => t.id === draggedTaskId);
       const subs = task?.subtasks ?? [];
@@ -450,34 +403,31 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
         return;
       }
     }
-    // Optimistic local update
+    // Optimistic update
     setTasks(prev => prev.map(t =>
       t.id === draggedTaskId
-        ? { ...t, source: targetSrc, status: targetStatus as UnifiedTask['status'], updatedAt: new Date().toISOString() }
+        ? { ...t, deptId, statusId, status: statusName as UnifiedTask['status'], updatedAt: new Date().toISOString() }
         : t
     ));
-    // Persist status change to API
+    // Persist to API
     const numericId = Number(draggedTaskId);
-    if (!isNaN(numericId)) {
-      const statusId = dynamicStatuses.find(s => s.name === targetStatus)?.id;
-      if (statusId && statusId > 0) {
-        void fetch(`/api/tasks/${numericId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentStatusId: statusId }),
-        });
-      }
+    if (!isNaN(numericId) && statusId > 0) {
+      void fetch(`/api/tasks/${numericId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusId: statusId, departmentId: deptId }),
+      });
     }
     setDraggedTaskId(null);
   };
 
-  const pageTitle    = sourceFilter ? `${SOURCE_CONFIG[sourceFilter].label} Tasks` : 'All Tasks';
-  const pageSubtitle = sourceFilter
-    ? `Tasks assigned to the ${SOURCE_CONFIG[sourceFilter].label.toLowerCase()} department.`
+  const pageTitle    = activeDept ? `${activeDept.name} Tasks` : 'All Tasks';
+  const pageSubtitle = activeDept
+    ? `Tasks assigned to the ${activeDept.name} department.`
     : 'All tasks across departments.';
 
-  /* â”€â”€â”€ Row renderer (list view) â”€â”€â”€ */
-  const renderTaskRow = (task: UnifiedTask) => {
+  /* ─── Row renderer (list view) ─── */
+  const renderTaskRow = (task: BoardTask) => {
     const assignee = getAssignee(task.assigneeId);
     const overdue  = isOverdue(task);
     return (
@@ -515,8 +465,8 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     );
   };
 
-  /* â”€â”€â”€ Kanban card renderer â”€â”€â”€ */
-  const renderKanbanCard = (task: UnifiedTask) => {
+  /* ─── Kanban card renderer ─── */
+  const renderKanbanCard = (task: BoardTask) => {
     const assignee = getAssignee(task.assigneeId);
     const overdue  = isOverdue(task);
     return (
@@ -559,102 +509,171 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
     );
   };
 
-  /* â”€â”€â”€ Flat 4-column kanban (single dept page or OM tab) â”€â”€â”€ */
-  const renderFlatKanban = (srcTasks: UnifiedTask[], src: TaskSource) => {
-    const extraStatuses = [...new Set(srcTasks.map(t => t.status).filter(s => !STATUS_ORDER.includes(s)))];
-    const allStatuses = [...STATUS_ORDER, ...extraStatuses];
+  /* ─── Single-dept kanban: columns = that dept's statuses ─── */
+  const renderDeptKanban = (dept: TaskApiDepartment) => {
+    const deptTasks = tasksByDeptId.get(dept.id) ?? filteredTasks.filter(t => t.deptId === dept.id);
+    const statuses = getDeptStatuses(dept);
     return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {allStatuses.map(status => {
-        const columnTasks = srcTasks.filter(t => t.status === status);
+      <div className="flex gap-4 overflow-x-auto pb-6 -mx-1 px-1">
+        {statuses.map(status => {
+          const columnTasks = deptTasks.filter(t => t.status === status.name);
+          const colKey = `${dept.id}-${status.id}`;
+          return (
+            <div key={status.id} className="flex-none w-72">
+              <div
+                style={{ borderTopColor: status.color || '#64748b' }}
+                className="bg-slate-50 rounded-2xl border-t-4 p-3 min-h-40"
+              >
+                <button
+                  onClick={() => toggleStatus(colKey)}
+                  className="w-full flex items-center justify-between mb-3 px-1 hover:opacity-70 transition-opacity"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-slate-700 uppercase tracking-wide">{status.name}</span>
+                    {status.isEntryStep && (
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-blue-100 text-blue-700">Entry</span>
+                    )}
+                    {status.isExitStep && (
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-green-100 text-green-700">Exit</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full">{columnTasks.length}</span>
+                    {collapsedStatuses[colKey]
+                      ? <ChevronRight size={13} className="text-slate-400" />
+                      : <ChevronDown size={13} className="text-slate-400" />}
+                  </div>
+                </button>
+                <div
+                  className="space-y-2 min-h-10"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => handleCardDrop(dept.id, status.id, status.name)}
+                >
+                  {!collapsedStatuses[colKey] && columnTasks.length === 0 && (
+                    <p className="text-center text-[10px] text-slate-300 font-medium py-4">Drop here</p>
+                  )}
+                  {!collapsedStatuses[colKey] && columnTasks.map(renderKanbanCard)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  /* ─── All-depts kanban: columns = departments, inside each = that dept's statuses ─── */
+  const renderAllDeptsKanban = () => (
+    <div className="flex gap-4 overflow-x-auto pb-6 -mx-1 px-1">
+      {departments.map(dept => {
+        const deptTasks = tasksByDeptId.get(dept.id) ?? [];
+        const statuses = getDeptStatuses(dept);
         return (
-          <div
-            key={status}
-            className="bg-slate-50 rounded-2xl p-3 min-h-40"
-            onDragOver={e => e.preventDefault()}
-            onDrop={() => handleCardDrop(src, status)}
-          >
-            <button
-              onClick={() => toggleStatus(`${src}-${status}`)}
-              className="w-full flex items-center justify-between mb-3 px-1 hover:opacity-70 transition-opacity"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: statusColorMap[status] ?? '#64748b' }} />
-                <span className="text-xs font-black text-slate-700 uppercase tracking-wide">{status}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full">{columnTasks.length}</span>
-                {collapsedStatuses[`${src}-${status}`]
-                  ? <ChevronRight size={13} className="text-slate-400" />
-                  : <ChevronDown size={13} className="text-slate-400" />}
-              </div>
-            </button>
-            {!collapsedStatuses[`${src}-${status}`] && (
-              <div className="space-y-2">
-                {columnTasks.length === 0 && (
-                  <p className="text-center text-[10px] text-slate-300 font-medium py-4">Drop here</p>
-                )}
-                {columnTasks.map(renderKanbanCard)}
-              </div>
-            )}
+          <div key={dept.id} className="flex-none w-72 flex flex-col">
+            {/* Dept column header */}
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl mb-3 bg-slate-100">
+              <span className="text-sm font-black text-slate-700 uppercase tracking-wide flex-1">{dept.name}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 text-slate-600 shrink-0">
+                {deptTasks.length}
+              </span>
+            </div>
+
+            {/* Status sections stacked vertically inside each dept column */}
+            <div className="space-y-2 flex-1">
+              {statuses.map(status => {
+                const statusTasks = deptTasks.filter(t => t.status === status.name);
+                const colKey = `${dept.id}-${status.id}`;
+                return (
+                  <div
+                    key={status.id}
+                    className="bg-slate-50 rounded-xl overflow-hidden"
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={e => { e.stopPropagation(); handleCardDrop(dept.id, status.id, status.name); }}
+                  >
+                    <button
+                      onClick={() => toggleStatus(colKey)}
+                      className="w-full flex items-center justify-between px-3 py-2 border-b border-slate-100 hover:bg-white/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color || '#64748b' }} />
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-full">
+                          {statusTasks.length}
+                        </span>
+                        {collapsedStatuses[colKey]
+                          ? <ChevronRight size={11} className="text-slate-400" />
+                          : <ChevronDown size={11} className="text-slate-400" />}
+                      </div>
+                    </button>
+                    {!collapsedStatuses[colKey] && (
+                      <div className="p-2 space-y-2 min-h-14">
+                        {statusTasks.length === 0 && (
+                          <p className="text-center text-[10px] text-slate-300 font-medium py-3">Drop here</p>
+                        )}
+                        {statusTasks.map(renderKanbanCard)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })}
     </div>
-    );
-  };
+  );
 
-  /* â”€â”€â”€ Grouped list section renderer â”€â”€â”€ */
-  const renderListSection = (src: TaskSource) => {
-    const cfg = SOURCE_CONFIG[src];
-    const deptTasks = tasksByDept[src] ?? [];
-    const isCollapsed = !!collapsedDepts[src];
-    const activeDeptTasks = deptTasks.filter(t => t.status !== 'Done').length;
-    const extraStatusesInDept = [...new Set(deptTasks.map(t => t.status).filter(s => !STATUS_ORDER.includes(s)))];
-    const allStatusesForDept = [...STATUS_ORDER, ...extraStatusesInDept];
+  /* ─── Grouped list section renderer (per dept) ─── */
+  const renderListSection = (dept: TaskApiDepartment) => {
+    const deptTasks = tasksByDeptId.get(dept.id) ?? [];
+    const isCollapsed = !!collapsedDepts[dept.id];
+    const statuses = getDeptStatuses(dept);
+    const activeDeptTasks = deptTasks.filter(t => !statuses.find(s => s.name === t.status)?.isExitStep).length;
     return (
-      <Card key={src} className="border-none shadow-sm overflow-hidden">
-        {/* Dept header */}
-        <div className={`flex items-center justify-between px-5 py-3.5 ${cfg.bg} transition-all`}>
+      <Card key={dept.id} className="border-none shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-100">
           <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${cfg.color}`} />
-            <span className={`text-sm font-black uppercase tracking-wide ${cfg.textColor}`}>{cfg.label}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/60 ${cfg.textColor}`}>
+            <span className="text-sm font-black uppercase tracking-wide text-slate-700">{dept.name}</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/60 text-slate-600">
               {deptTasks.length} task{deptTasks.length !== 1 ? 's' : ''}
             </span>
             {activeDeptTasks > 0 && <Badge variant="info" className="text-[9px]">{activeDeptTasks} active</Badge>}
           </div>
-          <button onClick={() => toggleDept(src)} className="p-1 rounded shrink-0">
-            {isCollapsed ? <ChevronRight size={16} className={cfg.textColor} /> : <ChevronDown size={16} className={cfg.textColor} />}
+          <button onClick={() => toggleDept(dept.id)} className="p-1 rounded shrink-0">
+            {isCollapsed
+              ? <ChevronRight size={16} className="text-slate-500" />
+              : <ChevronDown size={16} className="text-slate-500" />}
           </button>
         </div>
-        {/* Status groups */}
         {!isCollapsed && (
           <div>
             {deptTasks.length === 0 ? (
               <div className="py-10 text-center text-sm text-slate-400 font-medium">No tasks match your filters.</div>
             ) : (
-              allStatusesForDept.map(status => {
-                const statusTasks = deptTasks.filter(t => t.status === status);
+              statuses.map(status => {
+                const statusTasks = deptTasks.filter(t => t.status === status.name);
                 if (statusTasks.length === 0) return null;
+                const colKey = `${dept.id}-${status.id}`;
                 return (
-                  <div key={status}>
+                  <div key={status.id}>
                     <button
-                      onClick={() => toggleStatus(`${src}-${status}`)}
+                      onClick={() => toggleStatus(colKey)}
                       className="w-full flex items-center gap-2 px-5 py-2 bg-slate-50 border-y border-slate-100 hover:bg-slate-100 transition-colors"
                     >
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColorMap[status] ?? '#64748b' }} />
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status}</span>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color || '#64748b' }} />
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status.name}</span>
                       <span className="text-[9px] font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-full ml-1">
                         {statusTasks.length}
                       </span>
                       <span className="ml-auto">
-                        {collapsedStatuses[`${src}-${status}`]
+                        {collapsedStatuses[colKey]
                           ? <ChevronRight size={13} className="text-slate-400" />
                           : <ChevronDown size={13} className="text-slate-400" />}
                       </span>
                     </button>
-                    {!collapsedStatuses[`${src}-${status}`] && (
+                    {!collapsedStatuses[colKey] && (
                       <>
                         <div className="grid grid-cols-[1fr_130px_100px_90px_100px_80px] gap-4 px-6 py-2 bg-white border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                           <span>Task</span><span>Client</span><span>Assignee</span><span>Status</span><span>Due Date</span><span>Priority</span>
@@ -679,6 +698,8 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       </div>
     );
   }
+
+  const displayDepts = activeDept ? [activeDept] : departments;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -723,25 +744,13 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
           </div>
           <div className="flex items-center gap-2">
             <Filter size={14} className="text-slate-400" />
-            {!sourceFilter && (
-              <select
-                value={filterSource}
-                onChange={e => setFilterSource(e.target.value as TaskSource | 'all')}
-                className="h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#0f766e]"
-              >
-                <option value="all">All Departments</option>
-                <option value="client-relations">Client Relations</option>
-                <option value="liaison">Liaison</option>
-                <option value="compliance">Compliance</option>
-              </select>
-            )}
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
               className="h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#0f766e]"
             >
               <option value="all">All Status</option>
-              {STATUS_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+              {filterStatusOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
             <select
               value={filterPriority}
@@ -758,84 +767,23 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
       {/* LIST VIEW */}
       {viewMode === 'list' && (
         <div className="space-y-4">
-          {(sourceFilter ? [sourceFilter] : contextDeptOrder).map(src =>
-            renderListSection(src)
-          )}
+          {displayDepts.map(dept => renderListSection(dept))}
         </div>
       )}
 
+      {/* KANBAN — single dept view (per-dept statuses as columns) */}
+      {viewMode === 'kanban' && activeDept != null && renderDeptKanban(activeDept)}
 
-      {/* â•â•â• KANBAN â€” single dept page (flat 4-column) â•â•â• */}
-      {viewMode === 'kanban' && !!sourceFilter && (
-        renderFlatKanban(filteredTasks, sourceFilter)
-      )}
-
-      {/* â•â•â• KANBAN â€” All Departments tab (horizontal, cross-dept drag) â•â•â• */}
-      {viewMode === 'kanban' && !sourceFilter && (
-        <div className="flex gap-4 overflow-x-auto pb-6 -mx-1 px-1">
-          {contextDeptOrder.map(src => {
-            const cfg = SOURCE_CONFIG[src];
-            const deptTasks = tasksByDept[src] ?? [];
-            return (
-              <div key={src} className="flex-none w-72 flex flex-col">
-                {/* Dept column header */}
-                <div className={`flex items-center gap-2 px-4 py-3 rounded-xl mb-3 ${cfg.bg}`}>
-                  <div className={`w-2.5 h-2.5 rounded-full ${cfg.color} shrink-0`} />
-                  <span className={`text-sm font-black uppercase tracking-wide flex-1 ${cfg.textColor}`}>{cfg.label}</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/60 ${cfg.textColor} shrink-0`}>
-                    {deptTasks.length}
-                  </span>
-                </div>
-
-                {/* Status sections stacked vertically inside each dept column */}
-                <div className="space-y-2 flex-1">
-                  {STATUS_ORDER.map(status => {
-                    const statusTasks = deptTasks.filter(t => t.status === status);
-                    return (
-                      <div
-                        key={status}
-                        className="bg-slate-50 rounded-xl overflow-hidden"
-                        onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                        onDrop={e => { e.stopPropagation(); handleCardDrop(src, status); }}
-                      >
-                        <button
-                          onClick={() => toggleStatus(`${src}-${status}`)}
-                          className="w-full flex items-center justify-between px-3 py-2 border-b border-slate-100 hover:bg-white/60 transition-colors"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColorMap[status] ?? '#64748b' }} />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-full">
-                              {statusTasks.length}
-                            </span>
-                            {collapsedStatuses[`${src}-${status}`]
-                              ? <ChevronRight size={11} className="text-slate-400" />
-                              : <ChevronDown size={11} className="text-slate-400" />}
-                          </div>
-                        </button>
-                        {!collapsedStatuses[`${src}-${status}`] && (
-                          <div className="p-2 space-y-2 min-h-14">
-                            {statusTasks.length === 0 && (
-                              <p className="text-center text-[10px] text-slate-300 font-medium py-3">Drop here</p>
-                            )}
-                            {statusTasks.map(renderKanbanCard)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
+      {/* KANBAN — all depts view (departments as columns, dept statuses inside each) */}
+      {viewMode === 'kanban' && activeDept == null && renderAllDeptsKanban()}
 
       {/* Create Task Modal */}
-      <Modal isOpen={isCreateModalOpen} onClose={() => { setIsCreateModalOpen(false); resetCreateForm(); }} title="Create New Task" size="lg">
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => { setIsCreateModalOpen(false); resetCreateForm(); }}
+        title="Create New Task"
+        size="lg"
+      >
         <div className="p-6 space-y-4">
 
           {/* 1. Client */}
@@ -1015,66 +963,51 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
             />
           </div>
 
-          {/* 5. Department */}
+          {/* 5. Department — dynamic from DB */}
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Department *</label>
             <select
-              value={newSource}
+              value={newDeptId ?? ''}
               onChange={e => {
-                const src = e.target.value as TaskSource;
-                setNewSource(src);
-                // Reset status to first status of new department
-                const deptName = SOURCE_TO_DEPT_NAME[src];
-                const dept = departments.find(d => d.name === deptName);
-                const sorted = (dept?.statuses ?? []).slice().sort((a, b) => a.statusOrder - b.statusOrder);
-                setNewStatus(sorted[0]?.name ?? 'To Do');
+                const deptId = parseInt(e.target.value, 10);
+                setNewDeptId(isNaN(deptId) ? null : deptId);
+                const dept = departments.find(d => d.id === deptId);
+                const statuses = getDeptStatuses(dept);
+                setNewStatus(statuses[0]?.name ?? '');
               }}
               className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0f766e]"
-              disabled={!!sourceFilter}
+              disabled={activeDeptId != null}
             >
-              <option value="client-relations">Client Relations</option>
-              <option value="compliance">Compliance</option>
-              <option value="liaison">Liaison</option>
-              <option value="om">Operations</option>
-              <option value="admin">Admin</option>
-              <option value="accounting">Accounting</option>
-              <option value="hr">Human Resources</option>
+              <option value="">Select department…</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </select>
           </div>
 
-          {/* 6. Assignee — multi-select searchable dropdown */}
+          {/* 6. Assignee — single searchable dropdown */}
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Assignee *</label>
             <div className="relative">
-              <div
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 onClick={() => setAssigneeDropdownOpen(v => !v)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setAssigneeDropdownOpen(v => !v); }}
-                className="w-full min-h-10 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-left flex items-center gap-2 flex-wrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0f766e] hover:border-slate-300 transition-colors"
+                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#0f766e] hover:border-slate-300 transition-colors"
               >
-                {newAssigneeIds.length === 0 ? (
-                  <span className="text-slate-400 text-sm">Select assignees…</span>
+                {newAssigneeId ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 bg-teal-700 rounded-full flex items-center justify-center shrink-0 text-[8px] font-black text-white">
+                      {boardEmployees.find(m => m.id === newAssigneeId)?.avatar ?? '?'}
+                    </div>
+                    <span className="text-slate-700 truncate">
+                      {boardEmployees.find(m => m.id === newAssigneeId)?.name ?? 'Unknown'}
+                    </span>
+                  </div>
                 ) : (
-                  newAssigneeIds.map(id => {
-                    const m = boardEmployees.find(x => x.id === id);
-                    return m ? (
-                      <span key={id} className="flex items-center gap-1 bg-teal-50 text-teal-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                        <span className="w-4 h-4 bg-teal-700 rounded-full text-[8px] font-black text-white flex items-center justify-center shrink-0">{m.avatar}</span>
-                        {m.name.split(' ')[0]}
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); setNewAssigneeIds(prev => prev.filter(x => x !== id)); }}
-                          className="ml-0.5 hover:text-teal-900 transition-colors"
-                        >
-                          <X size={10} />
-                        </button>
-                      </span>
-                    ) : null;
-                  })
+                  <span className="text-slate-400">Select an assignee…</span>
                 )}
-                <ChevronDown size={15} className={`ml-auto shrink-0 text-slate-400 transition-transform ${assigneeDropdownOpen ? 'rotate-180' : ''}`} />
-              </div>
+                <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform ${assigneeDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
               {assigneeDropdownOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setAssigneeDropdownOpen(false)} />
@@ -1096,21 +1029,15 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                         m.name.toLowerCase().includes(assigneeSearch.toLowerCase()) ||
                         m.department.toLowerCase().includes(assigneeSearch.toLowerCase())
                       ).map(m => {
-                        const selected = newAssigneeIds.includes(m.id);
+                        const selected = newAssigneeId === m.id;
                         return (
                           <button
                             key={m.id}
                             type="button"
-                            onClick={() => setNewAssigneeIds(prev =>
-                              selected ? prev.filter(x => x !== m.id) : [...prev, m.id]
-                            )}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors ${
-                              selected ? 'bg-teal-50' : ''
-                            }`}
+                            onClick={() => { setNewAssigneeId(m.id); setAssigneeDropdownOpen(false); setAssigneeSearch(''); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors ${selected ? 'bg-teal-50' : ''}`}
                           >
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] font-black text-white ${
-                              selected ? 'bg-teal-700' : 'bg-slate-400'
-                            }`}>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] font-black text-white ${selected ? 'bg-teal-700' : 'bg-slate-400'}`}>
                               {m.avatar}
                             </div>
                             <div className="flex-1 text-left min-w-0">
@@ -1129,15 +1056,14 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
                         <p className="text-xs text-slate-400 text-center py-4">No members found</p>
                       )}
                     </div>
-                    {newAssigneeIds.length > 0 && (
-                      <div className="border-t border-slate-100 px-3 py-2 flex items-center justify-between">
-                        <span className="text-xs text-slate-500 font-medium">{newAssigneeIds.length} selected</span>
+                    {newAssigneeId && (
+                      <div className="border-t border-slate-100 px-3 py-2">
                         <button
                           type="button"
-                          onClick={() => setNewAssigneeIds([])}
-                          className="text-xs text-red-500 hover:text-red-700 font-semibold transition-colors"
+                          onClick={() => { setNewAssigneeId(''); setAssigneeDropdownOpen(false); }}
+                          className="text-xs text-rose-500 hover:text-rose-700 font-semibold transition-colors"
                         >
-                          Clear all
+                          Clear selection
                         </button>
                       </div>
                     )}
@@ -1179,12 +1105,6 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
             <Input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} />
           </div>
 
-          {/* 7. Tags */}
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Tags (comma separated)</label>
-            <Input value={newTags} onChange={e => setNewTags(e.target.value)} placeholder="e.g. BIR, Filing" />
-          </div>
-
           {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-slate-100">
             <Button variant="outline" className="flex-1" onClick={() => { setIsCreateModalOpen(false); resetCreateForm(); }}>
@@ -1201,5 +1121,22 @@ export function TaskManagementBoard({ sourceFilter }: TaskManagementBoardProps) 
         </div>
       </Modal>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Public export — wraps inner component in Suspense (required for useSearchParams)
+// ─────────────────────────────────────────────────────────────────
+export function TaskManagementBoard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-32">
+          <Loader2 size={32} className="animate-spin text-[#0f766e]" />
+        </div>
+      }
+    >
+      <TaskManagementBoardInner />
+    </Suspense>
   );
 }

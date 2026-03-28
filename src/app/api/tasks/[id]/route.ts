@@ -4,12 +4,13 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { notifyMany } from "@/lib/notification";
 
 const taskInclude = {
   client: { select: { id: true, businessName: true } },
   template: { select: { id: true, name: true } },
-  currentDepartment: { select: { id: true, name: true } },
-  currentStatus: { select: { id: true, name: true, color: true } },
+  department: { select: { id: true, name: true } },
+  status: { select: { id: true, name: true, color: true } },
   assignedTo: {
     select: { id: true, firstName: true, lastName: true, employeeNo: true },
   },
@@ -18,7 +19,6 @@ const taskInclude = {
     include: {
       department: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true } },
-      status: { select: { id: true, name: true, color: true, isExitStep: true } },
     },
   },
   conversations: {
@@ -41,13 +41,12 @@ const patchTaskSchema = z.object({
   description: z.string().nullable().optional(),
   clientId: z.number().int().positive().nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
-  currentDepartmentId: z.number().int().positive().nullable().optional(),
-  currentStatusId: z.number().int().positive().nullable().optional(),
+  departmentId: z.number().int().positive().nullable().optional(),
+  statusId: z.number().int().positive().nullable().optional(),
   assignedToId: z.number().int().positive().nullable().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   daysDue: z.number().int().positive().nullable().optional(),
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),
-  currentRouteOrder: z.number().int().min(1).optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -84,8 +83,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
   const existing = await prisma.task.findUnique({
     where: { id: taskId },
     include: {
-      currentDepartment: { select: { name: true } },
-      currentStatus: { select: { name: true } },
+      department: { select: { name: true } },
+      status: { select: { name: true } },
       assignedTo: { select: { firstName: true, lastName: true } },
     },
   });
@@ -131,22 +130,22 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     newValue?: string;
   }[] = [];
 
-  if (rest.currentStatusId !== undefined && rest.currentStatusId !== existing.currentStatusId) {
+  if (rest.statusId !== undefined && rest.statusId !== existing.statusId) {
     historyEntries.push({
       taskId,
       actorId: session.user.id,
       changeType: "STATUS_CHANGED",
-      oldValue: existing.currentStatus?.name ?? undefined,
-      newValue: updated.currentStatus?.name ?? undefined,
+      oldValue: existing.status?.name ?? undefined,
+      newValue: updated.status?.name ?? undefined,
     });
   }
-  if (rest.currentDepartmentId !== undefined && rest.currentDepartmentId !== existing.currentDepartmentId) {
+  if (rest.departmentId !== undefined && rest.departmentId !== existing.departmentId) {
     historyEntries.push({
       taskId,
       actorId: session.user.id,
       changeType: "DEPARTMENT_CHANGED",
-      oldValue: existing.currentDepartment?.name ?? undefined,
-      newValue: updated.currentDepartment?.name ?? undefined,
+      oldValue: existing.department?.name ?? undefined,
+      newValue: updated.department?.name ?? undefined,
     });
   }
   if (rest.assignedToId !== undefined && rest.assignedToId !== existing.assignedToId) {
@@ -189,12 +188,21 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       newValue: newDate,
     });
   }
-  if (rest.name !== undefined || rest.description !== undefined) {
+  if (rest.name !== undefined && rest.name !== existing.name) {
     historyEntries.push({
       taskId,
       actorId: session.user.id,
       changeType: "DETAILS_UPDATED",
-      newValue: rest.name ?? existing.name,
+      oldValue: existing.name,
+      newValue: rest.name,
+    });
+  }
+  if (rest.description !== undefined && rest.description !== existing.description) {
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "DETAILS_UPDATED",
+      newValue: "Description updated",
     });
   }
 
@@ -219,6 +227,56 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     description: `Updated task "${updated.name}"`,
     ...getRequestMeta(request),
   });
+
+  // Notify assigned employee and task creator on important changes
+  const importantTypes = ['STATUS_CHANGED', 'PRIORITY_CHANGED', 'DETAILS_UPDATED', 'ASSIGNEE_CHANGED'];
+  if (historyEntries.some(e => importantTypes.includes(e.changeType))) {
+    void (async () => {
+      const [creatorLog, assigneeEmployee] = await Promise.all([
+        prisma.activityLog.findFirst({
+          where: { entity: 'Task', entityId: String(taskId), action: 'CREATED' },
+          select: { userId: true },
+        }),
+        updated.assignedToId
+          ? prisma.employee.findUnique({ where: { id: updated.assignedToId }, select: { userId: true } })
+          : Promise.resolve(null),
+      ]);
+
+      const recipientIds = new Set<string>();
+      if (creatorLog?.userId && creatorLog.userId !== session.user.id) recipientIds.add(creatorLog.userId);
+      if (assigneeEmployee?.userId && assigneeEmployee.userId !== session.user.id) recipientIds.add(assigneeEmployee.userId);
+      if (recipientIds.size === 0) return;
+
+      const statusEntry = historyEntries.find(e => e.changeType === 'STATUS_CHANGED');
+      const priorityEntry = historyEntries.find(e => e.changeType === 'PRIORITY_CHANGED');
+      const nameEntry = historyEntries.find(e => e.changeType === 'DETAILS_UPDATED' && e.oldValue);
+      const assigneeEntry = historyEntries.find(e => e.changeType === 'ASSIGNEE_CHANGED');
+
+      let title = `Task updated: "${updated.name}"`;
+      let message = 'A task has been updated.';
+      if (statusEntry) {
+        title = `Status changed on "${updated.name}"`;
+        message = `Status: "${statusEntry.oldValue ?? '—'}" → "${statusEntry.newValue ?? '—'}"`;
+      } else if (priorityEntry) {
+        title = `Priority changed on "${updated.name}"`;
+        message = `Priority: "${priorityEntry.oldValue ?? '—'}" → "${priorityEntry.newValue ?? '—'}"`;
+      } else if (nameEntry) {
+        title = 'Task renamed';
+        message = `"${nameEntry.oldValue}" was renamed to "${nameEntry.newValue}"`;
+      } else if (assigneeEntry) {
+        title = `Assignee changed on "${updated.name}"`;
+        message = `Assignee changed to "${assigneeEntry.newValue ?? 'Unassigned'}"`;
+      }
+
+      void notifyMany({
+        userIds: [...recipientIds],
+        type: 'TASK',
+        title,
+        message,
+        linkUrl: `/portal/task-management/tasks/${taskId}`,
+      });
+    })();
+  }
 
   return NextResponse.json({ data: { ...updated, historyLogs: freshHistory } });
 }

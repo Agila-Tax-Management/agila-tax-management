@@ -11,7 +11,7 @@ import {
 import { useToast } from '@/context/ToastContext';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
 
-// ── Types ────────────────────────────────────────────────────────────
+// -- Types ------------------------------------------------------------
 
 type TPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 
@@ -72,7 +72,7 @@ interface ApiTemplate {
   serviceOneTimePlans: ApiLinkedOneTime[];
 }
 
-// ── Draft types (wizard local state) ─────────────────────────────
+// -- Draft types (wizard local state) -----------------------------
 
 interface DraftSubtask {
   tempId:      string;
@@ -99,7 +99,7 @@ interface DraftTaskSubtask {
   routeTempId: string; // which route (department step) this subtask belongs to
 }
 
-// ── Constants ─────────────────────────────────────────────────────
+// -- Constants -----------------------------------------------------
 
 const PRIORITIES: TPriority[] = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
 
@@ -116,7 +116,7 @@ const PRIORITY_COLOR: Record<TPriority, string> = {
 
 const BASE = '/api/admin/settings/task-workflow/templates';
 
-// ── Delete Confirm Modal ──────────────────────────────────────────
+// -- Delete Confirm Modal ------------------------------------------
 
 function DeleteModal({
   name, onConfirm, onClose, loading,
@@ -153,7 +153,7 @@ function DeleteModal({
   );
 }
 
-// ── Create Template Modal (2-step Wizard) ────────────────────────
+// -- Create Template Modal (2-step Wizard) ------------------------
 
 function CreateTemplateModal({ onCreated, onClose }: {
   onCreated: (t: ApiTemplate) => void;
@@ -163,7 +163,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
   const { departments: allDepartments } = useTaskDepartments();
 
   // Step
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
 
   // Step 1 — Template info
   const [name, setName]        = useState('');
@@ -184,7 +184,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
   const usedDeptIds = new Set(routes.map(r => r.departmentId));
   const availDepts  = allDepartments.filter(d => !usedDeptIds.has(d.id));
 
-  // ── Route helpers ─────────────────────────────────────────────
+  // -- Route helpers ---------------------------------------------
 
   const addRoute = () => {
     if (!addDeptId) return;
@@ -217,7 +217,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
     setRoutes(next);
   };
 
-  // ── Task-level subtask helpers ────────────────────────────────
+  // -- Task-level subtask helpers --------------------------------
 
   const addTaskSubtask = () => {
     if (routes.length === 0) return;
@@ -239,7 +239,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
     setTaskSubtasks(prev => prev.filter(s => s.tempId !== id));
   };
 
-  // ── Submit ─────────────────────────────────────────────────────
+  // -- Submit -----------------------------------------------------
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -283,7 +283,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
         apiRoutes.push({ ...createdRoute, subtasks: apiSubtasks });
       }
 
-      // 3. Add task-level subtasks (mapped via routeTempId → createdRoute.id)
+      // 3. Add task-level subtasks (mapped via routeTempId ? createdRoute.id)
       const routeTempToApiId = new Map(routes.map((draft, i) => [draft.tempId, apiRoutes[i]?.id]));
       for (const sub of taskSubtasks.filter(s => s.name.trim())) {
         const routeApiId = routeTempToApiId.get(sub.routeTempId);
@@ -307,7 +307,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────
+  // -- Render -----------------------------------------------------
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
@@ -319,12 +319,9 @@ function CreateTemplateModal({ onCreated, onClose }: {
             <h2 className="font-black text-slate-900 text-base">New Template</h2>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${step === 1 ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700'}`}>1</span>
-              <span className="text-[10px] text-slate-400">Info</span>
+              <span className="text-[10px] text-slate-400">Info & Routes</span>
               <ChevronRight size={10} className="text-slate-300" />
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${step === 2 ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>2</span>
-              <span className="text-[10px] text-slate-400">Route</span>
-              <ChevronRight size={10} className="text-slate-300" />
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${step === 3 ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>3</span>
               <span className="text-[10px] text-slate-400">Subtasks</span>
             </div>
           </div>
@@ -333,7 +330,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
           </button>
         </div>
 
-        {/* ── Step 1: Template Info ──────────────────────────── */}
+        {/* -- Step 1: Template Info ---------------------------- */}
         {step === 1 && (
           <div className="p-6 space-y-4 overflow-y-auto flex-1">
             <div>
@@ -369,8 +366,8 @@ function CreateTemplateModal({ onCreated, onClose }: {
           </div>
         )}
 
-        {/* ── Step 2: Department Routes ──────────────────────── */}
-        {step === 2 && (
+        {/* -- Step 1 continued: Department Routes ------------------------ */}
+        {step === 1 && (
           <div className="overflow-y-auto flex-1 p-6 space-y-4">
 
             {/* Route list */}
@@ -471,14 +468,14 @@ function CreateTemplateModal({ onCreated, onClose }: {
           </div>
         )}
 
-        {/* ── Step 3: Subtasks ───────────────────────────────── */}
-        {step === 3 && (
+        {/* -- Step 2: Subtasks --------------------------------- */}
+        {step === 2 && (
           <div className="overflow-y-auto flex-1 p-6 space-y-4">
             {routes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-slate-200 rounded-xl">
                 <ListChecks size={24} className="text-slate-300 mb-2" />
                 <p className="text-xs text-slate-400 font-medium">No route steps defined</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Go back to Step 2 and add at least one department.</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Go back to Step 1 and add at least one department.</p>
               </div>
             ) : (
               <>
@@ -565,7 +562,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
           <div>
             {step > 1 && (
               <button
-                onClick={() => setStep((step - 1) as 1 | 2 | 3)}
+                onClick={() => setStep(1)}
                 className="px-4 py-2 text-sm font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
               >
                 <ChevronLeft size={14} /> Back
@@ -577,10 +574,10 @@ function CreateTemplateModal({ onCreated, onClose }: {
               className="px-4 py-2 text-sm font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
               Cancel
             </button>
-            {step < 3 ? (
+            {step < 2 ? (
               <button
-                onClick={() => setStep((step + 1) as 2 | 3)}
-                disabled={step === 1 ? !name.trim() : false}
+                onClick={() => setStep(2)}
+                disabled={!name.trim()}
                 className="px-5 py-2 text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white rounded-xl transition-colors disabled:opacity-40 inline-flex items-center gap-2"
               >
                 Next <ChevronRight size={14} />
@@ -603,7 +600,7 @@ function CreateTemplateModal({ onCreated, onClose }: {
   );
 }
 
-// ── Edit Template Modal ───────────────────────────────────────────
+// -- Edit Template Modal -------------------------------------------
 
 interface AddSubtaskForm {
   name: string; description: string; priority: TPriority; daysDue: string;
@@ -749,7 +746,7 @@ function EditTemplateModal({
     setConfirmUnlink(null);
   };
 
-  // ── Save details ──────────────────────────────────────────────
+  // -- Save details ----------------------------------------------
 
   const saveDetails = async () => {
     if (!detailsName.trim()) return;
@@ -778,7 +775,7 @@ function EditTemplateModal({
     }
   };
 
-  // ── Add step ─────────────────────────────────────────────────
+  // -- Add step -------------------------------------------------
 
   const addStep = async () => {
     if (!addStepDeptId) return;
@@ -804,7 +801,7 @@ function EditTemplateModal({
     }
   };
 
-  // ── Remove step ───────────────────────────────────────────────
+  // -- Remove step -----------------------------------------------
 
   const removeStep = async (routeId: number) => {
     const route = tpl.departmentRoutes.find(r => r.id === routeId);
@@ -825,7 +822,7 @@ function EditTemplateModal({
     success('Removed', `"${route.department.name}" removed from route.`);
   };
 
-  // ── Move step ─────────────────────────────────────────────────
+  // -- Move step -------------------------------------------------
 
   const moveStep = (routeId: number, direction: 'up' | 'down') => {
     const sorted  = [...tpl.departmentRoutes].sort((a, b) => a.routeOrder - b.routeOrder);
@@ -848,7 +845,7 @@ function EditTemplateModal({
     });
   };
 
-  // ── Update route daysDue ──────────────────────────────────────
+  // -- Update route daysDue --------------------------------------
 
   const updateRouteDaysDue = async (routeId: number, val: string) => {
     const daysDue = val ? parseInt(val, 10) : null;
@@ -868,7 +865,7 @@ function EditTemplateModal({
     });
   };
 
-  // ── Add subtask ───────────────────────────────────────────────
+  // -- Add subtask -----------------------------------------------
 
   const openAddSubtask = (routeId: number) => {
     setAddSubtaskForms(prev => ({
@@ -913,7 +910,7 @@ function EditTemplateModal({
     }
   };
 
-  // ── Edit subtask ──────────────────────────────────────────────
+  // -- Edit subtask ----------------------------------------------
 
   const startEdit = (routeId: number, s: ApiSubtask) => {
     setEditingSubtask({
@@ -956,7 +953,7 @@ function EditTemplateModal({
     }
   };
 
-  // ── Delete subtask ────────────────────────────────────────────
+  // -- Delete subtask --------------------------------------------
 
   const deleteSubtask = async (routeId: number, subtaskId: number) => {
     const res = await fetch(`${base}/routes/${routeId}/subtasks/${subtaskId}`, { method: 'DELETE' });
@@ -995,7 +992,7 @@ function EditTemplateModal({
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
-          {/* ── Details ────────────────────────────────────────── */}
+          {/* -- Details ------------------------------------------ */}
           <section>
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Template Details</h3>
             <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
@@ -1040,7 +1037,7 @@ function EditTemplateModal({
             </div>
           </section>
 
-          {/* ── Route Builder ──────────────────────────────────── */}
+          {/* -- Route Builder ------------------------------------ */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Department Route</h3>
@@ -1174,7 +1171,7 @@ function EditTemplateModal({
             </div>
           </section>
 
-          {/* ── Subtasks ─────────────────────────────────────── */}
+          {/* -- Subtasks --------------------------------------- */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -1372,7 +1369,7 @@ function EditTemplateModal({
             })}
           </section>
 
-          {/* ── Linked Services ──────────────────────────────── */}
+          {/* -- Linked Services -------------------------------- */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Linked Services</h3>
@@ -1397,7 +1394,7 @@ function EditTemplateModal({
                         Monthly
                       </span>
                       <span className="flex-1 text-xs font-medium text-slate-700 min-w-0 truncate">{plan.name}</span>
-                      <span className="text-[10px] text-slate-400 shrink-0">₱{Number(plan.serviceRate).toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">?{Number(plan.serviceRate).toLocaleString()}</span>
                       {confirmUnlink?.id === plan.id && confirmUnlink.type === 'plan' ? (
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] text-red-600 font-bold">Unlink?</span>
@@ -1431,7 +1428,7 @@ function EditTemplateModal({
                         One-time
                       </span>
                       <span className="flex-1 text-xs font-medium text-slate-700 min-w-0 truncate">{svc.name}</span>
-                      <span className="text-[10px] text-slate-400 shrink-0">₱{Number(svc.serviceRate).toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">?{Number(svc.serviceRate).toLocaleString()}</span>
                       {confirmUnlink?.id === svc.id && confirmUnlink.type === 'oneTime' ? (
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] text-red-600 font-bold">Unlink?</span>
@@ -1514,7 +1511,7 @@ function EditTemplateModal({
                     <div key={plan.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-100 hover:bg-slate-50">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{plan.name}</p>
-                        <p className="text-[10px] text-slate-400">₱{Number(plan.serviceRate).toLocaleString()} · {plan.recurring}</p>
+                        <p className="text-[10px] text-slate-400">?{Number(plan.serviceRate).toLocaleString()} · {plan.recurring}</p>
                       </div>
                       {plan.linkedToThisTemplate ? (
                         <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full shrink-0">Linked</span>
@@ -1538,7 +1535,7 @@ function EditTemplateModal({
                     <div key={svc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-100 hover:bg-slate-50">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{svc.name}</p>
-                        <p className="text-[10px] text-slate-400">₱{Number(svc.serviceRate).toLocaleString()}</p>
+                        <p className="text-[10px] text-slate-400">?{Number(svc.serviceRate).toLocaleString()}</p>
                       </div>
                       {svc.linkedToThisTemplate ? (
                         <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full shrink-0">Linked</span>
@@ -1579,7 +1576,7 @@ function EditTemplateModal({
   );
 }
 
-// ── Template Card ─────────────────────────────────────────────────
+// -- Template Card -------------------------------------------------
 
 function TemplateCard({
   template, onEdit, onDelete, onDuplicate, onUse,
@@ -1674,7 +1671,7 @@ function TemplateCard({
   );
 }
 
-// ── Main component ────────────────────────────────────────────────
+// -- Main component ------------------------------------------------
 
 export function TemplatesSettings(): React.ReactNode {
   const { success, error } = useToast();

@@ -70,8 +70,8 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
 
   // ── Workflow state helpers ───────────────────────────────────────
   const canSubmit           = jo.status === 'DRAFT';
-  const canAckAM            = jo.status === 'SUBMITTED' && !jo.accountManagerId;
-  const canAckOps           = jo.status === 'SUBMITTED' && !!jo.accountManagerId && !jo.operationsManagerId;
+  const canAckOps           = jo.status === 'SUBMITTED' && !jo.operationsManagerId;
+  const canAckAM            = jo.status === 'SUBMITTED' && !!jo.operationsManagerId && !jo.accountManagerId;
   const canAckExec          = jo.status === 'ACKNOWLEDGED' && !jo.executiveId;
   const canCancel           = jo.status !== 'COMPLETED' && jo.status !== 'CANCELLED';
 
@@ -352,25 +352,25 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
                 actionLabel=""
                 canAck={false}
               />
-              {/* Account Manager */}
+              {/* Operations Manager (acks first) */}
               <SignatureBlock
-                role="Account Manager"
-                name={jo.accountManager?.name}
-                date={jo.dateAccountManagerAck}
-                pending={!jo.accountManagerId}
-                actionKey="ack_account_manager"
-                actionLabel="Acknowledge as AM"
-                canAck={canAckAM}
-              />
-              {/* Account Officer (Ops Manager) */}
-              <SignatureBlock
-                role="Account Officer"
+                role="Operations Manager"
                 name={jo.operationsManager?.name}
                 date={jo.dateOperationsManagerAck}
                 pending={!jo.operationsManagerId}
                 actionKey="ack_operations"
-                actionLabel="Acknowledge as AO"
+                actionLabel="Acknowledge as OM"
                 canAck={canAckOps}
+              />
+              {/* Account Officer (acks second) */}
+              <SignatureBlock
+                role="Account Officer"
+                name={jo.accountManager?.name}
+                date={jo.dateAccountManagerAck}
+                pending={!jo.accountManagerId}
+                actionKey="ack_account_manager"
+                actionLabel="Acknowledge as AO"
+                canAck={canAckAM}
               />
               {/* Executive */}
               <SignatureBlock
@@ -471,8 +471,8 @@ function WorkflowProgress({ jo }: { jo: JobOrderRecord }): React.ReactNode {
   const steps = [
     { label: 'Created', done: true, name: jo.preparedBy?.name, date: jo.datePrepared },
     { label: 'Submitted', done: jo.status !== 'DRAFT', name: null, date: null },
-    { label: 'AM Acknowledged', done: !!jo.accountManagerId, name: jo.accountManager?.name, date: jo.dateAccountManagerAck },
-    { label: 'AO Acknowledged', done: !!jo.operationsManagerId, name: jo.operationsManager?.name, date: jo.dateOperationsManagerAck },
+    { label: 'Ops Acknowledged', done: !!jo.operationsManagerId, name: jo.operationsManager?.name, date: jo.dateOperationsManagerAck },
+    { label: 'AO Acknowledged', done: !!jo.accountManagerId, name: jo.accountManager?.name, date: jo.dateAccountManagerAck },
     { label: 'Executive Approved', done: !!jo.executiveId, name: jo.executive?.name, date: jo.dateExecutiveAck },
   ];
 

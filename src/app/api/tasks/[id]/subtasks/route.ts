@@ -10,7 +10,6 @@ const createSubtaskSchema = z.object({
   description: z.string().optional(),
   departmentId: z.number().int().positive().optional(),
   assignedToId: z.number().int().positive().optional(),
-  statusId: z.number().int().positive().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   daysDue: z.number().int().positive().optional(),
   dueDate: z.string().datetime({ offset: true }).optional(),
@@ -59,7 +58,6 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     include: {
       department: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true } },
-      status: { select: { id: true, name: true, color: true } },
     },
   });
 

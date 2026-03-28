@@ -199,46 +199,17 @@ export async function PATCH(
   if (action === "ack_account_manager") {
     if (existing.status !== "SUBMITTED") {
       return NextResponse.json(
-        { error: "Job order must be SUBMITTED for Account Manager acknowledgment" },
-        { status: 409 },
-      );
-    }
-    if (existing.accountManagerId) {
-      return NextResponse.json(
-        { error: "Account Manager has already acknowledged this job order" },
-        { status: 409 },
-      );
-    }
-    const jobOrder = await prisma.jobOrder.update({
-      where: { id },
-      data: { accountManagerId: session.user.id, dateAccountManagerAck: now },
-      include: JO_INCLUDE,
-    });
-    void logActivity({
-      userId: session.user.id,
-      action: "APPROVED",
-      entity: "JobOrder",
-      entityId: id,
-      description: `Account Manager acknowledged job order ${existing.jobOrderNumber}`,
-      ...getRequestMeta(request),
-    });
-    return NextResponse.json({ data: jobOrder });
-  }
-
-  if (action === "ack_operations") {
-    if (existing.status !== "SUBMITTED") {
-      return NextResponse.json(
         { error: "Job order must be SUBMITTED for Account Officer acknowledgment" },
         { status: 409 },
       );
     }
-    if (!existing.accountManagerId) {
+    if (!existing.operationsManagerId) {
       return NextResponse.json(
-        { error: "Account Manager must acknowledge first" },
+        { error: "Operations Manager must acknowledge first" },
         { status: 409 },
       );
     }
-    if (existing.operationsManagerId) {
+    if (existing.accountManagerId) {
       return NextResponse.json(
         { error: "Account Officer has already acknowledged this job order" },
         { status: 409 },
@@ -247,8 +218,8 @@ export async function PATCH(
     const jobOrder = await prisma.jobOrder.update({
       where: { id },
       data: {
-        operationsManagerId: session.user.id,
-        dateOperationsManagerAck: now,
+        accountManagerId: session.user.id,
+        dateAccountManagerAck: now,
         status: "ACKNOWLEDGED",
       },
       include: JO_INCLUDE,
@@ -259,6 +230,38 @@ export async function PATCH(
       entity: "JobOrder",
       entityId: id,
       description: `Account Officer acknowledged job order ${existing.jobOrderNumber}`,
+      ...getRequestMeta(request),
+    });
+    return NextResponse.json({ data: jobOrder });
+  }
+
+  if (action === "ack_operations") {
+    if (existing.status !== "SUBMITTED") {
+      return NextResponse.json(
+        { error: "Job order must be SUBMITTED for Operations Manager acknowledgment" },
+        { status: 409 },
+      );
+    }
+    if (existing.operationsManagerId) {
+      return NextResponse.json(
+        { error: "Operations Manager has already acknowledged this job order" },
+        { status: 409 },
+      );
+    }
+    const jobOrder = await prisma.jobOrder.update({
+      where: { id },
+      data: {
+        operationsManagerId: session.user.id,
+        dateOperationsManagerAck: now,
+      },
+      include: JO_INCLUDE,
+    });
+    void logActivity({
+      userId: session.user.id,
+      action: "APPROVED",
+      entity: "JobOrder",
+      entityId: id,
+      description: `Operations Manager acknowledged job order ${existing.jobOrderNumber}`,
       ...getRequestMeta(request),
     });
     return NextResponse.json({ data: jobOrder });

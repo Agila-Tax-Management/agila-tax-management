@@ -38,12 +38,11 @@ export default async function TaskDetailRoute({
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     include: {
-      currentDepartment: { select: { id: true, name: true } },
-      currentStatus: { select: { id: true, name: true } },
+      department: { select: { id: true, name: true } },
+      status: { select: { id: true, name: true } },
       subtasks: {
         orderBy: { order: 'asc' as const },
         include: {
-          status: { select: { id: true, name: true, isExitStep: true } },
           assignedTo: { select: { id: true, firstName: true, lastName: true } },
           department: { select: { id: true, name: true } },
         },
@@ -66,9 +65,9 @@ export default async function TaskDetailRoute({
     id: String(task.id),
     title: task.name,
     description: task.description ?? '',
-    status: (task.currentStatus?.name ?? 'To Do') as AOTaskStatus,
+    status: (task.status?.name ?? 'To Do') as AOTaskStatus,
     priority: DB_PRIORITY_MAP[task.priority] ?? 'Medium',
-    source: deptToSource(task.currentDepartment?.name ?? ''),
+    source: deptToSource(task.department?.name ?? ''),
     clientId: String(task.clientId ?? ''),
     assigneeId: String(task.assignedToId ?? ''),
     dueDate: task.dueDate?.toISOString() ?? new Date().toISOString(),
@@ -79,7 +78,7 @@ export default async function TaskDetailRoute({
     subtasks: task.subtasks.map(s => ({
       id: String(s.id),
       title: s.name,
-      completed: s.status?.isExitStep ?? false,
+      completed: s.isCompleted,
       notes: s.description ?? undefined,
       assigneeId: s.assignedTo ? String(s.assignedTo.id) : undefined,
       assigneeName: s.assignedTo ? `${s.assignedTo.firstName} ${s.assignedTo.lastName}` : undefined,

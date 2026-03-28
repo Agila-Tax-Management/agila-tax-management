@@ -1,13 +1,13 @@
 // src/components/task-management/SharedTaskDetailPage.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Calendar, Tag, Send, Clock,
-  ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search,
+  ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search, X,
 } from 'lucide-react';
 import { SubtaskDetailModal, type ActivityEntry } from './SubtaskDetailModal';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -97,9 +97,31 @@ function formatHistoryChange(entry: TaskHistoryEntry): string {
     case 'PRIORITY_CHANGED': return `Changed priority: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
     case 'ASSIGNEE_CHANGED': return `Changed assignee: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
     case 'DUE_DATE_CHANGED': return `Updated due date to ${entry.newValue ?? '—'}`;
+    case 'DETAILS_UPDATED':
+      if (entry.oldValue && entry.newValue) return `Renamed: "${entry.oldValue}" → "${entry.newValue}"`;
+      return 'Updated task details';
     case 'CREATED':          return 'Task created';
     default:                 return entry.changeType.replace(/_/g, ' ').toLowerCase();
   }
+}
+
+function renderMessageWithLinks(message: string): React.ReactNode {
+  const urlPattern = /https?:\/\/[^\s]+/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = urlPattern.exec(message)) !== null) {
+    if (match.index > lastIndex) parts.push(message.slice(lastIndex, match.index));
+    parts.push(
+      <a key={match.index} href={match[0]} target="_blank" rel="noopener noreferrer"
+        className="text-teal-600 underline hover:text-teal-800 transition-colors break-all">
+        {match[0]}
+      </a>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < message.length) parts.push(message.slice(lastIndex));
+  return parts.length > 1 ? <>{parts}</> : message;
 }
 
 export function SharedTaskDetailPage({
@@ -135,6 +157,25 @@ export function SharedTaskDetailPage({
   const [isDueDateEditing, setIsDueDateEditing] = useState(false);
   // Activity logs keyed by subtask ID — persists across modal open/close and parent re-renders
   const [subtaskActivityLogs, setSubtaskActivityLogs] = useState<Record<string, ActivityEntry[]>>({});
+  // Inline editing state for description and client
+const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [editDescValue, setEditDescValue] = useState('');
+  const [isEditingClient, setIsEditingClient] = useState(false);
+  const [editClientId, setEditClientId] = useState('');
+  const [clientOptions, setClientOptions] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    fetch('/api/hr/clients')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { data?: Array<{ id: number; businessName: string }> } | null) => {
+        if (!d?.data) return;
+        setClientOptions(d.data.map(c => ({ id: String(c.id), name: c.businessName })));
+      })
+      .catch(() => undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddSubtaskActivity = (kind: ActivityEntry['kind'], message: string) => {
     if (!selectedSubtaskId) return;
@@ -151,7 +192,9 @@ export function SharedTaskDetailPage({
     }));
   };
 
-  const clientName = INITIAL_CLIENTS.find(c => c.id === editingTask.clientId)?.businessName ?? 'Unknown';
+  const clientName = clientOptions.find(c => c.id === editingTask.clientId)?.name
+    ?? INITIAL_CLIENTS.find(c => c.id === editingTask.clientId)?.businessName
+    ?? (editingTask.clientId ? `Client #${editingTask.clientId}` : 'Unknown');
   const assignee   = teamMembers.find(m => m.id === editingTask.assigneeId);
   const isOverdue  = editingTask.status !== 'Done' && new Date(editingTask.dueDate) < new Date();
 
@@ -183,7 +226,7 @@ export function SharedTaskDetailPage({
     setStatusDeptId(null);
     if (taskId) {
       setIsSaving(true);
-      const ok = await patchTask({ currentStatusId: status.id, currentDepartmentId: deptId });
+      const ok = await patchTask({ statusId: status.id, departmentId: deptId });
       setIsSaving(false);
       if (!ok) { toastError('Failed to update status', 'Please try again.'); return; }
     }
@@ -211,6 +254,43 @@ export function SharedTaskDetailPage({
       if (!ok) { toastError('Failed to update assignee', 'Please try again.'); return; }
     }
     update({ ...editingTask, assigneeId, updatedAt: new Date().toISOString() });
+  };
+
+  const handleSaveTitle = async () => {
+    const newTitle = editTitleValue.trim();
+    if (!newTitle || newTitle === editingTask.title) { setIsEditingTitle(false); return; }
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchTask({ name: newTitle });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update title', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, title: newTitle, updatedAt: new Date().toISOString() });
+    setIsEditingTitle(false);
+  };
+
+  const handleSaveDescription = async () => {
+    const desc = editDescValue.trim();
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchTask({ description: desc || null });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update description', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, description: desc, updatedAt: new Date().toISOString() });
+    setIsEditingDesc(false);
+  };
+
+  const handleSaveClient = async () => {
+    if (!editClientId) { setIsEditingClient(false); return; }
+    if (taskId) {
+      setIsSaving(true);
+      const ok = await patchTask({ clientId: Number(editClientId) });
+      setIsSaving(false);
+      if (!ok) { toastError('Failed to update client', 'Please try again.'); return; }
+    }
+    update({ ...editingTask, clientId: editClientId, updatedAt: new Date().toISOString() });
+    setIsEditingClient(false);
   };
 
   const handleDueDateChange = async (dateValue: string) => {
@@ -262,19 +342,14 @@ export function SharedTaskDetailPage({
     if (!sub) return;
     const newCompleted = !sub.completed;
     if (taskId) {
-      const exitStatus  = deptStatuses?.find(s => s.isExitStep);
-      const entryStatus = deptStatuses?.find(s => s.isEntryStep);
-      const newStatusId = newCompleted ? exitStatus?.id : entryStatus?.id;
-      if (newStatusId !== undefined) {
-        setIsSaving(true);
-        const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ statusId: newStatusId }),
-        });
-        setIsSaving(false);
-        if (!res.ok) { toastError('Failed to update subtask', 'Please try again.'); return; }
-      }
+      setIsSaving(true);
+      const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCompleted: newCompleted }),
+      });
+      setIsSaving(false);
+      if (!res.ok) { toastError('Failed to update subtask', 'Please try again.'); return; }
     }
     update({
       ...editingTask,
@@ -399,8 +474,34 @@ export function SharedTaskDetailPage({
               className="w-3 h-3 rounded-full shrink-0"
               style={{ backgroundColor: getStatusColor(editingTask.status, deptStatuses) }}
             />
-            <h1 className="text-xl font-black text-slate-900 truncate">{editingTask.title}</h1>
-            {sourceInfo && (
+            {isEditingTitle ? (
+              <div className="flex flex-col gap-2 flex-1 min-w-0">
+                <input
+                  autoFocus
+                  value={editTitleValue}
+                  onChange={e => setEditTitleValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void handleSaveTitle();
+                    if (e.key === 'Escape') setIsEditingTitle(false);
+                  }}
+                  className="flex-1 text-xl font-black border-b-2 border-[#0f766e] focus:outline-none bg-transparent text-slate-900 min-w-0"
+                />
+                <div className="flex gap-2">
+                <button onClick={() => void handleSaveTitle()} className="text-xs font-bold px-3 py-1.5 bg-[#0f766e] text-white rounded-lg hover:bg-[#0d6560] transition shrink-0">Save</button>
+                <button onClick={() => setIsEditingTitle(false)} className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition shrink-0">Cancel</button>
+                </div>
+                
+              </div>
+            ) : (
+              <h1
+                className="text-xl font-black text-slate-900 truncate cursor-pointer hover:bg-slate-50 rounded-lg px-1 -mx-1 transition"
+                onDoubleClick={() => { setEditTitleValue(editingTask.title); setIsEditingTitle(true); }}
+                title="Double-click to edit title"
+              >
+                {editingTask.title}
+              </h1>
+            )}
+            {!isEditingTitle && sourceInfo && (
               <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${sourceInfo.bg} ${sourceInfo.textColor}`}>
                 {sourceInfo.label}
               </span>
@@ -420,15 +521,82 @@ export function SharedTaskDetailPage({
             {/* Client */}
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Client</p>
-              <p className="text-sm font-bold text-slate-800">{clientName}</p>
+              {isEditingClient ? (
+                <div className="space-y-2">
+                  <select
+                    autoFocus
+                    value={editClientId}
+                    onChange={e => setEditClientId(e.target.value)}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f766e] bg-white"
+                  >
+                    <option value="">— Select a client —</option>
+                    {clientOptions.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => void handleSaveClient()}
+                      className="text-xs font-bold px-3 py-1.5 bg-[#0f766e] text-white rounded-lg hover:bg-[#0d6560] transition"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setIsEditingClient(false)}
+                      className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  className="text-sm font-bold text-slate-800 cursor-pointer hover:bg-slate-50 rounded-lg p-1 -m-1 transition"
+                  onDoubleClick={() => { setEditClientId(editingTask.clientId); setIsEditingClient(true); }}
+                  title="Double-click to edit"
+                >
+                  {clientName}
+                </p>
+              )}
             </div>
 
             {/* Description */}
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Description</p>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {editingTask.description || <span className="italic text-slate-400">No description.</span>}
-              </p>
+              {isEditingDesc ? (
+                <div className="space-y-2">
+                  <textarea
+                    autoFocus
+                    value={editDescValue}
+                    onChange={e => setEditDescValue(e.target.value)}
+                    rows={4}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0f766e] resize-none"
+                    placeholder="Add a description…"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => void handleSaveDescription()}
+                      className="text-xs font-bold px-3 py-1.5 bg-[#0f766e] text-white rounded-lg hover:bg-[#0d6560] transition"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setIsEditingDesc(false)}
+                      className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  className="text-sm text-slate-600 leading-relaxed cursor-pointer hover:bg-slate-50 rounded-lg p-1 -m-1 transition"
+                  onDoubleClick={() => { setEditDescValue(editingTask.description); setIsEditingDesc(true); }}
+                  title="Double-click to edit"
+                >
+                  {editingTask.description || <span className="italic text-slate-400">No description — double-click to add.</span>}
+                </p>
+              )}
             </div>
 
             {/* Department badge */}
@@ -671,6 +839,7 @@ export function SharedTaskDetailPage({
                       <tr className="bg-slate-50 border-b border-slate-200">
                         <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-6" />
                         <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Subtask</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Department</th>
                         <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Due Date</th>
                         <th className="text-left px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Assignee</th>
                         <th className="w-6" />
@@ -724,16 +893,19 @@ export function SharedTaskDetailPage({
                             </td>
                             {/* Title */}
                             <td className="px-3 py-2.5">
-                              <div className="flex flex-col gap-0.5">
-                                <span className={`font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                                  {subtask.title}
+                              <span className={`font-medium ${subtask.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                {subtask.title}
+                              </span>
+                            </td>
+                            {/* Department */}
+                            <td className="px-3 py-2.5 hidden sm:table-cell">
+                              {subtask.department ? (
+                                <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                                  {subtask.department.name}
                                 </span>
-                                {subtask.department && (
-                                  <span className="inline-flex items-center self-start text-[9px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                                    {subtask.department.name}
-                                  </span>
-                                )}
-                              </div>
+                              ) : (
+                                <span className="text-slate-300 text-[11px]">—</span>
+                              )}
                             </td>
                             {/* Due Date */}
                             <td className="px-3 py-2.5 hidden sm:table-cell">
@@ -889,8 +1061,8 @@ export function SharedTaskDetailPage({
                           <span className="text-xs font-bold text-slate-800">{item.author.name}</span>
                           <span className="text-[10px] text-slate-400">{formatDateTime(item.createdAt)}</span>
                         </div>
-                        <div className="bg-slate-50 border border-slate-100 rounded-xl rounded-tl-sm px-3 py-2">
-                          <p className="text-xs text-slate-700 leading-relaxed">{item.message}</p>
+                        <div className="bg-white border border-slate-200 rounded-xl rounded-tl-sm px-3 py-2 shadow-sm">
+                          <p className="text-xs text-slate-700 leading-relaxed">{renderMessageWithLinks(item.message)}</p>
                         </div>
                       </div>
                     </div>
@@ -955,6 +1127,8 @@ export function SharedTaskDetailPage({
           currentUser={currentUser}
           activityLog={subtaskActivityLogs[selectedSubtaskId ?? ''] ?? []}
           onAddActivity={handleAddSubtaskActivity}
+          departments={(allDeptStatuses ?? []).map(d => ({ id: d.id, name: d.name }))}
+          onParentTitleUpdate={newTitle => update({ ...editingTask, title: newTitle, updatedAt: new Date().toISOString() })}
         />
       )}
     </>

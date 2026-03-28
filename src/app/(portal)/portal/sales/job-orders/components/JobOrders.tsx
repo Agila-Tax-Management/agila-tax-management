@@ -526,8 +526,8 @@ export function JobOrders(): React.ReactNode {
 
 function AckProgress({ jo }: { jo: JobOrderRecord }): React.ReactNode {
   const steps = [
-    { label: 'AM', done: !!jo.accountManagerId, name: jo.accountManager?.name },
-    { label: 'AO', done: !!jo.operationsManagerId, name: jo.operationsManager?.name },
+    { label: 'OM', done: !!jo.operationsManagerId, name: jo.operationsManager?.name },
+    { label: 'AO', done: !!jo.accountManagerId, name: jo.accountManager?.name },
     { label: 'Exec', done: !!jo.executiveId, name: jo.executive?.name },
   ];
 
