@@ -128,13 +128,46 @@ const fmtDateTime = (d: string) =>
 const fmtTime = (dt: string | null): string => {
   if (!dt) return '—';
   const d = new Date(dt);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 };
 
 const fmtHours = (h: string | number): string => {
   const n = Number(h);
   return n === 0 ? '—' : n.toFixed(2);
 };
+
+function toMin(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function computeRowPay(
+  ts: TimesheetRecord,
+  dailyRate: number,
+  payType: string,
+  scheduleDays: WorkScheduleDay[] | undefined,
+  dayOfWeek: number,
+) {
+  const sd = scheduleDays?.find((d) => d.dayOfWeek === dayOfWeek) ?? null;
+  const schedStart = sd ? toMin(sd.startTime) : 8 * 60;
+  const schedEnd = sd ? toMin(sd.endTime) : 17 * 60;
+  const brkStart = sd?.breakStart ? toMin(sd.breakStart) : null;
+  const brkEnd = sd?.breakEnd ? toMin(sd.breakEnd) : null;
+  const breakMin = brkStart !== null && brkEnd !== null ? Math.max(0, brkEnd - brkStart) : 60;
+  const scheduledWorkMin = Math.max(1, schedEnd - schedStart - breakMin);
+  const isVariable = payType === 'VARIABLE_PAY';
+  const lateDeduct = isVariable
+    ? parseFloat(((ts.lateMinutes / scheduledWorkMin) * dailyRate).toFixed(2))
+    : 0;
+  const undertimeDeduct = isVariable
+    ? parseFloat(((ts.undertimeMinutes / scheduledWorkMin) * dailyRate).toFixed(2))
+    : 0;
+  return { lateDeduct, undertimeDeduct };
+}
 
 const SS_LABEL: Record<string, string> = {
   PRESENT: 'Present', ABSENT: 'Absent', INCOMPLETE: 'Half Day',
@@ -326,6 +359,8 @@ export function PayslipDetailPage() {
   const hireDate = activeEmp?.hireDate ?? null;
   const activeSchedule = activeCt?.schedule ?? null;
   const activeComp = activeCt?.compensations[0] ?? null;
+  const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
+  const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
   const canDownload = true;
 
   const earningsRows = [
@@ -592,6 +627,7 @@ export function PayslipDetailPage() {
                 }
                 const statusLabel = SS_LABEL[ts.status] ?? ts.status;
                 const statusColor = SS_COLOR[ts.status] ?? 'text-muted-foreground';
+                const { lateDeduct, undertimeDeduct } = computeRowPay(ts, tableDailyRate, tablePayType, activeSchedule?.days, date.getDay());
                 return (
                   <tr key={ts.id} className="hover:bg-muted/30">
                     <td className="px-2 py-2 font-medium">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</td>
@@ -601,7 +637,7 @@ export function PayslipDetailPage() {
                     <td className="px-2 py-2">{fmtTime(ts.lunchEnd)}</td>
                     <td className="px-2 py-2">{fmtTime(ts.timeOut)}</td>
                     <td className={`px-2 py-2 font-semibold ${statusColor}`}>{statusLabel}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.regularHours)}</td>
+                    <td className="px-2 py-2 text-right">{Number(ts.dailyGrossPay) > 0 ? fmt(tableDailyRate) : '—'}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdOtHours)}</td>
@@ -613,8 +649,12 @@ export function PayslipDetailPage() {
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdOtHours)}</td>
-                    <td className="px-2 py-2 text-right text-red-500">{ts.lateMinutes > 0 ? ts.lateMinutes : '—'}</td>
-                    <td className="px-2 py-2 text-right text-amber-500">{ts.undertimeMinutes > 0 ? ts.undertimeMinutes : '—'}</td>
+                    <td className="px-2 py-2 text-right text-red-500">
+                      {lateDeduct > 0 ? `-${fmt(lateDeduct)}` : ts.lateMinutes > 0 ? `${ts.lateMinutes}m` : '—'}
+                    </td>
+                    <td className="px-2 py-2 text-right text-amber-500">
+                      {undertimeDeduct > 0 ? `-${fmt(undertimeDeduct)}` : ts.undertimeMinutes > 0 ? `${ts.undertimeMinutes}m` : '—'}
+                    </td>
                     <td className="px-2 py-2 text-right font-bold text-emerald-600">
                       {Number(ts.dailyGrossPay) > 0 ? `₱${Number(ts.dailyGrossPay).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
                     </td>
@@ -623,7 +663,12 @@ export function PayslipDetailPage() {
               })}
               <tr className="bg-muted/50 border-t-2 border-border font-bold">
                 <td className="px-2 py-2 text-xs font-bold" colSpan={7}>TOTALS</td>
-                <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.regularHours), 0)))}</td>
+                <td className="px-2 py-2 text-right text-xs">
+                  {(() => {
+                    const total = periodDays.reduce((s, { ts: t }) => t && Number(t.dailyGrossPay) > 0 ? s + tableDailyRate : s, 0);
+                    return total > 0 ? fmt(total) : '—';
+                  })()}
+                </td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.regOtHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdOtHours), 0)))}</td>
@@ -635,8 +680,34 @@ export function PayslipDetailPage() {
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhOtHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdOtHours), 0)))}</td>
-                <td className="px-2 py-2 text-right text-red-500">{timesheets.reduce((s, t) => s + t.lateMinutes, 0) || '—'}</td>
-                <td className="px-2 py-2 text-right text-amber-500">{timesheets.reduce((s, t) => s + t.undertimeMinutes, 0) || '—'}</td>
+                <td className="px-2 py-2 text-right text-red-500">
+                  {(() => {
+                    if (tablePayType !== 'VARIABLE_PAY') {
+                      const total = timesheets.reduce((s, t) => s + t.lateMinutes, 0);
+                      return total > 0 ? `${total}m` : '—';
+                    }
+                    const total = periodDays.reduce((s, { ts: t, date: d }) => {
+                      if (!t) return s;
+                      const { lateDeduct: ld } = computeRowPay(t, tableDailyRate, tablePayType, activeSchedule?.days, d.getDay());
+                      return s + ld;
+                    }, 0);
+                    return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
+                  })()}
+                </td>
+                <td className="px-2 py-2 text-right text-amber-500">
+                  {(() => {
+                    if (tablePayType !== 'VARIABLE_PAY') {
+                      const total = timesheets.reduce((s, t) => s + t.undertimeMinutes, 0);
+                      return total > 0 ? `${total}m` : '—';
+                    }
+                    const total = periodDays.reduce((s, { ts: t, date: d }) => {
+                      if (!t) return s;
+                      const { undertimeDeduct: ud } = computeRowPay(t, tableDailyRate, tablePayType, activeSchedule?.days, d.getDay());
+                      return s + ud;
+                    }, 0);
+                    return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
+                  })()}
+                </td>
                 <td className="px-2 py-2 text-right text-emerald-600">
                   {(() => {
                     const total = timesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { computeTimesheetFields } from '@/lib/timesheet-calc';
 
 /**
  * GET /api/dashboard/timesheet/me
@@ -152,7 +153,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           contracts: {
             where: { status: 'ACTIVE' },
             take: 1,
-            include: { compensations: { where: { isActive: true }, take: 1 } },
+            include: {
+              compensations: { where: { isActive: true }, take: 1 },
+              schedule: {
+                include: { days: true },
+              },
+            },
           },
         },
       },
@@ -234,19 +240,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Please end your lunch break first' }, { status: 409 });
     }
 
-    // Calculate regular hours: (timeOut - timeIn) minus lunch break
-    const lunchMs =
-      record.lunchStart && record.lunchEnd
-        ? record.lunchEnd.getTime() - record.lunchStart.getTime()
-        : 0;
-    const workMs = now.getTime() - record.timeIn.getTime() - lunchMs;
-    const regularHours = Math.max(0, workMs / 3600000);
+    // Resolve work schedule day for today (0=Sun … 6=Sat)
+    const schedule = activeContract.schedule;
+    const todayDow = now.getDay();
+    const scheduleDay =
+      schedule?.days.find((d) => d.dayOfWeek === todayDow) ?? null;
+
+    const compensation = activeContract.compensations[0] ?? null;
+
+    const computed = computeTimesheetFields(
+      record.timeIn,
+      now,
+      record.lunchStart,
+      record.lunchEnd,
+      scheduleDay,
+      compensation
+        ? {
+            calculatedDailyRate: compensation.calculatedDailyRate.toString(),
+            payType: compensation.payType,
+          }
+        : null,
+    );
 
     record = await prisma.timesheet.update({
       where: { id: record.id },
       data: {
         timeOut: now,
-        regularHours: parseFloat(regularHours.toFixed(2)),
+        regularHours: computed.regularHours,
+        lateMinutes: computed.lateMinutes,
+        undertimeMinutes: computed.undertimeMinutes,
+        regOtHours: computed.regOtHours,
+        dailyGrossPay: computed.dailyGrossPay,
         status: 'PRESENT',
       },
     });

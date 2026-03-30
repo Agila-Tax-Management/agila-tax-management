@@ -1,6 +1,6 @@
 // src/components/hr/profile/profile-types.ts
 
-export type ProfileTab = 'personal' | 'government-ids' | 'documents' | 'employment' | 'contracts';
+export type ProfileTab = 'personal' | 'government-ids' | 'documents' | 'employment' | 'contracts' | 'leave-credits';
 
 export type EmploymentTypeOption = 'Regular' | 'Probationary' | 'Contractual' | 'Project Based' | 'Part Time' | 'Intern';
 export type ContractTypeOption = 'Probationary' | 'Regular' | 'Contractual' | 'Project Based' | 'Consultant' | 'Intern';

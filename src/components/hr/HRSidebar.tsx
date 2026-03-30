@@ -3,14 +3,10 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Users, CalendarDays, Star,
+  LayoutDashboard, Users, Star,
   Clock, Wallet, Landmark, FileQuestion, Heart, Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
-import { getPendingLeaves, getOpenRequests } from '@/lib/mock-hr-data';
-
-const pendingLeaves = getPendingLeaves().length;
-const openRequests = getOpenRequests().length;
 
 const HR_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/hr' },
@@ -20,7 +16,6 @@ const HR_NAV_ITEMS = [
     isSection: true,
   },
   { id: 'employees', label: 'Employee Management', icon: Users, href: '/portal/hr/employee-management' },
-  { id: 'leaves', label: 'Leave Management', icon: CalendarDays, href: '/portal/hr/leave-management', badge: pendingLeaves },
   { id: 'performance', label: 'Performance', icon: Star, href: '/portal/hr/performance-management' },
   {
     id: 'operations',
@@ -35,7 +30,7 @@ const HR_NAV_ITEMS = [
     label: 'SUPPORT',
     isSection: true,
   },
-  { id: 'hr-requests', label: 'HR Requests', icon: FileQuestion, href: '/portal/hr/hr-request', badge: openRequests },
+  { id: 'hr-requests', label: 'HR Requests', icon: FileQuestion, href: '/portal/hr/hr-request' },
 ];
 
 interface HRSidebarProps {
@@ -110,7 +105,7 @@ export function HRSidebar({ isOpen, onClose }: HRSidebarProps) {
               >
                 {Icon && <Icon size={18} />}
                 <span className="text-sm flex-1 text-left">{item.label}</span>
-                {'badge' in item && item.badge !== undefined && item.badge > 0 && (
+                {'badge' in item && typeof item.badge === 'number' && item.badge > 0 && (
                   <Badge variant="danger" className="text-[9px] px-1.5 py-0.5">
                     {item.badge}
                   </Badge>
