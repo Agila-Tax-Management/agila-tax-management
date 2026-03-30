@@ -63,6 +63,17 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
 };
 const PRIORITY_RANK: Record<AOTaskPriority, number> = { Urgent: 1, High: 2, Medium: 3, Low: 4 };
 
+function daysLeftInfo(dueDate: string, statusName: string): { label: string; cls: string } | null {
+  if (/done|complet|finish/i.test(statusName)) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate); due.setHours(0, 0, 0, 0);
+  const n = Math.round((due.getTime() - today.getTime()) / 86400000);
+  if (n > 1) return { label: `${n}d left`, cls: 'text-slate-500 bg-slate-100' };
+  if (n === 1) return { label: '1d left', cls: 'text-amber-600 bg-amber-50' };
+  if (n === 0) return { label: 'Today', cls: 'text-amber-600 bg-amber-50' };
+  return { label: `${Math.abs(n)}d over`, cls: 'text-rose-600 bg-rose-50' };
+}
+
 type ViewMode = 'list' | 'kanban';
 type SortBy = 'name' | 'dueDate' | 'priority';
 
@@ -232,14 +243,18 @@ export function MyTask() {
             )}
             {filteredTasks.map(task => {
               const overdue = isOverdue(task);
+              const dl = daysLeftInfo(task.dueDate, task.statusName);
               return (
                 <div key={task.id} onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)} className="grid grid-cols-[1fr_140px_100px_100px_80px] gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors">
                   <p className="text-sm font-bold text-slate-800 truncate">{task.title}</p>
                   <span className="text-xs text-slate-600 font-medium truncate">{task.clientName}</span>
                   <Badge variant={statusVariant(task.statusName)} className="text-[9px] w-fit">{task.statusName}</Badge>
-                  <span className={`text-xs font-bold flex items-center gap-1 ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>
-                    <Calendar size={12} /> {formatDate(task.dueDate)}
-                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className={`text-xs font-bold flex items-center gap-1 ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>
+                      <Calendar size={12} /> {formatDate(task.dueDate)}
+                    </span>
+                    {dl && <span className={`text-[9px] font-bold px-1.5 py-px rounded w-fit ${dl.cls}`}>{dl.label}</span>}
+                  </div>
                   <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[9px] w-fit">{task.priority}</Badge>
                 </div>
               );
@@ -266,6 +281,7 @@ export function MyTask() {
                     )}
                     {columnTasks.map(task => {
                       const overdue = isOverdue(task);
+                      const dl = daysLeftInfo(task.dueDate, task.statusName);
                       return (
                         <div
                           key={task.id}
@@ -280,11 +296,14 @@ export function MyTask() {
                             <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 shrink-0 mt-0.5 ml-1" />
                           </div>
                           <p className="text-[10px] text-slate-500 font-medium mb-2 truncate">{task.clientName}</p>
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                            <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
-                              <Calendar size={10} /> {formatDate(task.dueDate)}
-                            </span>
-                            <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">{task.priority}</Badge>
+                          <div className="flex flex-col gap-0.5 pt-2 border-t border-slate-50">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
+                                <Calendar size={10} /> {formatDate(task.dueDate)}
+                              </span>
+                              <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">{task.priority}</Badge>
+                            </div>
+                            {dl && <span className={`text-[8px] font-bold px-1.5 py-px rounded w-fit ${dl.cls}`}>{dl.label}</span>}
                           </div>
                           {task.subtaskCount > 0 && (
                             <div className="mt-2 flex items-center gap-1.5">
