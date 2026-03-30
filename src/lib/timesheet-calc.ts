@@ -101,12 +101,13 @@ export function computeTimesheetFields(
   const workedMin = workedMs / 60000;
 
   // ── Late minutes ─────────────────────────────────────────────────────────
-  // Convert timeIn to minutes-since-midnight in LOCAL time (the employee's timezone).
-  const timeInMin = timeIn.getHours() * 60 + timeIn.getMinutes();
+  // Times are stored as UTC (buildUtcDate: "HH:MM" → T${HH:MM}:00.000Z).
+  // Use UTC accessors so server timezone never shifts the comparison.
+  const timeInMin = timeIn.getUTCHours() * 60 + timeIn.getUTCMinutes();
   const lateMinutes = Math.max(0, timeInMin - schedStartMin);
 
   // ── Undertime minutes ────────────────────────────────────────────────────
-  const timeOutMin = timeOut.getHours() * 60 + timeOut.getMinutes();
+  const timeOutMin = timeOut.getUTCHours() * 60 + timeOut.getUTCMinutes();
   const undertimeMinutes = Math.max(0, schedEndMin - timeOutMin);
 
   // ── Regular vs OT hours ──────────────────────────────────────────────────

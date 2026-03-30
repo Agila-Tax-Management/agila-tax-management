@@ -10,6 +10,11 @@ interface RouteParams {
 }
 
 const patchSchema = z.object({
+  basicPay: z.number().min(0).optional(),
+  holidayPay: z.number().min(0).optional(),
+  overtimePay: z.number().min(0).optional(),
+  paidLeavePay: z.number().min(0).optional(),
+  allowance: z.number().min(0).optional(),
   sssDeduction: z.number().min(0).optional(),
   philhealthDeduction: z.number().min(0).optional(),
   pagibigDeduction: z.number().min(0).optional(),
@@ -18,7 +23,6 @@ const patchSchema = z.object({
   pagibigLoan: z.number().min(0).optional(),
   sssLoan: z.number().min(0).optional(),
   cashAdvanceRepayment: z.number().min(0).optional(),
-  allowance: z.number().min(0).optional(),
 });
 
 /**
@@ -86,6 +90,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
                       frequency: true,
                       calculatedDailyRate: true,
                       calculatedMonthlyRate: true,
+                      deductSss: true,
+                      deductPhilhealth: true,
+                      deductPagibig: true,
+                      pagibigType: true,
                     },
                   },
                 },
@@ -137,6 +145,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     where: { id, payrollPeriod: { clientId } },
     select: {
       id: true,
+      approvedAt: true,
       basicPay: true,
       holidayPay: true,
       overtimePay: true,
@@ -155,6 +164,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   });
 
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (existing.approvedAt !== null) {
+    return NextResponse.json(
+      { error: "This payslip has already been approved and cannot be edited." },
+      { status: 409 },
+    );
+  }
 
   if (!["DRAFT", "PROCESSING"].includes(existing.payrollPeriod.status)) {
     return NextResponse.json(
@@ -181,24 +197,32 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   const u = parsed.data;
 
   // Recalculate with any overridden values, falling back to existing
-  const sss          = u.sssDeduction            ?? Number(existing.sssDeduction);
-  const philhealth   = u.philhealthDeduction      ?? Number(existing.philhealthDeduction);
-  const pagibig      = u.pagibigDeduction         ?? Number(existing.pagibigDeduction);
-  const tax          = u.withholdingTax           ?? Number(existing.withholdingTax);
-  const lateUnder    = u.lateUndertimeDeduction   ?? Number(existing.lateUndertimeDeduction);
-  const pagibigLoan  = u.pagibigLoan              ?? Number(existing.pagibigLoan);
-  const sssLoan      = u.sssLoan                  ?? Number(existing.sssLoan);
-  const cashAdv      = u.cashAdvanceRepayment      ?? Number(existing.cashAdvanceRepayment);
+  const basicPay     = u.basicPay                 ?? Number(existing.basicPay);
+  const holidayPay   = u.holidayPay               ?? Number(existing.holidayPay);
+  const overtimePay  = u.overtimePay              ?? Number(existing.overtimePay);
+  const paidLeavePay = u.paidLeavePay             ?? Number(existing.paidLeavePay);
   const allowance    = u.allowance                ?? Number(existing.allowance);
+  const sss          = u.sssDeduction             ?? Number(existing.sssDeduction);
+  const philhealth   = u.philhealthDeduction       ?? Number(existing.philhealthDeduction);
+  const pagibig      = u.pagibigDeduction          ?? Number(existing.pagibigDeduction);
+  const tax          = u.withholdingTax            ?? Number(existing.withholdingTax);
+  const lateUnder    = u.lateUndertimeDeduction    ?? Number(existing.lateUndertimeDeduction);
+  const pagibigLoan  = u.pagibigLoan               ?? Number(existing.pagibigLoan);
+  const sssLoan      = u.sssLoan                   ?? Number(existing.sssLoan);
+  const cashAdv      = u.cashAdvanceRepayment       ?? Number(existing.cashAdvanceRepayment);
 
   const totalDeductions = sss + philhealth + pagibig + tax + lateUnder + pagibigLoan + sssLoan + cashAdv;
-  const grossPay = Number(existing.basicPay) + Number(existing.holidayPay)
-    + Number(existing.overtimePay) + Number(existing.paidLeavePay) + allowance;
+  const grossPay = basicPay + holidayPay + overtimePay + paidLeavePay + allowance;
   const netPay = Math.max(0, grossPay - totalDeductions);
 
   const updated = await prisma.payslip.update({
     where: { id },
     data: {
+      basicPay,
+      holidayPay,
+      overtimePay,
+      paidLeavePay,
+      allowance,
       sssDeduction: sss,
       philhealthDeduction: philhealth,
       pagibigDeduction: pagibig,
@@ -207,7 +231,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
       pagibigLoan,
       sssLoan,
       cashAdvanceRepayment: cashAdv,
-      allowance,
       grossPay,
       totalDeductions,
       netPay,

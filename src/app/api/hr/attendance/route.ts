@@ -31,8 +31,10 @@ function mapStatus(
 
 function fmtTime(d: Date | null): string | null {
   if (!d) return null;
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
+  // Times are stored as UTC via buildUtcDate ("HH:MM" → T${HH:MM}:00.000Z).
+  // Use UTC accessors so local server timezone never shifts the displayed value.
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
 
@@ -58,6 +60,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const dateParam = searchParams.get('date');
   const search = (searchParams.get('search') ?? '').trim().toLowerCase();
   const statusFilter = (searchParams.get('status') ?? 'All').trim();
+  const departmentFilter = (searchParams.get('department') ?? '').trim().toLowerCase();
 
   if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     return NextResponse.json(
@@ -127,11 +130,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const lateMinutes = ts?.lateMinutes ?? 0;
     const uiStatus = mapStatus(dbStatus, lateMinutes);
 
-    const timeIn = fmtTime(ts?.timeIn ?? null);
-    const timeOut = fmtTime(ts?.timeOut ?? null);
+    const timeIn     = fmtTime(ts?.timeIn     ?? null);
+    const lunchStart = fmtTime(ts?.lunchStart ?? null);
+    const lunchEnd   = fmtTime(ts?.lunchEnd   ?? null);
+    const timeOut    = fmtTime(ts?.timeOut    ?? null);
     const hoursWorked = ts ? parseFloat(ts.regularHours.toString()) : 0;
     const overtime = ts ? parseFloat(ts.regOtHours.toString()) : 0;
-    const notes = ts ? '' : '';
+    const notes = '';
 
     return {
       id: ts?.id ?? `no-ts-${emp.id}`,
@@ -139,6 +144,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       employeeName,
       department,
       timeIn,
+      lunchStart,
+      lunchEnd,
       timeOut,
       hoursWorked,
       overtime,
@@ -154,7 +161,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       rec.employeeName.toLowerCase().includes(search) ||
       rec.department.toLowerCase().includes(search);
     const matchStatus = statusFilter === 'All' || rec.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchDept   = departmentFilter === '' || rec.department.toLowerCase() === departmentFilter;
+    return matchSearch && matchStatus && matchDept;
   });
 
   // Compute stats from the full (unfiltered) record set

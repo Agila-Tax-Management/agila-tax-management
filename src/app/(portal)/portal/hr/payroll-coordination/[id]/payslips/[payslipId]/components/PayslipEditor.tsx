@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Save, RotateCcw, CheckCircle, FileText,
   User, Calendar, CreditCard, Briefcase, Building2, DollarSign,
-  Banknote, ThumbsUp,
+  Banknote, ThumbsUp, RefreshCw,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -35,6 +35,10 @@ interface ActiveCompensation {
   frequency: string;
   calculatedDailyRate: string;
   calculatedMonthlyRate: string;
+  deductSss: boolean;
+  deductPhilhealth: boolean;
+  deductPagibig: boolean;
+  pagibigType: string;
 }
 
 interface TimesheetRecord {
@@ -249,6 +253,7 @@ export function PayslipEditor() {
   const [timesheetsLoading, setTimesheetsLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Editable deduction/earning fields
   const [basicPay, setBasicPay] = useState('0');
@@ -342,7 +347,7 @@ export function PayslipEditor() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          basicPay: Number(basicPay),
+    basicPay: Number(basicPay),
           holidayPay: Number(holidayPay),
           overtimePay: Number(overtimePay),
           paidLeavePay: Number(paidLeavePay),
@@ -351,7 +356,7 @@ export function PayslipEditor() {
           philhealthDeduction: Number(philhealth),
           pagibigDeduction: Number(pagibig),
           withholdingTax: Number(tax),
-          lateUndertime: Number(lateUnder),
+          lateUndertimeDeduction: Number(lateUnder),
           pagibigLoan: Number(pagibigLoan),
           sssLoan: Number(sssLoan),
           cashAdvanceRepayment: Number(cashAdv),
@@ -482,6 +487,104 @@ export function PayslipEditor() {
     }
   };
 
+  const handleRefreshDeductions = async () => {
+    setRefreshing(true);
+    try {
+      // Step 1: Run server-side recalculation (fixes timesheet rows, aggregates OT + leave)
+      // Step 2: Re-fetch fresh payslip (for up-to-date employee/comp/audit data)
+      const [recalcRes, psRes] = await Promise.all([
+        fetch(`/api/hr/payslips/${payslipId}/recalculate`, { method: 'POST' }),
+        fetch(`/api/hr/payslips/${payslipId}`),
+      ]);
+
+      interface RecalcResponse {
+        data?: {
+          timesheets: TimesheetRecord[];
+          suggestions: {
+            basicPay: number;
+            allowance: number;
+            overtimePay: number;
+            paidLeavePay: number;
+            sssDeduction: number;
+            philhealthDeduction: number;
+            pagibigDeduction: number;
+          };
+          meta: {
+            recalcCount: number;
+            recalcMessages: string[];
+            otRequestCount: number;
+            leaveRequestCount: number;
+          };
+        };
+        error?: string;
+      }
+
+      const recalcJson: RecalcResponse = await recalcRes.json();
+      const psJson: { data?: PayslipDetail; error?: string } = await psRes.json();
+
+      if (!recalcRes.ok) {
+        error('Recalculation failed', recalcJson.error ?? 'Server error during recalculation');
+        return;
+      }
+      if (!psRes.ok || !psJson.data) {
+        error('Failed to refresh', psJson.error ?? 'Could not load payslip');
+        return;
+      }
+
+      const fresh = psJson.data;
+      const { timesheets: freshTs, suggestions, meta } = recalcJson.data!;
+
+      // Update UI state
+      setPayslip(fresh);
+      setTimesheets(freshTs);
+
+      // Helper: if the DB-saved value is already non-zero, keep it;
+      // otherwise fall back to the server's computed suggestion.
+      // This preserves manually-entered or previously-refreshed values.
+      const retainOrSuggest = (savedVal: string, suggestion: number): string =>
+        Number(savedVal) > 0 ? savedVal : suggestion.toFixed(2);
+
+      // ── Earnings ────────────────────────────────────────────────
+      // basicPay is always recomputed (it directly tracks timesheet data)
+      setBasicPay(suggestions.basicPay.toFixed(2));
+      // allowance, overtimePay, paidLeavePay: keep saved value if already set
+      setAllowance(retainOrSuggest(fresh.allowance, suggestions.allowance));
+      setOvertimePay(retainOrSuggest(fresh.overtimePay, suggestions.overtimePay));
+      setPaidLeavePay(retainOrSuggest(fresh.paidLeavePay, suggestions.paidLeavePay));
+      // holidayPay is always purely manual — sync from saved DB value, never overwrite
+      setHolidayPay(fresh.holidayPay);
+
+      // ── Government contributions from server suggestions ───────
+      // Always recompute these from current compensation config
+      setSss(suggestions.sssDeduction.toFixed(2));
+      setPhilhealth(suggestions.philhealthDeduction.toFixed(2));
+      setPagibig(suggestions.pagibigDeduction.toFixed(2));
+
+      // ── Other deductions — always sync from saved DB values ────
+      setLateUnder(fresh.lateUndertimeDeduction);
+      setPagibigLoan(fresh.pagibigLoan);
+      setSssLoan(fresh.sssLoan);
+      setCashAdv(fresh.cashAdvanceRepayment);
+      setTax(fresh.withholdingTax);
+
+      // Build summary message
+      const parts: string[] = [];
+      if (meta.recalcCount > 0)
+        parts.push(`${meta.recalcCount} timesheet row${meta.recalcCount > 1 ? 's' : ''} recomputed`);
+      if (meta.otRequestCount > 0)
+        parts.push(`${meta.otRequestCount} approved OT request${meta.otRequestCount > 1 ? 's' : ''} applied`);
+      if (meta.leaveRequestCount > 0)
+        parts.push(`${meta.leaveRequestCount} paid leave request${meta.leaveRequestCount > 1 ? 's' : ''} applied`);
+      if (parts.length === 0) parts.push('all values are up to date');
+
+      success('Refreshed', parts.join(' · '));
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleMarkPaid = async () => {
     if (!payslip) return;
     setMarkingPaid(true);
@@ -566,9 +669,21 @@ export function PayslipEditor() {
             &nbsp;·&nbsp;Payout: {fmtDate(payslip.payrollPeriod.payoutDate)}
           </p>
         </div>
-        <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]} className="flex-shrink-0 mt-1">
-          {STATUS_LABEL[payslip.payrollPeriod.status]}
-        </Badge>
+        <div className="flex items-center gap-2 shrink-0 mt-1">
+          <Button
+            variant="outline"
+            className="gap-1.5 text-xs h-8"
+            disabled={refreshing || payslip.approvedAt !== null}
+            onClick={() => { void handleRefreshDeductions(); }}
+            title={payslip.approvedAt !== null ? 'Cannot refresh an approved payslip' : 'Refresh employee compensation & recompute government deductions'}
+          >
+            {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Refresh
+          </Button>
+          <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]}>
+            {STATUS_LABEL[payslip.payrollPeriod.status]}
+          </Badge>
+        </div>
       </div>
 
       {/* ── Employee Information ── */}
@@ -888,7 +1003,7 @@ export function PayslipEditor() {
       <Card className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div className="flex items-start gap-2">
-            <User size={14} className="mt-0.5 text-muted-foreground flex-shrink-0" />
+            <User size={14} className="mt-0.5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Prepared By</p>
               <p className="font-semibold text-foreground">{payslip.preparedBy?.name ?? '—'}</p>
@@ -898,7 +1013,7 @@ export function PayslipEditor() {
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <CheckCircle size={14} className="mt-0.5 text-muted-foreground flex-shrink-0" />
+            <CheckCircle size={14} className="mt-0.5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Approved By</p>
               <p className="font-semibold text-foreground">{payslip.approvedBy?.name ?? '—'}</p>
@@ -908,7 +1023,7 @@ export function PayslipEditor() {
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <Calendar size={14} className="mt-0.5 text-muted-foreground flex-shrink-0" />
+            <Calendar size={14} className="mt-0.5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Acknowledged By</p>
               <p className="font-semibold text-foreground">{payslip.acknowledgedBy?.name ?? '—'}</p>
