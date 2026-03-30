@@ -657,6 +657,54 @@ const SERVICE_INCLUSIONS = [
   { name: "Business Permit Renewal",          category: "Licensing",    description: "Annual Mayor's Permit / LGU Business Permit renewal" },
 ];
 
+/* ─── Work Schedules ─────────────────────────────────────────────── */
+
+const WORK_SCHEDULES = [
+  {
+    name: "Standard Office Hours",
+    timezone: "Asia/Manila",
+    // dayOfWeek: 0 = Sunday … 6 = Saturday
+    days: [
+      { dayOfWeek: 0, isWorkingDay: false, startTime: "08:00", endTime: "17:00", breakStart: null, breakEnd: null },
+      { dayOfWeek: 1, isWorkingDay: true,  startTime: "08:00", endTime: "17:00", breakStart: "12:00", breakEnd: "13:00" },
+      { dayOfWeek: 2, isWorkingDay: true,  startTime: "08:00", endTime: "17:00", breakStart: "12:00", breakEnd: "13:00" },
+      { dayOfWeek: 3, isWorkingDay: true,  startTime: "08:00", endTime: "17:00", breakStart: "12:00", breakEnd: "13:00" },
+      { dayOfWeek: 4, isWorkingDay: true,  startTime: "08:00", endTime: "17:00", breakStart: "12:00", breakEnd: "13:00" },
+      { dayOfWeek: 5, isWorkingDay: true,  startTime: "08:00", endTime: "17:00", breakStart: "12:00", breakEnd: "13:00" },
+      { dayOfWeek: 6, isWorkingDay: false, startTime: "08:00", endTime: "17:00", breakStart: null, breakEnd: null },
+    ],
+  },
+];
+
+/* ─── Payroll Schedules ───────────────────────────────────────────── */
+
+const PAYROLL_SCHEDULE_SEEDS = [
+  {
+    name: "Semi-Monthly (1st–15th / 16th–EOM)",
+    frequency: "TWICE_A_MONTH" as const,
+    firstPeriodStartDay: 1,
+    firstPeriodEndDay: 15,
+    firstPayoutDay: 20,
+    secondPeriodStartDay: 16,
+    secondPeriodEndDay: 31, // Use 31 to represent End-of-Month
+    secondPayoutDay: 5,
+    isActive: true,
+  },
+];
+
+/* ─── Leave Types ─────────────────────────────────────────────────── */
+
+const LEAVE_TYPE_SEEDS = [
+  {
+    name: "Service Incentive Leave",
+    isPaid: true,
+    defaultDays: 5,
+    carryOverLimit: 5,
+    resetMonth: 1,
+    resetDay: 1,
+  },
+];
+
 async function main(): Promise<void> {
   // ── 1. Seed Company (Agila — the internal company) ───────────────
   const atmsClient = await prisma.client.upsert({
@@ -1179,6 +1227,60 @@ async function main(): Promise<void> {
     }
   }
   console.log(`  ✓ ${taskCount} sample tasks seeded across departments`);
+
+  // ── 12. Seed Work Schedule ─────────────────────────────────────────
+  for (const ws of WORK_SCHEDULES) {
+    const existing = await prisma.workSchedule.findFirst({
+      where: { clientId: atmsClient.id, name: ws.name },
+    });
+    if (!existing) {
+      await prisma.workSchedule.create({
+        data: {
+          clientId: atmsClient.id,
+          name: ws.name,
+          timezone: ws.timezone,
+          days: {
+            create: ws.days.map((d) => ({
+              dayOfWeek: d.dayOfWeek,
+              isWorkingDay: d.isWorkingDay,
+              startTime: d.startTime,
+              endTime: d.endTime,
+              breakStart: d.breakStart ?? undefined,
+              breakEnd: d.breakEnd ?? undefined,
+            })),
+          },
+        },
+      });
+      console.log(`  ✓ Work schedule '${ws.name}' seeded`);
+    } else {
+      console.log(`  · Work schedule '${ws.name}' already exists — skipped`);
+    }
+  }
+
+  // ── 13. Seed Payroll Schedule ──────────────────────────────────────
+  for (const ps of PAYROLL_SCHEDULE_SEEDS) {
+    const existing = await prisma.payrollSchedule.findFirst({
+      where: { clientId: atmsClient.id, name: ps.name },
+    });
+    if (!existing) {
+      await prisma.payrollSchedule.create({
+        data: { clientId: atmsClient.id, ...ps },
+      });
+      console.log(`  ✓ Payroll schedule '${ps.name}' seeded`);
+    } else {
+      console.log(`  · Payroll schedule '${ps.name}' already exists — skipped`);
+    }
+  }
+
+  // ── 14. Seed Leave Types ───────────────────────────────────────────
+  for (const lt of LEAVE_TYPE_SEEDS) {
+    await prisma.leaveType.upsert({
+      where: { clientId_name: { clientId: atmsClient.id, name: lt.name } },
+      update: { isPaid: lt.isPaid, defaultDays: lt.defaultDays, carryOverLimit: lt.carryOverLimit, resetMonth: lt.resetMonth, resetDay: lt.resetDay },
+      create: { clientId: atmsClient.id, ...lt },
+    });
+  }
+  console.log(`  ✓ ${LEAVE_TYPE_SEEDS.length} leave type(s) seeded`);
 }
 
 main()
