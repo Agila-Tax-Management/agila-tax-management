@@ -197,6 +197,21 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
     ?? (editingTask.clientId ? `Client #${editingTask.clientId}` : 'Unknown');
   const assignee   = teamMembers.find(m => m.id === editingTask.assigneeId);
   const isOverdue  = editingTask.status !== 'Done' && new Date(editingTask.dueDate) < new Date();
+  const isDone = /done|complet|finish/i.test(editingTask.status);
+  const daysLeft = (() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const due = new Date(editingTask.dueDate); due.setHours(0, 0, 0, 0);
+    return Math.round((due.getTime() - today.getTime()) / 86400000);
+  })();
+  const daysLeftText = isDone ? null
+    : daysLeft > 1 ? `${daysLeft} days left`
+    : daysLeft === 1 ? '1 day left'
+    : daysLeft === 0 ? 'Due today'
+    : `${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? 's' : ''} overdue`;
+  const daysLeftCls = isDone ? ''
+    : daysLeft <= 0 ? 'text-rose-600 bg-rose-50'
+    : daysLeft === 1 ? 'text-amber-600 bg-amber-50'
+    : 'text-slate-600 bg-slate-100';
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -790,6 +805,11 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
                     {formatDate(editingTask.dueDate)}
                     {isOverdue && ' (Overdue)'}
                   </span>
+                  {daysLeftText && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${daysLeftCls}`}>
+                      {daysLeftText}
+                    </span>
+                  )}
                 </button>
               )}
             </div>

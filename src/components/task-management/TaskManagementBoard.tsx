@@ -331,6 +331,16 @@ function TaskManagementBoardInner() {
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
   const isOverdue = (t: BoardTask) =>
     t.status !== 'Done' && new Date(t.dueDate) < new Date();
+  const daysLeftInfo = (dueDate: string, status: string): { label: string; cls: string } | null => {
+    if (/done|complet|finish/i.test(status)) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate); due.setHours(0, 0, 0, 0);
+    const n = Math.round((due.getTime() - today.getTime()) / 86400000);
+    if (n > 1) return { label: `${n}d left`, cls: 'text-slate-500 bg-slate-100' };
+    if (n === 1) return { label: '1d left', cls: 'text-amber-600 bg-amber-50' };
+    if (n === 0) return { label: 'Today', cls: 'text-amber-600 bg-amber-50' };
+    return { label: `${Math.abs(n)}d over`, cls: 'text-rose-600 bg-rose-50' };
+  };
 
   const filteredTasks = useMemo(() => tasks.filter(t => {
     const matchSearch   = search === '' ||
@@ -430,6 +440,7 @@ function TaskManagementBoardInner() {
   const renderTaskRow = (task: BoardTask) => {
     const assignee = getAssignee(task.assigneeId);
     const overdue  = isOverdue(task);
+    const dl       = daysLeftInfo(task.dueDate, task.status);
     return (
       <div
         key={task.id}
@@ -457,9 +468,12 @@ function TaskManagementBoardInner() {
           <span className="text-xs text-slate-600 truncate">{assignee?.name.split(' ')[0] ?? 'N/A'}</span>
         </div>
         <Badge variant={statusVariant(task.status)} className="text-[9px] w-fit">{task.status}</Badge>
-        <span className={`text-xs font-bold flex items-center gap-1 ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>
-          <Calendar size={12} /> {formatDate(task.dueDate)}
-        </span>
+        <div className="flex flex-col gap-0.5">
+          <span className={`text-xs font-bold flex items-center gap-1 ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>
+            <Calendar size={12} /> {formatDate(task.dueDate)}
+          </span>
+          {dl && <span className={`text-[9px] font-bold px-1.5 py-px rounded w-fit ${dl.cls}`}>{dl.label}</span>}
+        </div>
         <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[9px] w-fit">{task.priority}</Badge>
       </div>
     );
@@ -469,6 +483,7 @@ function TaskManagementBoardInner() {
   const renderKanbanCard = (task: BoardTask) => {
     const assignee = getAssignee(task.assigneeId);
     const overdue  = isOverdue(task);
+    const dl       = daysLeftInfo(task.dueDate, task.status);
     return (
       <div
         key={task.id}
@@ -496,13 +511,16 @@ function TaskManagementBoardInner() {
             </div>
             <span className="text-[10px] text-slate-500">{assignee?.name.split(' ')[0]}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
-              <Calendar size={10} /> {formatDate(task.dueDate)}
-            </span>
-            <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">
-              {task.priority}
-            </Badge>
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[10px] font-bold flex items-center gap-0.5 ${overdue ? 'text-rose-500' : 'text-slate-400'}`}>
+                <Calendar size={10} /> {formatDate(task.dueDate)}
+              </span>
+              <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] px-1.5 py-0">
+                {task.priority}
+              </Badge>
+            </div>
+            {dl && <span className={`text-[8px] font-bold px-1.5 py-px rounded self-end ${dl.cls}`}>{dl.label}</span>}
           </div>
         </div>
       </div>

@@ -1,5 +1,11 @@
-import { TaskManagementBoard } from '@/components/task-management/TaskManagementBoard';
+// src/app/(portal)/portal/account-officer/tasks/page.tsx
+import { TaskDepartmentsProvider } from '@/context/TaskDepartmentsContext';
+import { TaskBoard } from '@/components/account-officer/TaskBoard';
 
 export default function TasksPage() {
-  return <TaskManagementBoard sourceFilter="client-relations" />;
+  return (
+    <TaskDepartmentsProvider>
+      <TaskBoard />
+    </TaskDepartmentsProvider>
+  );
 }
