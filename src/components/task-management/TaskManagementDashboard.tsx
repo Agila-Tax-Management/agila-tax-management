@@ -25,22 +25,24 @@ const ALL_SOURCES: TaskSource[] = [
 
 const DEPT_ROUTES: Record<TaskSource, string> = {
   'client-relations': '/portal/task-management/client-relations',
-  liaison:            '/portal/task-management/liaison',
-  compliance:         '/portal/task-management/compliance',
-  om:                 '/portal/task-management/om',
-  admin:              '/portal/task-management/admin',
-  accounting:         '/portal/task-management/accounting',
-  hr:                 '/portal/task-management/hr',
+  liaison: '/portal/task-management/liaison',
+  compliance: '/portal/task-management/compliance',
+  om: '/portal/task-management/om',
+  admin: '/portal/task-management/admin',
+  accounting: '/portal/task-management/accounting',
+  hr: '/portal/task-management/hr',
+  it: ''
 };
 
 const DEPT_ICONS: Record<TaskSource, React.ReactNode> = {
   'client-relations': <Handshake />,
-  liaison:            <Truck />,
-  compliance:         <Shield />,
-  om:                 <Target />,
-  admin:              <Building2 />,
-  accounting:         <Calculator />,
-  hr:                 <Users />,
+  liaison: <Truck />,
+  compliance: <Shield />,
+  om: <Target />,
+  admin: <Building2 />,
+  accounting: <Calculator />,
+  hr: <Users />,
+  it: undefined
 };
 
 const STATUS_CONFIG: Record<AOTaskStatus, { color: string; bg: string }> = {

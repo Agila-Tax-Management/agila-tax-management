@@ -1,5 +1,12 @@
-import { TaskManagementBoard } from '@/components/task-management/TaskManagementBoard';
+'use client';
+
+import { TaskDepartmentsProvider } from '@/context/TaskDepartmentsContext';
+import { LiaisonTaskBoard } from '@/components/liaison/LiaisonTaskBoard';
 
 export default function TasksDashboardPage() {
-  return <TaskManagementBoard sourceFilter="liaison" />;
+  return (
+    <TaskDepartmentsProvider>
+      <LiaisonTaskBoard />
+    </TaskDepartmentsProvider>
+  );
 }
