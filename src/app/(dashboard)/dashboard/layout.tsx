@@ -78,13 +78,6 @@ function ProfileDropdown() {
             <User size={15} className="shrink-0 text-muted-foreground" />
             Profile
           </button>
-          <button
-            onClick={() => navigate('/dashboard/settings')}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-          >
-            <Settings size={15} className="shrink-0 text-muted-foreground" />
-            Settings
-          </button>
           <div className="my-1 border-t border-border" />
           <button
             onClick={async () => {
@@ -352,7 +345,20 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
           </div>
         </nav>
 
-
+        {/* Footer */}
+        <div className="p-3 border-t border-sidebar-border shrink-0">
+          <button
+            onClick={() => navigate('/dashboard/settings')}
+            className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl transition
+              ${pathname.startsWith('/dashboard/settings')
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+            title={!isExpanded ? 'Settings' : undefined}
+          >
+            <Settings size={20} className="shrink-0" />
+            {isExpanded && <span className="text-sm font-medium">Settings</span>}
+          </button>
+        </div>
       </aside>
     </>
   );
