@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -97,14 +98,34 @@ function AssignAOCell({ client, aoUsers, onAssigned }: AssignAOCellProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { success, error: toastError } = useToast();
+
+  useEffect(() => { setMounted(true); }, []);
+
+  const openDropdown = () => {
+    if (saving) return;
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+      });
+    }
+    setOpen(v => !v);
+  };
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handleOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(e.target as Node) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
         setSearch('');
       }
@@ -146,10 +167,70 @@ function AssignAOCell({ client, aoUsers, onAssigned }: AssignAOCellProps) {
     }
   }
 
+  const dropdown = mounted && open ? ReactDOM.createPortal(
+    <div
+      ref={dropdownRef}
+      style={{ top: dropdownPos.top, left: dropdownPos.left }}
+      className="absolute w-56 bg-white border border-slate-200 rounded-xl shadow-lg z-9999 overflow-hidden"
+    >
+      {/* Search bar */}
+      <div className="p-2 border-b border-slate-100">
+        <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-1.5">
+          <Search size={13} className="text-slate-400 shrink-0" />
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search AO..."
+            className="bg-transparent text-xs text-slate-700 placeholder-slate-400 outline-none flex-1"
+          />
+        </div>
+      </div>
+
+      {/* Options list */}
+      <ul className="max-h-48 overflow-y-auto py-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+        {/* Unassign */}
+        <li>
+          <button
+            onClick={() => void assign(null, null)}
+            className="w-full text-left px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-50 transition"
+          >
+            — Unassign
+          </button>
+        </li>
+
+        {filtered.length === 0 ? (
+          <li className="px-4 py-3 text-xs text-slate-400 text-center">No matching AO</li>
+        ) : (
+          filtered.map((ao) => (
+            <li key={ao.id}>
+              <button
+                onClick={() => void assign(ao.id, ao.name)}
+                className={`
+                  w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition
+                  hover:bg-amber-50 hover:text-amber-700
+                  ${client.assignedAOId === ao.id
+                    ? 'bg-amber-50 text-amber-700 font-bold'
+                    : 'text-slate-700'
+                  }
+                `}
+              >
+                <UserAvatar name={ao.name} />
+                {ao.name}
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div ref={ref} className="relative">
+    <div className="relative">
       <button
-        onClick={() => { if (!saving) setOpen((v) => !v); }}
+        ref={buttonRef}
+        onClick={openDropdown}
         disabled={saving}
         className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm transition min-w-40 justify-between disabled:opacity-60"
       >
@@ -168,60 +249,7 @@ function AssignAOCell({ client, aoUsers, onAssigned }: AssignAOCellProps) {
           className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
-
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-          {/* Search bar */}
-          <div className="p-2 border-b border-slate-100">
-            <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-1.5">
-              <Search size={13} className="text-slate-400 shrink-0" />
-              <input
-                autoFocus
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search AO..."
-                className="bg-transparent text-xs text-slate-700 placeholder-slate-400 outline-none flex-1"
-              />
-            </div>
-          </div>
-
-          {/* Options list */}
-          <ul className="max-h-48 overflow-y-auto py-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-            {/* Unassign */}
-            <li>
-              <button
-                onClick={() => void assign(null, null)}
-                className="w-full text-left px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-50 transition"
-              >
-                — Unassign
-              </button>
-            </li>
-
-            {filtered.length === 0 ? (
-              <li className="px-4 py-3 text-xs text-slate-400 text-center">No matching AO</li>
-            ) : (
-              filtered.map((ao) => (
-                <li key={ao.id}>
-                  <button
-                    onClick={() => void assign(ao.id, ao.name)}
-                    className={`
-                      w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition
-                      hover:bg-amber-50 hover:text-amber-700
-                      ${client.assignedAOId === ao.id
-                        ? 'bg-amber-50 text-amber-700 font-bold'
-                        : 'text-slate-700'
-                      }
-                    `}
-                  >
-                    <UserAvatar name={ao.name} />
-                    {ao.name}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
