@@ -191,10 +191,14 @@ model EmployeeCompensation {
     // ─── Calculated Rates (The outputs for Payslip generation) ───
     calculatedDailyRate   Decimal  @db.Decimal(10, 2)
     calculatedMonthlyRate Decimal  @db.Decimal(10, 2)
+    
+    payrollScheduleId     String?
+    payrollSchedule       PayrollSchedule? @relation(fields: [payrollScheduleId], references: [id], onDelete: Restrict)
 
     // ─── State ───
     isActive            Boolean  @default(true)
     effectiveDate       DateTime @default(now()) @db.Date
+    
 
     createdAt           DateTime @default(now())
     updatedAt           DateTime @updatedAt
@@ -205,24 +209,69 @@ model EmployeeCompensation {
 
 // ─── Payroll Period ───────────────────────────────────────────────
 model PayrollPeriod {
-    id              Int      @id @default(autoincrement())
+    id                Int      @id @default(autoincrement())
     
-    clientId        Int
-    client          Client   @relation(fields: [clientId], references: [id])
+    clientId          Int
+    client            Client   @relation(fields: [clientId], references: [id])
 
-    startDate       DateTime @db.Date
-    endDate         DateTime @db.Date
+    // ─── ADD THIS: Link to the specific schedule used ───
+    payrollScheduleId String?
+    payrollSchedule   PayrollSchedule? @relation(fields: [payrollScheduleId], references: [id], onDelete: Restrict)
+
+    startDate         DateTime @db.Date
+    endDate           DateTime @db.Date
     
-    status          PayrollPeriodStatus @default(DRAFT)
+    // ─── ADD THIS: The target date the money should hit the bank ───
+    payoutDate        DateTime @db.Date 
+    
+    status            PayrollPeriodStatus @default(DRAFT)
 
-    payslips        Payslip[]
+    payslips          Payslip[]
 
-    createdAt       DateTime @default(now())
-    updatedAt       DateTime @updatedAt
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
 
     @@index([clientId])
+    @@index([payrollScheduleId]) // New index for faster queries
     @@map("payroll_period")
 }
+
+// ─── Payroll Schedule (Settings) ──────────────────────────────────
+// Defines the cutoff and payout rules for a group of employees.
+model PayrollSchedule {
+    id                   String   @id @default(cuid())
+    
+    clientId             Int
+    client               Client   @relation(fields: [clientId], references: [id])
+
+    name                 String   // e.g., "Standard Semi-Monthly (1st-15th, 16th-EOM)"
+    frequency            SalaryFrequency @default(TWICE_A_MONTH)
+
+    // ─── First Period Cutoff & Payout ───
+    firstPeriodStartDay  Int      // e.g., 1
+    firstPeriodEndDay    Int      // e.g., 15
+    firstPayoutDay       Int      // e.g., 20
+
+    // ─── Second Period Cutoff & Payout (Nullable for Monthly/Weekly) ───
+    secondPeriodStartDay Int?     // e.g., 16
+    // 💡 PRO TIP: Use 31 to represent "End of Month" in your app logic, 
+    // since February has 28 days and April has 30.
+    secondPeriodEndDay   Int?     // e.g., 31 
+    secondPayoutDay      Int?     // e.g., 5
+
+    isActive             Boolean  @default(true)
+
+    // Employees assigned to this specific schedule rule
+    compensations        EmployeeCompensation[]
+    payrollPeriods       PayrollPeriod[]
+
+    createdAt            DateTime @default(now())
+    updatedAt            DateTime @updatedAt
+
+    @@index([clientId])
+    @@map("payroll_schedule")
+}
+
 
 // ─── Payslip (Dual-Auth Approvals & Acknowledgments) ──────────────
 model Payslip {
@@ -233,6 +282,15 @@ model Payslip {
 
     employeeId      Int
     employee        Employee @relation(fields: [employeeId], references: [id])
+
+    // ─── ADD THIS: Frozen Hour Summaries (The "Why" behind the pay) ───
+    totalRegularDays       Decimal  @db.Decimal(5, 2) @default(0.00)
+    totalRegularHours      Decimal  @db.Decimal(7, 2) @default(0.00)
+    totalOvertimeHours     Decimal  @db.Decimal(7, 2) @default(0.00)
+    totalNightDiffHours    Decimal  @db.Decimal(7, 2) @default(0.00) // Highly recommended for PH/DOLE
+    totalHolidayHours      Decimal  @db.Decimal(7, 2) @default(0.00)
+    totalLateMins          Int      @default(0)
+    totalUndertimeMins     Int      @default(0)
 
     basicPay        Decimal  @db.Decimal(10, 2) @default(0.00) 
     holidayPay      Decimal  @db.Decimal(10, 2) @default(0.00) 

@@ -99,6 +99,7 @@ export interface CompensationRecord {
   deductTax: boolean;
   calculatedDailyRate: string;
   calculatedMonthlyRate: string;
+  payrollScheduleId: string | null;
   isActive: boolean;
   effectiveDate: string;
   createdAt: string;

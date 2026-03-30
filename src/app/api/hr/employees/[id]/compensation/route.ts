@@ -125,6 +125,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       deductTax: d.deductTax,
       calculatedDailyRate,
       calculatedMonthlyRate,
+      payrollScheduleId: d.payrollScheduleId ?? null,
       isActive: true,
     },
   });

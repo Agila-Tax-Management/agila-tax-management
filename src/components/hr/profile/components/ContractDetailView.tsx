@@ -16,6 +16,12 @@ type SalaryFrequency = 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
 type PayType = 'FIXED_PAY' | 'VARIABLE_PAY';
 type DisbursementType = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'E_WALLET';
 
+interface PayrollScheduleOption {
+  id: string;
+  name: string;
+  frequency: string;
+}
+
 interface CompFormData {
   baseRate: string;
   allowanceRate: string;
@@ -30,6 +36,7 @@ interface CompFormData {
   deductPhilhealth: boolean;
   deductPagibig: boolean;
   pagibigType: 'REGULAR' | 'MINIMUM';
+  payrollScheduleId: string;
 }
 
 export interface ContractDetailViewProps {
@@ -67,6 +74,7 @@ const DEFAULT_COMP_FORM: CompFormData = {
   deductPhilhealth: false,
   deductPagibig: false,
   pagibigType: 'REGULAR',
+  payrollScheduleId: '',
 };
 
 const inputCls =
@@ -105,6 +113,7 @@ export function ContractDetailView({
   const [showCompForm, setShowCompForm] = useState(false);
   const [compForm, setCompForm] = useState<CompFormData>(DEFAULT_COMP_FORM);
   const [compSaving, setCompSaving] = useState(false);
+  const [payrollSchedules, setPayrollSchedules] = useState<PayrollScheduleOption[]>([]);
 
   const fetchCompensation = useCallback(async () => {
     setCompLoading(true);
@@ -122,9 +131,21 @@ export function ContractDetailView({
     }
   }, [employeeId, contract.id]);
 
+  const fetchPayrollSchedules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/hr/payroll-schedules');
+      if (!res.ok) return;
+      const data = (await res.json()) as { data?: PayrollScheduleOption[] };
+      setPayrollSchedules((data.data ?? []).filter((s) => (s as { isActive?: boolean }).isActive !== false));
+    } catch {
+      // silently fail
+    }
+  }, []);
+
   useEffect(() => {
     void fetchCompensation();
-  }, [fetchCompensation]);
+    void fetchPayrollSchedules();
+  }, [fetchCompensation, fetchPayrollSchedules]);
 
   const handleOpenCompForm = () => {
     if (compensation) {
@@ -142,6 +163,7 @@ export function ContractDetailView({
         deductPhilhealth: compensation.deductPhilhealth,
         deductPagibig: compensation.deductPagibig,
         pagibigType: (compensation.pagibigType ?? 'REGULAR') as 'REGULAR' | 'MINIMUM',
+        payrollScheduleId: compensation.payrollScheduleId ?? '',
       });
     } else {
       setCompForm(DEFAULT_COMP_FORM);
@@ -175,6 +197,7 @@ export function ContractDetailView({
           deductPagibig: compForm.deductPagibig,
           pagibigType: compForm.pagibigType,
           deductTax: false,
+          payrollScheduleId: compForm.payrollScheduleId || null,
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -455,6 +478,23 @@ export function ContractDetailView({
               </div>
             </div>
 
+            {/* Payroll Schedule */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1">
+                Payroll Schedule
+              </p>
+              <div>
+                <p className="text-[11px] text-muted-foreground">Assigned Schedule</p>
+                {compensation.payrollScheduleId ? (
+                  <p className="text-sm font-medium text-foreground">
+                    {payrollSchedules.find((s) => s.id === compensation.payrollScheduleId)?.name ?? compensation.payrollScheduleId}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No schedule assigned</p>
+                )}
+              </div>
+            </div>
+
             {/* Calculated Rates */}
             <div className="rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -726,6 +766,31 @@ export function ContractDetailView({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Section: Payroll Schedule */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">
+                Payroll Schedule
+              </p>
+              <div>
+                <label className={labelCls}>Assign to Payroll Schedule</label>
+                <select
+                  className={selectCls}
+                  value={compForm.payrollScheduleId}
+                  onChange={(e) => setCompForm((p) => ({ ...p, payrollScheduleId: e.target.value }))}
+                >
+                  <option value="">— No schedule assigned —</option>
+                  {payrollSchedules.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Assigning a schedule enables automatic payroll generation for this employee.
+                </p>
               </div>
             </div>
 
