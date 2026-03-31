@@ -62,7 +62,7 @@ export const createServicePlanSchema = z.object({
   governmentOfficeIds: z.array(z.number().int().positive()).default([]),
   cityIds: z.array(z.number().int().positive()).default([]),
   inclusionIds: z.array(z.number().int().positive()).default([]),
-  taskTemplateId: z.number().int().positive().optional().nullable(),
+  taskTemplateIds: z.array(z.number().int().positive()).default([]),
   promoIds: z.array(z.number().int().positive()).default([]),
 });
 
@@ -75,7 +75,7 @@ export const updateServicePlanSchema = z.object({
   governmentOfficeIds: z.array(z.number().int().positive()).optional(),
   cityIds: z.array(z.number().int().positive()).optional(),
   inclusionIds: z.array(z.number().int().positive()).optional(),
-  taskTemplateId: z.number().int().positive().optional().nullable(),
+  taskTemplateIds: z.array(z.number().int().positive()).optional(),
   promoIds: z.array(z.number().int().positive()).optional(),
 });
 
@@ -94,7 +94,7 @@ export const createServiceOneTimeSchema = z.object({
   governmentOfficeIds: z.array(z.number().int().positive()).default([]),
   cityIds: z.array(z.number().int().positive()).default([]),
   inclusionIds: z.array(z.number().int().positive()).default([]),
-  taskTemplateId: z.number().int().positive().optional().nullable(),
+  taskTemplateIds: z.array(z.number().int().positive()).default([]),
   promoIds: z.array(z.number().int().positive()).default([]),
 });
 
@@ -106,7 +106,7 @@ export const updateServiceOneTimeSchema = z.object({
   governmentOfficeIds: z.array(z.number().int().positive()).optional(),
   cityIds: z.array(z.number().int().positive()).optional(),
   inclusionIds: z.array(z.number().int().positive()).optional(),
-  taskTemplateId: z.number().int().positive().optional().nullable(),
+  taskTemplateIds: z.array(z.number().int().positive()).optional(),
   promoIds: z.array(z.number().int().positive()).optional(),
 });
 

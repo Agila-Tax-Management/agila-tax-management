@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const templates = await prisma.taskTemplate.findMany({
+  const raw = await prisma.taskTemplate.findMany({
     orderBy: { id: "asc" },
     include: {
       departmentRoutes: {
@@ -29,14 +29,20 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
           subtasks: { orderBy: { subtaskOrder: "asc" } },
         },
       },
-      servicePlans: {
-        select: { id: true, name: true, serviceRate: true, recurring: true, status: true },
+      servicePlanLinks: {
+        include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } },
       },
-      serviceOneTimePlans: {
-        select: { id: true, name: true, serviceRate: true, status: true },
+      serviceOneTimeLinks: {
+        include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } },
       },
     },
   });
+
+  const templates = raw.map(({ servicePlanLinks, serviceOneTimeLinks, ...tpl }) => ({
+    ...tpl,
+    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
+    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+  }));
 
   return NextResponse.json({ data: templates });
 }
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
-  const template = await prisma.taskTemplate.create({
+  const rawTemplate = await prisma.taskTemplate.create({
     data: {
       name: parsed.data.name,
       description: parsed.data.description ?? null,
@@ -78,14 +84,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           subtasks: true,
         },
       },
-      servicePlans: {
-        select: { id: true, name: true, serviceRate: true, recurring: true, status: true },
+      servicePlanLinks: {
+        include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } },
       },
-      serviceOneTimePlans: {
-        select: { id: true, name: true, serviceRate: true, status: true },
+      serviceOneTimeLinks: {
+        include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } },
       },
     },
   });
+
+  const { servicePlanLinks, serviceOneTimeLinks, ...rest } = rawTemplate;
+  const template = {
+    ...rest,
+    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
+    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+  };
 
   void logActivity({
     userId: session.user.id,

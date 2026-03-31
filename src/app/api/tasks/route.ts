@@ -18,6 +18,7 @@ const taskInclude = {
       employeeNo: true,
     },
   },
+  jobOrder: { select: { id: true, jobOrderNumber: true } },
   subtasks: {
     orderBy: { order: "asc" as const },
     include: {

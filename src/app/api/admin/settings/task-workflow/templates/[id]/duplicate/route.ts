@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
 
   if (!source) return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
-  const copy = await prisma.taskTemplate.create({
+  const rawCopy = await prisma.taskTemplate.create({
     data: {
       name:        `${source.name} (Copy)`,
       description: source.description,
@@ -64,10 +64,17 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
           subtasks: { orderBy: { subtaskOrder: "asc" } },
         },
       },
-      servicePlans:        { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } },
-      serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true, status: true } },
+      servicePlanLinks:    { include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } } },
+      serviceOneTimeLinks: { include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } } },
     },
   });
+
+  const { servicePlanLinks, serviceOneTimeLinks, ...copyRest } = rawCopy;
+  const copy = {
+    ...copyRest,
+    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
+    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+  };
 
   void logActivity({
     userId:      session.user.id,

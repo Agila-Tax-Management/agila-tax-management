@@ -99,6 +99,8 @@ export async function PATCH(
       accountManagerId: true,
       operationsManagerId: true,
       executiveId: true,
+      leadId: true,
+      clientId: true,
     },
   });
   if (!existing) return NextResponse.json({ error: "Job order not found" }, { status: 404 });
@@ -215,15 +217,144 @@ export async function PATCH(
         { status: 409 },
       );
     }
-    const jobOrder = await prisma.jobOrder.update({
-      where: { id },
-      data: {
-        accountManagerId: session.user.id,
-        dateAccountManagerAck: now,
-        status: "ACKNOWLEDGED",
-      },
-      include: JO_INCLUDE,
+
+    const jobOrder = await prisma.$transaction(async (tx) => {
+      // ── Mark job order as ACKNOWLEDGED ──────────────────────────
+      const updatedJO = await tx.jobOrder.update({
+        where: { id },
+        data: {
+          accountManagerId: session.user.id,
+          dateAccountManagerAck: now,
+          status: "ACKNOWLEDGED",
+        },
+        include: JO_INCLUDE,
+      });
+
+      // ── Spawn tasks from linked task templates ─────────────────────
+      // Fetch the lead with its service plans + one-time services +
+      // their task templates (including department routes + subtasks).
+      const lead = await tx.lead.findUnique({
+        where: { id: existing.leadId },
+        include: {
+          servicePlans: {
+            include: {
+              taskTemplates: {
+                include: {
+                  taskTemplate: {
+                    include: {
+                      departmentRoutes: {
+                        orderBy: { routeOrder: "asc" },
+                        include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          serviceOneTimePlans: {
+            include: {
+              taskTemplates: {
+                include: {
+                  taskTemplate: {
+                    include: {
+                      departmentRoutes: {
+                        orderBy: { routeOrder: "asc" },
+                        include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (lead) {
+        const clientId = existing.clientId ?? lead.convertedClientId ?? null;
+
+        // Deduplicate templates across all attached services
+        type TplEntry = typeof lead.servicePlans[0]["taskTemplates"][0]["taskTemplate"];
+        const templateMap = new Map<number, TplEntry>();
+        for (const plan of lead.servicePlans) {
+          for (const link of plan.taskTemplates) {
+            if (!templateMap.has(link.taskTemplate.id)) {
+              templateMap.set(link.taskTemplate.id, link.taskTemplate);
+            }
+          }
+        }
+        for (const svc of lead.serviceOneTimePlans) {
+          for (const link of svc.taskTemplates) {
+            if (!templateMap.has(link.taskTemplate.id)) {
+              templateMap.set(link.taskTemplate.id, link.taskTemplate);
+            }
+          }
+        }
+
+        for (const template of templateMap.values()) {
+          const firstRoute = template.departmentRoutes[0] ?? null;
+
+          const entryStatus = firstRoute
+            ? await tx.departmentTaskStatus.findFirst({
+                where: { departmentId: firstRoute.departmentId, isEntryStep: true },
+                select: { id: true },
+              })
+            : null;
+
+          const taskDueDate = template.daysDue
+            ? new Date(Date.now() + template.daysDue * 24 * 60 * 60 * 1000)
+            : null;
+
+          const newTask = await tx.task.create({
+            data: {
+              name: template.name,
+              description: template.description ?? null,
+              clientId,
+              templateId: template.id,
+              jobOrderId: updatedJO.id,
+              departmentId: firstRoute?.departmentId ?? null,
+              statusId: entryStatus?.id ?? null,
+              daysDue: template.daysDue ?? null,
+              dueDate: taskDueDate,
+            },
+            select: { id: true },
+          });
+
+          const subtaskData = template.departmentRoutes.flatMap((route) =>
+            route.subtasks.map((tSub) => ({
+              parentTaskId: newTask.id,
+              departmentId: route.departmentId,
+              name: tSub.name,
+              description: tSub.description ?? null,
+              priority: tSub.priority,
+              order: tSub.subtaskOrder,
+              daysDue: tSub.daysDue ?? null,
+              dueDate:
+                tSub.daysDue && taskDueDate
+                  ? new Date(taskDueDate.getTime() + tSub.daysDue * 24 * 60 * 60 * 1000)
+                  : null,
+            }))
+          );
+
+          if (subtaskData.length > 0) {
+            await tx.taskSubtask.createMany({ data: subtaskData });
+          }
+
+          await tx.taskHistory.create({
+            data: {
+              taskId: newTask.id,
+              actorId: session.user.id,
+              changeType: "CREATED",
+              newValue: `Auto-created from job order ${updatedJO.jobOrderNumber} on acknowledgment (template: "${template.name}")`,
+            },
+          });
+        }
+      }
+
+      return updatedJO;
     });
+
     void logActivity({
       userId: session.user.id,
       action: "APPROVED",
