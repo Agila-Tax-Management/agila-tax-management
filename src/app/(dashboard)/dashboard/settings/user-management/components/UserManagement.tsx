@@ -141,10 +141,10 @@ export default function UserManagement(): React.ReactNode {
   /* ─── Stats ──────────────────────────────────────────────── */
 
   const stats = [
-    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400' },
-    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
-    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' },
-    { label: 'Admins', value: users.filter((u) => u.role === 'SUPER_ADMIN' || u.role === 'ADMIN').length, icon: ShieldCheck, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/30 dark:text-purple-400' },
+    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 dark:text-blue-400' },
+    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500 dark:text-slate-400' },
+    { label: 'Admins', value: users.filter((u) => u.role === 'SUPER_ADMIN' || u.role === 'ADMIN').length, icon: ShieldCheck, color: 'text-purple-600 dark:text-purple-400' },
   ];
 
   /* ─── Render ─────────────────────────────────────────────── */

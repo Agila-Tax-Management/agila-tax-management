@@ -307,17 +307,17 @@ export function PayrollCoordination() {
             return (
               <div
                 key={`${pending.year}-${pending.month}-${pending.schedule.id}-${pending.periodNumber}`}
-                className="flex items-center justify-between gap-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 px-4 py-3"
+                className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 dark:border-amber-700 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-200 dark:bg-amber-800 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-amber-200 dark:bg-amber-800 flex items-center justify-center shrink-0">
                     <Zap size={15} className="text-amber-700 dark:text-amber-300" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    <p className="text-sm font-bold text-black-800">
                       Ready to Generate: {pending.label}
                     </p>
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <p className="text-xs text-black-800">
                       {pending.schedule.name} · Period {pending.periodNumber}
                     </p>
                   </div>
@@ -325,7 +325,7 @@ export function PayrollCoordination() {
                 <Button
                   onClick={() => { void handleGenerate(pending); }}
                   disabled={!!generating}
-                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white flex-shrink-0"
+                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shrink-0"
                 >
                   {isGen ? (
                     <><Loader2 size={14} className="animate-spin" /> Generating…</>
@@ -574,7 +574,7 @@ export function PayrollCoordination() {
       >
         <div className="p-5 space-y-4">
           <div className="flex items-start gap-3">
-            <AlertCircle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm text-foreground">{confirmModal?.message}</p>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-border">

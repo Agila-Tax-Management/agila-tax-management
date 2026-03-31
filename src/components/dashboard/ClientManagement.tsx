@@ -169,25 +169,25 @@ export default function ClientManagement(): React.ReactNode {
       label: 'Total Clients',
       value: clients.length,
       icon: Building2,
-      color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400',
+      color: 'text-blue-600 dark:text-blue-400',
     },
     {
       label: 'Active',
       value: activeCount,
       icon: UserCheck,
-      color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400',
+      color: 'text-emerald-600 dark:text-emerald-400',
     },
     {
       label: 'Inactive',
       value: inactiveCount,
       icon: Ban,
-      color: 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400',
+      color: 'text-red-500 dark:text-red-400',
     },
     {
       label: 'Total Portal Users',
       value: totalUsers,
       icon: Users,
-      color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400',
+      color: 'text-amber-600 dark:text-amber-400',
     },
   ];
 

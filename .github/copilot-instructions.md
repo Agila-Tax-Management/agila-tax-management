@@ -34,11 +34,14 @@
    - The problem or feature being addressed
    - Which files will be created, edited, or deleted
    - The implementation approach and any trade-offs
+  - Any UI/theme decisions (including whether dark mode is involved)
 2. **Wait for approval** — Do **not** proceed with code changes until the user explicitly confirms the plan.
 3. **Iterate** — If the user requests adjustments to the plan, revise and re-present before implementing.
 4. **Execute** — Only after approval, carry out the changes and report what was done.
 
 This applies to all feature work, refactors, bug fixes, and schema changes. Trivial questions, file reads, or research tasks do not require a plan.
+
+**Default behavior:** For implementation tasks, always present the plan in chat first and wait for explicit user confirmation before making edits.
 
 ---
 
@@ -611,3 +614,4 @@ All module sidebars follow the same structure:
 - Dark mode: `.dark` class on `<html>` (variables overridden)
 - Toggle via `ThemeContext` → persisted in `localStorage`
 - Use theme-aware classes: `bg-background`, `text-foreground`, `bg-card`, `border-border`, etc.
+- Copilot default: do **not** use, suggest, or implement dark-theme UI/styles unless the user explicitly prompts for dark mode.
