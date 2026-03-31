@@ -213,7 +213,7 @@ export function ASPSettings(): React.ReactNode {
 
             <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
               {officesLoading ? (
-                <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading officesâ€¦</div>
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading offices</div>
               ) : offices.length === 0 ? (
                 <div className="px-6 py-12 text-center">
                   <Globe size={32} className="mx-auto mb-3 text-muted-foreground/40" />
@@ -235,7 +235,7 @@ export function ASPSettings(): React.ReactNode {
                       {offices.map((office) => (
                         <tr key={office.id} className="hover:bg-accent transition-colors">
                           <td className={tdClass}>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold text-blue-700 dark:text-blue-800 border border-blue-200 dark:border-blue-800">
                               {office.code}
                             </span>
                           </td>
@@ -246,7 +246,7 @@ export function ASPSettings(): React.ReactNode {
                             </div>
                           </td>
                           <td className={tdClass}>
-                            <span className="text-sm text-muted-foreground">{office.description ?? 'â€”'}</span>
+                            <span className="text-sm text-muted-foreground">{office.description ?? '-”'}</span>
                           </td>
                           <td className={tdClass}>
                             <Badge variant={office.isActive ? 'success' : 'neutral'} className="text-[10px]">

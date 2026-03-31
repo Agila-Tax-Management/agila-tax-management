@@ -224,10 +224,10 @@ export default function UserClientManagement(): React.ReactNode {
   }
 
   const stats = [
-    { label: 'Total External Users', value: users.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400' },
-    { label: 'Active Users', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
-    { label: 'Assigned Clients', value: assignedClientCount, icon: UserRound, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400' },
-    { label: 'Suspended', value: suspendedCount, icon: Ban, color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-400' },
+    { label: 'Total External Users', value: users.length, icon: Users, color: 'text-blue-600 dark:text-blue-400' },
+    { label: 'Active Users', value: activeCount, icon: UserCheck, color: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Assigned Clients', value: assignedClientCount, icon: UserRound, color: 'text-amber-600 dark:text-amber-400' },
+    { label: 'Suspended', value: suspendedCount, icon: Ban, color: 'text-rose-600 dark:text-rose-400' },
   ];
 
   return (
