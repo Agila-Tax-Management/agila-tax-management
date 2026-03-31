@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { ArrowLeft, Briefcase, FileText, FolderOpen, IdCard, User } from 'lucide-react';
+import { ArrowLeft, Briefcase, FileText, FolderOpen, Gift, IdCard, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -13,6 +13,7 @@ import { ContractsTab } from './components/ContractsTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import { EmploymentTab } from './components/EmploymentTab';
 import { GovernmentIdsTab } from './components/GovernmentIdsTab';
+import { LeaveCreditsTab } from './components/LeaveCreditsTab';
 import { PersonalInfoTab } from './components/PersonalInfoTab';
 import type {
   ContractRecord,
@@ -31,6 +32,7 @@ const TABS: { key: ProfileTab; label: string; icon: typeof User }[] = [
   { key: 'documents', label: 'Documents', icon: FolderOpen },
   { key: 'employment', label: 'Employment', icon: Briefcase },
   { key: 'contracts', label: 'Contracts', icon: FileText },
+  { key: 'leave-credits', label: 'Leave Credits', icon: Gift },
 ];
 
 /* API response types */
@@ -642,6 +644,10 @@ export function EmployeeProfileView({ employee }: EmployeeProfileViewProps): Rea
           employeeId={employeeId}
           onContractSaved={() => { void fetchContracts(); }}
         />
+      )}
+
+      {activeTab === 'leave-credits' && (
+        <LeaveCreditsTab employeeId={employeeId} />
       )}
     </div>
   );

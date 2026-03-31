@@ -16,6 +16,12 @@ type SalaryFrequency = 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
 type PayType = 'FIXED_PAY' | 'VARIABLE_PAY';
 type DisbursementType = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'E_WALLET';
 
+interface PayrollScheduleOption {
+  id: string;
+  name: string;
+  frequency: string;
+}
+
 interface CompFormData {
   baseRate: string;
   allowanceRate: string;
@@ -29,6 +35,8 @@ interface CompFormData {
   deductSss: boolean;
   deductPhilhealth: boolean;
   deductPagibig: boolean;
+  pagibigType: 'REGULAR' | 'MINIMUM';
+  payrollScheduleId: string;
 }
 
 export interface ContractDetailViewProps {
@@ -65,6 +73,8 @@ const DEFAULT_COMP_FORM: CompFormData = {
   deductSss: false,
   deductPhilhealth: false,
   deductPagibig: false,
+  pagibigType: 'REGULAR',
+  payrollScheduleId: '',
 };
 
 const inputCls =
@@ -103,6 +113,7 @@ export function ContractDetailView({
   const [showCompForm, setShowCompForm] = useState(false);
   const [compForm, setCompForm] = useState<CompFormData>(DEFAULT_COMP_FORM);
   const [compSaving, setCompSaving] = useState(false);
+  const [payrollSchedules, setPayrollSchedules] = useState<PayrollScheduleOption[]>([]);
 
   const fetchCompensation = useCallback(async () => {
     setCompLoading(true);
@@ -120,9 +131,21 @@ export function ContractDetailView({
     }
   }, [employeeId, contract.id]);
 
+  const fetchPayrollSchedules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/hr/payroll-schedules');
+      if (!res.ok) return;
+      const data = (await res.json()) as { data?: PayrollScheduleOption[] };
+      setPayrollSchedules((data.data ?? []).filter((s) => (s as { isActive?: boolean }).isActive !== false));
+    } catch {
+      // silently fail
+    }
+  }, []);
+
   useEffect(() => {
     void fetchCompensation();
-  }, [fetchCompensation]);
+    void fetchPayrollSchedules();
+  }, [fetchCompensation, fetchPayrollSchedules]);
 
   const handleOpenCompForm = () => {
     if (compensation) {
@@ -139,6 +162,8 @@ export function ContractDetailView({
         deductSss: compensation.deductSss,
         deductPhilhealth: compensation.deductPhilhealth,
         deductPagibig: compensation.deductPagibig,
+        pagibigType: (compensation.pagibigType ?? 'REGULAR') as 'REGULAR' | 'MINIMUM',
+        payrollScheduleId: compensation.payrollScheduleId ?? '',
       });
     } else {
       setCompForm(DEFAULT_COMP_FORM);
@@ -170,7 +195,9 @@ export function ContractDetailView({
           deductSss: compForm.deductSss,
           deductPhilhealth: compForm.deductPhilhealth,
           deductPagibig: compForm.deductPagibig,
+          pagibigType: compForm.pagibigType,
           deductTax: false,
+          payrollScheduleId: compForm.payrollScheduleId || null,
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -419,13 +446,10 @@ export function ContractDetailView({
                 Government Benefits
               </p>
               <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    { key: 'deductSss' as const, label: 'SSS' },
-                    { key: 'deductPagibig' as const, label: 'Pag-IBIG' },
-                    { key: 'deductPhilhealth' as const, label: 'PhilHealth' },
-                  ] as { key: keyof Pick<CompensationRecord, 'deductSss' | 'deductPhilhealth' | 'deductPagibig'>; label: string }[]
-                ).map(({ key, label }) => (
+                {([
+                  { key: 'deductSss' as const, label: 'SSS' },
+                  { key: 'deductPhilhealth' as const, label: 'PhilHealth' },
+                ] as { key: keyof Pick<CompensationRecord, 'deductSss' | 'deductPhilhealth'>; label: string }[]).map(({ key, label }) => (
                   <span
                     key={key}
                     className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
@@ -437,6 +461,37 @@ export function ContractDetailView({
                     {compensation[key] ? '✓' : '✗'} {label}
                   </span>
                 ))}
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
+                    compensation.deductPagibig
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
+                      : 'bg-muted text-muted-foreground border-border'
+                  }`}
+                >
+                  {compensation.deductPagibig ? '✓' : '✗'} Pag-IBIG
+                  {compensation.deductPagibig && (
+                    <span className="ml-1 opacity-70">
+                      ({compensation.pagibigType === 'MINIMUM' ? '₱200' : '2%'})
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* Payroll Schedule */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1">
+                Payroll Schedule
+              </p>
+              <div>
+                <p className="text-[11px] text-muted-foreground">Assigned Schedule</p>
+                {compensation.payrollScheduleId ? (
+                  <p className="text-sm font-medium text-foreground">
+                    {payrollSchedules.find((s) => s.id === compensation.payrollScheduleId)?.name ?? compensation.payrollScheduleId}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No schedule assigned</p>
+                )}
               </div>
             </div>
 
@@ -651,37 +706,91 @@ export function ContractDetailView({
                 Government Benefits Registration
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {(
-                  [
-                    { key: 'deductSss' as const, label: 'SSS Registration' },
-                    { key: 'deductPagibig' as const, label: 'Pag-IBIG Registration' },
-                    { key: 'deductPhilhealth' as const, label: 'PhilHealth Registration' },
-                  ] as {
-                    key: keyof Pick<CompFormData, 'deductSss' | 'deductPhilhealth' | 'deductPagibig'>;
-                    label: string;
-                  }[]
-                ).map(({ key, label }) => (
-                  <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <div className="flex gap-4 mt-1">
-                      {([
-                        { value: true, label: 'Yes' },
-                        { value: false, label: 'No' },
-                      ] as const).map(({ value, label: l }) => (
-                        <label key={l} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`cdv-${key}`}
-                            checked={compForm[key] === value}
-                            onChange={() => setCompForm((p) => ({ ...p, [key]: value }))}
-                            className="h-4 w-4 accent-blue-600"
-                          />
-                          <span className="text-sm text-foreground">{l}</span>
-                        </label>
-                      ))}
-                    </div>
+                {/* SSS */}
+                <div>
+                  <label className={labelCls}>SSS Registration</label>
+                  <div className="flex gap-4 mt-1">
+                    {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label }) => (
+                      <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="cdv-deductSss" checked={compForm.deductSss === value}
+                          onChange={() => setCompForm((p) => ({ ...p, deductSss: value }))}
+                          className="h-4 w-4 accent-blue-600" />
+                        <span className="text-sm text-foreground">{label}</span>
+                      </label>
+                    ))}
                   </div>
-                ))}
+                </div>
+                {/* PhilHealth */}
+                <div>
+                  <label className={labelCls}>PhilHealth Registration</label>
+                  <div className="flex gap-4 mt-1">
+                    {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label }) => (
+                      <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="cdv-deductPhilhealth" checked={compForm.deductPhilhealth === value}
+                          onChange={() => setCompForm((p) => ({ ...p, deductPhilhealth: value }))}
+                          className="h-4 w-4 accent-blue-600" />
+                        <span className="text-sm text-foreground">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {compForm.deductPhilhealth && (
+                    <p className="text-[11px] text-muted-foreground mt-1.5">2.5% of monthly salary</p>
+                  )}
+                </div>
+                {/* Pag-IBIG */}
+                <div>
+                  <label className={labelCls}>Pag-IBIG Registration</label>
+                  <div className="flex gap-4 mt-1">
+                    {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label }) => (
+                      <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="cdv-deductPagibig" checked={compForm.deductPagibig === value}
+                          onChange={() => setCompForm((p) => ({ ...p, deductPagibig: value }))}
+                          className="h-4 w-4 accent-blue-600" />
+                        <span className="text-sm text-foreground">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {compForm.deductPagibig && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[11px] font-semibold text-muted-foreground">Contribution Type</p>
+                      <div className="flex gap-4">
+                        {([{ value: 'REGULAR', label: 'Regular (2%)' }, { value: 'MINIMUM', label: 'Minimum (₱200)' }] as const).map(({ value, label }) => (
+                          <label key={value} className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="cdv-pagibigType" checked={compForm.pagibigType === value}
+                              onChange={() => setCompForm((p) => ({ ...p, pagibigType: value }))}
+                              className="h-4 w-4 accent-blue-600" />
+                            <span className="text-sm text-foreground">{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Payroll Schedule */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">
+                Payroll Schedule
+              </p>
+              <div>
+                <label className={labelCls}>Assign to Payroll Schedule</label>
+                <select
+                  className={selectCls}
+                  value={compForm.payrollScheduleId}
+                  onChange={(e) => setCompForm((p) => ({ ...p, payrollScheduleId: e.target.value }))}
+                >
+                  <option value="">— No schedule assigned —</option>
+                  {payrollSchedules.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Assigning a schedule enables automatic payroll generation for this employee.
+                </p>
               </div>
             </div>
 

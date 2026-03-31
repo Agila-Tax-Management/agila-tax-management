@@ -1,6 +1,6 @@
 // src/components/hr/profile/profile-types.ts
 
-export type ProfileTab = 'personal' | 'government-ids' | 'documents' | 'employment' | 'contracts';
+export type ProfileTab = 'personal' | 'government-ids' | 'documents' | 'employment' | 'contracts' | 'leave-credits';
 
 export type EmploymentTypeOption = 'Regular' | 'Probationary' | 'Contractual' | 'Project Based' | 'Part Time' | 'Intern';
 export type ContractTypeOption = 'Probationary' | 'Regular' | 'Contractual' | 'Project Based' | 'Consultant' | 'Intern';
@@ -95,9 +95,11 @@ export interface CompensationRecord {
   deductSss: boolean;
   deductPhilhealth: boolean;
   deductPagibig: boolean;
+  pagibigType: 'REGULAR' | 'MINIMUM';
   deductTax: boolean;
   calculatedDailyRate: string;
   calculatedMonthlyRate: string;
+  payrollScheduleId: string | null;
   isActive: boolean;
   effectiveDate: string;
   createdAt: string;

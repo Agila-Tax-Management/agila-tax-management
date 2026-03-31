@@ -1,128 +1,101 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
-import { Eye, Download, Search, FileText } from 'lucide-react';
-import { PayslipModal } from '@/components/UI/PayslipModal';
-import { useRouter } from 'next/navigation';
+import {
+  Eye, Search, FileText, Loader2, CheckCircle,
+} from 'lucide-react';
+import { useToast } from '@/context/ToastContext';
 
-interface Payslip {
+// ─── Types ────────────────────────────────────────────────────────
+
+interface PayslipListItem {
   id: string;
-  period: string;
-  date: string;
-  amount: string;
-  employeeName: string;
-  designation: string;
-  employeeCode: string;
-  sssNo: string;
-  philhealthNo: string;
-  hdmfNo: string;
-  creditingDate: string;
-  earnings: {
-    taxable: {
-      basic: number;
-      overtime: number;
-      adjustments: number;
-    };
-    nonTaxable: {
-      bonus: number;
-      allowances: number;
-      deMinimis: number;
-    };
+  payrollPeriod: {
+    id: number;
+    startDate: string;
+    endDate: string;
+    payoutDate: string;
+    status: string;
+    payrollSchedule: { name: string; frequency: string } | null;
   };
-  deductions: {
-    taxesAndStatutories: {
-      absences: number;
-      undertime: number;
-      tardiness: number;
-      sss: number;
-      phic: number;
-      hdmf: number;
-      withholdingTax: number;
-    };
-    loansAndOthers: {
-      loan: number;
-      cashAdvance: number;
-      damages: number;
-      adjustments: number;
-    };
-  };
-  payment: {
-    bank: string;
-    accountName: string;
-    accountNumber: string;
-    referenceNumber: string;
+  basicPay: string;
+  holidayPay: string;
+  overtimePay: string;
+  paidLeavePay: string;
+  allowance: string;
+  grossPay: string;
+  sssDeduction: string;
+  philhealthDeduction: string;
+  pagibigDeduction: string;
+  withholdingTax: string;
+  lateUndertimeDeduction: string;
+  pagibigLoan: string;
+  sssLoan: string;
+  cashAdvanceRepayment: string;
+  totalDeductions: string;
+  netPay: string;
+  acknowledgedAt: string | null;
+  preparedBy: { name: string } | null;
+  approvedBy: { name: string } | null;
+  acknowledgedBy: { name: string } | null;
+  employee: {
+    firstName: string;
+    lastName: string;
+    employeeNo: string | null;
   };
 }
 
-export const PayslipsView: React.FC = () => {
-  const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+// ─── Helpers ──────────────────────────────────────────────────────
+
+const fmt = (v: string | number | null | undefined) =>
+  `₱${(Number(v) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// ─── Main Component ───────────────────────────────────────────────
+
+export function PayslipsView() {
+  const { error } = useToast();
   const router = useRouter();
+  const [payslips, setPayslips] = useState<PayslipListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
-  const payslips: Payslip[] = [
-    {
-      id: 'PS-2025-001',
-      period: 'December 16-31, 2025',
-      date: 'Jan 15, 2026',
-      amount: '₱4,000.00',
-      employeeName: 'Genesis Edsrilon Jr.',
-      designation: 'Jr. Website Developer',
-      employeeCode: 'EMP-2025-001',
-      sssNo: '34-1234567-8',
-      philhealthNo: '12-345678901-2',
-      hdmfNo: '1234-5678-9012',
-      creditingDate: 'January 15, 2026',
-      earnings: {
-        taxable: { basic: 0, overtime: 0, adjustments: 0 },
-        nonTaxable: { bonus: 0, allowances: 4000, deMinimis: 0 },
-      },
-      deductions: {
-        taxesAndStatutories: { absences: 0, undertime: 0, tardiness: 0, sss: 0, phic: 0, hdmf: 0, withholdingTax: 0 },
-        loansAndOthers: { loan: 0, cashAdvance: 0, damages: 0, adjustments: 0 },
-      },
-      payment: {
-        bank: 'Hello Money',
-        accountName: 'Genesis Edsrilon Jr.',
-        accountNumber: '12312412314',
-        referenceNumber: '1412ss1241vgf1231',
-      },
-    },
-    {
-      id: 'PS-2025-002',
-      period: 'December 1-15, 2025',
-      date: 'Dec 31, 2025',
-      amount: '₱4,000.00',
-      employeeName: 'Genesis Edsrilon Jr.',
-      designation: 'Jr. Website Developer',
-      employeeCode: 'EMP-2025-001',
-      sssNo: '34-1234567-8',
-      philhealthNo: '12-345678901-2',
-      hdmfNo: '1234-5678-9012',
-      creditingDate: 'December 31, 2025',
-      earnings: {
-        taxable: { basic: 0, overtime: 0, adjustments: 0 },
-        nonTaxable: { bonus: 0, allowances: 4000, deMinimis: 0 },
-      },
-      deductions: {
-        taxesAndStatutories: { absences: 0, undertime: 0, tardiness: 0, sss: 0, phic: 0, hdmf: 0, withholdingTax: 0 },
-        loansAndOthers: { loan: 0, cashAdvance: 0, damages: 0, adjustments: 0 },
-      },
-      payment: {
-        bank: 'Hello Money',
-        accountName: 'Genesis Edsrilon Jr.',
-        accountNumber: '12312412314',
-        referenceNumber: 'REF123456789',
-      },
-    },
-  ];
+  const fetchPayslips = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/employee/payslips');
+      const json: { data?: PayslipListItem[]; error?: string } = await res.json();
+      if (!res.ok || !json.data) {
+        error('Failed to load', json.error ?? 'Could not load payslips');
+        return;
+      }
+      setPayslips(json.data);
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setLoading(false);
+    }
+  }, [error]);
 
-  const handleViewPayslip = (payslip: Payslip) => {
-    setSelectedPayslip(payslip);
-    setIsModalOpen(true);
-  };
+  useEffect(() => {
+    void fetchPayslips();
+  }, [fetchPayslips]);
+
+  const filtered = payslips.filter((ps) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (ps.payrollPeriod.payrollSchedule?.name ?? '').toLowerCase().includes(q) ||
+      fmtDate(ps.payrollPeriod.startDate).toLowerCase().includes(q) ||
+      fmtDate(ps.payrollPeriod.payoutDate).toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -146,69 +119,85 @@ export const PayslipsView: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
             <input
               type="text"
-              placeholder="Filter by date..."
+              placeholder="Filter by schedule or date…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 h-10 bg-muted border-none rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
             />
           </div>
         </div>
 
-        <div className="overflow-x-auto sm:-mx-8">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-muted text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] border-y border-border">
-                <th className="p-6">Reference</th>
-                <th className="p-6">Pay Period</th>
-                <th className="p-6">Payout Date</th>
-                <th className="p-6">Net Pay</th>
-                <th className="p-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {payslips.map((slip) => (
-                <tr key={slip.id} className="hover:bg-muted/50 transition-colors group">
-                  <td className="p-6 font-bold text-muted-foreground text-xs">#{slip.id}</td>
-                  <td className="p-6 font-black text-foreground text-sm">{slip.period}</td>
-                  <td className="p-6 text-muted-foreground text-sm">{slip.date}</td>
-                  <td className="p-6 font-black text-amber-600 text-base">{slip.amount}</td>
-                  <td className="p-6">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        className="rounded-xl group-hover:border-amber-300 group-hover:bg-amber-50 transition-all"
-                        onClick={() => router.push(`/dashboard/payslips/computation?id=${slip.id}`)}
-                      >
-                        <Eye size={14} className="mr-2" /> View
-                      </Button>
-                      <Button
-                        variant="primary"
-                        className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold"
-                        onClick={() => {
-                          handleViewPayslip(slip);
-                          setTimeout(() => {
-                            const downloadBtn = document.querySelector('[data-download-btn]') as HTMLButtonElement;
-                            downloadBtn?.click();
-                          }, 500);
-                        }}
-                      >
-                        <Download size={14} className="mr-2" /> Download
-                      </Button>
-                    </div>
-                  </td>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm">Loading payslips…</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto sm:-mx-8">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-muted text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] border-y border-border">
+                  <th className="p-6">Schedule / Period</th>
+                  <th className="p-6">Payout Date</th>
+                  <th className="p-6">Net Pay</th>
+                  <th className="p-6 text-center">Acknowledged</th>
+                  <th className="p-6 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((slip) => (
+                  <tr key={slip.id} className="hover:bg-muted/50 transition-colors group">
+                    <td className="p-6">
+                      <p className="font-black text-foreground text-sm">
+                        {slip.payrollPeriod.payrollSchedule?.name ?? '—'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {fmtDate(slip.payrollPeriod.startDate)} – {fmtDate(slip.payrollPeriod.endDate)}
+                      </p>
+                    </td>
+                    <td className="p-6 text-muted-foreground text-sm">
+                      {fmtDate(slip.payrollPeriod.payoutDate)}
+                    </td>
+                    <td className="p-6 font-black text-amber-600 text-base">
+                      {fmt(slip.netPay)}
+                    </td>
+                    <td className="p-6 text-center">
+                      {slip.acknowledgedAt ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-semibold">
+                          <CheckCircle size={12} /> Acknowledged
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-500 font-medium">Pending</span>
+                      )}
+                    </td>
+                    <td className="p-6">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          className="rounded-xl group-hover:border-amber-300 group-hover:bg-amber-50 transition-all"
+                          onClick={() => router.push(`/dashboard/payslips/${slip.id}`)}
+                        >
+                          <Eye size={14} className="mr-2" /> View
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={5} className="p-12 text-center text-sm text-muted-foreground">
+                      {payslips.length === 0
+                        ? 'No payslips available yet.'
+                        : 'No payslips match your filter.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
-
-      {/* Payslip Modal */}
-      {selectedPayslip && (
-        <PayslipModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          payslip={selectedPayslip}
-        />
-      )}
     </div>
   );
-};
+}
+

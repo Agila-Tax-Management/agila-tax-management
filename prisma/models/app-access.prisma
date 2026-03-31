@@ -33,6 +33,9 @@ model EmployeeAppAccess {
     canEdit   Boolean @default(false)
     canDelete Boolean @default(false)
 
+    // ─── Workflow Actions ───
+    canApprove Boolean  @default(false) // Can approve/finalize records (Approver)
+
     createdAt DateTime @default(now())
 
     @@unique([employeeId, appId])
