@@ -38,14 +38,6 @@ const AO_NAV_ITEMS = [
   },
   { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/account-officer/tasks', badge: TASK_BADGE_COUNT },
   { id: 'clients', label: 'Clients', icon: Users, href: '/portal/account-officer/clients', badge: 0 },
-  { id: 'payment-monitoring', label: 'Payment Monitoring', icon: DollarSign, href: '/portal/account-officer/payment-monitoring', badge: 0 },
-  {
-    id: 'communication',
-    label: 'COMMUNICATION',
-    isSection: true,
-  },
-  { id: 'discussions', label: 'Discussions', icon: MessageSquare, href: '/portal/account-officer/discussions', badge: DISCUSSION_BADGE_COUNT },
-  { id: 'notifications', label: 'Notifications', icon: Bell, href: '/portal/account-officer/notifications', badge: NOTIF_BADGE_COUNT },
 ];
 
 interface AOSidebarProps {
