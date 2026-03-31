@@ -187,6 +187,28 @@ const INTERNAL_USERS: InternalUserSeed[] = [
       OPERATIONS_MANAGEMENT: { canRead: true, canWrite: false, canEdit: false, canDelete: false },
     },
   },
+  {
+    employeeNo: "EMP-00004",
+    firstName: "Lia",
+    lastName: "Santiago",
+    email: "liaison@agila.com",
+    password: "agilapassword",
+    role: "EMPLOYEE",
+    gender: "Female",
+    birthDate: new Date("1996-04-18"),
+    phone: "09210000000",
+    currentCity: "Cebu City",
+    currentProvince: "Cebu",
+    department: "Liaison",
+    departmentDescription: "Field operations and government agency liaison work",
+    positionTitle: "Liaison Officer",
+    positionDescription: "Handles field tasks and government agency submissions",
+    employeeLevel: "Mid",
+    hireDate: new Date("2024-06-01"),
+    appAccess: {
+      LIAISON: { canRead: true, canWrite: true, canEdit: true, canDelete: false },
+    },
+  },
 ];
 
 /* ─── Client company definitions ────────────────────────────────────
