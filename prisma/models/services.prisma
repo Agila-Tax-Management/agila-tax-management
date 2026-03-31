@@ -97,8 +97,7 @@ model ServicePlan {
     inclusions        ServiceInclusion[] @relation("ServicePlanInclusions")
     promos            Promo[]            @relation("ServicePlanPromos")
 
-    taskTemplateId Int?
-    taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
+    taskTemplates       ServicePlanTaskTemplate[]
 
     leads               Lead[]
     clientSubscriptions ClientSubscription[]
@@ -125,8 +124,7 @@ model ServiceOneTime {
     inclusions        ServiceInclusion[] @relation("ServiceOneTimeInclusions")
     promos            Promo[]            @relation("ServiceOneTimePromos")
 
-    taskTemplateId Int?
-    taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
+    taskTemplates ServiceOneTimeTaskTemplate[]
 
     leads Lead[]
 
@@ -134,6 +132,34 @@ model ServiceOneTime {
     updatedAt DateTime @updatedAt
 
     @@map("service_one_time")
+}
+
+// ─── Service Plan ↔ Task Template (Many-to-Many) ─────────────────
+
+model ServicePlanTaskTemplate {
+    servicePlanId  Int
+    taskTemplateId Int
+
+    servicePlan  ServicePlan  @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+    taskTemplate TaskTemplate @relation("ServicePlanTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
+
+    @@id([servicePlanId, taskTemplateId])
+    @@index([taskTemplateId])
+    @@map("service_plan_task_template")
+}
+
+// ─── Service One-Time ↔ Task Template (Many-to-Many) ──────────────
+
+model ServiceOneTimeTaskTemplate {
+    serviceOneTimeId Int
+    taskTemplateId   Int
+
+    serviceOneTime ServiceOneTime @relation(fields: [serviceOneTimeId], references: [id], onDelete: Cascade)
+    taskTemplate   TaskTemplate   @relation("ServiceOneTimeTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
+
+    @@id([serviceOneTimeId, taskTemplateId])
+    @@index([taskTemplateId])
+    @@map("service_one_time_task_template")
 }
 
 // ─── Promo ────────────────────────────────────────────────────────

@@ -39,7 +39,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
         serviceRate: true,
         recurring: true,
         status: true,
-        taskTemplateId: true,
+        taskTemplates: { select: { taskTemplateId: true } },
       },
       orderBy: { name: "asc" },
     }),
@@ -50,7 +50,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
         name: true,
         serviceRate: true,
         status: true,
-        taskTemplateId: true,
+        taskTemplates: { select: { taskTemplateId: true } },
       },
       orderBy: { name: "asc" },
     }),
@@ -58,10 +58,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
 
   return NextResponse.json({
     data: {
-      plans: plans.map((p) => ({ ...p, linkedToThisTemplate: p.taskTemplateId === templateId })),
-      oneTimePlans: oneTimePlans.map((p) => ({
+      plans: plans.map(({ taskTemplates, ...p }) => ({
         ...p,
-        linkedToThisTemplate: p.taskTemplateId === templateId,
+        linkedToThisTemplate: taskTemplates.some((t) => t.taskTemplateId === templateId),
+      })),
+      oneTimePlans: oneTimePlans.map(({ taskTemplates, ...p }) => ({
+        ...p,
+        linkedToThisTemplate: taskTemplates.some((t) => t.taskTemplateId === templateId),
       })),
     },
   });
@@ -108,9 +111,10 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     const plan = await prisma.servicePlan.findUnique({ where: { id: serviceId } });
     if (!plan) return NextResponse.json({ error: "Service plan not found" }, { status: 404 });
 
-    await prisma.servicePlan.update({
-      where: { id: serviceId },
-      data: { taskTemplateId: templateId },
+    await prisma.servicePlanTaskTemplate.upsert({
+      where: { servicePlanId_taskTemplateId: { servicePlanId: serviceId, taskTemplateId: templateId } },
+      update: {},
+      create: { servicePlanId: serviceId, taskTemplateId: templateId },
     });
 
     void logActivity({
@@ -125,9 +129,10 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     const oneTime = await prisma.serviceOneTime.findUnique({ where: { id: serviceId } });
     if (!oneTime) return NextResponse.json({ error: "Service not found" }, { status: 404 });
 
-    await prisma.serviceOneTime.update({
-      where: { id: serviceId },
-      data: { taskTemplateId: templateId },
+    await prisma.serviceOneTimeTaskTemplate.upsert({
+      where: { serviceOneTimeId_taskTemplateId: { serviceOneTimeId: serviceId, taskTemplateId: templateId } },
+      update: {},
+      create: { serviceOneTimeId: serviceId, taskTemplateId: templateId },
     });
 
     void logActivity({
@@ -180,13 +185,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
   if (type === "plan") {
     const plan = await prisma.servicePlan.findUnique({ where: { id: serviceId } });
     if (!plan) return NextResponse.json({ error: "Service plan not found" }, { status: 404 });
-    if (plan.taskTemplateId !== templateId) {
-      return NextResponse.json({ error: "This service is not linked to this template" }, { status: 400 });
-    }
 
-    await prisma.servicePlan.update({
-      where: { id: serviceId },
-      data: { taskTemplateId: null },
+    const link = await prisma.servicePlanTaskTemplate.findUnique({
+      where: { servicePlanId_taskTemplateId: { servicePlanId: serviceId, taskTemplateId: templateId } },
+    });
+    if (!link) return NextResponse.json({ error: "This service is not linked to this template" }, { status: 400 });
+
+    await prisma.servicePlanTaskTemplate.delete({
+      where: { servicePlanId_taskTemplateId: { servicePlanId: serviceId, taskTemplateId: templateId } },
     });
 
     void logActivity({
@@ -200,13 +206,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
   } else {
     const oneTime = await prisma.serviceOneTime.findUnique({ where: { id: serviceId } });
     if (!oneTime) return NextResponse.json({ error: "Service not found" }, { status: 404 });
-    if (oneTime.taskTemplateId !== templateId) {
-      return NextResponse.json({ error: "This service is not linked to this template" }, { status: 400 });
-    }
 
-    await prisma.serviceOneTime.update({
-      where: { id: serviceId },
-      data: { taskTemplateId: null },
+    const link = await prisma.serviceOneTimeTaskTemplate.findUnique({
+      where: { serviceOneTimeId_taskTemplateId: { serviceOneTimeId: serviceId, taskTemplateId: templateId } },
+    });
+    if (!link) return NextResponse.json({ error: "This service is not linked to this template" }, { status: 400 });
+
+    await prisma.serviceOneTimeTaskTemplate.delete({
+      where: { serviceOneTimeId_taskTemplateId: { serviceOneTimeId: serviceId, taskTemplateId: templateId } },
     });
 
     void logActivity({

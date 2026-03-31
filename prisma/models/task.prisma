@@ -32,8 +32,8 @@ model TaskTemplate {
     departmentRoutes    TaskTemplateRoute[]
     tasks               Task[]
 
-    servicePlans        ServicePlan[]
-    serviceOneTimePlans ServiceOneTime[]
+    servicePlanLinks     ServicePlanTaskTemplate[]     @relation("ServicePlanTemplates")
+    serviceOneTimeLinks  ServiceOneTimeTaskTemplate[]  @relation("ServiceOneTimeTemplates")
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

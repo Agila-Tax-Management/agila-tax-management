@@ -1,6 +1,6 @@
 // src/app/(portal)/portal/sales/job-orders/components/JobOrderPDF.tsx
 import React from 'react';
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 import type { JobOrderRecord } from './JobOrders';
 
 /* ── Palette ─────────────────────────────────────────────────────── */
@@ -43,6 +43,8 @@ const s = StyleSheet.create({
     borderBottomColor: C.slate800,
     marginBottom: 16,
   },
+  companyLogoRow: { flexDirection: 'row', alignItems: 'center' },
+  logoImg:        { width: 36, height: 36, borderRadius: 4, marginRight: 8 },
   companyName:    { fontFamily: 'Helvetica-Bold', fontSize: 12, color: C.slate900 },
   companyTagline: { fontSize: 8, color: C.slate500, marginTop: 3 },
   joTitle:   { fontFamily: 'Helvetica-Bold', fontSize: 20, color: C.indigo, textTransform: 'uppercase', letterSpacing: 2 },
@@ -274,9 +276,12 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
 
         {/* ── Header ──────────────────────────────────────────── */}
         <View style={s.header}>
-          <View>
-            <Text style={s.companyName}>AGILA TAX AND BUSINESS SOLUTIONS</Text>
-            <Text style={s.companyTagline}>Tax Compliance &amp; Business Registration Services</Text>
+          <View style={s.companyLogoRow}>
+            <Image src="/images/agila_logo.webp" style={s.logoImg} />
+            <View>
+              <Text style={s.companyName}>AGILA TAX AND BUSINESS SOLUTIONS</Text>
+              <Text style={s.companyTagline}>Tax Compliance &amp; Business Registration Services</Text>
+            </View>
           </View>
           <View>
             <Text style={s.joTitle}>Job Order</Text>

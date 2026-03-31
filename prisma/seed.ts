@@ -1093,7 +1093,7 @@ async function main(): Promise<void> {
         recurring: "MONTHLY",
         serviceRate: 3500,
         status: "ACTIVE",
-        taskTemplateId: vatTemplate?.id ?? undefined,
+        taskTemplates: vatTemplate ? { create: [{ taskTemplateId: vatTemplate.id }] } : undefined,
         governmentOffices: birOffice   ? { connect: [{ id: birOffice.id }] }   : undefined,
         cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
         inclusions: {
@@ -1119,7 +1119,7 @@ async function main(): Promise<void> {
         description: "End-to-end processing of BIR TIN application and Certificate of Registration (COR) for newly registered businesses. Includes form preparation, RDO submission, and Books of Accounts registration.",
         serviceRate: 1500,
         status: "ACTIVE",
-        taskTemplateId: tinTemplate?.id ?? undefined,
+        taskTemplates: tinTemplate ? { create: [{ taskTemplateId: tinTemplate.id }] } : undefined,
         governmentOffices: birOffice  ? { connect: [{ id: birOffice.id }] }  : undefined,
         cities:            cebuCity   ? { connect: [{ id: cebuCity.id }] }   : undefined,
         inclusions: {
@@ -1140,7 +1140,7 @@ async function main(): Promise<void> {
         description: "Annual renewal of the LGU Business Permit / Mayor's Permit. Includes barangay clearance processing, BPLO submission, fee payment, and permit delivery to the client.",
         serviceRate: 1200,
         status: "ACTIVE",
-        taskTemplateId: permitTemplate?.id ?? undefined,
+        taskTemplates: permitTemplate ? { create: [{ taskTemplateId: permitTemplate.id }] } : undefined,
         governmentOffices: mayorOffice ? { connect: [{ id: mayorOffice.id }] } : undefined,
         cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
         inclusions: {

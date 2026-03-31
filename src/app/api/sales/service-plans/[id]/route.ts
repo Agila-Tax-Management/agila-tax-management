@@ -13,7 +13,7 @@ const SERVICE_PLAN_INCLUDE = {
   governmentOffices: { select: { id: true, code: true, name: true } },
   cities: { select: { id: true, name: true, province: true } },
   inclusions: { select: { id: true, name: true, category: true } },
-  taskTemplate: { select: { id: true, name: true } },
+  taskTemplates: { include: { taskTemplate: { select: { id: true, name: true, description: true } } } },
   promos: {
     select: {
       id: true,
@@ -90,7 +90,7 @@ export async function PATCH(
     governmentOfficeIds,
     cityIds,
     inclusionIds,
-    taskTemplateId,
+    taskTemplateIds,
     promoIds,
     ...rest
   } = parsed.data;
@@ -99,8 +99,14 @@ export async function PATCH(
     where: { id: planId },
     data: {
       ...rest,
-      taskTemplateId:
-        taskTemplateId === null ? null : taskTemplateId ?? undefined,
+      ...(taskTemplateIds !== undefined && {
+        taskTemplates: {
+          deleteMany: {},
+          ...(taskTemplateIds.length > 0 && {
+            create: taskTemplateIds.map((id) => ({ taskTemplateId: id })),
+          }),
+        },
+      }),
       ...(governmentOfficeIds !== undefined && {
         governmentOffices: { set: governmentOfficeIds.map((id) => ({ id })) },
       }),

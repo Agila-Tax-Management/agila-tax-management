@@ -1,28 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
-import type { Client } from '@/lib/types';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
-import { INITIAL_CLIENTS } from '@/lib/mock-clients';
-import { PLAN_DATA, MOCK_SERVICES } from '@/lib/service-data';
-import type { ServicePlan } from '@/lib/service-data';
+import { useToast } from '@/context/ToastContext';
+import type {
+  ClientListRecord,
+  ClientDetailRecord,
+  ServicePlanOption,
+  OneTimeServiceOption,
+} from '@/types/sales-client-list.types';
 import {
   Search, ChevronLeft, ChevronRight, Eye,
-  User, FileText, CheckCircle, Package, Plus
+  User, FileText, CheckCircle, Package, Plus,
+  Loader2, Briefcase,
 } from 'lucide-react';
 
-const parseMoney = (value: unknown): number => {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const normalized = value.replace(/[^\d.-]/g, '');
-    return Number.parseFloat(normalized) || 0;
-  }
-  return 0;
-};
+// ─── Helpers ──────────────────────────────────────────────────────
 
 const formatPHP = (amount: number): string =>
   new Intl.NumberFormat('en-PH', {
@@ -30,114 +27,177 @@ const formatPHP = (amount: number): string =>
     maximumFractionDigits: 2,
   }).format(amount);
 
-export const ClientList: React.FC = () => {
-  const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
+const JO_STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
+  DRAFT: 'neutral',
+  SUBMITTED: 'info',
+  ACKNOWLEDGED: 'warning',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+};
+
+// ─── Component ────────────────────────────────────────────────────
+
+export function ClientList(): React.ReactNode {
+  const { success, error: toastError } = useToast();
+
+  // ─── Core data ─────────────────────────────────────────────────
+  const [clients, setClients] = useState<ClientListRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // ─── Filters / pagination ──────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [entriesPerPage, setEntriesPerPage] = useState('50');
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [clientsPerPage, setClientsPerPage] = useState(50);
-  const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
-  const [selectedOneTimeServices, setSelectedOneTimeServices] = useState<Set<string>>(new Set());
-  const [isChangingPlan, setIsChangingPlan] = useState(false);
-  const [newPlan, setNewPlan] = useState<string | undefined>(undefined);
 
-  const getResolvedOneTimePrice = (service: { rate?: number }): number => {
-    return parseMoney(service.rate);
+  // Reset page when filters or page size change (adjust state during render)
+  const [prevFilters, setPrevFilters] = useState({ searchTerm, statusFilter, clientsPerPage });
+  if (
+    prevFilters.searchTerm !== searchTerm ||
+    prevFilters.statusFilter !== statusFilter ||
+    prevFilters.clientsPerPage !== clientsPerPage
+  ) {
+    setPrevFilters({ searchTerm, statusFilter, clientsPerPage });
+    setCurrentPage(1);
+  }
+
+  // ─── Detail modal ──────────────────────────────────────────────
+  const [selectedClient, setSelectedClient] = useState<ClientListRecord | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [clientDetail, setClientDetail] = useState<ClientDetailRecord | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+
+  // ─── Add services modal ────────────────────────────────────────
+  const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
+  const [selectedOneTimeServices, setSelectedOneTimeServices] = useState<Set<number>>(new Set());
+  const [isChangingPlan, setIsChangingPlan] = useState(false);
+  const [newPlanId, setNewPlanId] = useState<number | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false);
+  const [servicePlans, setServicePlans] = useState<ServicePlanOption[]>([]);
+  const [oneTimeServices, setOneTimeServices] = useState<OneTimeServiceOption[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const hasLoadedServices = useRef(false);
+
+  // ─── Fetch clients ─────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Standard async data fetching pattern
+  useEffect(() => {
+    setIsLoading(true);
+    const params = new URLSearchParams({
+      search: searchTerm,
+      status: statusFilter,
+      page: String(currentPage),
+      limit: String(clientsPerPage),
+    });
+    fetch(`/api/sales/clients?${params}`)
+      .then(r => r.json())
+      .then((json: { data: ClientListRecord[]; total: number; page: number; totalPages: number }) => {
+        setClients(json.data ?? []);
+        setTotal(json.total ?? 0);
+        setTotalPages(json.totalPages ?? 0);
+      })
+      .catch(() => toastError('Failed to load clients', 'Please refresh and try again.'))
+      .finally(() => setIsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, statusFilter, currentPage, clientsPerPage, refreshKey]);
+
+  // ─── Load service options lazily on first modal open ──────────
+  const loadServiceOptions = async () => {
+    if (hasLoadedServices.current) return;
+    setIsLoadingServices(true);
+    try {
+      const [plansRes, servicesRes] = await Promise.all([
+        fetch('/api/sales/service-plans').then(r => r.json()),
+        fetch('/api/sales/service-one-time').then(r => r.json()),
+      ]);
+      setServicePlans((plansRes as { data: ServicePlanOption[] }).data ?? []);
+      setOneTimeServices((servicesRes as { data: OneTimeServiceOption[] }).data ?? []);
+      hasLoadedServices.current = true;
+    } catch {
+      toastError('Failed to load services', 'Please try again.');
+    } finally {
+      setIsLoadingServices(false);
+    }
   };
 
-  // Filter clients based on search and status
-  const filteredClients = clients.filter(c => {
-    const matchesSearch =
-      c.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.clientNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === 'All' ||
-      c.status.toLowerCase() === statusFilter.toLowerCase();
-
-    return matchesSearch && matchesStatus;
-  });
-
-  const indexOfLastClient = currentPage * clientsPerPage;
-  const indexOfFirstClient = indexOfLastClient - clientsPerPage;
-  const totalPages = Math.ceil(filteredClients.length / clientsPerPage);
-  const paginatedClients = filteredClients.slice(indexOfFirstClient, indexOfLastClient);
-
+  // ─── Event handlers ────────────────────────────────────────────
   const handleEntriesPerPageChange = (value: string) => {
     setEntriesPerPage(value);
-    if (value === 'All') {
-      setClientsPerPage(filteredClients.length || 1);
-    } else {
-      setClientsPerPage(parseInt(value));
-    }
-    setCurrentPage(1);
+    setClientsPerPage(value === 'All' ? 1000 : parseInt(value, 10));
   };
 
-  const handleViewClient = (client: Client) => {
+  const handleViewClient = async (client: ClientListRecord) => {
     setSelectedClient(client);
+    setClientDetail(null);
     setIsDetailModalOpen(true);
-  };
-
-  const toggleOneTimeService = (serviceId: string) => {
-    const newSelected = new Set(selectedOneTimeServices);
-    if (newSelected.has(serviceId)) {
-      newSelected.delete(serviceId);
-    } else {
-      newSelected.add(serviceId);
+    setIsDetailLoading(true);
+    try {
+      const res = await fetch(`/api/sales/clients/${client.id}`);
+      const json = await res.json() as { data?: ClientDetailRecord; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to load client');
+      setClientDetail(json.data ?? null);
+    } catch {
+      toastError('Failed to load client details', 'Please try again.');
+    } finally {
+      setIsDetailLoading(false);
     }
-    setSelectedOneTimeServices(newSelected);
   };
 
-  const handleSaveServices = () => {
-    if (!selectedClient) return;
-
-    setClients(prev =>
-      prev.map(client => {
-        if (client.id !== selectedClient.id) return client;
-
-        const updated = { ...client };
-
-        // If changing plan
-        if (isChangingPlan && newPlan) {
-          const newPlanData = PLAN_DATA[newPlan as ServicePlan];
-          updated.planDetails = {
-            basePlan: newPlan,
-            displayName: newPlanData.displayName,
-            customFeaturesIncluded: newPlanData.featuresIncluded,
-            customFeaturesMore: newPlanData.featuresMore || [],
-            customFreebies: newPlanData.freebies,
-            customPrice: newPlanData.price,
-            selectedServiceIds: [],
-          };
-        }
-
-        // Add one-time services
-        if (selectedOneTimeServices.size > 0) {
-          const newServices = Array.from(selectedOneTimeServices).map(id => {
-            const service = MOCK_SERVICES.find(s => s.id === id);
-            return {
-              id: `${client.id}-${id}`,
-              serviceId: id,
-              serviceName: service?.name || '',
-              rate: service?.rate || 0,
-            };
-          });
-          updated.clientServices = [...(updated.clientServices || []), ...newServices];
-        }
-
-        return updated;
-      })
-    );
-
-    setIsAddServicesModalOpen(false);
+  const handleOpenAddServices = (client: ClientListRecord) => {
+    setSelectedClient(client);
     setSelectedOneTimeServices(new Set());
     setIsChangingPlan(false);
-    setNewPlan(undefined);
+    setNewPlanId(undefined);
+    setIsAddServicesModalOpen(true);
+    void loadServiceOptions();
   };
+
+  const toggleOneTimeService = (serviceId: number) => {
+    setSelectedOneTimeServices(prev => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) next.delete(serviceId);
+      else next.add(serviceId);
+      return next;
+    });
+  };
+
+  const handleSaveServices = async () => {
+    if (!selectedClient) return;
+    if (!isChangingPlan && selectedOneTimeServices.size === 0) return;
+
+    setIsSaving(true);
+    try {
+      const body: { changePlanId?: number; oneTimeServiceIds?: number[]; notes: null } = {
+        notes: null,
+      };
+      if (isChangingPlan && newPlanId) body.changePlanId = newPlanId;
+      if (selectedOneTimeServices.size > 0) body.oneTimeServiceIds = Array.from(selectedOneTimeServices);
+
+      const res = await fetch(`/api/sales/clients/${selectedClient.id}/job-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json() as { data?: { jobOrderNumber: string }; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to create job order');
+
+      success('Job Order Created', `Job order ${json.data?.jobOrderNumber ?? ''} has been submitted.`);
+      setIsAddServicesModalOpen(false);
+      setSelectedOneTimeServices(new Set());
+      setIsChangingPlan(false);
+      setNewPlanId(undefined);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      toastError('Failed to save', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const indexOfFirstClient = (currentPage - 1) * clientsPerPage;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -156,7 +216,7 @@ export const ClientList: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <Input
               className="pl-10 h-12 bg-slate-50 border-slate-200 rounded-xl"
-              placeholder="Search by name, client no., email..."
+              placeholder="Search by name or client no..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
@@ -166,10 +226,9 @@ export const ClientList: React.FC = () => {
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
           >
-            <option>All</option>
-            <option>Active</option>
-            <option>Pending</option>
-            <option>Suspended</option>
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
           </select>
           <select
             className="h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm font-medium"
@@ -198,30 +257,36 @@ export const ClientList: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {paginatedClients.length > 0 ? (
-                paginatedClients.map(client => (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="p-12 text-center">
+                    <Loader2 size={24} className="mx-auto animate-spin text-slate-400" />
+                  </td>
+                </tr>
+              ) : clients.length > 0 ? (
+                clients.map(client => (
                   <tr key={client.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-5">
-                      <span className="text-sm font-bold text-slate-800">{client.clientNo}</span>
+                      <span className="text-sm font-bold text-slate-800">{client.clientNo ?? `#${client.id}`}</span>
                     </td>
                     <td className="p-5">
                       <div>
                         <p className="font-bold text-slate-900 text-sm">{client.businessName}</p>
-                        <p className="text-xs text-slate-400 mt-1">{client.companyCode || 'N/A'}</p>
+                        <p className="text-xs text-slate-400 mt-1">{client.companyCode ?? 'N/A'}</p>
                       </div>
                     </td>
                     <td className="p-5">
-                      <p className="text-sm text-slate-600">{client.email}</p>
-                      <p className="text-xs text-slate-400 mt-1">{client.phone}</p>
+                      <p className="text-sm text-slate-600">{client.contactEmail ?? '—'}</p>
+                      <p className="text-xs text-slate-400 mt-1">{client.contactPhone ?? '—'}</p>
                     </td>
                     <td className="p-5">
-                      {client.planDetails ? (
+                      {client.activeSubscription ? (
                         <div>
                           <Badge variant="info" className="text-xs font-bold">
-                            {client.planDetails.displayName || 'Custom Plan'}
+                            {client.activeSubscription.servicePlanName}
                           </Badge>
                           <p className="text-xs text-slate-500 mt-1">
-                            ₱{client.planDetails.customPrice || '0'}/mo
+                            ₱{formatPHP(client.activeSubscription.agreedRate)}/mo
                           </p>
                         </div>
                       ) : (
@@ -229,8 +294,8 @@ export const ClientList: React.FC = () => {
                       )}
                     </td>
                     <td className="p-5">
-                      <Badge variant={client.status === 'Active' ? 'success' : 'warning'}>
-                        {client.status}
+                      <Badge variant={client.active ? 'success' : 'warning'}>
+                        {client.active ? 'Active' : 'Inactive'}
                       </Badge>
                     </td>
                     <td className="p-5 text-right">
@@ -238,22 +303,15 @@ export const ClientList: React.FC = () => {
                         <Button
                           variant="outline"
                           className="h-9 w-9 p-0 bg-purple-50 hover:bg-purple-100 border-purple-200"
-                          onClick={() => {
-                            setSelectedClient(client);
-                            setSelectedOneTimeServices(new Set());
-                            setIsChangingPlan(false);
-                            setNewPlan(undefined);
-                            setIsAddServicesModalOpen(true);
-                          }}
+                          onClick={() => handleOpenAddServices(client)}
                           title="Add / Change Plan"
                         >
                           <Plus size={16} className="text-purple-600" />
                         </Button>
-
                         <Button
                           variant="ghost"
                           className="h-9 w-9 p-0"
-                          onClick={() => handleViewClient(client)}
+                          onClick={() => void handleViewClient(client)}
                         >
                           <Eye size={16} />
                         </Button>
@@ -276,7 +334,10 @@ export const ClientList: React.FC = () => {
       {/* Pagination */}
       <div className="flex justify-between items-center">
         <p className="text-sm text-slate-500">
-          Showing <span className="font-bold">{indexOfFirstClient + 1}</span>-<span className="font-bold">{Math.min(indexOfLastClient, filteredClients.length)}</span> of <span className="font-bold">{filteredClients.length}</span> clients
+          Showing{' '}
+          <span className="font-bold">{clients.length > 0 ? indexOfFirstClient + 1 : 0}</span>–
+          <span className="font-bold">{indexOfFirstClient + clients.length}</span> of{' '}
+          <span className="font-bold">{total}</span> clients
         </p>
         <div className="flex gap-2">
           <Button
@@ -289,7 +350,7 @@ export const ClientList: React.FC = () => {
           </Button>
 
           {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            let pageNum;
+            let pageNum: number;
             if (totalPages <= 5) {
               pageNum = i + 1;
             } else if (currentPage <= 3) {
@@ -327,16 +388,16 @@ export const ClientList: React.FC = () => {
         </div>
       </div>
 
-      {/* Client Detail Modal - View Only */}
+      {/* Client Detail Modal */}
       <Modal
         isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
-        title={selectedClient ? `${selectedClient.businessName}` : ''}
+        onClose={() => { setIsDetailModalOpen(false); setClientDetail(null); }}
+        title={selectedClient ? selectedClient.businessName : ''}
         size="xl"
       >
         {selectedClient && (
           <div className="space-y-6 p-6">
-            {/* Basic Information Card */}
+            {/* Basic Information */}
             <Card className="p-6 border-slate-200">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center">
@@ -344,121 +405,132 @@ export const ClientList: React.FC = () => {
                 </div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Basic Information</h3>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Client Number</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.clientNo}</p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.clientNo ?? `#${selectedClient.id}`}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Company Code</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.companyCode || 'N/A'}</p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.companyCode ?? 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Authorized Representative</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.authorizedRep}</p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.authorizedRep ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Email</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.email}</p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.contactEmail ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Phone</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.phone}</p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.contactPhone ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</p>
-                  <Badge variant={selectedClient.status === 'Active' ? 'success' : 'warning'} className="mt-1">
-                    {selectedClient.status}
+                  <Badge variant={selectedClient.active ? 'success' : 'warning'} className="mt-1">
+                    {selectedClient.active ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-6 border-slate-200">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center">
-                    <CheckCircle size={20} />
-                  </div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Active Services</h3>
-                </div>
+            {/* Subscription + Job Orders (loaded from detail endpoint) */}
+            {isDetailLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 size={24} className="animate-spin text-slate-400" />
               </div>
-
-              {/* Monthly Service Plan */}
-              {selectedClient.planDetails ? (
-                <div className="mb-6 p-4 bg-purple-50 rounded-xl border-2 border-purple-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="text-xs font-black text-purple-900 uppercase tracking-wider">Monthly Service Plan</p>
-                      <h4 className="text-lg font-black text-purple-700 mt-1">
-                        {selectedClient.planDetails.displayName}
-                      </h4>
+            ) : clientDetail ? (
+              <>
+                <Card className="p-6 border-slate-200">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center">
+                      <CheckCircle size={20} />
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-black text-purple-600">
-                        ₱{selectedClient.planDetails.customPrice}
-                      </p>
-                      <p className="text-xs text-purple-600 font-bold">/month</p>
-                    </div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Active Subscription</h3>
                   </div>
-
-                  {/* Features included in plan */}
-                  {selectedClient.planDetails.customFeaturesIncluded.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-purple-200">
-                      <p className="text-xs font-black text-purple-900 uppercase tracking-wider mb-3">
-                        Plan Features ({selectedClient.planDetails.customFeaturesIncluded.length}):
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {selectedClient.planDetails.customFeaturesIncluded.map((feature, idx) => (
-                          <div key={idx} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-purple-100">
-                            <CheckCircle size={14} className="text-emerald-600 shrink-0 mt-0.5" />
-                            <span className="text-slate-700 leading-relaxed">{feature}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mb-6 p-8 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                  <Package size={48} className="mx-auto mb-3 text-slate-300" />
-                  <p className="text-sm font-bold text-slate-600">No Monthly Service Plan</p>
-                  <p className="text-xs text-slate-500 mt-1">Click the &ldquo;+&rdquo; button to assign a monthly plan</p>
-                </div>
-              )}
-
-              {/* One-Time Services */}
-              <div>
-                <p className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3">
-                  One-Time Services ({selectedClient.clientServices?.length || 0}):
-                </p>
-                {selectedClient.clientServices && selectedClient.clientServices.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {selectedClient.clientServices.map(clientService => (
-                      <div key={clientService.id} className="flex items-start gap-2 text-sm bg-blue-50 p-2 rounded-lg border border-blue-100">
-                        <FileText size={14} className="text-blue-600 shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <span className="text-slate-700 font-medium">{clientService.serviceName}</span>
-                          {clientService.rate > 0 && (
-                            <p className="text-xs text-slate-500 mt-0.5">₱{formatPHP(clientService.rate)}</p>
-                          )}
+                  {clientDetail.activeSubscription ? (
+                    <div className="p-4 bg-purple-50 rounded-xl border-2 border-purple-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-xs font-black text-purple-900 uppercase tracking-wider">Monthly Service Plan</p>
+                          <h4 className="text-lg font-black text-purple-700 mt-1">
+                            {clientDetail.activeSubscription.servicePlanName}
+                          </h4>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-purple-600">
+                            ₱{formatPHP(clientDetail.activeSubscription.agreedRate)}
+                          </p>
+                          <p className="text-xs text-purple-600 font-bold">/{clientDetail.activeSubscription.billingCycle.toLowerCase()}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 italic">No one-time services added</p>
-                )}
-              </div>
-            </Card>
+                      {clientDetail.activeSubscription.inclusions.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-purple-200">
+                          <p className="text-xs font-black text-purple-900 uppercase tracking-wider mb-3">
+                            Plan Inclusions ({clientDetail.activeSubscription.inclusions.length}):
+                          </p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {clientDetail.activeSubscription.inclusions.map(inc => (
+                              <div key={inc.id} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-purple-100">
+                                <CheckCircle size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                                <span className="text-slate-700 leading-relaxed">{inc.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                      <Package size={48} className="mx-auto mb-3 text-slate-300" />
+                      <p className="text-sm font-bold text-slate-600">No Active Subscription</p>
+                      <p className="text-xs text-slate-500 mt-1">Click &ldquo;+&rdquo; to assign a monthly plan</p>
+                    </div>
+                  )}
+                </Card>
 
-            {/* Actions */}
+                <Card className="p-6 border-slate-200">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center">
+                      <Briefcase size={20} />
+                    </div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Recent Job Orders</h3>
+                  </div>
+                  {clientDetail.recentJobOrders.length > 0 ? (
+                    <div className="space-y-3">
+                      {clientDetail.recentJobOrders.map(jo => (
+                        <div key={jo.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-black text-slate-800">{jo.jobOrderNumber}</span>
+                            <Badge variant={JO_STATUS_VARIANT[jo.status] ?? 'neutral'} className="text-xs">
+                              {jo.status}
+                            </Badge>
+                          </div>
+                          <div className="space-y-1">
+                            {jo.items.map(item => (
+                              <div key={item.id} className="flex items-center gap-2 text-xs text-slate-600">
+                                <FileText size={12} className="text-blue-500 shrink-0" />
+                                <span>{item.serviceName}</span>
+                                <span className="ml-auto font-bold">₱{formatPHP(item.total)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">No job orders yet</p>
+                  )}
+                </Card>
+              </>
+            ) : null}
+
             <div className="flex gap-3 pt-4 border-t border-slate-200">
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => setIsDetailModalOpen(false)}
+                onClick={() => { setIsDetailModalOpen(false); setClientDetail(null); }}
               >
                 Close
               </Button>
@@ -467,16 +539,16 @@ export const ClientList: React.FC = () => {
         )}
       </Modal>
 
-      {/* Add Services Modal */}
+      {/* Add / Change Services Modal */}
       <Modal
         isOpen={isAddServicesModalOpen}
         onClose={() => {
           setIsAddServicesModalOpen(false);
           setSelectedOneTimeServices(new Set());
           setIsChangingPlan(false);
-          setNewPlan(undefined);
+          setNewPlanId(undefined);
         }}
-        title={selectedClient ? `Add Services - ${selectedClient.businessName}` : 'Add Services'}
+        title={selectedClient ? `Add Services — ${selectedClient.businessName}` : 'Add Services'}
         size="xl"
       >
         {selectedClient && (
@@ -489,7 +561,6 @@ export const ClientList: React.FC = () => {
                 </div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Change Monthly Plan</h3>
               </div>
-
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <input
@@ -503,32 +574,37 @@ export const ClientList: React.FC = () => {
                     Change to a different plan
                   </label>
                 </div>
-
                 {isChangingPlan && (
                   <div className="ml-7">
                     <label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 block">
                       Select New Plan
                     </label>
-                    <select
-                      value={newPlan || ''}
-                      onChange={e => setNewPlan(e.target.value)}
-                      className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm font-medium"
-                    >
-                      <option value="">Select a plan...</option>
-                      {Object.entries(PLAN_DATA).map(([key, plan]) => (
-                        <option key={key} value={key}>
-                          {plan.displayName} - ₱{plan.price}/mo
-                        </option>
-                      ))}
-                    </select>
+                    {isLoadingServices ? (
+                      <div className="flex items-center gap-2 text-slate-500 text-sm py-2">
+                        <Loader2 size={16} className="animate-spin" />
+                        Loading plans...
+                      </div>
+                    ) : (
+                      <select
+                        value={newPlanId ?? ''}
+                        onChange={e => setNewPlanId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                        className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm font-medium"
+                      >
+                        <option value="">Select a plan...</option>
+                        {servicePlans.map(plan => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name} — ₱{formatPHP(plan.serviceRate)}/mo
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 )}
-
-                {selectedClient.planDetails && (
+                {selectedClient.activeSubscription && (
                   <div className="p-3 bg-slate-50 rounded-lg">
                     <p className="text-xs font-bold text-slate-500 uppercase">Current Plan:</p>
                     <p className="text-sm font-bold text-slate-900 mt-1">
-                      {selectedClient.planDetails.displayName} - ₱{selectedClient.planDetails.customPrice}/mo
+                      {selectedClient.activeSubscription.servicePlanName} — ₱{formatPHP(selectedClient.activeSubscription.agreedRate)}/mo
                     </p>
                   </div>
                 )}
@@ -543,72 +619,76 @@ export const ClientList: React.FC = () => {
                 </div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Add One-Time Services</h3>
               </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {MOCK_SERVICES.map(service => {
-                  const isSelected = selectedOneTimeServices.has(service.id);
-                  const alreadyHasService = selectedClient?.clientServices?.some(
-                    cs => cs.serviceId === service.id
-                  );
-
-                  return (
-                    <div
-                      key={service.id}
-                      className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-blue-50 border-blue-300'
-                          : alreadyHasService
-                          ? 'bg-slate-100 border-slate-300 opacity-60'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                      }`}
-                      onClick={() => !alreadyHasService && toggleOneTimeService(service.id)}
-                    >
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={alreadyHasService}
-                          onChange={() => toggleOneTimeService(service.id)}
-                          className="mt-1 w-4 h-4 rounded border-slate-300"
-                          onClick={e => e.stopPropagation()}
-                        />
-                        <div className="flex-1">
-                          <h4 className="text-sm font-bold text-slate-900">{service.name}</h4>
-                          {getResolvedOneTimePrice(service) > 0 && (
-                            <p className="text-xs font-bold text-blue-600 mt-1">
-                              ₱{formatPHP(getResolvedOneTimePrice(service))}
-                            </p>
-                          )}
-                          <div className="flex gap-2 mt-2">
-                            <Badge variant="neutral" className="text-[10px]">
-                              {service.teamInCharge}
-                            </Badge>
-                            <Badge variant="info" className="text-[10px]">
-                              {service.government}
-                            </Badge>
+              {isLoadingServices ? (
+                <div className="flex items-center gap-2 text-slate-500 text-sm py-4">
+                  <Loader2 size={16} className="animate-spin" />
+                  Loading services...
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {oneTimeServices.map(service => {
+                    const isSelected = selectedOneTimeServices.has(service.id);
+                    return (
+                      <div
+                        key={service.id}
+                        className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-300'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                        onClick={() => toggleOneTimeService(service.id)}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleOneTimeService(service.id)}
+                            className="mt-1 w-4 h-4 rounded border-slate-300"
+                            onClick={e => e.stopPropagation()}
+                          />
+                          <div className="flex-1">
+                            <h4 className="text-sm font-bold text-slate-900">{service.name}</h4>
+                            {service.serviceRate > 0 && (
+                              <p className="text-xs font-bold text-blue-600 mt-1">
+                                ₱{formatPHP(service.serviceRate)}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {service.inclusions.slice(0, 1).map(inc => (
+                                <Badge key={inc.id} variant="neutral" className="text-[10px]">
+                                  {inc.category ?? inc.name}
+                                </Badge>
+                              ))}
+                              {service.governmentOffices.slice(0, 1).map(gov => (
+                                <Badge key={gov.id} variant="info" className="text-[10px]">
+                                  {gov.code}
+                                </Badge>
+                              ))}
+                            </div>
                           </div>
-                          {alreadyHasService && (
-                            <Badge variant="success" className="mt-2 text-xs">Already Added</Badge>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                  {oneTimeServices.length === 0 && (
+                    <p className="text-sm text-slate-500 italic py-4 text-center">No one-time services available</p>
+                  )}
+                </div>
+              )}
             </Card>
 
             {/* Summary */}
-            {(selectedOneTimeServices.size > 0 || isChangingPlan) && (
+            {(selectedOneTimeServices.size > 0 || (isChangingPlan && newPlanId)) && (
               <Card className="p-4 bg-emerald-50 border-emerald-200">
                 <p className="text-xs font-black text-emerald-900 uppercase tracking-wider mb-2">Summary:</p>
                 <ul className="text-sm text-emerald-800 space-y-1">
-                  {isChangingPlan && newPlan && (
-                    <li>• Changing plan to: <strong>{PLAN_DATA[newPlan as ServicePlan]?.displayName}</strong></li>
+                  {isChangingPlan && newPlanId && (
+                    <li>• Changing plan to: <strong>{servicePlans.find(p => p.id === newPlanId)?.name ?? '...'}</strong></li>
                   )}
                   {selectedOneTimeServices.size > 0 && (
                     <li>• Adding <strong>{selectedOneTimeServices.size}</strong> one-time service(s)</li>
                   )}
+                  <li className="text-xs text-emerald-700 mt-1">A job order will be created and sent for operations review.</li>
                 </ul>
               </Card>
             )}
@@ -618,21 +698,29 @@ export const ClientList: React.FC = () => {
               <Button
                 variant="outline"
                 className="flex-1"
+                disabled={isSaving}
                 onClick={() => {
                   setIsAddServicesModalOpen(false);
                   setSelectedOneTimeServices(new Set());
                   setIsChangingPlan(false);
-                  setNewPlan(undefined);
+                  setNewPlanId(undefined);
                 }}
               >
                 Cancel
               </Button>
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={handleSaveServices}
-                disabled={!isChangingPlan && selectedOneTimeServices.size === 0}
+                onClick={() => void handleSaveServices()}
+                disabled={isSaving || (!isChangingPlan && selectedOneTimeServices.size === 0) || (isChangingPlan && !newPlanId)}
               >
-                Save Changes
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 size={16} className="animate-spin" />
+                    Creating Job Order...
+                  </span>
+                ) : (
+                  'Create Job Order'
+                )}
               </Button>
             </div>
           </div>
@@ -640,4 +728,5 @@ export const ClientList: React.FC = () => {
       </Modal>
     </div>
   );
-};
+}
+

@@ -26,6 +26,13 @@ interface ServiceOneTimeDetail {
   governmentOffices: { id: number; code: string; name: string }[];
   cities: { id: number; name: string; province?: string | null }[];
   inclusions: { id: number; name: string; category?: string | null }[];
+  taskTemplates: { taskTemplate: { id: number; name: string } }[];
+}
+
+interface TaskTemplateOption {
+  id: number;
+  name: string;
+  description: string | null;
 }
 
 function SearchableMultiSelect({
@@ -241,6 +248,119 @@ function InclusionTagInput({
   );
 }
 
+interface TaskTemplateOption {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
+function TaskTemplateTagInput({
+  templates,
+  selectedIds,
+  onAdd,
+  onRemove,
+}: {
+  templates: TaskTemplateOption[];
+  selectedIds: number[];
+  onAdd: (id: number) => void;
+  onRemove: (id: number) => void;
+}) {
+  const [inputValue, setInputValue] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const filtered = useMemo(
+    () =>
+      templates.filter(
+        (t) =>
+          t.name.toLowerCase().includes(inputValue.toLowerCase()) &&
+          !selectedIds.includes(t.id),
+      ),
+    [templates, inputValue, selectedIds],
+  );
+
+  const handleSelect = (id: number) => {
+    onAdd(id);
+    setInputValue('');
+    setShowDropdown(false);
+  };
+
+  const selectedItems = templates.filter((t) => selectedIds.includes(t.id));
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          Task Templates
+        </label>
+        {selectedIds.length > 0 && (
+          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+            {selectedIds.length} linked
+          </span>
+        )}
+      </div>
+
+      <div className="relative">
+        <input
+          className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="Search task templates..."
+          value={inputValue}
+          onChange={(e) => { setInputValue(e.target.value); setShowDropdown(true); }}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (filtered.length > 0) handleSelect(filtered[0].id);
+            }
+          }}
+        />
+        {showDropdown && (
+          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+            <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
+              {filtered.length > 0 ? (
+                filtered.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-blue-50 text-slate-800 transition-colors"
+                    onMouseDown={() => handleSelect(t.id)}
+                  >
+                    <span className="font-semibold block">{t.name}</span>
+                    {t.description && (
+                      <span className="text-slate-400">{t.description}</span>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-3 text-xs text-slate-400 text-center">
+                  {inputValue.trim() ? 'No matching templates' : templates.length === 0 ? 'No task templates. Create one in Task Workflow settings.' : 'All templates have been linked'}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selectedItems.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {selectedItems.map((t) => (
+            <span
+              key={t.id}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800"
+            >
+              <Layout size={10} />
+              {t.name}
+              <button type="button" onClick={() => onRemove(t.id)}>
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FormState {
   name: string;
   description: string;
@@ -249,6 +369,7 @@ interface FormState {
   governmentOfficeIds: number[];
   cityIds: number[];
   inclusionIds: number[];
+  taskTemplateIds: number[];
 }
 
 export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): React.ReactNode {
@@ -263,6 +384,7 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
     governmentOfficeIds: [],
     cityIds: [],
     inclusionIds: [],
+    taskTemplateIds: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -270,6 +392,7 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
   const [govOffices, setGovOffices] = useState<RefItem[]>([]);
   const [cities, setCities] = useState<RefItem[]>([]);
   const [inclusions, setInclusions] = useState<RefItem[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplateOption[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -277,8 +400,9 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
       fetch('/api/sales/government-offices').then((r) => r.json()),
       fetch('/api/sales/cities').then((r) => r.json()),
       fetch('/api/sales/service-inclusions').then((r) => r.json()),
+      fetch('/api/sales/task-templates').then((r) => r.json()),
     ])
-      .then(([svcData, govData, cityData, incData]) => {
+      .then(([svcData, govData, cityData, incData, tmplData]) => {
         const svc = (svcData as { data?: ServiceOneTimeDetail }).data;
         if (!svc) {
           error('Service not found', 'The requested service could not be loaded.');
@@ -293,10 +417,12 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
           governmentOfficeIds: svc.governmentOffices.map((g) => g.id),
           cityIds: svc.cities.map((c) => c.id),
           inclusionIds: svc.inclusions.map((i) => i.id),
+          taskTemplateIds: svc.taskTemplates.map((t) => t.taskTemplate.id),
         });
         setGovOffices((govData as { data?: RefItem[] }).data ?? []);
         setCities((cityData as { data?: RefItem[] }).data ?? []);
         setInclusions((incData as { data?: RefItem[] }).data ?? []);
+        setTaskTemplates((tmplData as { data?: TaskTemplateOption[] }).data ?? []);
       })
       .catch(() => {
         error('Failed to load data', 'Could not load service details.');
@@ -352,6 +478,7 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
           governmentOfficeIds: form.governmentOfficeIds,
           cityIds: form.cityIds,
           inclusionIds: form.inclusionIds,
+          taskTemplateIds: form.taskTemplateIds,
         }),
       });
       const data = await res.json();
@@ -494,33 +621,13 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
             />
           </div>
 
-          {/* Task Template (coming soon) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Task Template
-              </label>
-              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                Coming soon
-              </span>
-            </div>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className="p-2 border-b border-slate-100 bg-slate-50">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300" size={13} />
-                  <input
-                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-100 rounded-lg text-slate-400 cursor-not-allowed"
-                    placeholder="Task templates coming soon..."
-                    disabled
-                  />
-                </div>
-              </div>
-              <div className="p-6 text-center">
-                <Layout size={24} className="mx-auto text-slate-300 mb-2" />
-                <p className="text-xs text-slate-400">Task template linking will be available in a future update.</p>
-              </div>
-            </div>
-          </div>
+          {/* Task Templates */}
+          <TaskTemplateTagInput
+            templates={taskTemplates}
+            selectedIds={form.taskTemplateIds}
+            onAdd={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: [...prev.taskTemplateIds, id] }))}
+            onRemove={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: prev.taskTemplateIds.filter((v) => v !== id) }))}
+          />
 
           {/* Selection Summary */}
           {(form.governmentOfficeIds.length > 0 || form.cityIds.length > 0) && (

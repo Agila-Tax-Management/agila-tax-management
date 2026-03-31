@@ -1,6 +1,6 @@
 // src/components/hr/PayslipPDF.tsx
 import React from 'react';
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -89,19 +89,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  logoBox: {
-    width: 24,
-    height: 24,
-    backgroundColor: '#1d4ed8',
+  logoImg: {
+    width: 28,
+    height: 28,
     borderRadius: 4,
     marginRight: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
   },
   companyName: {
     fontSize: 12,
@@ -372,9 +364,7 @@ function PayslipPage({
       {/* Header */}
       <View style={s.header}>
         <View style={s.logoRow}>
-          <View style={s.logoBox}>
-            <Text style={s.logoLetter}>A</Text>
-          </View>
+          <Image src="/images/agila_logo.webp" style={s.logoImg} />
           <View>
             <Text style={s.companyName}>AGILA TAX MANAGEMENT</Text>
             <Text style={s.companySubtitle}>Tax Consulting & Business Solutions · Cebu City, Philippines</Text>

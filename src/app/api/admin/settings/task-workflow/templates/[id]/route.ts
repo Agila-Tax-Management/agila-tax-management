@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
   const templateId = parseInt(id, 10);
   if (isNaN(templateId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-  const template = await prisma.taskTemplate.findUnique({
+  const raw = await prisma.taskTemplate.findUnique({
     where: { id: templateId },
     include: {
       departmentRoutes: {
@@ -37,16 +37,23 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
           subtasks: { orderBy: { subtaskOrder: "asc" } },
         },
       },
-      servicePlans: {
-        select: { id: true, name: true, serviceRate: true, recurring: true, status: true },
+      servicePlanLinks: {
+        include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } },
       },
-      serviceOneTimePlans: {
-        select: { id: true, name: true, serviceRate: true, status: true },
+      serviceOneTimeLinks: {
+        include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } },
       },
     },
   });
 
-  if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  if (!raw) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+
+  const { servicePlanLinks, serviceOneTimeLinks, ...rest } = raw;
+  const template = {
+    ...rest,
+    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
+    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+  };
 
   return NextResponse.json({ data: template });
 }

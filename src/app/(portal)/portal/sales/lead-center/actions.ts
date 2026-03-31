@@ -41,6 +41,12 @@ function toSlug(name: string): string {
     .trim();
 }
 
+// ─── Helper: derive company code prefix (4 uppercase alphanumeric chars) ─
+function toCompanyCodePrefix(name: string): string {
+  const stripped = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return stripped.substring(0, 4).padEnd(4, 'X') || 'CLIE';
+}
+
 // ─── Server Action ───────────────────────────────────────────────
 export async function provisionLeadAccountAction(
   input: ProvisionLeadAccountInput,
@@ -82,10 +88,27 @@ export async function provisionLeadAccountAction(
         portalName = `${baseSlug}-${slugSuffix}`;
       }
 
-      // ── Step 1a: Create Client (active) ───────────────────────
+      // ── Step 1b: Generate unique companyCode (e.g. ACME-001) ──
+      const prefix = toCompanyCodePrefix(businessName);
+      const codePrefix = `${prefix}-`;
+      const latestCode = await tx.client.findFirst({
+        where: { companyCode: { startsWith: codePrefix } },
+        orderBy: { companyCode: 'desc' },
+        select: { companyCode: true },
+      });
+      let nextCodeSeq = 1;
+      if (latestCode?.companyCode) {
+        const parts = latestCode.companyCode.split('-');
+        const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+        if (!isNaN(lastSeq)) nextCodeSeq = lastSeq + 1;
+      }
+      const companyCode = `${codePrefix}${String(nextCodeSeq).padStart(3, '0')}`;
+
+      // ── Step 1c: Create Client (active) ───────────────────────
       const newClient = await tx.client.create({
         data: {
           portalName,
+          companyCode,
           businessName,
           businessEntity,
           active: true,
@@ -93,7 +116,7 @@ export async function provisionLeadAccountAction(
         select: { id: true },
       });
 
-      // ── Step 1b: Create ClientUser (inactive) + assignment ─────
+      // ── Step 1d: Create ClientUser (inactive) + assignment ────
       await tx.clientUser.create({
         data: {
           name: fullName,

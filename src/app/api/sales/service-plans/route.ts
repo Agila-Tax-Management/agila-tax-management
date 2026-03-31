@@ -9,7 +9,7 @@ const SERVICE_PLAN_INCLUDE = {
   governmentOffices: { select: { id: true, code: true, name: true } },
   cities: { select: { id: true, name: true, province: true } },
   inclusions: { select: { id: true, name: true, category: true } },
-  taskTemplate: { select: { id: true, name: true } },
+  taskTemplates: { include: { taskTemplate: { select: { id: true, name: true, description: true } } } },
   promos: {
     select: {
       id: true,
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     governmentOfficeIds,
     cityIds,
     inclusionIds,
-    taskTemplateId,
+    taskTemplateIds,
     promoIds,
     ...rest
   } = parsed.data;
@@ -81,7 +81,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const plan = await prisma.servicePlan.create({
     data: {
       ...rest,
-      taskTemplateId: taskTemplateId ?? undefined,
+      taskTemplates:
+        taskTemplateIds.length > 0
+          ? { create: taskTemplateIds.map((id) => ({ taskTemplateId: id })) }
+          : undefined,
       governmentOffices:
         governmentOfficeIds.length > 0
           ? { connect: governmentOfficeIds.map((id) => ({ id })) }

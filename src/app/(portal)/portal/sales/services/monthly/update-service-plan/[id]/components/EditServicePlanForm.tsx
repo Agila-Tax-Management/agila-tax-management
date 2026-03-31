@@ -28,7 +28,13 @@ interface ServicePlanDetail {
   cities: { id: number; name: string; province: string | null }[];
   inclusions: { id: number; name: string; category: string | null }[];
   promos: { id: number; name: string }[];
-  taskTemplate: { id: number; name: string } | null;
+  taskTemplates: { taskTemplate: { id: number; name: string } }[];
+}
+
+interface TaskTemplateOption {
+  id: number;
+  name: string;
+  description: string | null;
 }
 
 function SearchableMultiSelect({
@@ -247,6 +253,119 @@ function InclusionTagInput({
   );
 }
 
+interface TaskTemplateOption {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
+function TaskTemplateTagInput({
+  templates,
+  selectedIds,
+  onAdd,
+  onRemove,
+}: {
+  templates: TaskTemplateOption[];
+  selectedIds: number[];
+  onAdd: (id: number) => void;
+  onRemove: (id: number) => void;
+}) {
+  const [inputValue, setInputValue] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const filtered = useMemo(
+    () =>
+      templates.filter(
+        (t) =>
+          t.name.toLowerCase().includes(inputValue.toLowerCase()) &&
+          !selectedIds.includes(t.id),
+      ),
+    [templates, inputValue, selectedIds],
+  );
+
+  const handleSelect = (id: number) => {
+    onAdd(id);
+    setInputValue('');
+    setShowDropdown(false);
+  };
+
+  const selectedItems = templates.filter((t) => selectedIds.includes(t.id));
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          Task Templates
+        </label>
+        {selectedIds.length > 0 && (
+          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+            {selectedIds.length} linked
+          </span>
+        )}
+      </div>
+
+      <div className="relative">
+        <input
+          className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          placeholder="Search task templates..."
+          value={inputValue}
+          onChange={(e) => { setInputValue(e.target.value); setShowDropdown(true); }}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (filtered.length > 0) handleSelect(filtered[0].id);
+            }
+          }}
+        />
+        {showDropdown && (
+          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+            <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
+              {filtered.length > 0 ? (
+                filtered.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-purple-50 text-slate-800 transition-colors"
+                    onMouseDown={() => handleSelect(t.id)}
+                  >
+                    <span className="font-semibold block">{t.name}</span>
+                    {t.description && (
+                      <span className="text-slate-400">{t.description}</span>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-3 text-xs text-slate-400 text-center">
+                  {inputValue.trim() ? 'No matching templates' : templates.length === 0 ? 'No task templates. Create one in Task Workflow settings.' : 'All templates have been linked'}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selectedItems.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {selectedItems.map((t) => (
+            <span
+              key={t.id}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800"
+            >
+              <Layout size={10} />
+              {t.name}
+              <button type="button" onClick={() => onRemove(t.id)}>
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FormState {
   name: string;
   description: string;
@@ -257,7 +376,7 @@ interface FormState {
   cityIds: number[];
   inclusionIds: number[];
   promoIds: number[];
-  taskTemplateSearch: string;
+  taskTemplateIds: number[];
 }
 
 interface EditServicePlanFormProps {
@@ -278,7 +397,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
     cityIds: [],
     inclusionIds: [],
     promoIds: [],
-    taskTemplateSearch: '',
+    taskTemplateIds: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -287,6 +406,9 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
   const [cities, setCities] = useState<RefItem[]>([]);
   const [inclusions, setInclusions] = useState<RefItem[]>([]);
   const [promos, setPromos] = useState<RefItem[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplateOption[]>([]);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -295,8 +417,9 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
       fetch('/api/sales/cities').then((r) => r.json()),
       fetch('/api/sales/service-inclusions').then((r) => r.json()),
       fetch('/api/sales/promos').then((r) => r.json()),
+      fetch('/api/sales/task-templates').then((r) => r.json()),
     ])
-      .then(([planRes, gov, cty, inc, prm]) => {
+      .then(([planRes, gov, cty, inc, prm, tmpl]) => {
         const plan: ServicePlanDetail = planRes.data;
         setForm({
           name: plan.name,
@@ -308,12 +431,13 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
           cityIds: plan.cities.map((c) => c.id),
           inclusionIds: plan.inclusions.map((i) => i.id),
           promoIds: plan.promos.map((p) => p.id),
-          taskTemplateSearch: '',
+          taskTemplateIds: plan.taskTemplates.map((t) => t.taskTemplate.id),
         });
         setGovOffices(gov.data ?? []);
         setCities(cty.data ?? []);
         setInclusions(inc.data ?? []);
         setPromos(prm.data ?? []);
+        setTaskTemplates(tmpl.data ?? []);
       })
       .catch(() => {
         error('Failed to load plan', 'Could not fetch service plan details.');
@@ -370,6 +494,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
           cityIds: form.cityIds,
           inclusionIds: form.inclusionIds,
           promoIds: form.promoIds,
+          taskTemplateIds: form.taskTemplateIds,
         }),
       });
 
@@ -531,38 +656,13 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
             onCreateNew={handleCreateInclusion}
           />
 
-          {/* Task Template Picker (UI-only) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Task Template
-              </label>
-              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                Coming soon
-              </span>
-            </div>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className="p-2 border-b border-slate-100 bg-slate-50">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-                  <input
-                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-400 opacity-60"
-                    placeholder="Search task templates..."
-                    value={form.taskTemplateSearch}
-                    onChange={(e) => setForm({ ...form, taskTemplateSearch: e.target.value })}
-                    disabled
-                  />
-                </div>
-              </div>
-              <div className="p-6 text-center">
-                <Layout size={24} className="mx-auto text-slate-300 mb-2" />
-                <p className="text-xs font-semibold text-slate-400">No task templates yet</p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Task template management will be available in a future update.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Task Templates */}
+          <TaskTemplateTagInput
+            templates={taskTemplates}
+            selectedIds={form.taskTemplateIds}
+            onAdd={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: [...prev.taskTemplateIds, id] }))}
+            onRemove={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: prev.taskTemplateIds.filter((v) => v !== id) }))}
+          />
 
           {/* Selection Summary */}
           {(form.governmentOfficeIds.length > 0 ||
