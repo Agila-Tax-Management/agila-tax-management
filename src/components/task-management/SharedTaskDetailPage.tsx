@@ -7,9 +7,11 @@ import { Button } from '@/components/UI/button';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Calendar, Tag, Send, Clock,
-  ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search, X,
+  ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search, X, Link,
 } from 'lucide-react';
 import { SubtaskDetailModal, type ActivityEntry } from './SubtaskDetailModal';
+import { JobOrderViewModal } from '@/app/(portal)/portal/sales/job-orders/components/JobOrderViewModal';
+import type { JobOrderRecord } from '@/app/(portal)/portal/sales/job-orders/components/JobOrders';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
 import { useToast } from '@/context/ToastContext';
 import type { AOTask, AOTaskStatus, AOTaskPriority, AOTaskSubtask, AOTeamMember } from '@/lib/types';
@@ -63,6 +65,7 @@ export interface SharedTaskDetailPageProps {
   initialConversations?: ConversationEntry[];
   initialHistoryLogs?: TaskHistoryEntry[];
   onUpdate?: (updated: AOTask) => void;
+  jobOrder?: { id: string; jobOrderNumber: string } | null;
 }
 
 const DEFAULT_STATUS_COLORS: Record<string, string> = {
@@ -93,15 +96,20 @@ function getStatusColor(statusName: string, deptStatuses?: DeptStatus[]): string
 
 function formatHistoryChange(entry: TaskHistoryEntry): string {
   switch (entry.changeType) {
-    case 'STATUS_CHANGED':   return `Changed status: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
-    case 'PRIORITY_CHANGED': return `Changed priority: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
-    case 'ASSIGNEE_CHANGED': return `Changed assignee: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
-    case 'DUE_DATE_CHANGED': return `Updated due date to ${entry.newValue ?? '—'}`;
+    case 'STATUS_CHANGED':      return `Changed status: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
+    case 'PRIORITY_CHANGED':    return `Changed priority: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
+    case 'ASSIGNEE_CHANGED':    return `Changed assignee: ${entry.oldValue ?? '—'} → ${entry.newValue ?? '—'}`;
+    case 'DUE_DATE_CHANGED':    return `Updated due date to ${entry.newValue ?? '—'}`;
+    case 'JOB_ORDER_CHANGED':
+      if (!entry.oldValue && entry.newValue)  return `Linked job order: ${entry.newValue}`;
+      if (entry.oldValue && !entry.newValue)  return `Removed job order: ${entry.oldValue}`;
+      if (entry.oldValue && entry.newValue)   return `Changed job order: ${entry.oldValue} → ${entry.newValue}`;
+      return 'Updated job order reference';
     case 'DETAILS_UPDATED':
       if (entry.oldValue && entry.newValue) return `Renamed: "${entry.oldValue}" → "${entry.newValue}"`;
       return 'Updated task details';
-    case 'CREATED':          return 'Task created';
-    default:                 return entry.changeType.replace(/_/g, ' ').toLowerCase();
+    case 'CREATED':             return 'Task created';
+    default:                    return entry.changeType.replace(/_/g, ' ').toLowerCase();
   }
 }
 
@@ -136,6 +144,7 @@ export function SharedTaskDetailPage({
   initialConversations = [],
   initialHistoryLogs = [],
   onUpdate,
+  jobOrder,
 }: SharedTaskDetailPageProps): React.ReactNode {
   const router = useRouter();
   const { error: toastError } = useToast();
@@ -155,6 +164,14 @@ export function SharedTaskDetailPage({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [isDueDateEditing, setIsDueDateEditing] = useState(false);
+  const [isJobOrderModalOpen, setIsJobOrderModalOpen] = useState(false);
+  const [jobOrderDetail, setJobOrderDetail] = useState<JobOrderRecord | null>(null);
+  const [isLoadingJO, setIsLoadingJO] = useState(false);
+  const [currentJobOrder, setCurrentJobOrder] = useState<{ id: string; jobOrderNumber: string } | null>(jobOrder ?? null);
+  const [isEditingJobOrder, setIsEditingJobOrder] = useState(false);
+  const [joSearchQuery, setJoSearchQuery] = useState('');
+  const [joOptions, setJoOptions] = useState<Array<{ id: string; jobOrderNumber: string }>>([]);
+  const [isSearchingJO, setIsSearchingJO] = useState(false);
   // Activity logs keyed by subtask ID — persists across modal open/close and parent re-renders
   const [subtaskActivityLogs, setSubtaskActivityLogs] = useState<Record<string, ActivityEntry[]>>({});
   // Inline editing state for description and client
@@ -455,6 +472,50 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
     router.push('/portal/task-management');
   };
 
+  const handleOpenJobOrder = async () => {
+    if (!currentJobOrder) return;
+    if (jobOrderDetail && jobOrderDetail.id === currentJobOrder.id) { setIsJobOrderModalOpen(true); return; }
+    setIsLoadingJO(true);
+    try {
+      const res = await fetch(`/api/sales/job-orders/${currentJobOrder.id}`);
+      if (!res.ok) { toastError('Failed to load job order', 'Please try again.'); return; }
+      const json = await res.json() as { data: JobOrderRecord };
+      setJobOrderDetail(json.data);
+      setIsJobOrderModalOpen(true);
+    } catch {
+      toastError('Network error', 'Could not load the job order.');
+    } finally {
+      setIsLoadingJO(false);
+    }
+  };
+
+  const handleStartEditJobOrder = async () => {
+    setIsEditingJobOrder(true);
+    setJoSearchQuery('');
+    if (joOptions.length > 0) return;
+    setIsSearchingJO(true);
+    try {
+      const res = await fetch('/api/sales/job-orders');
+      if (!res.ok) return;
+      const json = await res.json() as { data: Array<{ id: string; jobOrderNumber: string }> };
+      setJoOptions(json.data.map(jo => ({ id: jo.id, jobOrderNumber: jo.jobOrderNumber })));
+    } catch {
+      // silently fail — user can still cancel
+    } finally {
+      setIsSearchingJO(false);
+    }
+  };
+
+  const handleSaveJobOrder = async (joId: string | null, joNum: string | null) => {
+    setIsSaving(true);
+    const ok = await patchTask({ jobOrderId: joId });
+    setIsSaving(false);
+    if (!ok) { toastError('Failed to update job order', 'Please try again.'); return; }
+    setCurrentJobOrder(joId && joNum ? { id: joId, jobOrderNumber: joNum } : null);
+    setJobOrderDetail(null);
+    setIsEditingJobOrder(false);
+  };
+
   // Build unified activity feed sorted chronologically
   type ActivityItem =
     | { kind: 'conversation'; id: number;  createdAt: string; message: string; author: { id: string; name: string; image: string | null } }
@@ -468,6 +529,9 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
   ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   const selectedSubtask = (editingTask.subtasks ?? []).find(s => s.id === selectedSubtaskId);
+  const joSearchResults = joOptions
+    .filter(jo => jo.jobOrderNumber.toLowerCase().includes(joSearchQuery.toLowerCase()))
+    .slice(0, 8);
   const dueDateInputValue = editingTask.dueDate
     ? new Date(editingTask.dueDate).toISOString().slice(0, 10)
     : '';
@@ -533,10 +597,11 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
           {/* Left: Details */}
           <div className="w-3/5 p-6 overflow-y-auto border-r border-slate-100 space-y-6">
 
-            {/* Client */}
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Client</p>
-              {isEditingClient ? (
+            {/* Client + Job Order (2-col) */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Client</p>
+                {isEditingClient ? (
                 <div className="space-y-2">
                   <select
                     autoFocus
@@ -573,6 +638,77 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
                   {clientName}
                 </p>
               )}
+              </div>
+
+              {/* Job Order */}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Job Order</p>
+                {isEditingJobOrder ? (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={joSearchQuery}
+                        onChange={e => setJoSearchQuery(e.target.value)}
+                        placeholder={isSearchingJO ? 'Loading…' : 'Search by JO number…'}
+                        disabled={isSearchingJO}
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0f766e] disabled:bg-slate-50"
+                      />
+                      {joSearchQuery && joSearchResults.length > 0 && (
+                        <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                          {joSearchResults.map(jo => (
+                            <button
+                              key={jo.id}
+                              onClick={() => void handleSaveJobOrder(jo.id, jo.jobOrderNumber)}
+                              className="w-full text-left px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 transition"
+                            >
+                              {jo.jobOrderNumber}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {joSearchQuery && !isSearchingJO && joSearchResults.length === 0 && (
+                        <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-sm px-3 py-2">
+                          <p className="text-xs text-slate-400 italic">No results found.</p>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setIsEditingJobOrder(false)}
+                      className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : currentJobOrder ? (
+                  <div className="group flex items-center gap-1.5">
+                    <button
+                      onClick={() => void handleOpenJobOrder()}
+                      className="text-sm font-bold text-blue-600 hover:underline transition"
+                      title="Click to view job order"
+                    >
+                      {isLoadingJO ? 'Loading…' : currentJobOrder.jobOrderNumber}
+                    </button>
+                    <button
+                      onClick={() => void handleSaveJobOrder(null, null)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-rose-500 rounded p-0.5"
+                      title="Remove job order reference"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => void handleStartEditJobOrder()}
+                    className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-[#0f766e] transition"
+                    title="Assign a job order"
+                  >
+                    <Link size={13} />
+                    <span className="italic">Assign job order</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Description */}
@@ -1149,6 +1285,16 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
           onAddActivity={handleAddSubtaskActivity}
           departments={(allDeptStatuses ?? []).map(d => ({ id: d.id, name: d.name }))}
           onParentTitleUpdate={newTitle => update({ ...editingTask, title: newTitle, updatedAt: new Date().toISOString() })}
+        />
+      )}
+
+      {jobOrderDetail && (
+        <JobOrderViewModal
+          isOpen={isJobOrderModalOpen}
+          onClose={() => setIsJobOrderModalOpen(false)}
+          jobOrder={jobOrderDetail}
+          onUpdate={jo => setJobOrderDetail(jo)}
+          onEdit={() => {}}
         />
       )}
     </>

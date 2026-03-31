@@ -51,7 +51,8 @@ model JobOrder {
     executive        User?     @relation("JobOrderExecutive", fields: [executiveId], references: [id])
     dateExecutiveAck DateTime?
 
-    items JobOrderItem[]
+    items  JobOrderItem[]
+    tasks  Task[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

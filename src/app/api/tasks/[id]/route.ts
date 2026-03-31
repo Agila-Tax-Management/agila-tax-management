@@ -14,6 +14,7 @@ const taskInclude = {
   assignedTo: {
     select: { id: true, firstName: true, lastName: true, employeeNo: true },
   },
+  jobOrder: { select: { id: true, jobOrderNumber: true } },
   subtasks: {
     orderBy: { order: "asc" as const },
     include: {
@@ -46,6 +47,7 @@ const patchTaskSchema = z.object({
   assignedToId: z.number().int().positive().nullable().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   daysDue: z.number().int().positive().nullable().optional(),
+  jobOrderId: z.string().nullable().optional(),
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
@@ -86,6 +88,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       department: { select: { name: true } },
       status: { select: { name: true } },
       assignedTo: { select: { firstName: true, lastName: true } },
+      jobOrder: { select: { jobOrderNumber: true } },
     },
   });
   if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -125,7 +128,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
   const historyEntries: {
     taskId: number;
     actorId: string;
-    changeType: "STATUS_CHANGED" | "DEPARTMENT_CHANGED" | "ASSIGNEE_CHANGED" | "PRIORITY_CHANGED" | "DUE_DATE_CHANGED" | "DETAILS_UPDATED";
+    changeType: "STATUS_CHANGED" | "DEPARTMENT_CHANGED" | "ASSIGNEE_CHANGED" | "PRIORITY_CHANGED" | "DUE_DATE_CHANGED" | "DETAILS_UPDATED" | "JOB_ORDER_CHANGED";
     oldValue?: string;
     newValue?: string;
   }[] = [];
@@ -203,6 +206,15 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       actorId: session.user.id,
       changeType: "DETAILS_UPDATED",
       newValue: "Description updated",
+    });
+  }
+  if (rest.jobOrderId !== undefined && rest.jobOrderId !== existing.jobOrderId) {
+    historyEntries.push({
+      taskId,
+      actorId: session.user.id,
+      changeType: "JOB_ORDER_CHANGED",
+      oldValue: existing.jobOrder?.jobOrderNumber ?? undefined,
+      newValue: updated.jobOrder?.jobOrderNumber ?? undefined,
     });
   }
 

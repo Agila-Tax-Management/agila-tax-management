@@ -33,9 +33,10 @@ interface TaskDetailPageProps {
   taskId: number;
   initialConversations: ConversationEntry[];
   initialHistoryLogs: TaskHistoryEntry[];
+  jobOrder?: { id: string; jobOrderNumber: string } | null;
 }
 
-export function TaskDetailPage({ task, taskId, initialConversations, initialHistoryLogs }: TaskDetailPageProps) {
+export function TaskDetailPage({ task, taskId, initialConversations, initialHistoryLogs, jobOrder }: TaskDetailPageProps) {
   const { departments } = useTaskDepartments();
   const { data: session } = authClient.useSession();
   const [teamMembers, setTeamMembers] = useState<AOTeamMember[]>([]);
@@ -88,6 +89,7 @@ export function TaskDetailPage({ task, taskId, initialConversations, initialHist
       allDeptStatuses={allDeptStatuses}
       initialConversations={initialConversations}
       initialHistoryLogs={initialHistoryLogs}
+      jobOrder={jobOrder ?? null}
     />
   );
 }

@@ -40,6 +40,7 @@ export default async function TaskDetailRoute({
     include: {
       department: { select: { id: true, name: true } },
       status: { select: { id: true, name: true } },
+      jobOrder: { select: { id: true, jobOrderNumber: true } },
       subtasks: {
         orderBy: { order: 'asc' as const },
         include: {
@@ -105,12 +106,14 @@ export default async function TaskDetailRoute({
     actor: { id: h.actor.id, name: h.actor.name },
   }));
 
+  const jobOrder = task.jobOrder ?? null;
   return (
     <TaskDetailPage
       task={unified}
       taskId={taskId}
       initialConversations={initialConversations}
       initialHistoryLogs={initialHistoryLogs}
+      jobOrder={jobOrder}
     />
   );
 }
