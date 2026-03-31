@@ -1,27 +1,22 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ClipboardList, Calendar, UserCircle, CheckCircle, LayoutDashboard
 } from 'lucide-react';
-import { INITIAL_LIAISON_TASKS, CURRENT_LIAISON } from '@/lib/mock-liaison-data';
 
-const TASK_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.status !== 'Done').length;
-const MY_TASK_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.assigneeId === CURRENT_LIAISON.id && t.status !== 'Done').length;
-const OVERDUE_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.assigneeId === CURRENT_LIAISON.id && t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-17')).length;
+interface LiaisonSidebarData {
+  dashboardBadge: number;
+  taskBoardBadge: number;
+  myTasksBadge: number;
+}
 
-const LIAISON_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/liaison/dashboard', badge: OVERDUE_BADGE_COUNT },
-  {
-    id: 'management',
-    label: 'MANAGEMENT',
-    isSection: true,
-  },
-  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison/tasks', badge: TASK_BADGE_COUNT },
-  { id: 'myTasks', label: 'My Tasks', icon: CheckCircle, href: '/portal/liaison/my-task', badge: MY_TASK_BADGE_COUNT },
-  { id: 'calendar', label: 'Schedule Calendar', icon: Calendar, href: '/portal/liaison/calendar', badge: 0 },
-];
+const EMPTY_SIDEBAR_DATA: LiaisonSidebarData = {
+  dashboardBadge: 0,
+  taskBoardBadge: 0,
+  myTasksBadge: 0,
+};
 
 interface LiaisonSidebarProps {
   isOpen: boolean;
@@ -31,6 +26,42 @@ interface LiaisonSidebarProps {
 export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [badgeData, setBadgeData] = useState<LiaisonSidebarData>(EMPTY_SIDEBAR_DATA);
+
+  const navItems = useMemo(() => {
+    return [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/liaison/dashboard', badge: badgeData.dashboardBadge },
+      {
+        id: 'management',
+        label: 'MANAGEMENT',
+        isSection: true,
+      },
+      { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison/tasks', badge: badgeData.taskBoardBadge },
+      { id: 'myTasks', label: 'My Tasks', icon: CheckCircle, href: '/portal/liaison/my-task', badge: badgeData.myTasksBadge },
+      { id: 'report', label: 'Report', icon: Calendar, href: '/portal/liaison/report' },
+    ];
+  }, [badgeData.dashboardBadge, badgeData.myTasksBadge, badgeData.taskBoardBadge]);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- fetching sidebar badge counts from API */
+  useEffect(() => {
+    async function loadSidebarCounts(): Promise<void> {
+      try {
+        const response = await fetch('/api/liaison/sidebar', { cache: 'no-store' });
+        if (!response.ok) {
+          setBadgeData(EMPTY_SIDEBAR_DATA);
+          return;
+        }
+
+        const json = (await response.json()) as { data?: LiaisonSidebarData };
+        setBadgeData(json.data ?? EMPTY_SIDEBAR_DATA);
+      } catch {
+        setBadgeData(EMPTY_SIDEBAR_DATA);
+      }
+    }
+
+    void loadSidebarCounts();
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -66,7 +97,7 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-          {LIAISON_NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             if (item.isSection) {
               return (
                 <div key={item.id} className="pt-6 pb-2">
