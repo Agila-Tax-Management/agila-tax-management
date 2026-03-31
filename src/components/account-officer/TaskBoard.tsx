@@ -13,17 +13,10 @@ import {
   Search, Plus, LayoutList, Columns3,
   Calendar, GripVertical, Tag, Filter, Loader2, X, ChevronDown,
 } from 'lucide-react';
-import type { AOTaskStatus, AOTaskPriority } from '@/lib/types';
+import type { AOTaskPriority } from '@/lib/types';
+import type { TaskApiStatus } from '@/context/TaskDepartmentsContext';
 
-const STATUS_ORDER: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
 const PRIORITY_OPTIONS: AOTaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
-
-const STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warning' | 'success'; color: string }> = {
-  'To Do': { variant: 'neutral', color: 'bg-slate-500' },
-  'In Progress': { variant: 'info', color: 'bg-blue-500' },
-  'Review': { variant: 'warning', color: 'bg-amber-500' },
-  'Done': { variant: 'success', color: 'bg-emerald-500' },
-};
 
 const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
   Low: { variant: 'neutral' },
@@ -31,6 +24,23 @@ const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'w
   High: { variant: 'warning' },
   Urgent: { variant: 'danger' },
 };
+
+const DEFAULT_STATUSES: TaskApiStatus[] = [
+  { id: -1, name: 'To Do',       color: '#64748b', statusOrder: 1, isEntryStep: true,  isExitStep: false },
+  { id: -2, name: 'In Progress', color: '#3b82f6', statusOrder: 2, isEntryStep: false, isExitStep: false },
+  { id: -3, name: 'For Review',  color: '#ca8a04', statusOrder: 3, isEntryStep: false, isExitStep: false },
+  { id: -4, name: 'Done',        color: '#16a34a', statusOrder: 4, isEntryStep: false, isExitStep: true  },
+];
+
+type BadgeVariant = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
+function statusVariant(name: string): BadgeVariant {
+  const lower = name.toLowerCase();
+  if (/done|complet|finish/.test(lower)) return 'success';
+  if (/progress|doing|active|ongoing/.test(lower)) return 'info';
+  if (/review|pending|wait|hold/.test(lower)) return 'warning';
+  if (/cancel|block|reject|fail/.test(lower)) return 'danger';
+  return 'neutral';
+}
 
 const DB_PRIORITY_MAP: Record<string, AOTaskPriority> = {
   LOW: 'Low', NORMAL: 'Medium', HIGH: 'High', URGENT: 'Urgent',
@@ -59,7 +69,8 @@ interface LocalTask {
   numericId: number;
   title: string;
   description: string;
-  status: AOTaskStatus;
+  status: string;
+  statusColor: string | null;
   statusId: number;
   priority: AOTaskPriority;
   clientId: string;
@@ -75,22 +86,14 @@ interface LocalClient { id: string; name: string; }
 interface LocalEmployee { id: string; name: string; avatar: string; department: string; }
 interface TemplateItem { id: number; name: string; description: string | null; }
 
-function mapStatus(name: string | null | undefined): AOTaskStatus {
-  if (!name) return 'To Do';
-  const n = name.toLowerCase();
-  if (n.includes('progress')) return 'In Progress';
-  if (n.includes('review')) return 'Review';
-  if (n.includes('done') || n.includes('complet') || n.includes('finish')) return 'Done';
-  return 'To Do';
-}
-
 function mapApiToLocal(t: ApiTask): LocalTask {
   return {
     id: String(t.id),
     numericId: t.id,
     title: t.name,
     description: t.description ?? '',
-    status: mapStatus(t.status?.name),
+    status: t.status?.name ?? '',
+    statusColor: t.status?.color ?? null,
     statusId: t.status?.id ?? 0,
     priority: DB_PRIORITY_MAP[t.priority ?? 'NORMAL'] ?? 'Medium',
     clientId: String(t.client?.id ?? ''),
@@ -117,7 +120,7 @@ export function TaskBoard() {
   // UI
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<AOTaskStatus | 'all'>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<AOTaskPriority | 'all'>('all');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
@@ -156,6 +159,9 @@ export function TaskBoard() {
     [departments],
   );
   const aoDeptStatuses = aoDept?.statuses ?? [];
+  const kanbanStatuses = aoDeptStatuses.length > 0
+    ? [...aoDeptStatuses].sort((a, b) => a.statusOrder - b.statusOrder)
+    : DEFAULT_STATUSES;
 
   /* â”€â”€â”€ Fetch tasks â”€â”€â”€ */
   const fetchTasks = useCallback(async () => {
@@ -182,8 +188,11 @@ export function TaskBoard() {
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 
-  const isOverdue = (t: LocalTask) =>
-    t.status !== 'Done' && new Date(t.dueDate) < new Date();
+  const isOverdue = (t: LocalTask) => {
+    const statusDef = aoDeptStatuses.find(s => s.id === t.statusId);
+    const isDone = statusDef ? statusDef.isExitStep : /done|complet|finish/i.test(t.status);
+    return !isDone && new Date(t.dueDate) < new Date();
+  };
 
   const daysLeftInfo = (dueDate: string, status: string): { label: string; cls: string } | null => {
     if (/done|complet|finish/i.test(status)) return null;
@@ -291,18 +300,19 @@ export function TaskBoard() {
   };
 
   /* â”€â”€â”€ Drag & Drop â”€â”€â”€ */
-  const handleDrop = async (targetStatus: AOTaskStatus) => {
+  const handleDrop = async (targetStatusName: string, targetStatusId: number) => {
     if (!draggedTaskId) return;
     const task = tasks.find(t => t.id === draggedTaskId);
     if (!task) return;
-    const statusEntry = aoDeptStatuses.find(s => s.name === targetStatus);
-    setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, status: targetStatus } : t));
+    setTasks(prev => prev.map(t =>
+      t.id === draggedTaskId ? { ...t, status: targetStatusName, statusId: targetStatusId } : t,
+    ));
     setDraggedTaskId(null);
-    if (statusEntry?.id) {
+    if (targetStatusId > 0) {
       await fetch(`/api/tasks/${task.numericId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statusId: statusEntry.id }),
+        body: JSON.stringify({ statusId: targetStatusId }),
       });
     }
   };
@@ -360,11 +370,13 @@ export function TaskBoard() {
             <Filter size={14} className="text-slate-400" />
             <select
               value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value as AOTaskStatus | 'all')}
+              onChange={e => setFilterStatus(e.target.value)}
               className="h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#25238e]"
             >
               <option value="all">All Status</option>
-              {STATUS_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+              {kanbanStatuses.map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
             </select>
             <select
               value={filterPriority}
@@ -420,7 +432,7 @@ export function TaskBoard() {
                     </div>
                     <span className="text-xs text-slate-600 truncate">{task.assigneeName.split(' ')[0]}</span>
                   </div>
-                  <Badge variant={STATUS_CONFIG[task.status].variant} className="text-[9px] w-fit">{task.status}</Badge>
+                  <Badge variant={statusVariant(task.status)} className="text-[9px] w-fit">{task.status}</Badge>
                   <div className="flex flex-col gap-0.5">
                     <span className={`text-xs font-bold flex items-center gap-1 ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>
                       <Calendar size={12} /> {formatDate(task.dueDate)}
@@ -437,20 +449,20 @@ export function TaskBoard() {
 
       {/* Kanban View */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {STATUS_ORDER.map(status => {
-            const columnTasks = filteredTasks.filter(t => t.status === status);
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${kanbanStatuses.length === 3 ? 'lg:grid-cols-3' : kanbanStatuses.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+          {kanbanStatuses.map(status => {
+            const columnTasks = filteredTasks.filter(t => t.statusId === status.id || t.status === status.name);
             return (
               <div
-                key={status}
+                key={status.id}
                 className="bg-slate-50 rounded-2xl p-3 min-h-100"
                 onDragOver={e => e.preventDefault()}
-                onDrop={() => void handleDrop(status)}
+                onDrop={() => void handleDrop(status.name, status.id)}
               >
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[status].color}`} />
-                    <span className="text-xs font-black text-slate-700 uppercase tracking-wide">{status}</span>
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: status.color ?? '#64748b' }} />
+                    <span className="text-xs font-black text-slate-700 uppercase tracking-wide">{status.name}</span>
                   </div>
                   <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full">{columnTasks.length}</span>
                 </div>
