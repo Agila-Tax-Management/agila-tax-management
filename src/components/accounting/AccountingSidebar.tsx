@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CreditCard, FileText, Receipt,
-  BarChart3, Calculator,
+  BarChart3, Calculator, BookOpen, PenLine,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
@@ -21,12 +21,19 @@ const ACCOUNTING_NAV_ITEMS = [
   { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting/payments', badge: pendingCount },
   { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting/invoices' },
   { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting/billing' },
+  { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting/journaling' },
   {
     id: 'analytics',
     label: 'ANALYTICS',
     isSection: true,
   },
   { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/accounting/reports' },
+  {
+    id: 'tools',
+    label: 'TOOLS',
+    isSection: true,
+  },
+  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting/chartofaccounts' },
 ];
 
 interface AccountingSidebarProps {
