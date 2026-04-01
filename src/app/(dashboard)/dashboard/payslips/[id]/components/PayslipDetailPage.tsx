@@ -401,7 +401,7 @@ export function PayslipDetailPage() {
             &nbsp;·&nbsp;Payout: {fmtDate(payslip.payrollPeriod.payoutDate)}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {payslip.acknowledgedAt === null ? (
             <Button
               className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -731,7 +731,7 @@ export function PayslipDetailPage() {
               pending: payslip.acknowledgedAt === null },
           ].map(({ icon: Icon, label, name, sub, pending }) => (
             <div key={label} className="flex items-start gap-2">
-              <Icon size={14} className="mt-0.5 text-muted-foreground flex-shrink-0" />
+              <Icon size={14} className="mt-0.5 text-muted-foreground shrink-0" />
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
                 <p className="font-semibold text-foreground">{name ?? '—'}</p>
