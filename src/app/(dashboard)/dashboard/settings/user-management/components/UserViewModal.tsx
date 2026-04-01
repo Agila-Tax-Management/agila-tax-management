@@ -67,7 +67,7 @@ export default function UserViewModal({
       <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
+          <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
             {initials}
           </div>
           <div className="min-w-0 flex-1">

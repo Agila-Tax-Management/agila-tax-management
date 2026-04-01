@@ -97,8 +97,8 @@ export function CreateJobOrderModal({ isOpen, onClose, lead, onCreated }: Create
                       <td className="px-4 py-2.5">
                         <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
                           svc.type === 'Recurring'
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                            : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                            ? 'bg-blue-100 text-blue-700 dark:text-blue-400'
+                            : 'bg-purple-100 text-purple-700 dark:text-purple-400'
                         }`}>
                           {svc.type}
                         </span>

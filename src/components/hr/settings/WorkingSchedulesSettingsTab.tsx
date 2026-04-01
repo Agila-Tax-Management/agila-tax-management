@@ -237,7 +237,7 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
                         <button
                           type="button"
                           onClick={() => setExpandedId(expandedId === sched.id ? null : sched.id)}
-                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-muted px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-foreground hover:bg-slate-200 dark:hover:bg-muted/80"
+                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-foreground hover:bg-slate-200"
                         >
                           {expandedId === sched.id ? <><ChevronUp size={13} /> Hide</> : <><ChevronDown size={13} /> View</>}
                         </button>

@@ -1,4 +1,4 @@
-﻿// src/components/sales/LeadCenter.tsx
+// src/components/sales/LeadCenter.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, JSX } from 'react';
@@ -266,7 +266,7 @@ export function LeadCenter(): React.ReactNode {
                   key={status.id}
                   className={
                     isOver
-                      ? 'shrink-0 w-72 rounded-2xl p-4 flex flex-col border transition-all duration-200 bg-blue-50/80 dark:bg-blue-950/20 border-blue-300 shadow-lg ring-2 ring-blue-200'
+                      ? 'shrink-0 w-72 rounded-2xl p-4 flex flex-col border transition-all duration-200 bg-blue-50/80 border-blue-300 shadow-lg ring-2 ring-blue-200'
                       : 'shrink-0 w-72 rounded-2xl p-4 flex flex-col border transition-all duration-200 bg-muted/40 border-border'
                   }
                   onDragOver={(e) => onDragOver(e, status.id)}
@@ -289,7 +289,7 @@ export function LeadCenter(): React.ReactNode {
                   </div>
 
                   {isOver && draggedId !== null && (
-                    <div className="mb-3 p-3 border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 dark:bg-blue-950/20 flex items-center justify-center">
+                    <div className="mb-3 p-3 border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 flex items-center justify-center">
                       <ArrowRightLeft className="h-4 w-4 text-blue-500 mr-2 animate-bounce" />
                       <span className="text-xs font-bold text-blue-600">Drop to move here</span>
                     </div>
@@ -352,15 +352,15 @@ export function LeadCenter(): React.ReactNode {
                             {lead.isAccountCreated && !lead.isCreatedJobOrder && (
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                                 lead.invoices?.[0]?.status === 'PAID'
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                  ? 'bg-blue-100 text-blue-700 dark:text-blue-400'
+                                  : 'bg-amber-100 text-amber-700 dark:text-amber-400'
                               }`}>
                                 <Clock size={9} className="shrink-0" />
                                 {lead.invoices?.[0]?.status === 'PAID' ? 'Ready for Turn Over' : 'Waiting for Payment'}
                               </span>
                             )}
                             {lead.isCreatedJobOrder && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
                                 <CheckCircle2 size={9} className="shrink-0" /> Converted
                               </span>
                             )}

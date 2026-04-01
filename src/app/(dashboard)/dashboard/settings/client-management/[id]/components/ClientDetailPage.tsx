@@ -231,7 +231,7 @@ export default function ClientDetailPage(): React.ReactNode {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-sm font-bold text-blue-700 dark:text-blue-300">
             {clientInitials}
           </div>
           <div>
@@ -345,7 +345,7 @@ export default function ClientDetailPage(): React.ReactNode {
                     {/* User */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700 dark:text-blue-300">
                           {getInitials(u.name, u.email)}
                         </div>
                         <div className="min-w-0">
@@ -391,14 +391,14 @@ export default function ClientDetailPage(): React.ReactNode {
                             setEditingUser(u);
                             setFormOpen(true);
                           }}
-                          className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-blue-50 hover:text-blue-600"
                           title="Edit user"
                         >
                           <Pencil size={15} />
                         </button>
                         <button
                           onClick={() => setDeletingUser(u)}
-                          className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                          className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-red-50 hover:text-red-600"
                           title="Remove user"
                         >
                           <Trash2 size={15} />

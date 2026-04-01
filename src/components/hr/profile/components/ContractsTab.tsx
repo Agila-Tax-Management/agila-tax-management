@@ -100,7 +100,7 @@ export function ContractsTab({
           </div>
 
           {hasActiveContract && (
-            <div className="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3">
+            <div className="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 border border-amber-200 dark:border-amber-800 px-4 py-3">
               <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
               <p className="text-sm text-amber-700 dark:text-amber-400">
                 There is already an <span className="font-semibold">Active</span> contract on record.
@@ -127,7 +127,7 @@ export function ContractsTab({
                   key={contract.id}
                   role="button"
                   tabIndex={0}
-                  className="rounded-xl border border-border p-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 dark:hover:bg-blue-950/10 transition-colors"
+                  className="rounded-xl border border-border p-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
                   onClick={() => setSelectedContractId(contract.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') setSelectedContractId(contract.id);
@@ -170,7 +170,7 @@ export function ContractsTab({
                       <button
                         type="button"
                         title="Delete contract"
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteTarget(contract);
@@ -218,7 +218,7 @@ export function ContractsTab({
       >
         <div className="space-y-4">
           {deleteTarget?.status === 'ACTIVE' && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 dark:border-red-800 dark:text-red-400">
               <AlertTriangle size={15} className="mt-0.5 shrink-0" />
               <p className="text-xs font-medium">
                 This is an <strong>Active</strong> contract. Deleting it will immediately remove the

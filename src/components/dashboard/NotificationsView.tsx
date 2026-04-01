@@ -276,7 +276,7 @@ export function NotificationsView() {
                 onClick={() => handleClick(n)}
                 className={`w-full text-left px-5 py-4 flex gap-4 items-start transition-colors group ${
                   !n.read
-                    ? 'bg-indigo-50/40 dark:bg-indigo-950/20 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/30'
+                    ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
                     : 'hover:bg-muted/50'
                 }`}
               >

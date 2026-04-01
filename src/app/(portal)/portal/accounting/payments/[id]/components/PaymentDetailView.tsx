@@ -180,7 +180,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                 {/* Client */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                  <div className="mt-0.5 p-1.5 bg-slate-100 rounded-md">
                     <User size={14} className="text-slate-600" />
                   </div>
                   <div>
@@ -198,7 +198,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
 
                 {/* Payment Date */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                  <div className="mt-0.5 p-1.5 bg-slate-100 rounded-md">
                     <Calendar size={14} className="text-slate-600" />
                   </div>
                   <div>
@@ -209,7 +209,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
 
                 {/* Method */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                  <div className="mt-0.5 p-1.5 bg-slate-100 rounded-md">
                     <CreditCard size={14} className="text-slate-600" />
                   </div>
                   <div>
@@ -220,7 +220,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
 
                 {/* Total Amount */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-emerald-50 dark:bg-emerald-950 rounded-md">
+                  <div className="mt-0.5 p-1.5 bg-emerald-50 rounded-md">
                     <Banknote size={14} className="text-emerald-600" />
                   </div>
                   <div>
@@ -231,7 +231,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
 
                 {/* Unused Credit */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-amber-50 dark:bg-amber-950 rounded-md">
+                  <div className="mt-0.5 p-1.5 bg-amber-50 rounded-md">
                     <Wallet size={14} className="text-amber-600" />
                   </div>
                   <div>
@@ -244,7 +244,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
 
                 {/* Reference */}
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                  <div className="mt-0.5 p-1.5 bg-slate-100 rounded-md">
                     <Hash size={14} className="text-slate-600" />
                   </div>
                   <div>
@@ -259,7 +259,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
               {/* Notes */}
               {payment.notes && (
                 <div className="mt-5 pt-5 border-t border-border flex items-start gap-3">
-                  <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md shrink-0">
+                  <div className="mt-0.5 p-1.5 bg-slate-100 rounded-md shrink-0">
                     <FileText size={14} className="text-slate-600" />
                   </div>
                   <div>
@@ -407,7 +407,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
                         <span className="absolute left-1.75 top-5 bottom-0 w-px bg-border" />
                       )}
                       {/* Dot */}
-                      <span className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-amber-500 bg-amber-100 dark:bg-amber-950" />
+                      <span className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-amber-500 bg-amber-100" />
 
                       <div className="pb-6">
                         <p className="text-xs font-semibold text-foreground leading-tight">

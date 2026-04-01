@@ -186,7 +186,7 @@ function AssignDropdown({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-border rounded-xl shadow-xl z-50 overflow-hidden">
           <div className="p-2 border-b border-border">
             <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
               <Search size={13} className="text-muted-foreground shrink-0" />

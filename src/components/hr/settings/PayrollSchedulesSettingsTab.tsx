@@ -228,7 +228,7 @@ export function PayrollSchedulesSettingsTab(): React.ReactNode {
               <div className="flex items-center justify-between gap-3">
                 {/* Left info */}
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
                     <CalendarRange size={15} className="text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="min-w-0">
@@ -414,7 +414,7 @@ export function PayrollSchedulesSettingsTab(): React.ReactNode {
           )}
 
           {/* EOM info banner */}
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2.5">
+          <div className="rounded-lg bg-blue-50 border border-blue-200 dark:border-blue-800 px-3 py-2.5">
             <p className="text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed">
               <strong>End-of-Month (EOM):</strong> A cut-off end day of 31 automatically resolves
               to the actual last day of each month — 28 or 29 for February, 30 for

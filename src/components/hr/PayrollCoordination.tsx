@@ -310,8 +310,8 @@ export function PayrollCoordination() {
                 className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 dark:border-amber-700 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-200 dark:bg-amber-800 flex items-center justify-center shrink-0">
-                    <Zap size={15} className="text-amber-700 dark:text-amber-300" />
+                  <div className="w-8 h-8 rounded-lg bg-amber-200 flex items-center justify-center shrink-0">
+                    <Zap size={15} className="text-amber-700" />
                   </div>
                   <div>
                     <p className="text-sm font-bold text-black-800">

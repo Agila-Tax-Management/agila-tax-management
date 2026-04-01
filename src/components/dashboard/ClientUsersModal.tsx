@@ -78,7 +78,7 @@ export default function ClientUsersModal({
       <div className="p-6 space-y-4">
         {client && (
           <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:text-blue-300 shrink-0">
               {(client.businessName ?? client.companyCode ?? '?').slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -116,7 +116,7 @@ export default function ClientUsersModal({
                   <tr key={u.id} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:text-blue-300">
                           {getInitials(u.name, u.email)}
                         </div>
                         <div className="min-w-0">

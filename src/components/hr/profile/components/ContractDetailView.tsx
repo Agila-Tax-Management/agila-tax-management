@@ -454,7 +454,7 @@ export function ContractDetailView({
                     key={key}
                     className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
                       compensation[key]
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:text-emerald-400 dark:border-emerald-800'
                         : 'bg-muted text-muted-foreground border-border'
                     }`}
                   >
@@ -464,7 +464,7 @@ export function ContractDetailView({
                 <span
                   className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
                     compensation.deductPagibig
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:text-emerald-400 dark:border-emerald-800'
                       : 'bg-muted text-muted-foreground border-border'
                   }`}
                 >
@@ -496,7 +496,7 @@ export function ContractDetailView({
             </div>
 
             {/* Calculated Rates */}
-            <div className="rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
+            <div className="rounded-xl bg-blue-50 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <CheckCircle size={14} className="text-emerald-500" />
                 <p className="text-xs font-bold text-foreground uppercase tracking-wider">
@@ -548,7 +548,7 @@ export function ContractDetailView({
         {showCompForm && (
           <div className="space-y-5 pt-2 border-t border-border">
             {compensation && (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3">
+              <div className="rounded-lg bg-amber-50 border border-amber-200 dark:border-amber-800 px-4 py-3">
                 <p className="text-xs text-amber-700 dark:text-amber-400">
                   Saving will create a new active compensation and deactivate the current one.
                 </p>
@@ -800,7 +800,7 @@ export function ContractDetailView({
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">
                   Calculated Rates (Preview)
                 </p>
-                <div className="rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
+                <div className="rounded-xl bg-blue-50 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
                       <p className="text-[11px] text-muted-foreground">Salary Basis</p>

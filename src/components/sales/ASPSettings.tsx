@@ -1,4 +1,4 @@
-﻿// src/components/sales/ASPSettings.tsx
+// src/components/sales/ASPSettings.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -257,14 +257,14 @@ export function ASPSettings(): React.ReactNode {
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => setOfficeModal({ open: true, record: office })}
-                                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition-all"
+                                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                 title="Edit"
                               >
                                 <Edit2 size={15} />
                               </button>
                               <button
                                 onClick={() => { void handleDeleteOffice(office); }}
-                                className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
+                                className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                 title="Deactivate"
                               >
                                 <Trash2 size={15} />
@@ -346,14 +346,14 @@ export function ASPSettings(): React.ReactNode {
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => setCityModal({ open: true, record: city })}
-                                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition-all"
+                                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                 title="Edit"
                               >
                                 <Edit2 size={15} />
                               </button>
                               <button
                                 onClick={() => { void handleDeleteCity(city); }}
-                                className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
+                                className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                 title="Deactivate"
                               >
                                 <Trash2 size={15} />
@@ -456,14 +456,14 @@ export function ASPSettings(): React.ReactNode {
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => setStatusModal({ open: true, record: s })}
-                                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition-all"
+                                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                 title="Edit"
                               >
                                 <Edit2 size={15} />
                               </button>
                               <button
                                 onClick={() => { void handleDeleteStatus(s); }}
-                                className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
+                                className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                 title="Delete"
                               >
                                 <Trash2 size={15} />

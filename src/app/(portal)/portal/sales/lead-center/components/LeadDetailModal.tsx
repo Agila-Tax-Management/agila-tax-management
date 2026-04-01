@@ -630,7 +630,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                       <span className="flex-1 text-foreground">
                         {appliedPromo?.name}{appliedPromo?.code ? ` (${appliedPromo.code})` : ''}
                       </span>
-                      <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold">
+                      <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:text-green-400 text-xs font-semibold">
                         {appliedPromo?.discountType === 'PERCENTAGE'
                           ? `−${appliedPromo.discountRate}%`
                           : `−₱${Number(appliedPromo?.discountRate).toLocaleString()}`}
@@ -706,7 +706,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                     {lead.signedTsaUrl}
                   </a>
                   <ExternalLink size={12} className="text-blue-600 shrink-0" />
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[11px] font-semibold shrink-0">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:text-green-400 text-[11px] font-semibold shrink-0">
                     <CheckCircle2 size={10} /> TSA Signed
                   </span>
                 </div>
@@ -778,7 +778,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               variant="outline"
               onClick={() => { void handleDelete(); }}
               disabled={deleting || saving}
-              className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200"
+              className="text-red-600 hover:bg-red-50 border-red-200"
             >
               {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : <Trash2 size={14} className="mr-2" />}
               Delete Lead
@@ -788,7 +788,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                 lead.isAccountCreated ? (
                   lead.isSignedTSA && invoicePaid ? (
                     lead.isCreatedJobOrder ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
                         <CheckCircle2 size={13} /> Job Order Created
                         {(fullLead ?? lead).jobOrders?.[0] && (
                           <a
@@ -801,15 +801,15 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                         )}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-semibold">
                         <Clock size={13} /> Ready for Turn Over
                       </span>
                     )
                   ) : (
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold ${
                       invoicePaid
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
-                        : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
+                        ? 'bg-blue-50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
+                        : 'bg-amber-50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
                     }`}>
                       <Clock size={13} /> {invoicePaid ? 'Ready for Turn Over' : 'Waiting for Payment'}
                     </span>
