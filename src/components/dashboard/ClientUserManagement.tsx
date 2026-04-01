@@ -108,10 +108,10 @@ export default function ClientUserManagement() {
 
   // Stat cards config
   const stats = [
-    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400' },
-    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
-    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' },
-    { label: 'Suspended', value: suspendedCount, icon: Ban, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400' },
+    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:text-blue-400' },
+    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400' },
+    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500 bg-slate-100 dark:text-slate-400' },
+    { label: 'Suspended', value: suspendedCount, icon: Ban, color: 'text-amber-600 bg-amber-50 dark:text-amber-400' },
   ];
 
   return (
@@ -221,7 +221,7 @@ export default function ClientUserManagement() {
                           onClick={() => setViewingUser(user)}
                           className="flex items-center gap-3 hover:opacity-80 transition text-left"
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
                             {initials}
                           </div>
                           <div>
@@ -318,7 +318,7 @@ export default function ClientUserManagement() {
         <Modal isOpen={!!viewingUser} onClose={() => setViewingUser(null)} title="User Details" size="md">
           <div className="p-4 space-y-6">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
+              <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
                 {viewingUser.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">

@@ -314,7 +314,7 @@ export default function ClientManagement(): React.ReactNode {
                             onClick={() => router.push(`/dashboard/settings/client-management/${client.id}`)}
                             className="flex items-center gap-3 text-left transition hover:opacity-80"
                           >
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:text-blue-300">
                               {initials}
                             </div>
                             <div className="min-w-0">
@@ -390,7 +390,7 @@ export default function ClientManagement(): React.ReactNode {
                                 setEditingClient(client);
                                 setFormOpen(true);
                               }}
-                              className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                              className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-blue-50 hover:text-blue-600"
                               title="Edit client"
                             >
                               <Pencil size={15} />
@@ -398,7 +398,7 @@ export default function ClientManagement(): React.ReactNode {
                             {client.active ? (
                               <button
                                 onClick={() => void toggleActive(client)}
-                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-slate-100 hover:text-slate-600"
                                 title="Deactivate client"
                               >
                                 <UserX size={15} />
@@ -406,7 +406,7 @@ export default function ClientManagement(): React.ReactNode {
                             ) : (
                               <button
                                 onClick={() => void toggleActive(client)}
-                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30"
+                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-emerald-50 hover:text-emerald-600"
                                 title="Activate client"
                               >
                                 <Power size={15} />

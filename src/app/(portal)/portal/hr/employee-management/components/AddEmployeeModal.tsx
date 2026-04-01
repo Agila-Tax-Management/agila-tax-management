@@ -755,7 +755,7 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
                           type="button"
                           onClick={() => setS1((p) => ({ ...p, selectedUserId: u.id }))}
                           className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors ${
-                            s1.selectedUserId === u.id ? 'bg-blue-50 dark:bg-blue-950' : ''
+                            s1.selectedUserId === u.id ? 'bg-blue-50' : ''
                           }`}
                         >
                           <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
@@ -887,7 +887,7 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
             )}
 
             {clients.length === 0 && (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-4 py-3">
+              <div className="rounded-lg bg-amber-50 border border-amber-200 dark:border-amber-800 px-4 py-3">
                 <p className="text-xs text-amber-700 dark:text-amber-300">
                   Client/company options not available. Employment will be linked to ATMS by default.
                 </p>
@@ -917,7 +917,7 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
               </div>
 
               {!createdEmploymentId && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-4 py-3">
+                <div className="rounded-lg bg-amber-50 border border-amber-200 dark:border-amber-800 px-4 py-3">
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     No employment record found. Go back to step 2 to add employment, or skip this step.
                   </p>
@@ -1145,7 +1145,7 @@ export function AddEmployeeModal({ isOpen, onClose, onCreated }: AddEmployeeModa
               {baseRateNum > 0 && (
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Calculated Rates</p>
-                  <div className="rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
+                  <div className="rounded-xl bg-blue-50 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
                         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Salary Basis</p>

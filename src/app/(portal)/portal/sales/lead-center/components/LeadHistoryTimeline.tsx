@@ -142,10 +142,10 @@ export function LeadHistoryTimeline({ leadId, initialComments, initialHistory, i
           const matchedInvoice = invoiceNumber ? invoices.find((inv) => inv.invoiceNumber === invoiceNumber) : null;
 
           const statusColors: Record<string, string> = {
-            PAID: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-            UNPAID: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-            PARTIALLY_PAID: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-            OVERDUE: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+            PAID: 'bg-green-100 text-green-700 dark:text-green-400',
+            UNPAID: 'bg-amber-100 text-amber-700 dark:text-amber-400',
+            PARTIALLY_PAID: 'bg-blue-100 text-blue-700 dark:text-blue-400',
+            OVERDUE: 'bg-red-100 text-red-700 dark:text-red-400',
             VOID: 'bg-muted text-muted-foreground',
             DRAFT: 'bg-muted text-muted-foreground',
           };

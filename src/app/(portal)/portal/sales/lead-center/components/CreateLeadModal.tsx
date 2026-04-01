@@ -607,7 +607,7 @@ export function CreateLeadModal({ isOpen, onClose, onSaved }: CreateLeadModalPro
                     <span className="flex-1 text-foreground">
                       {appliedPromo?.name}{appliedPromo?.code ? ` (${appliedPromo.code})` : ''}
                     </span>
-                    <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold">
+                    <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:text-green-400 text-xs font-semibold">
                       {appliedPromo?.discountType === 'PERCENTAGE'
                         ? `−${appliedPromo.discountRate}%`
                         : `−₱${Number(appliedPromo?.discountRate).toLocaleString()}`}

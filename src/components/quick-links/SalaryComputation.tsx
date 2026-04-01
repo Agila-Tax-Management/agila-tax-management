@@ -386,7 +386,7 @@ export function SalaryComputation(): React.ReactNode {
           {/* Net Pay Summary */}
           <Card className="p-6">
             <div className="flex items-center gap-2 mb-5">
-              <div className="p-2 rounded-xl bg-slate-800 dark:bg-slate-600 text-white">
+              <div className="p-2 rounded-xl bg-slate-800 text-white">
                 <Receipt size={16} />
               </div>
               <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
@@ -450,7 +450,7 @@ export function SalaryComputation(): React.ReactNode {
             />
 
             {/* Monthly net highlight */}
-            <div className="mt-4 p-4 rounded-xl bg-slate-900 dark:bg-slate-800 text-white">
+            <div className="mt-4 p-4 rounded-xl bg-slate-900 text-white">
               <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">
                 Monthly Net Pay
               </p>

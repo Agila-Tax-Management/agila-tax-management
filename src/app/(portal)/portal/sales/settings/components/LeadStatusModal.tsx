@@ -137,7 +137,7 @@ export function LeadStatusModal({
       onClick={() => onChange(!checked)}
       className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all w-full ${
         checked
-          ? 'bg-blue-50 border-blue-300 dark:bg-blue-950/30 dark:border-blue-700'
+          ? 'bg-blue-50 border-blue-300 dark:border-blue-700'
           : 'bg-background border-border hover:border-blue-300'
       }`}
     >

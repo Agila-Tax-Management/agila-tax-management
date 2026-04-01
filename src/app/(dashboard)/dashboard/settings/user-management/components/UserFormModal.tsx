@@ -509,7 +509,7 @@ export default function UserFormModal({
                   key={p.key}
                   className={`rounded-xl border p-4 transition ${
                     flags.enabled
-                      ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40 dark:bg-blue-950/30'
+                      ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40'
                       : 'border-border hover:bg-muted/50'
                   }`}
                 >

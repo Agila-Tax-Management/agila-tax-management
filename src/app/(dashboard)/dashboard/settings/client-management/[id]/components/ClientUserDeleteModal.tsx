@@ -30,7 +30,7 @@ export default function ClientUserDeleteModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Remove User" size="sm">
       <div className="space-y-4 p-6">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
             <Trash2 size={18} className="text-red-600 dark:text-red-400" />
           </div>
           <div>

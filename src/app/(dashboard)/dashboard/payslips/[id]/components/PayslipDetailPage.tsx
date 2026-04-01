@@ -761,7 +761,7 @@ export function PayslipDetailPage() {
                 </div>
               ))
             )}
-            <div className="flex justify-between px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30">
+            <div className="flex justify-between px-3 py-2 bg-emerald-50">
               <span className="text-xs font-bold text-emerald-700">Gross Pay</span>
               <span className="text-xs font-black text-emerald-700">{fmt(payslip.grossPay)}</span>
             </div>
@@ -784,7 +784,7 @@ export function PayslipDetailPage() {
                 </div>
               ))
             )}
-            <div className="flex justify-between px-3 py-2 bg-red-50 dark:bg-red-950/30">
+            <div className="flex justify-between px-3 py-2 bg-red-50">
               <span className="text-xs font-bold text-red-700">Total Deductions</span>
               <span className="text-xs font-black text-red-700">{fmt(payslip.totalDeductions)}</span>
             </div>
@@ -793,7 +793,7 @@ export function PayslipDetailPage() {
       </div>
 
       {/* ── Net Pay ── */}
-      <div className="flex items-center justify-between p-5 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-700">
+      <div className="flex items-center justify-between p-5 rounded-xl bg-blue-50 border border-blue-200 dark:border-blue-700">
         <span className="text-sm font-bold text-blue-800 dark:text-blue-200 uppercase tracking-wide">Net Pay</span>
         <span className="text-3xl font-black text-blue-700 dark:text-blue-300">{fmt(payslip.netPay)}</span>
       </div>

@@ -252,7 +252,7 @@ export default function UserManagement(): React.ReactNode {
                           onClick={() => setViewingUser(user)}
                           className="flex items-center gap-3 hover:opacity-80 transition text-left"
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
                             {initials}
                           </div>
                           <div>
@@ -285,14 +285,14 @@ export default function UserManagement(): React.ReactNode {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => setViewingUser(user)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition"
                             title="View details"
                           >
                             <Eye size={15} />
                           </button>
                           <button
                             onClick={() => openEdit(user)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 transition"
                             title="Edit user"
                           >
                             <Pencil size={15} />
@@ -300,7 +300,7 @@ export default function UserManagement(): React.ReactNode {
                           {user.active ? (
                             <button
                               onClick={() => setDeletingUser(user)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition"
                               title="Deactivate user"
                             >
                               <Trash2 size={15} />
@@ -308,7 +308,7 @@ export default function UserManagement(): React.ReactNode {
                           ) : (
                             <button
                               onClick={() => setReactivatingUser(user)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition"
                               title="Reactivate user"
                             >
                               <RotateCcw size={15} />

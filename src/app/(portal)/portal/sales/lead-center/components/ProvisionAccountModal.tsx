@@ -171,7 +171,7 @@ export function ProvisionAccountModal({
       ) : (
         /* ── Step 2: Provisioning Form ─────────────────────────── */
         <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[80vh]">
-          <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+          <p className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
             The portal user will be <strong>inactive</strong> until manually activated from
             the Client Users settings.
           </p>

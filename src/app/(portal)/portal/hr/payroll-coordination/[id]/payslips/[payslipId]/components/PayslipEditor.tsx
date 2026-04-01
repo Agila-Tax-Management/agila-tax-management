@@ -1038,7 +1038,7 @@ export function PayslipEditor() {
       </Card>
 
       {!canEdit && payslip.payrollPeriod.status === 'APPROVED' && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
           <RotateCcw size={14} />
           <span>This payroll is <strong>Approved</strong>. To edit deductions, revert to Processing first.</span>
           <Button

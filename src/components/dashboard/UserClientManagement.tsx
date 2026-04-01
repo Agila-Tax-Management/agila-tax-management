@@ -335,7 +335,7 @@ export default function UserClientManagement(): React.ReactNode {
                             onClick={() => setViewingUser(user)}
                             className="flex items-center gap-3 text-left transition hover:opacity-80"
                           >
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:text-blue-300">
                               {initials}
                             </div>
                             <div>
