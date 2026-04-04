@@ -1098,80 +1098,102 @@ async function main(): Promise<void> {
   }
   console.log(`  ✓ ${SERVICE_INCLUSIONS.length} service inclusions seeded`);
 
-  const birOffice   = await prisma.governmentOffice.findUnique({ where: { code: "BIR" } });
-  const mayorOffice = await prisma.governmentOffice.findUnique({ where: { code: "MAYOR" } });
-  const cebuCity    = await prisma.city.findUnique({ where: { name: "Cebu City" } });
+  const birOffice      = await prisma.governmentOffice.findUnique({ where: { code: "BIR" } });
+  const mayorOffice    = await prisma.governmentOffice.findUnique({ where: { code: "MAYOR" } });
+  const cebuCity       = await prisma.city.findUnique({ where: { name: "Cebu City" } });
 
-  const vatTemplate = await prisma.taskTemplate.findFirst({ where: { name: "BIR 2550M – Monthly VAT Return" } });
-  const tinTemplate = await prisma.taskTemplate.findFirst({ where: { name: "BIR TIN Registration – New Business" } });
-
-  // Service Plan: Starter VAT Monthly
-  const existingPlan = await prisma.servicePlan.findFirst({ where: { name: "Starter VAT Monthly Plan" } });
-  if (!existingPlan) {
-    await prisma.servicePlan.create({
-      data: {
-        name: "Starter VAT Monthly Plan",
-        description: "Essential monthly tax compliance package for VAT-registered sole proprietors and professionals. Covers monthly VAT filing, withholding tax, bookkeeping, and government remittances.",
-        recurring: "MONTHLY",
-        serviceRate: 3500,
-        status: "ACTIVE",
-        taskTemplates: vatTemplate ? { create: [{ taskTemplateId: vatTemplate.id }] } : undefined,
-        governmentOffices: birOffice   ? { connect: [{ id: birOffice.id }] }   : undefined,
-        cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
-        inclusions: {
-          connect: [
-            "BIR Monthly VAT Filing (2550M)",
-            "BIR Quarterly Income Tax (1701Q)",
-            "BIR Withholding Tax (1601C)",
-            "Bookkeeping",
-            "Government Remittances",
-          ].map((name) => ({ name })),
-        },
-      },
-    });
-    console.log("  ✓ Service plan 'Starter VAT Monthly Plan' seeded");
-  }
-
-  // One-Time Service: BIR TIN Registration
-  const existingOneTime = await prisma.serviceOneTime.findFirst({ where: { name: "BIR TIN Registration (New Business)" } });
-  if (!existingOneTime) {
-    await prisma.serviceOneTime.create({
-      data: {
-        name: "BIR TIN Registration (New Business)",
-        description: "End-to-end processing of BIR TIN application and Certificate of Registration (COR) for newly registered businesses. Includes form preparation, RDO submission, and Books of Accounts registration.",
-        serviceRate: 1500,
-        status: "ACTIVE",
-        taskTemplates: tinTemplate ? { create: [{ taskTemplateId: tinTemplate.id }] } : undefined,
-        governmentOffices: birOffice  ? { connect: [{ id: birOffice.id }] }  : undefined,
-        cities:            cebuCity   ? { connect: [{ id: cebuCity.id }] }   : undefined,
-        inclusions: {
-          connect: [{ name: "BIR TIN Registration" }],
-        },
-      },
-    });
-    console.log("  ✓ One-time service 'BIR TIN Registration (New Business)' seeded");
-  }
-
-  // One-Time Service: Mayor's Permit Renewal
+  const vatTemplate    = await prisma.taskTemplate.findFirst({ where: { name: "BIR 2550M – Monthly VAT Return" } });
+  const tinTemplate    = await prisma.taskTemplate.findFirst({ where: { name: "BIR TIN Registration – New Business" } });
   const permitTemplate = await prisma.taskTemplate.findFirst({ where: { name: "Mayor's Permit Renewal" } });
-  const existingPermitService = await prisma.serviceOneTime.findFirst({ where: { name: "Mayor's Permit Renewal (Annual)" } });
-  if (!existingPermitService) {
-    await prisma.serviceOneTime.create({
-      data: {
-        name: "Mayor's Permit Renewal (Annual)",
-        description: "Annual renewal of the LGU Business Permit / Mayor's Permit. Includes barangay clearance processing, BPLO submission, fee payment, and permit delivery to the client.",
-        serviceRate: 1200,
-        status: "ACTIVE",
-        taskTemplates: permitTemplate ? { create: [{ taskTemplateId: permitTemplate.id }] } : undefined,
-        governmentOffices: mayorOffice ? { connect: [{ id: mayorOffice.id }] } : undefined,
-        cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
-        inclusions: {
-          connect: [{ name: "Business Permit Renewal" }],
-        },
+
+  // ── 1. RECURRING COMPLIANCE SERVICE: Expanded Withholding Tax & VAT
+  const ewtService = await prisma.service.upsert({
+    where: { code: "TAX-EWT-MO" },
+    update: {},
+    create: {
+      code: "TAX-EWT-MO",
+      name: "Expanded Withholding Tax & VAT Filing",
+      description: "Monthly preparation and filing of EWT (1601-C/0619-E) and VAT (2550M) returns. Includes automated maker-checker workflows.",
+      billingType: "RECURRING",
+      frequency: "MONTHLY",
+      serviceRate: 3500,
+      isVatable: true,
+      status: "ACTIVE",
+      taskTemplates: vatTemplate ? { create: [{ taskTemplateId: vatTemplate.id }] } : undefined,
+      governmentOffices: birOffice ? { connect: [{ id: birOffice.id }] } : undefined,
+      cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
+      inclusions: {
+        connect: [
+          { name: "BIR Monthly VAT Filing (2550M)" },
+          { name: "BIR Withholding Tax (1601C)" },
+        ],
       },
-    });
-    console.log("  ✓ One-time service 'Mayor's Permit Renewal (Annual)' seeded");
-  }
+    },
+  });
+  console.log("  ✓ Recurring Service 'Expanded Withholding Tax & VAT' seeded");
+
+  // ── 2. ONE-TIME SERVICE: BIR TIN Registration
+  const birRegService = await prisma.service.upsert({
+    where: { code: "REG-BIR-NEW" },
+    update: {},
+    create: {
+      code: "REG-BIR-NEW",
+      name: "BIR TIN Registration (New Business)",
+      description: "End-to-end processing of BIR TIN application and Certificate of Registration (COR) for newly registered businesses.",
+      billingType: "ONE_TIME",
+      frequency: "NONE",
+      serviceRate: 1500,
+      isVatable: true,
+      status: "ACTIVE",
+      taskTemplates: tinTemplate ? { create: [{ taskTemplateId: tinTemplate.id }] } : undefined,
+      governmentOffices: birOffice ? { connect: [{ id: birOffice.id }] } : undefined,
+      cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
+      inclusions: { connect: [{ name: "BIR TIN Registration" }] },
+    },
+  });
+  console.log("  ✓ One-time service 'BIR TIN Registration' seeded");
+
+  // ── 3. ONE-TIME SERVICE: Mayor's Permit Renewal
+  await prisma.service.upsert({
+    where: { code: "REG-LGU-REN" },
+    update: {},
+    create: {
+      code: "REG-LGU-REN",
+      name: "Mayor's Permit Renewal",
+      description: "Annual renewal of the LGU Business Permit / Mayor's Permit.",
+      billingType: "ONE_TIME",
+      frequency: "NONE",
+      serviceRate: 1200,
+      isVatable: true,
+      status: "ACTIVE",
+      taskTemplates: permitTemplate ? { create: [{ taskTemplateId: permitTemplate.id }] } : undefined,
+      governmentOffices: mayorOffice ? { connect: [{ id: mayorOffice.id }] } : undefined,
+      cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
+      inclusions: { connect: [{ name: "Business Permit Renewal" }] },
+    },
+  });
+  console.log("  ✓ One-time service 'Mayor's Permit Renewal' seeded");
+
+  // ── 4. SERVICE PACKAGE: Business Starter Kit (Bundle)
+  await prisma.servicePackage.upsert({
+    where: { code: "PKG-STARTER" },
+    update: {},
+    create: {
+      code: "PKG-STARTER",
+      name: "Business Starter Kit",
+      description: "Complete compliance setup for new businesses: BIR Registration + 1st Month EWT/VAT Filing.",
+      packageRate: 4500,
+      isVatable: true,
+      isActive: true,
+      items: {
+        create: [
+          { serviceId: birRegService.id, quantity: 1, overrideRate: 1500 },
+          { serviceId: ewtService.id,    quantity: 1, overrideRate: 3000 },
+        ],
+      },
+    },
+  });
+  console.log("  ✓ Service Package 'Business Starter Kit' seeded");
 
   // ── 11. Seed Sample Tasks ─────────────────────────────────────────
   const superAdminUser = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });

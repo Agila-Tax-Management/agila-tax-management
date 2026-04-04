@@ -1,2 +1,0 @@
--- AlterEnum
-ALTER TYPE "TaskChangeType" ADD VALUE 'JOB_ORDER_CHANGED';

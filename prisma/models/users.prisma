@@ -54,6 +54,25 @@ model User {
   operationsManagerJobOrders JobOrder[] @relation("JobOrderOperationsManager")
   executiveJobOrders         JobOrder[] @relation("JobOrderExecutive")
 
+  // ─── Compliance Defaults (From ClientCompliance) ───
+    defaultProcessorFor        ClientCompliance[] @relation("DefaultProcessor")
+    defaultVerifierFor         ClientCompliance[] @relation("DefaultVerifier")
+    defaultPaymentProcessorFor ClientCompliance[] @relation("DefaultPaymentProcessor")
+    defaultPaymentApproverFor  ClientCompliance[] @relation("DefaultPaymentApprover")
+    defaultFinalApproverFor    ClientCompliance[] @relation("DefaultFinalApprover")
+    defaultSalesOfficerFor     ClientCompliance[] @relation("DefaultSalesOfficer")
+
+    // ─── Actual Executions (From ComplianceRecord) ───
+    processedRecords           ComplianceRecord[] @relation("RecordProcessor")
+    verifiedRecords            ComplianceRecord[] @relation("RecordVerifier")
+    paymentProcessedRecords    ComplianceRecord[] @relation("RecordPaymentProcessor")
+    paymentApprovedRecords     ComplianceRecord[] @relation("RecordPaymentApprover")
+    finalApprovedRecords       ComplianceRecord[] @relation("RecordFinalApprover")
+    salesObservedRecords       ComplianceRecord[] @relation("RecordSalesOfficer")
+
+    // ─── Communication ───
+    complianceNotes            ComplianceNote[]
+
   @@unique([email])
   @@map("user")
 }

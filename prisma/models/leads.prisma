@@ -101,9 +101,9 @@ model Lead {
     assignedAgentId String?
     assignedAgent   User?   @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
 
-    // ─── Services Availed / Interested In ───
-    servicePlans        ServicePlan[]
-    serviceOneTimePlans ServiceOneTime[]
+    // ─── Qoutations & Negotiations ───
+    quotes Quote[]
+
 
     // ─── Applied Promo (max 1 per lead) ───
     promoId Int?

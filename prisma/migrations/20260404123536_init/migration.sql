@@ -1,8 +1,17 @@
 -- CreateEnum
+CREATE TYPE "FilingStatus" AS ENUM ('PENDING', 'PREPARING', 'FOR_REVIEW', 'FILED', 'LATE_FILED');
+
+-- CreateEnum
+CREATE TYPE "ProcessStatus" AS ENUM ('PENDING', 'AWAITING_VERIFICATION', 'AWAITING_PAYMENT_PROCESS', 'AWAITING_PAYMENT_APPROVAL', 'AWAITING_FINAL_APPROVAL', 'PAID', 'COMPLETED');
+
+-- CreateEnum
+CREATE TYPE "ZeroFilingStatus" AS ENUM ('NONE', 'REQUESTED', 'CONFIRMED_ZERO');
+
+-- CreateEnum
 CREATE TYPE "LogAction" AS ENUM ('CREATED', 'UPDATED', 'DELETED', 'VIEWED', 'EXPORTED', 'IMPORTED', 'LOGIN', 'LOGOUT', 'STATUS_CHANGE', 'PERMISSION_CHANGE', 'ASSIGNED', 'UNASSIGNED', 'APPROVED', 'REJECTED', 'SUBMITTED', 'CANCELLED', 'ARCHIVED', 'RESTORED');
 
 -- CreateEnum
-CREATE TYPE "AppPortal" AS ENUM ('SALES', 'COMPLIANCE', 'LIAISON', 'ACCOUNTING', 'ACCOUNT_OFFICER', 'HR', 'TASK_MANAGEMENT', 'CLIENT_RELATIONS');
+CREATE TYPE "AppPortal" AS ENUM ('SALES', 'COMPLIANCE', 'LIAISON', 'ACCOUNTING', 'OPERATIONS_MANAGEMENT', 'HR', 'TASK_MANAGEMENT', 'CLIENT_RELATIONS');
 
 -- CreateEnum
 CREATE TYPE "ClientUserStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED');
@@ -65,31 +74,31 @@ CREATE TYPE "InvoiceStatus" AS ENUM ('DRAFT', 'UNPAID', 'PARTIALLY_PAID', 'PAID'
 CREATE TYPE "PaymentMethod" AS ENUM ('CASH', 'BANK_TRANSFER', 'CHECK', 'E_WALLET', 'CREDIT_CARD');
 
 -- CreateEnum
+CREATE TYPE "PaymentChangeType" AS ENUM ('PAYMENT_RECORDED', 'PAYMENT_UPDATED', 'ALLOCATION_MODIFIED', 'STATUS_CHANGED', 'PAYMENT_VOIDED');
+
+-- CreateEnum
 CREATE TYPE "InvoiceChangeType" AS ENUM ('INVOICE_CREATED', 'INVOICE_UPDATED', 'STATUS_CHANGED', 'DUE_DATE_CHANGED', 'PAYMENT_ADDED', 'PAYMENT_VOIDED', 'ITEM_ADDED', 'ITEM_REMOVED', 'INVOICE_VOIDED');
 
 -- CreateEnum
 CREATE TYPE "SubscriptionChangeType" AS ENUM ('SUBSCRIPTION_CREATED', 'RATE_CHANGED', 'PLAN_CHANGED', 'PAUSED', 'REACTIVATED', 'CANCELLED');
 
 -- CreateEnum
+CREATE TYPE "BillingCycle" AS ENUM ('MONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUALLY');
+
+-- CreateEnum
+CREATE TYPE "JobOrderStatus" AS ENUM ('DRAFT', 'SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "JobOrderItemType" AS ENUM ('SUBSCRIPTION', 'ONE_TIME');
+
+-- CreateEnum
 CREATE TYPE "LeadChangeType" AS ENUM ('CREATED', 'STATUS_CHANGED', 'DETAILS_UPDATED', 'SCHEDULE_UPDATED', 'INVOICE_GENERATED', 'CONTRACT_GENERATED', 'CONTRACT_SIGNED', 'TSA_GENERATED', 'TSA_SIGNED', 'JOB_ORDER_GENERATED', 'ACCOUNT_CREATED', 'CONVERTED');
-
--- CreateEnum
-CREATE TYPE "ServiceRecurring" AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY');
-
--- CreateEnum
-CREATE TYPE "ServiceStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'ARCHIVED');
-
--- CreateEnum
-CREATE TYPE "DiscountType" AS ENUM ('PERCENTAGE', 'FIXED');
-
--- CreateEnum
-CREATE TYPE "PromoFor" AS ENUM ('SERVICE_PLAN', 'SERVICE_ONE_TIME', 'BOTH');
 
 -- CreateEnum
 CREATE TYPE "TaskPriority" AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT');
 
 -- CreateEnum
-CREATE TYPE "TaskChangeType" AS ENUM ('CREATED', 'STATUS_CHANGED', 'DEPARTMENT_CHANGED', 'ASSIGNEE_CHANGED', 'DUE_DATE_CHANGED', 'DETAILS_UPDATED', 'COMMENT_ADDED');
+CREATE TYPE "TaskChangeType" AS ENUM ('CREATED', 'STATUS_CHANGED', 'DEPARTMENT_CHANGED', 'ASSIGNEE_CHANGED', 'PRIORITY_CHANGED', 'DUE_DATE_CHANGED', 'DETAILS_UPDATED', 'COMMENT_ADDED', 'JOB_ORDER_CHANGED');
 
 -- CreateEnum
 CREATE TYPE "AttendanceStatus" AS ENUM ('PRESENT', 'ABSENT', 'INCOMPLETE', 'PAID_LEAVE', 'UNPAID_LEAVE', 'DAY_OFF', 'REGULAR_HOLIDAY', 'SPECIAL_HOLIDAY');
@@ -107,7 +116,117 @@ CREATE TYPE "HolidayType" AS ENUM ('REGULAR', 'SPECIAL_NON_WORKING', 'SPECIAL_WO
 CREATE TYPE "CashAdvanceStatus" AS ENUM ('PENDING', 'APPROVED', 'ACTIVE', 'COMPLETED', 'CANCELLED');
 
 -- CreateEnum
+CREATE TYPE "SalaryRateType" AS ENUM ('DAILY', 'MONTHLY');
+
+-- CreateEnum
+CREATE TYPE "SalaryFrequency" AS ENUM ('ONCE_A_MONTH', 'TWICE_A_MONTH', 'WEEKLY');
+
+-- CreateEnum
+CREATE TYPE "PayType" AS ENUM ('FIXED_PAY', 'VARIABLE_PAY');
+
+-- CreateEnum
+CREATE TYPE "DisbursementType" AS ENUM ('CASH', 'BANK_TRANSFER', 'CHEQUE', 'E_WALLET');
+
+-- CreateEnum
+CREATE TYPE "PagibigContributionType" AS ENUM ('REGULAR', 'MINIMUM');
+
+-- CreateEnum
 CREATE TYPE "Role" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'EMPLOYEE');
+
+-- CreateEnum
+CREATE TYPE "ServiceBillingType" AS ENUM ('RECURRING', 'ONE_TIME');
+
+-- CreateEnum
+CREATE TYPE "ServiceFrequency" AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUALLY', 'NONE');
+
+-- CreateEnum
+CREATE TYPE "ServiceStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "DiscountType" AS ENUM ('PERCENTAGE', 'FIXED');
+
+-- CreateEnum
+CREATE TYPE "QuoteStatus" AS ENUM ('DRAFT', 'SENT_TO_CLIENT', 'NEGOTIATING', 'ACCEPTED', 'REJECTED');
+
+-- CreateTable
+CREATE TABLE "client_compliance" (
+    "id" TEXT NOT NULL,
+    "clientId" INTEGER NOT NULL,
+    "serviceId" INTEGER NOT NULL,
+    "status" "ServiceStatus" NOT NULL DEFAULT 'ACTIVE',
+    "processorId" TEXT,
+    "verifierId" TEXT,
+    "paymentProcessorId" TEXT,
+    "paymentApproverId" TEXT,
+    "finalApproverId" TEXT,
+    "salesOfficerId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "client_compliance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "compliance_record" (
+    "id" TEXT NOT NULL,
+    "clientComplianceId" TEXT NOT NULL,
+    "coverageDate" DATE NOT NULL,
+    "deadline" DATE NOT NULL,
+    "isZeroFiling" "ZeroFilingStatus" NOT NULL DEFAULT 'NONE',
+    "filedFormUrl" TEXT,
+    "emailConfirmUrl" TEXT,
+    "paymentConfirmUrl" TEXT,
+    "qapExcelUrl" TEXT,
+    "emailSubmissionUrl" TEXT,
+    "emailValidationUrl" TEXT,
+    "processorId" TEXT,
+    "processedAt" TIMESTAMP(3),
+    "verifierId" TEXT,
+    "verifiedAt" TIMESTAMP(3),
+    "paymentProcessorId" TEXT,
+    "paymentProcessedAt" TIMESTAMP(3),
+    "paymentApproverId" TEXT,
+    "paymentApprovedAt" TIMESTAMP(3),
+    "finalApproverId" TEXT,
+    "finalApprovedAt" TIMESTAMP(3),
+    "salesOfficerId" TEXT,
+    "filingStatus" "FilingStatus" NOT NULL DEFAULT 'PENDING',
+    "processStatus" "ProcessStatus" NOT NULL DEFAULT 'PENDING',
+    "completionRate" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "compliance_record_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "compliance_note" (
+    "id" TEXT NOT NULL,
+    "complianceRecordId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "compliance_note_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ewt_rental_line_item" (
+    "id" TEXT NOT NULL,
+    "complianceRecordId" TEXT NOT NULL,
+    "rentalType" TEXT NOT NULL,
+    "grossAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "vatAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "netOfVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "expandedTaxAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "effectiveMonth" TEXT NOT NULL,
+    "contractOfLeaseUrl" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ewt_rental_line_item_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "activity_log" (
@@ -147,6 +266,7 @@ CREATE TABLE "EmployeeAppAccess" (
     "canWrite" BOOLEAN NOT NULL DEFAULT false,
     "canEdit" BOOLEAN NOT NULL DEFAULT false,
     "canDelete" BOOLEAN NOT NULL DEFAULT false,
+    "canApprove" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "EmployeeAppAccess_pkey" PRIMARY KEY ("id")
@@ -164,6 +284,8 @@ CREATE TABLE "atms_clients" (
     "branchType" "BranchType" NOT NULL DEFAULT 'MAIN',
     "mainBranchId" INTEGER,
     "active" BOOLEAN NOT NULL DEFAULT false,
+    "clientRelationOfficerId" TEXT,
+    "operationsManagerId" TEXT,
     "dayResetTime" TEXT NOT NULL DEFAULT '00:00:00',
     "workingDayStarts" TEXT NOT NULL DEFAULT '09:00:00',
     "timezone" TEXT NOT NULL DEFAULT 'Asia/Manila',
@@ -428,17 +550,6 @@ CREATE TABLE "employee_contract" (
     "status" "ContractStatus" NOT NULL,
     "contractStart" TIMESTAMP(3) NOT NULL,
     "contractEnd" TIMESTAMP(3),
-    "monthlyRate" DECIMAL(10,2),
-    "dailyRate" DECIMAL(10,2),
-    "hourlyRate" DECIMAL(10,2),
-    "allowanceRate" DECIMAL(10,2) DEFAULT 0.00,
-    "deductSss" BOOLEAN NOT NULL DEFAULT false,
-    "deductPagibig" BOOLEAN NOT NULL DEFAULT false,
-    "deductPhilhealth" BOOLEAN NOT NULL DEFAULT false,
-    "deductTax" BOOLEAN NOT NULL DEFAULT false,
-    "disbursedMethod" "DisbursedMethod",
-    "payType" TEXT DEFAULT 'Variable Pay',
-    "bankDetails" TEXT,
     "scheduleId" INTEGER,
     "workingHoursPerWeek" INTEGER,
     "signedDate" TIMESTAMP(3),
@@ -668,6 +779,21 @@ CREATE TABLE "coa_request" (
 );
 
 -- CreateTable
+CREATE TABLE "hr_setting" (
+    "id" TEXT NOT NULL,
+    "clientId" INTEGER NOT NULL,
+    "employeeNumberPrefix" TEXT NOT NULL DEFAULT 'EMP',
+    "strictOvertimeApproval" BOOLEAN NOT NULL DEFAULT true,
+    "disableLateUndertimeGlobal" BOOLEAN NOT NULL DEFAULT true,
+    "enableAutoTimeOut" BOOLEAN NOT NULL DEFAULT false,
+    "autoTimeOutTime" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "hr_setting_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "notification" (
     "id" TEXT NOT NULL,
     "userId" TEXT,
@@ -689,7 +815,10 @@ CREATE TABLE "notification" (
 CREATE TABLE "client_subscription" (
     "id" SERIAL NOT NULL,
     "clientId" INTEGER NOT NULL,
-    "servicePlanId" INTEGER NOT NULL,
+    "serviceId" INTEGER NOT NULL,
+    "quoteLineItemId" TEXT,
+    "billingCycle" "BillingCycle" NOT NULL DEFAULT 'MONTHLY',
+    "nextBillingDate" TIMESTAMP(3),
     "agreedRate" DECIMAL(10,2) NOT NULL,
     "effectiveDate" TIMESTAMP(3) NOT NULL,
     "inactiveDate" TIMESTAMP(3),
@@ -730,6 +859,8 @@ CREATE TABLE "invoice_item" (
     "quantity" INTEGER NOT NULL DEFAULT 1,
     "unitPrice" DECIMAL(10,2) NOT NULL,
     "total" DECIMAL(10,2) NOT NULL,
+    "isVatable" BOOLEAN NOT NULL DEFAULT true,
+    "remarks" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -739,18 +870,45 @@ CREATE TABLE "invoice_item" (
 -- CreateTable
 CREATE TABLE "payment" (
     "id" TEXT NOT NULL,
-    "invoiceId" TEXT NOT NULL,
+    "paymentNumber" TEXT NOT NULL,
+    "clientId" INTEGER,
     "recordedById" TEXT,
     "amount" DECIMAL(10,2) NOT NULL,
     "paymentDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "method" "PaymentMethod" NOT NULL,
+    "unusedAmount" DECIMAL(10,2) NOT NULL DEFAULT 0,
     "referenceNumber" TEXT,
     "proofOfPaymentUrl" TEXT,
     "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "invoiceId" TEXT,
 
     CONSTRAINT "payment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payment_allocation" (
+    "id" TEXT NOT NULL,
+    "paymentId" TEXT NOT NULL,
+    "invoiceId" TEXT NOT NULL,
+    "amountApplied" DECIMAL(10,2) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "payment_allocation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payment_history" (
+    "id" TEXT NOT NULL,
+    "paymentId" TEXT NOT NULL,
+    "actorId" TEXT,
+    "changeType" "PaymentChangeType" NOT NULL,
+    "oldValue" TEXT,
+    "newValue" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "payment_history_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -780,6 +938,45 @@ CREATE TABLE "subscription_history" (
 );
 
 -- CreateTable
+CREATE TABLE "job_order" (
+    "id" TEXT NOT NULL,
+    "jobOrderNumber" TEXT NOT NULL,
+    "leadId" INTEGER NOT NULL,
+    "clientId" INTEGER,
+    "date" DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "status" "JobOrderStatus" NOT NULL DEFAULT 'DRAFT',
+    "notes" TEXT,
+    "preparedById" TEXT,
+    "datePrepared" TIMESTAMP(3),
+    "accountManagerId" TEXT,
+    "dateAccountManagerAck" TIMESTAMP(3),
+    "operationsManagerId" TEXT,
+    "dateOperationsManagerAck" TIMESTAMP(3),
+    "executiveId" TEXT,
+    "dateExecutiveAck" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "job_order_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "job_order_item" (
+    "id" TEXT NOT NULL,
+    "jobOrderId" TEXT NOT NULL,
+    "itemType" "JobOrderItemType" NOT NULL,
+    "serviceName" TEXT NOT NULL,
+    "rate" DECIMAL(10,2) NOT NULL,
+    "discount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    "total" DECIMAL(10,2) NOT NULL,
+    "remarks" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "job_order_item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "lead_status" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
@@ -800,9 +997,12 @@ CREATE TABLE "lead" (
     "firstName" TEXT NOT NULL,
     "middleName" TEXT,
     "lastName" TEXT NOT NULL,
+    "businessName" TEXT,
     "contactNumber" TEXT,
     "businessType" TEXT NOT NULL DEFAULT 'Not Specified',
     "leadSource" TEXT NOT NULL DEFAULT 'Facebook',
+    "address" TEXT,
+    "notes" TEXT,
     "facebookSenderId" TEXT,
     "facebookUrl" TEXT,
     "facebookName" TEXT,
@@ -826,6 +1026,8 @@ CREATE TABLE "lead" (
     "signedTsaUrl" TEXT,
     "signedJobOrderUrl" TEXT,
     "convertedClientId" INTEGER,
+    "assignedAgentId" TEXT,
+    "promoId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -855,157 +1057,6 @@ CREATE TABLE "lead_history" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "lead_history_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "government_office" (
-    "id" SERIAL NOT NULL,
-    "code" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "government_office_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "city" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "province" TEXT,
-    "region" TEXT,
-    "zipCode" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "city_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "service_inclusion" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "category" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "service_inclusion_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "service_plan" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "recurring" "ServiceRecurring" NOT NULL DEFAULT 'MONTHLY',
-    "serviceRate" DECIMAL(10,2) NOT NULL,
-    "status" "ServiceStatus" NOT NULL DEFAULT 'ACTIVE',
-    "taskTemplateId" INTEGER,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "service_plan_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "service_one_time" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "serviceRate" DECIMAL(10,2) NOT NULL,
-    "status" "ServiceStatus" NOT NULL DEFAULT 'ACTIVE',
-    "taskTemplateId" INTEGER,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "service_one_time_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "promo" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "code" TEXT,
-    "promoFor" "PromoFor" NOT NULL DEFAULT 'BOTH',
-    "discountType" "DiscountType" NOT NULL,
-    "discountRate" DECIMAL(10,2) NOT NULL,
-    "minimumRate" DECIMAL(10,2),
-    "maxUsage" INTEGER,
-    "usageCount" INTEGER NOT NULL DEFAULT 0,
-    "validFrom" TIMESTAMP(3),
-    "validUntil" TIMESTAMP(3),
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "promo_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "task" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "clientId" INTEGER,
-    "templateId" INTEGER,
-    "currentDepartmentId" INTEGER,
-    "currentRouteOrder" INTEGER NOT NULL DEFAULT 1,
-    "currentStatusId" INTEGER,
-    "assignedToId" INTEGER,
-    "priority" "TaskPriority" NOT NULL DEFAULT 'NORMAL',
-    "daysDue" INTEGER,
-    "dueDate" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "task_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "task_subtask" (
-    "id" SERIAL NOT NULL,
-    "parentTaskId" INTEGER NOT NULL,
-    "departmentId" INTEGER,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "assignedToId" INTEGER,
-    "statusId" INTEGER,
-    "priority" "TaskPriority" NOT NULL DEFAULT 'NORMAL',
-    "order" INTEGER NOT NULL DEFAULT 0,
-    "daysDue" INTEGER,
-    "dueDate" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "task_subtask_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "task_history" (
-    "id" TEXT NOT NULL,
-    "taskId" INTEGER NOT NULL,
-    "actorId" TEXT NOT NULL,
-    "changeType" "TaskChangeType" NOT NULL,
-    "oldValue" TEXT,
-    "newValue" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "task_history_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "task_conversation" (
-    "id" SERIAL NOT NULL,
-    "taskId" INTEGER NOT NULL,
-    "authorId" TEXT NOT NULL,
-    "message" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "task_conversation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1061,6 +1112,82 @@ CREATE TABLE "department_task_status" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "department_task_status_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "task" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "clientId" INTEGER,
+    "templateId" INTEGER,
+    "departmentId" INTEGER,
+    "statusId" INTEGER,
+    "assignedToId" INTEGER,
+    "priority" "TaskPriority" NOT NULL DEFAULT 'NORMAL',
+    "daysDue" INTEGER,
+    "dueDate" TIMESTAMP(3),
+    "jobOrderId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "task_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "task_subtask" (
+    "id" SERIAL NOT NULL,
+    "parentTaskId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "assignedToId" INTEGER,
+    "isCompleted" BOOLEAN NOT NULL DEFAULT false,
+    "priority" "TaskPriority" NOT NULL DEFAULT 'NORMAL',
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "daysDue" INTEGER,
+    "dueDate" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "departmentId" INTEGER,
+
+    CONSTRAINT "task_subtask_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "task_history" (
+    "id" TEXT NOT NULL,
+    "taskId" INTEGER NOT NULL,
+    "actorId" TEXT NOT NULL,
+    "changeType" "TaskChangeType" NOT NULL,
+    "oldValue" TEXT,
+    "newValue" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "task_history_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "task_subtask_history" (
+    "id" TEXT NOT NULL,
+    "subtaskId" INTEGER NOT NULL,
+    "actorId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "task_subtask_history_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "task_conversation" (
+    "id" SERIAL NOT NULL,
+    "taskId" INTEGER NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "task_conversation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1124,11 +1251,44 @@ CREATE TABLE "timesheet" (
 );
 
 -- CreateTable
+CREATE TABLE "employee_compensation" (
+    "id" TEXT NOT NULL,
+    "contractId" INTEGER NOT NULL,
+    "baseRate" DECIMAL(10,2) NOT NULL,
+    "allowanceRate" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    "allowanceOnFirstCutoffOnly" BOOLEAN NOT NULL DEFAULT true,
+    "rateType" "SalaryRateType" NOT NULL DEFAULT 'DAILY',
+    "frequency" "SalaryFrequency" NOT NULL DEFAULT 'TWICE_A_MONTH',
+    "payType" "PayType" NOT NULL DEFAULT 'VARIABLE_PAY',
+    "disbursementType" "DisbursementType" NOT NULL DEFAULT 'CASH',
+    "bankDetails" TEXT,
+    "isPaidRestDays" BOOLEAN NOT NULL DEFAULT false,
+    "restDaysPerWeek" INTEGER NOT NULL DEFAULT 1,
+    "doleFactor" DECIMAL(5,2) NOT NULL,
+    "deductSss" BOOLEAN NOT NULL DEFAULT false,
+    "deductPhilhealth" BOOLEAN NOT NULL DEFAULT false,
+    "deductPagibig" BOOLEAN NOT NULL DEFAULT false,
+    "pagibigType" "PagibigContributionType" NOT NULL DEFAULT 'REGULAR',
+    "deductTax" BOOLEAN NOT NULL DEFAULT false,
+    "calculatedDailyRate" DECIMAL(10,2) NOT NULL,
+    "calculatedMonthlyRate" DECIMAL(10,2) NOT NULL,
+    "payrollScheduleId" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "effectiveDate" DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "employee_compensation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "payroll_period" (
     "id" SERIAL NOT NULL,
     "clientId" INTEGER NOT NULL,
+    "payrollScheduleId" TEXT,
     "startDate" DATE NOT NULL,
     "endDate" DATE NOT NULL,
+    "payoutDate" DATE NOT NULL,
     "status" "PayrollPeriodStatus" NOT NULL DEFAULT 'DRAFT',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -1137,10 +1297,36 @@ CREATE TABLE "payroll_period" (
 );
 
 -- CreateTable
+CREATE TABLE "payroll_schedule" (
+    "id" TEXT NOT NULL,
+    "clientId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "frequency" "SalaryFrequency" NOT NULL DEFAULT 'TWICE_A_MONTH',
+    "firstPeriodStartDay" INTEGER NOT NULL,
+    "firstPeriodEndDay" INTEGER NOT NULL,
+    "firstPayoutDay" INTEGER NOT NULL,
+    "secondPeriodStartDay" INTEGER,
+    "secondPeriodEndDay" INTEGER,
+    "secondPayoutDay" INTEGER,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "payroll_schedule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "payslip" (
     "id" TEXT NOT NULL,
     "payrollPeriodId" INTEGER NOT NULL,
     "employeeId" INTEGER NOT NULL,
+    "totalRegularDays" DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    "totalRegularHours" DECIMAL(7,2) NOT NULL DEFAULT 0.00,
+    "totalOvertimeHours" DECIMAL(7,2) NOT NULL DEFAULT 0.00,
+    "totalNightDiffHours" DECIMAL(7,2) NOT NULL DEFAULT 0.00,
+    "totalHolidayHours" DECIMAL(7,2) NOT NULL DEFAULT 0.00,
+    "totalLateMins" INTEGER NOT NULL DEFAULT 0,
+    "totalUndertimeMins" INTEGER NOT NULL DEFAULT 0,
     "basicPay" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "holidayPay" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "overtimePay" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -1272,7 +1458,7 @@ CREATE TABLE "client_user_assignment" (
     "id" SERIAL NOT NULL,
     "clientUserId" TEXT NOT NULL,
     "clientId" INTEGER NOT NULL,
-    "role" "ClientPortalRole" NOT NULL DEFAULT 'EMPLOYEE',
+    "role" "ClientPortalRole" NOT NULL DEFAULT 'OWNER',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "client_user_assignment_pkey" PRIMARY KEY ("id")
@@ -1339,84 +1525,206 @@ CREATE TABLE "verification" (
 );
 
 -- CreateTable
-CREATE TABLE "_LeadToServicePlan" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "government_office" (
+    "id" SERIAL NOT NULL,
+    "code" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "_LeadToServicePlan_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "government_office_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_LeadToServiceOneTime" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "city" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "province" TEXT,
+    "region" TEXT,
+    "zipCode" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "_LeadToServiceOneTime_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "city_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServicePlanGovOffices" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "service_inclusion" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "category" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "_ServicePlanGovOffices_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "service_inclusion_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServiceOneTimeGovOffices" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "service" (
+    "id" SERIAL NOT NULL,
+    "code" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "billingType" "ServiceBillingType" NOT NULL,
+    "frequency" "ServiceFrequency" NOT NULL DEFAULT 'NONE',
+    "serviceRate" DECIMAL(10,2) NOT NULL,
+    "isVatable" BOOLEAN NOT NULL DEFAULT true,
+    "status" "ServiceStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "_ServiceOneTimeGovOffices_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "service_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServicePlanCities" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "service_task_template" (
+    "serviceId" INTEGER NOT NULL,
+    "taskTemplateId" INTEGER NOT NULL,
 
-    CONSTRAINT "_ServicePlanCities_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "service_task_template_pkey" PRIMARY KEY ("serviceId","taskTemplateId")
 );
 
 -- CreateTable
-CREATE TABLE "_ServiceOneTimeCities" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "service_package" (
+    "id" SERIAL NOT NULL,
+    "code" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "packageRate" DECIMAL(10,2) NOT NULL,
+    "isVatable" BOOLEAN NOT NULL DEFAULT true,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "_ServiceOneTimeCities_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "service_package_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServicePlanInclusions" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "service_package_item" (
+    "id" SERIAL NOT NULL,
+    "packageId" INTEGER NOT NULL,
+    "serviceId" INTEGER NOT NULL,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "overrideRate" DECIMAL(10,2),
 
-    CONSTRAINT "_ServicePlanInclusions_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "service_package_item_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServiceOneTimeInclusions" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "quote" (
+    "id" TEXT NOT NULL,
+    "quoteNumber" TEXT NOT NULL,
+    "leadId" INTEGER NOT NULL,
+    "status" "QuoteStatus" NOT NULL DEFAULT 'DRAFT',
+    "subTotal" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    "totalDiscount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    "grandTotal" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    "validUntil" DATE,
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "_ServiceOneTimeInclusions_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "quote_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServicePlanPromos" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
+CREATE TABLE "quote_line_item" (
+    "id" TEXT NOT NULL,
+    "quoteId" TEXT NOT NULL,
+    "serviceId" INTEGER NOT NULL,
+    "sourcePackageId" INTEGER,
+    "customName" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "negotiatedRate" DECIMAL(10,2) NOT NULL,
+    "isVatable" BOOLEAN NOT NULL DEFAULT true,
 
-    CONSTRAINT "_ServicePlanPromos_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "quote_line_item_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "_ServiceOneTimePromos" (
+CREATE TABLE "promo" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "code" TEXT,
+    "discountType" "DiscountType" NOT NULL,
+    "discountRate" DECIMAL(10,2) NOT NULL,
+    "minimumRate" DECIMAL(10,2),
+    "maxUsage" INTEGER,
+    "usageCount" INTEGER NOT NULL DEFAULT 0,
+    "validFrom" TIMESTAMP(3),
+    "validUntil" TIMESTAMP(3),
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "promo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "_AutoOvertimeEmployees" (
+    "A" INTEGER NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_AutoOvertimeEmployees_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_ExemptLateUndertimeEmployees" (
+    "A" INTEGER NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_ExemptLateUndertimeEmployees_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_ServiceGovOffices" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
 
-    CONSTRAINT "_ServiceOneTimePromos_AB_pkey" PRIMARY KEY ("A","B")
+    CONSTRAINT "_ServiceGovOffices_AB_pkey" PRIMARY KEY ("A","B")
 );
+
+-- CreateTable
+CREATE TABLE "_ServiceCities" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_ServiceCities_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_ServiceInclusions" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_ServiceInclusions_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_ServicePromos" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_ServicePromos_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateIndex
+CREATE INDEX "client_compliance_clientId_idx" ON "client_compliance"("clientId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "client_compliance_clientId_serviceId_key" ON "client_compliance"("clientId", "serviceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "compliance_record_clientComplianceId_coverageDate_key" ON "compliance_record"("clientComplianceId", "coverageDate");
+
+-- CreateIndex
+CREATE INDEX "compliance_note_complianceRecordId_idx" ON "compliance_note"("complianceRecordId");
+
+-- CreateIndex
+CREATE INDEX "ewt_rental_line_item_complianceRecordId_idx" ON "ewt_rental_line_item"("complianceRecordId");
 
 -- CreateIndex
 CREATE INDEX "activity_log_clientId_idx" ON "activity_log"("clientId");
@@ -1545,6 +1853,9 @@ CREATE INDEX "coa_request_employeeId_idx" ON "coa_request"("employeeId");
 CREATE INDEX "coa_request_clientId_idx" ON "coa_request"("clientId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "hr_setting_clientId_key" ON "hr_setting"("clientId");
+
+-- CreateIndex
 CREATE INDEX "notification_userId_idx" ON "notification"("userId");
 
 -- CreateIndex
@@ -1554,7 +1865,13 @@ CREATE INDEX "notification_clientUserId_idx" ON "notification"("clientUserId");
 CREATE INDEX "notification_isRead_priority_idx" ON "notification"("isRead", "priority");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "client_subscription_quoteLineItemId_key" ON "client_subscription"("quoteLineItemId");
+
+-- CreateIndex
 CREATE INDEX "client_subscription_clientId_isActive_idx" ON "client_subscription"("clientId", "isActive");
+
+-- CreateIndex
+CREATE INDEX "client_subscription_nextBillingDate_idx" ON "client_subscription"("nextBillingDate");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "invoice_invoiceNumber_key" ON "invoice"("invoiceNumber");
@@ -1572,7 +1889,22 @@ CREATE INDEX "invoice_status_idx" ON "invoice"("status");
 CREATE INDEX "invoice_item_invoiceId_idx" ON "invoice_item"("invoiceId");
 
 -- CreateIndex
-CREATE INDEX "payment_invoiceId_idx" ON "payment"("invoiceId");
+CREATE UNIQUE INDEX "payment_paymentNumber_key" ON "payment"("paymentNumber");
+
+-- CreateIndex
+CREATE INDEX "payment_clientId_idx" ON "payment"("clientId");
+
+-- CreateIndex
+CREATE INDEX "payment_allocation_paymentId_idx" ON "payment_allocation"("paymentId");
+
+-- CreateIndex
+CREATE INDEX "payment_allocation_invoiceId_idx" ON "payment_allocation"("invoiceId");
+
+-- CreateIndex
+CREATE INDEX "payment_history_paymentId_idx" ON "payment_history"("paymentId");
+
+-- CreateIndex
+CREATE INDEX "payment_history_paymentId_createdAt_idx" ON "payment_history"("paymentId", "createdAt" DESC);
 
 -- CreateIndex
 CREATE INDEX "invoice_history_invoiceId_idx" ON "invoice_history"("invoiceId");
@@ -1585,6 +1917,18 @@ CREATE INDEX "subscription_history_subscriptionId_idx" ON "subscription_history"
 
 -- CreateIndex
 CREATE INDEX "subscription_history_subscriptionId_createdAt_idx" ON "subscription_history"("subscriptionId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "job_order_jobOrderNumber_key" ON "job_order"("jobOrderNumber");
+
+-- CreateIndex
+CREATE INDEX "job_order_leadId_idx" ON "job_order"("leadId");
+
+-- CreateIndex
+CREATE INDEX "job_order_clientId_idx" ON "job_order"("clientId");
+
+-- CreateIndex
+CREATE INDEX "job_order_item_jobOrderId_idx" ON "job_order_item"("jobOrderId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "lead_convertedClientId_key" ON "lead"("convertedClientId");
@@ -1602,39 +1946,6 @@ CREATE INDEX "lead_history_leadId_idx" ON "lead_history"("leadId");
 CREATE INDEX "lead_history_leadId_createdAt_idx" ON "lead_history"("leadId", "createdAt" DESC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "government_office_code_key" ON "government_office"("code");
-
--- CreateIndex
-CREATE UNIQUE INDEX "city_name_key" ON "city"("name");
-
--- CreateIndex
-CREATE UNIQUE INDEX "service_inclusion_name_key" ON "service_inclusion"("name");
-
--- CreateIndex
-CREATE UNIQUE INDEX "promo_code_key" ON "promo"("code");
-
--- CreateIndex
-CREATE INDEX "task_clientId_idx" ON "task"("clientId");
-
--- CreateIndex
-CREATE INDEX "task_currentDepartmentId_currentStatusId_idx" ON "task"("currentDepartmentId", "currentStatusId");
-
--- CreateIndex
-CREATE INDEX "task_subtask_parentTaskId_idx" ON "task_subtask"("parentTaskId");
-
--- CreateIndex
-CREATE INDEX "task_subtask_departmentId_idx" ON "task_subtask"("departmentId");
-
--- CreateIndex
-CREATE INDEX "task_history_taskId_idx" ON "task_history"("taskId");
-
--- CreateIndex
-CREATE INDEX "task_history_taskId_createdAt_idx" ON "task_history"("taskId", "createdAt" DESC);
-
--- CreateIndex
-CREATE INDEX "task_conversation_taskId_idx" ON "task_conversation"("taskId");
-
--- CreateIndex
 CREATE INDEX "task_template_route_templateId_idx" ON "task_template_route"("templateId");
 
 -- CreateIndex
@@ -1648,6 +1959,33 @@ CREATE INDEX "department_task_status_departmentId_idx" ON "department_task_statu
 
 -- CreateIndex
 CREATE UNIQUE INDEX "department_task_status_departmentId_name_key" ON "department_task_status"("departmentId", "name");
+
+-- CreateIndex
+CREATE INDEX "task_clientId_idx" ON "task"("clientId");
+
+-- CreateIndex
+CREATE INDEX "task_jobOrderId_idx" ON "task"("jobOrderId");
+
+-- CreateIndex
+CREATE INDEX "task_departmentId_statusId_idx" ON "task"("departmentId", "statusId");
+
+-- CreateIndex
+CREATE INDEX "task_subtask_parentTaskId_idx" ON "task_subtask"("parentTaskId");
+
+-- CreateIndex
+CREATE INDEX "task_history_taskId_idx" ON "task_history"("taskId");
+
+-- CreateIndex
+CREATE INDEX "task_history_taskId_createdAt_idx" ON "task_history"("taskId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "task_subtask_history_subtaskId_idx" ON "task_subtask_history"("subtaskId");
+
+-- CreateIndex
+CREATE INDEX "task_subtask_history_subtaskId_createdAt_idx" ON "task_subtask_history"("subtaskId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "task_conversation_taskId_idx" ON "task_conversation"("taskId");
 
 -- CreateIndex
 CREATE INDEX "holiday_clientId_idx" ON "holiday"("clientId");
@@ -1668,7 +2006,16 @@ CREATE INDEX "timesheet_clientId_idx" ON "timesheet"("clientId");
 CREATE UNIQUE INDEX "timesheet_employeeId_date_key" ON "timesheet"("employeeId", "date");
 
 -- CreateIndex
+CREATE INDEX "employee_compensation_contractId_isActive_idx" ON "employee_compensation"("contractId", "isActive");
+
+-- CreateIndex
 CREATE INDEX "payroll_period_clientId_idx" ON "payroll_period"("clientId");
+
+-- CreateIndex
+CREATE INDEX "payroll_period_payrollScheduleId_idx" ON "payroll_period"("payrollScheduleId");
+
+-- CreateIndex
+CREATE INDEX "payroll_schedule_clientId_idx" ON "payroll_schedule"("clientId");
 
 -- CreateIndex
 CREATE INDEX "payslip_employeeId_idx" ON "payslip"("employeeId");
@@ -1722,34 +2069,106 @@ CREATE INDEX "account_userId_idx" ON "account"("userId");
 CREATE INDEX "verification_identifier_idx" ON "verification"("identifier");
 
 -- CreateIndex
-CREATE INDEX "_LeadToServicePlan_B_index" ON "_LeadToServicePlan"("B");
+CREATE UNIQUE INDEX "government_office_code_key" ON "government_office"("code");
 
 -- CreateIndex
-CREATE INDEX "_LeadToServiceOneTime_B_index" ON "_LeadToServiceOneTime"("B");
+CREATE UNIQUE INDEX "city_name_key" ON "city"("name");
 
 -- CreateIndex
-CREATE INDEX "_ServicePlanGovOffices_B_index" ON "_ServicePlanGovOffices"("B");
+CREATE UNIQUE INDEX "service_inclusion_name_key" ON "service_inclusion"("name");
 
 -- CreateIndex
-CREATE INDEX "_ServiceOneTimeGovOffices_B_index" ON "_ServiceOneTimeGovOffices"("B");
+CREATE UNIQUE INDEX "service_code_key" ON "service"("code");
 
 -- CreateIndex
-CREATE INDEX "_ServicePlanCities_B_index" ON "_ServicePlanCities"("B");
+CREATE INDEX "service_task_template_taskTemplateId_idx" ON "service_task_template"("taskTemplateId");
 
 -- CreateIndex
-CREATE INDEX "_ServiceOneTimeCities_B_index" ON "_ServiceOneTimeCities"("B");
+CREATE UNIQUE INDEX "service_package_code_key" ON "service_package"("code");
 
 -- CreateIndex
-CREATE INDEX "_ServicePlanInclusions_B_index" ON "_ServicePlanInclusions"("B");
+CREATE UNIQUE INDEX "service_package_item_packageId_serviceId_key" ON "service_package_item"("packageId", "serviceId");
 
 -- CreateIndex
-CREATE INDEX "_ServiceOneTimeInclusions_B_index" ON "_ServiceOneTimeInclusions"("B");
+CREATE UNIQUE INDEX "quote_quoteNumber_key" ON "quote"("quoteNumber");
 
 -- CreateIndex
-CREATE INDEX "_ServicePlanPromos_B_index" ON "_ServicePlanPromos"("B");
+CREATE INDEX "quote_line_item_quoteId_idx" ON "quote_line_item"("quoteId");
 
 -- CreateIndex
-CREATE INDEX "_ServiceOneTimePromos_B_index" ON "_ServiceOneTimePromos"("B");
+CREATE UNIQUE INDEX "promo_code_key" ON "promo"("code");
+
+-- CreateIndex
+CREATE INDEX "_AutoOvertimeEmployees_B_index" ON "_AutoOvertimeEmployees"("B");
+
+-- CreateIndex
+CREATE INDEX "_ExemptLateUndertimeEmployees_B_index" ON "_ExemptLateUndertimeEmployees"("B");
+
+-- CreateIndex
+CREATE INDEX "_ServiceGovOffices_B_index" ON "_ServiceGovOffices"("B");
+
+-- CreateIndex
+CREATE INDEX "_ServiceCities_B_index" ON "_ServiceCities"("B");
+
+-- CreateIndex
+CREATE INDEX "_ServiceInclusions_B_index" ON "_ServiceInclusions"("B");
+
+-- CreateIndex
+CREATE INDEX "_ServicePromos_B_index" ON "_ServicePromos"("B");
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_processorId_fkey" FOREIGN KEY ("processorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_verifierId_fkey" FOREIGN KEY ("verifierId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_paymentProcessorId_fkey" FOREIGN KEY ("paymentProcessorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_paymentApproverId_fkey" FOREIGN KEY ("paymentApproverId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_finalApproverId_fkey" FOREIGN KEY ("finalApproverId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_salesOfficerId_fkey" FOREIGN KEY ("salesOfficerId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_clientComplianceId_fkey" FOREIGN KEY ("clientComplianceId") REFERENCES "client_compliance"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_processorId_fkey" FOREIGN KEY ("processorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_verifierId_fkey" FOREIGN KEY ("verifierId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_paymentProcessorId_fkey" FOREIGN KEY ("paymentProcessorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_paymentApproverId_fkey" FOREIGN KEY ("paymentApproverId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_finalApproverId_fkey" FOREIGN KEY ("finalApproverId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_salesOfficerId_fkey" FOREIGN KEY ("salesOfficerId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_note" ADD CONSTRAINT "compliance_note_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_note" ADD CONSTRAINT "compliance_note_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ewt_rental_line_item" ADD CONSTRAINT "ewt_rental_line_item_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1768,6 +2187,12 @@ ALTER TABLE "EmployeeAppAccess" ADD CONSTRAINT "EmployeeAppAccess_appId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "atms_clients" ADD CONSTRAINT "atms_clients_mainBranchId_fkey" FOREIGN KEY ("mainBranchId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "atms_clients" ADD CONSTRAINT "atms_clients_clientRelationOfficerId_fkey" FOREIGN KEY ("clientRelationOfficerId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "atms_clients" ADD CONSTRAINT "atms_clients_operationsManagerId_fkey" FOREIGN KEY ("operationsManagerId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "bir_information" ADD CONSTRAINT "bir_information_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1905,6 +2330,9 @@ ALTER TABLE "coa_request" ADD CONSTRAINT "coa_request_approvedById_fkey" FOREIGN
 ALTER TABLE "coa_request" ADD CONSTRAINT "coa_request_approvedByClientUserId_fkey" FOREIGN KEY ("approvedByClientUserId") REFERENCES "client_user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "hr_setting" ADD CONSTRAINT "hr_setting_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "notification" ADD CONSTRAINT "notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1914,7 +2342,10 @@ ALTER TABLE "notification" ADD CONSTRAINT "notification_clientUserId_fkey" FOREI
 ALTER TABLE "client_subscription" ADD CONSTRAINT "client_subscription_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "client_subscription" ADD CONSTRAINT "client_subscription_servicePlanId_fkey" FOREIGN KEY ("servicePlanId") REFERENCES "service_plan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "client_subscription" ADD CONSTRAINT "client_subscription_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "client_subscription" ADD CONSTRAINT "client_subscription_quoteLineItemId_fkey" FOREIGN KEY ("quoteLineItemId") REFERENCES "quote_line_item"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "invoice" ADD CONSTRAINT "invoice_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -1926,10 +2357,25 @@ ALTER TABLE "invoice" ADD CONSTRAINT "invoice_leadId_fkey" FOREIGN KEY ("leadId"
 ALTER TABLE "invoice_item" ADD CONSTRAINT "invoice_item_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "payment" ADD CONSTRAINT "payment_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "payment" ADD CONSTRAINT "payment_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "payment" ADD CONSTRAINT "payment_recordedById_fkey" FOREIGN KEY ("recordedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment" ADD CONSTRAINT "payment_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoice"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_allocation" ADD CONSTRAINT "payment_allocation_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "payment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_allocation" ADD CONSTRAINT "payment_allocation_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_history" ADD CONSTRAINT "payment_history_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "payment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_history" ADD CONSTRAINT "payment_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "invoice_history" ADD CONSTRAINT "invoice_history_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1944,10 +2390,37 @@ ALTER TABLE "subscription_history" ADD CONSTRAINT "subscription_history_subscrip
 ALTER TABLE "subscription_history" ADD CONSTRAINT "subscription_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_preparedById_fkey" FOREIGN KEY ("preparedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_accountManagerId_fkey" FOREIGN KEY ("accountManagerId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_operationsManagerId_fkey" FOREIGN KEY ("operationsManagerId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_executiveId_fkey" FOREIGN KEY ("executiveId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order_item" ADD CONSTRAINT "job_order_item_jobOrderId_fkey" FOREIGN KEY ("jobOrderId") REFERENCES "job_order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "lead" ADD CONSTRAINT "lead_statusId_fkey" FOREIGN KEY ("statusId") REFERENCES "lead_status"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "lead" ADD CONSTRAINT "lead_convertedClientId_fkey" FOREIGN KEY ("convertedClientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lead" ADD CONSTRAINT "lead_assignedAgentId_fkey" FOREIGN KEY ("assignedAgentId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lead" ADD CONSTRAINT "lead_promoId_fkey" FOREIGN KEY ("promoId") REFERENCES "promo"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "lead_comment" ADD CONSTRAINT "lead_comment_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1962,51 +2435,6 @@ ALTER TABLE "lead_history" ADD CONSTRAINT "lead_history_leadId_fkey" FOREIGN KEY
 ALTER TABLE "lead_history" ADD CONSTRAINT "lead_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "service_plan" ADD CONSTRAINT "service_plan_taskTemplateId_fkey" FOREIGN KEY ("taskTemplateId") REFERENCES "task_template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "service_one_time" ADD CONSTRAINT "service_one_time_taskTemplateId_fkey" FOREIGN KEY ("taskTemplateId") REFERENCES "task_template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task" ADD CONSTRAINT "task_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task" ADD CONSTRAINT "task_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "task_template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task" ADD CONSTRAINT "task_currentDepartmentId_fkey" FOREIGN KEY ("currentDepartmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task" ADD CONSTRAINT "task_currentStatusId_fkey" FOREIGN KEY ("currentStatusId") REFERENCES "department_task_status"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task" ADD CONSTRAINT "task_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_parentTaskId_fkey" FOREIGN KEY ("parentTaskId") REFERENCES "task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_statusId_fkey" FOREIGN KEY ("statusId") REFERENCES "department_task_status"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_history" ADD CONSTRAINT "task_history_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_history" ADD CONSTRAINT "task_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_conversation" ADD CONSTRAINT "task_conversation_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "task_conversation" ADD CONSTRAINT "task_conversation_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "task_template_route" ADD CONSTRAINT "task_template_route_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "task_template"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2017,6 +2445,51 @@ ALTER TABLE "task_template_subtask" ADD CONSTRAINT "task_template_subtask_routeI
 
 -- AddForeignKey
 ALTER TABLE "department_task_status" ADD CONSTRAINT "department_task_status_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task" ADD CONSTRAINT "task_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task" ADD CONSTRAINT "task_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "task_template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task" ADD CONSTRAINT "task_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task" ADD CONSTRAINT "task_statusId_fkey" FOREIGN KEY ("statusId") REFERENCES "department_task_status"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task" ADD CONSTRAINT "task_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task" ADD CONSTRAINT "task_jobOrderId_fkey" FOREIGN KEY ("jobOrderId") REFERENCES "job_order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_parentTaskId_fkey" FOREIGN KEY ("parentTaskId") REFERENCES "task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_subtask" ADD CONSTRAINT "task_subtask_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_history" ADD CONSTRAINT "task_history_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_history" ADD CONSTRAINT "task_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_subtask_history" ADD CONSTRAINT "task_subtask_history_subtaskId_fkey" FOREIGN KEY ("subtaskId") REFERENCES "task_subtask"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_subtask_history" ADD CONSTRAINT "task_subtask_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_conversation" ADD CONSTRAINT "task_conversation_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_conversation" ADD CONSTRAINT "task_conversation_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "holiday" ADD CONSTRAINT "holiday_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -2031,7 +2504,19 @@ ALTER TABLE "timesheet" ADD CONSTRAINT "timesheet_employeeId_fkey" FOREIGN KEY (
 ALTER TABLE "timesheet" ADD CONSTRAINT "timesheet_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "employee_compensation" ADD CONSTRAINT "employee_compensation_contractId_fkey" FOREIGN KEY ("contractId") REFERENCES "employee_contract"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "employee_compensation" ADD CONSTRAINT "employee_compensation_payrollScheduleId_fkey" FOREIGN KEY ("payrollScheduleId") REFERENCES "payroll_schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "payroll_period" ADD CONSTRAINT "payroll_period_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payroll_period" ADD CONSTRAINT "payroll_period_payrollScheduleId_fkey" FOREIGN KEY ("payrollScheduleId") REFERENCES "payroll_schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payroll_schedule" ADD CONSTRAINT "payroll_schedule_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "payslip" ADD CONSTRAINT "payslip_payrollPeriodId_fkey" FOREIGN KEY ("payrollPeriodId") REFERENCES "payroll_period"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2094,61 +2579,61 @@ ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId"
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_LeadToServicePlan" ADD CONSTRAINT "_LeadToServicePlan_A_fkey" FOREIGN KEY ("A") REFERENCES "lead"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "service_task_template" ADD CONSTRAINT "service_task_template_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_LeadToServicePlan" ADD CONSTRAINT "_LeadToServicePlan_B_fkey" FOREIGN KEY ("B") REFERENCES "service_plan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "service_task_template" ADD CONSTRAINT "service_task_template_taskTemplateId_fkey" FOREIGN KEY ("taskTemplateId") REFERENCES "task_template"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_LeadToServiceOneTime" ADD CONSTRAINT "_LeadToServiceOneTime_A_fkey" FOREIGN KEY ("A") REFERENCES "lead"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "service_package_item" ADD CONSTRAINT "service_package_item_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "service_package"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_LeadToServiceOneTime" ADD CONSTRAINT "_LeadToServiceOneTime_B_fkey" FOREIGN KEY ("B") REFERENCES "service_one_time"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "service_package_item" ADD CONSTRAINT "service_package_item_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanGovOffices" ADD CONSTRAINT "_ServicePlanGovOffices_A_fkey" FOREIGN KEY ("A") REFERENCES "government_office"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "quote" ADD CONSTRAINT "quote_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanGovOffices" ADD CONSTRAINT "_ServicePlanGovOffices_B_fkey" FOREIGN KEY ("B") REFERENCES "service_plan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "quote_line_item" ADD CONSTRAINT "quote_line_item_quoteId_fkey" FOREIGN KEY ("quoteId") REFERENCES "quote"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimeGovOffices" ADD CONSTRAINT "_ServiceOneTimeGovOffices_A_fkey" FOREIGN KEY ("A") REFERENCES "government_office"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "quote_line_item" ADD CONSTRAINT "quote_line_item_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimeGovOffices" ADD CONSTRAINT "_ServiceOneTimeGovOffices_B_fkey" FOREIGN KEY ("B") REFERENCES "service_one_time"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "quote_line_item" ADD CONSTRAINT "quote_line_item_sourcePackageId_fkey" FOREIGN KEY ("sourcePackageId") REFERENCES "service_package"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanCities" ADD CONSTRAINT "_ServicePlanCities_A_fkey" FOREIGN KEY ("A") REFERENCES "city"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_AutoOvertimeEmployees" ADD CONSTRAINT "_AutoOvertimeEmployees_A_fkey" FOREIGN KEY ("A") REFERENCES "employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanCities" ADD CONSTRAINT "_ServicePlanCities_B_fkey" FOREIGN KEY ("B") REFERENCES "service_plan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_AutoOvertimeEmployees" ADD CONSTRAINT "_AutoOvertimeEmployees_B_fkey" FOREIGN KEY ("B") REFERENCES "hr_setting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimeCities" ADD CONSTRAINT "_ServiceOneTimeCities_A_fkey" FOREIGN KEY ("A") REFERENCES "city"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ExemptLateUndertimeEmployees" ADD CONSTRAINT "_ExemptLateUndertimeEmployees_A_fkey" FOREIGN KEY ("A") REFERENCES "employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimeCities" ADD CONSTRAINT "_ServiceOneTimeCities_B_fkey" FOREIGN KEY ("B") REFERENCES "service_one_time"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ExemptLateUndertimeEmployees" ADD CONSTRAINT "_ExemptLateUndertimeEmployees_B_fkey" FOREIGN KEY ("B") REFERENCES "hr_setting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanInclusions" ADD CONSTRAINT "_ServicePlanInclusions_A_fkey" FOREIGN KEY ("A") REFERENCES "service_inclusion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServiceGovOffices" ADD CONSTRAINT "_ServiceGovOffices_A_fkey" FOREIGN KEY ("A") REFERENCES "government_office"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanInclusions" ADD CONSTRAINT "_ServicePlanInclusions_B_fkey" FOREIGN KEY ("B") REFERENCES "service_plan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServiceGovOffices" ADD CONSTRAINT "_ServiceGovOffices_B_fkey" FOREIGN KEY ("B") REFERENCES "service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimeInclusions" ADD CONSTRAINT "_ServiceOneTimeInclusions_A_fkey" FOREIGN KEY ("A") REFERENCES "service_inclusion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServiceCities" ADD CONSTRAINT "_ServiceCities_A_fkey" FOREIGN KEY ("A") REFERENCES "city"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimeInclusions" ADD CONSTRAINT "_ServiceOneTimeInclusions_B_fkey" FOREIGN KEY ("B") REFERENCES "service_one_time"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServiceCities" ADD CONSTRAINT "_ServiceCities_B_fkey" FOREIGN KEY ("B") REFERENCES "service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanPromos" ADD CONSTRAINT "_ServicePlanPromos_A_fkey" FOREIGN KEY ("A") REFERENCES "promo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServiceInclusions" ADD CONSTRAINT "_ServiceInclusions_A_fkey" FOREIGN KEY ("A") REFERENCES "service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServicePlanPromos" ADD CONSTRAINT "_ServicePlanPromos_B_fkey" FOREIGN KEY ("B") REFERENCES "service_plan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServiceInclusions" ADD CONSTRAINT "_ServiceInclusions_B_fkey" FOREIGN KEY ("B") REFERENCES "service_inclusion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimePromos" ADD CONSTRAINT "_ServiceOneTimePromos_A_fkey" FOREIGN KEY ("A") REFERENCES "promo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServicePromos" ADD CONSTRAINT "_ServicePromos_A_fkey" FOREIGN KEY ("A") REFERENCES "promo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ServiceOneTimePromos" ADD CONSTRAINT "_ServiceOneTimePromos_B_fkey" FOREIGN KEY ("B") REFERENCES "service_one_time"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_ServicePromos" ADD CONSTRAINT "_ServicePromos_B_fkey" FOREIGN KEY ("B") REFERENCES "service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
