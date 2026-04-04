@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { getSessionWithAccess, getClientIdFromSession } from '@/lib/session';
 import { z } from 'zod';
 import { computeTimesheetFields } from '@/lib/timesheet-calc';
+import { resolveHrSettingFlags, applyHrSettingGuards } from '@/lib/hr-settings-guard';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
 const timeRegex = /^\d{2}:\d{2}$/;
@@ -132,11 +133,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
         ? { calculatedDailyRate: compensation.calculatedDailyRate.toString(), payType: compensation.payType }
         : null,
     );
-    updateData.regularHours     = computed.regularHours;
-    updateData.lateMinutes      = computed.lateMinutes;
-    updateData.undertimeMinutes = computed.undertimeMinutes;
-    updateData.regOtHours       = computed.regOtHours;
-    updateData.dailyGrossPay    = computed.dailyGrossPay;
+
+    const guardFlags = await resolveHrSettingFlags(clientId, existing.employeeId);
+    const guarded = applyHrSettingGuards(
+      computed,
+      guardFlags,
+      parseFloat((compensation?.calculatedDailyRate ?? 0).toString()),
+      compensation?.payType === 'VARIABLE_PAY',
+    );
+
+    updateData.regularHours     = guarded.regularHours;
+    updateData.lateMinutes      = guarded.lateMinutes;
+    updateData.undertimeMinutes = guarded.undertimeMinutes;
+    updateData.regOtHours       = guarded.regOtHours;
+    updateData.dailyGrossPay    = guarded.dailyGrossPay;
   }
 
   const updated = await prisma.timesheet.update({ where: { id }, data: updateData });

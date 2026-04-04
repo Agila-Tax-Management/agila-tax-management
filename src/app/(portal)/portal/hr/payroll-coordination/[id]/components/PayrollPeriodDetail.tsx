@@ -433,7 +433,7 @@ export function PayrollPeriodDetail() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
                         {/* Approve individual payslip */}
-                        {!ps.approvedAt && ['DRAFT', 'PROCESSING'].includes(period.status) && (
+                        {!ps.approvedAt && period.status === 'PROCESSING' && (
                           <Button
                             variant="ghost"
                             className="h-7 px-2 text-xs gap-1 text-blue-600"

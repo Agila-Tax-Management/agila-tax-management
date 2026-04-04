@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { getSessionWithAccess, getClientIdFromSession } from '@/lib/session';
 import { z } from 'zod';
 import { computeTimesheetFields } from '@/lib/timesheet-calc';
+import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from '@/lib/hr-settings-guard';
 
 const timeRegex = /^\d{2}:\d{2}$/;
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -105,6 +106,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   );
 
   // ── Per-row: schedule + compensation lookup + compute ─────────────────────
+  // Pre-fetch HR settings once for guard evaluation across all rows
+  const settingCache = await loadHrSettingCache(clientId);
+
   const results: PreviewRowResult[] = await Promise.all(
     rows.map(async (row): Promise<PreviewRowResult> => {
       const base: PreviewRowResult = {
@@ -192,14 +196,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             : null,
         );
 
+        const guardFlags = flagsFromCache(settingCache, employeeId);
+        const guarded = applyHrSettingGuards(
+          computed,
+          guardFlags,
+          parseFloat((compensation?.calculatedDailyRate ?? 0).toString()),
+          compensation?.payType === 'VARIABLE_PAY',
+        );
+
         const otHours = parseFloat(
           (
-            computed.regOtHours +
-            computed.rdOtHours +
-            computed.shOtHours +
-            computed.shRdOtHours +
-            computed.rhOtHours +
-            computed.rhRdOtHours
+            guarded.regOtHours +
+            guarded.rdOtHours +
+            guarded.shOtHours +
+            guarded.shRdOtHours +
+            guarded.rhOtHours +
+            guarded.rhRdOtHours
           ).toFixed(2),
         );
 
@@ -208,10 +220,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           lunchStart,
           lunchEnd,
           lunchFromSchedule,
-          regularHours: computed.regularHours,
+          regularHours: guarded.regularHours,
           otHours,
-          lateMinutes: computed.lateMinutes,
-          dailyGrossPay: computed.dailyGrossPay,
+          lateMinutes: guarded.lateMinutes,
+          dailyGrossPay: guarded.dailyGrossPay,
           willOverwrite,
         };
       } catch {

@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { getSessionWithAccess, getClientIdFromSession } from '@/lib/session';
 import { z } from 'zod';
 import { computeTimesheetFields } from '@/lib/timesheet-calc';
+import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from '@/lib/hr-settings-guard';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
 const timeRegex = /^\d{2}:\d{2}$/;
@@ -54,6 +55,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { rows } = parsed.data;
+
+  // Pre-fetch HR settings once for the whole batch (avoids N+1 DB calls)
+  const settingCache = await loadHrSettingCache(clientId);
 
   let imported = 0;
   let skipped = 0;
@@ -149,6 +153,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           : null,
       );
 
+      const guardFlags = flagsFromCache(settingCache, employee.id);
+      const guarded = applyHrSettingGuards(
+        computed,
+        guardFlags,
+        parseFloat((compensation?.calculatedDailyRate ?? 0).toString()),
+        compensation?.payType === 'VARIABLE_PAY',
+      );
+
       await prisma.timesheet.upsert({
         where: {
           employeeId_date: {
@@ -165,21 +177,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           lunchStart: lunchStartDate,
           lunchEnd: lunchEndDate,
           timeOut: timeOutDate,
-          lateMinutes: computed.lateMinutes,
-          undertimeMinutes: computed.undertimeMinutes,
-          regularHours: computed.regularHours,
-          regOtHours: computed.regOtHours,
-          rdHours: computed.rdHours,
-          rdOtHours: computed.rdOtHours,
-          shHours: computed.shHours,
-          shOtHours: computed.shOtHours,
-          shRdHours: computed.shRdHours,
-          shRdOtHours: computed.shRdOtHours,
-          rhHours: computed.rhHours,
-          rhOtHours: computed.rhOtHours,
-          rhRdHours: computed.rhRdHours,
-          rhRdOtHours: computed.rhRdOtHours,
-          dailyGrossPay: computed.dailyGrossPay,
+          lateMinutes: guarded.lateMinutes,
+          undertimeMinutes: guarded.undertimeMinutes,
+          regularHours: guarded.regularHours,
+          regOtHours: guarded.regOtHours,
+          rdHours: guarded.rdHours,
+          rdOtHours: guarded.rdOtHours,
+          shHours: guarded.shHours,
+          shOtHours: guarded.shOtHours,
+          shRdHours: guarded.shRdHours,
+          shRdOtHours: guarded.shRdOtHours,
+          rhHours: guarded.rhHours,
+          rhOtHours: guarded.rhOtHours,
+          rhRdHours: guarded.rhRdHours,
+          rhRdOtHours: guarded.rhRdOtHours,
+          dailyGrossPay: guarded.dailyGrossPay,
         },
         update: {
           status: 'PRESENT',
@@ -187,21 +199,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           lunchStart: lunchStartDate,
           lunchEnd: lunchEndDate,
           timeOut: timeOutDate,
-          lateMinutes: computed.lateMinutes,
-          undertimeMinutes: computed.undertimeMinutes,
-          regularHours: computed.regularHours,
-          regOtHours: computed.regOtHours,
-          rdHours: computed.rdHours,
-          rdOtHours: computed.rdOtHours,
-          shHours: computed.shHours,
-          shOtHours: computed.shOtHours,
-          shRdHours: computed.shRdHours,
-          shRdOtHours: computed.shRdOtHours,
-          rhHours: computed.rhHours,
-          rhOtHours: computed.rhOtHours,
-          rhRdHours: computed.rhRdHours,
-          rhRdOtHours: computed.rhRdOtHours,
-          dailyGrossPay: computed.dailyGrossPay,
+          lateMinutes: guarded.lateMinutes,
+          undertimeMinutes: guarded.undertimeMinutes,
+          regularHours: guarded.regularHours,
+          regOtHours: guarded.regOtHours,
+          rdHours: guarded.rdHours,
+          rdOtHours: guarded.rdOtHours,
+          shHours: guarded.shHours,
+          shOtHours: guarded.shOtHours,
+          shRdHours: guarded.shRdHours,
+          shRdOtHours: guarded.shRdOtHours,
+          rhHours: guarded.rhHours,
+          rhOtHours: guarded.rhOtHours,
+          rhRdHours: guarded.rhRdHours,
+          rhRdOtHours: guarded.rhRdOtHours,
+          dailyGrossPay: guarded.dailyGrossPay,
         },
       });
 

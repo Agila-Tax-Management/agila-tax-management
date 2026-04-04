@@ -123,6 +123,8 @@ interface PayslipDetail {
   preparedBy: { id: string; name: string } | null;
   approvedBy: { id: string; name: string } | null;
   acknowledgedBy: { id: string; name: string } | null;
+  // HR Settings (signals applied to stored timesheet data)
+  hrSetting: { strictOvertimeApproval: boolean; disableLateUndertimeGlobal: boolean } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -183,7 +185,12 @@ function computeRowPay(
   payType: string,
   scheduleDays: WorkScheduleDay[] | undefined,
   dayOfWeek: number,
+  disableLateUndertime = false,
 ) {
+  // If late/undertime is globally disabled the stored lateMinutes/undertimeMinutes are
+  // already zeroed by the server guard — mirror that here for display consistency.
+  if (disableLateUndertime) return { lateDeduct: 0, undertimeDeduct: 0 };
+
   const sd = scheduleDays?.find((d) => d.dayOfWeek === dayOfWeek) ?? null;
   const schedStart = sd ? toMin(sd.startTime) : 8 * 60;
   const schedEnd = sd ? toMin(sd.endTime) : 17 * 60;
@@ -815,6 +822,30 @@ export function PayslipEditor() {
           <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Daily Breakdown</h2>
           {timesheetsLoading && <Loader2 size={14} className="animate-spin text-muted-foreground ml-1" />}
         </div>
+
+        {/* HR Setting info banners */}
+        {(payslip.hrSetting?.disableLateUndertimeGlobal || payslip.hrSetting?.strictOvertimeApproval) && (
+          <div className="px-4 py-3 border-b border-border space-y-2">
+            {payslip.hrSetting.disableLateUndertimeGlobal && (
+              <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
+                <Info size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  <strong>Late &amp; undertime deductions are disabled</strong> for this company.
+                  Late/undertime minutes are not deducted from pay. Click <em>Refresh &amp; Save</em> to apply this to any existing rows.
+                </span>
+              </div>
+            )}
+            {payslip.hrSetting.strictOvertimeApproval && (
+              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                <Info size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  <strong>Strict overtime approval is enabled.</strong>
+                  Only approved overtime requests count toward OT pay — excess punch hours are not automatically credited.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead>
@@ -847,7 +878,7 @@ export function PayslipEditor() {
                 }
                 const statusLabel = SS_LABEL[ts.status] ?? ts.status;
                 const statusColor = SS_COLOR[ts.status] ?? 'text-muted-foreground';
-                const { lateDeduct, undertimeDeduct } = computeRowPay(ts, tableDailyRate, tablePayType, tableSchedule?.days, date.getDay());
+                const { lateDeduct, undertimeDeduct } = computeRowPay(ts, tableDailyRate, tablePayType, tableSchedule?.days, date.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
                 return (
                   <tr key={ts.id} className="hover:bg-muted/30">
                     <td className="px-2 py-2 font-medium">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</td>
@@ -945,7 +976,7 @@ export function PayslipEditor() {
                     }
                     const total = periodDays.reduce((s, { ts: t, date: d }) => {
                       if (!t) return s;
-                      const { lateDeduct: ld } = computeRowPay(t, tableDailyRate, tablePayType, tableSchedule?.days, d.getDay());
+                      const { lateDeduct: ld } = computeRowPay(t, tableDailyRate, tablePayType, tableSchedule?.days, d.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
                       return s + ld;
                     }, 0);
                     return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
@@ -959,7 +990,7 @@ export function PayslipEditor() {
                     }
                     const total = periodDays.reduce((s, { ts: t, date: d }) => {
                       if (!t) return s;
-                      const { undertimeDeduct: ud } = computeRowPay(t, tableDailyRate, tablePayType, tableSchedule?.days, d.getDay());
+                      const { undertimeDeduct: ud } = computeRowPay(t, tableDailyRate, tablePayType, tableSchedule?.days, d.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
                       return s + ud;
                     }, 0);
                     return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
@@ -1132,7 +1163,7 @@ export function PayslipEditor() {
         )}
 
         {/* Approve individual payslip */}
-        {!payslip.approvedAt && ['DRAFT', 'PROCESSING'].includes(payslip.payrollPeriod.status) && (
+        {!payslip.approvedAt && payslip.payrollPeriod.status === 'PROCESSING' && (
           <Button
             className="gap-2 bg-blue-500 hover:bg-blue-600 text-white"
             disabled={approving}

@@ -259,7 +259,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let timesheetRecalcCount = 0;
   for (const ts of timesheets) {
     if (!ts.timeIn || !ts.timeOut) continue;
-    if (Number(ts.regularHours) > 0) continue;
+    // Skip rows already computed: regularHours > 0 = regular day done;
+    // dailyGrossPay > 0 = holiday/rest-day premium row already computed.
+    if (Number(ts.regularHours) > 0 || Number(ts.dailyGrossPay) > 0) continue;
 
     const emp = compensationByEmpId.get(ts.employeeId);
     const empSchedule = emp?.contract.schedule ?? null;
@@ -385,10 +387,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         allowance = allowanceRate / freqDiv;
       }
 
-      // Basic pay: FIXED_PAY uses the calculated monthly rate prorated;
-      // VARIABLE_PAY sums each day's dailyGrossPay from the timesheet
+      // Basic pay:
+      //   FIXED_PAY  → full periodic salary regardless of attendance.
+      //   VARIABLE_PAY → sum actual dailyGrossPay from timesheet (reflects absences
+      //                  and late/undertime deductions; absent days have no row).
       const basicPay =
-        comp.payType === "FIXED_PAY"
+        comp.payType === 'FIXED_PAY'
           ? monthlyRate / freqDiv
           : empTs.reduce((s, ts) => s + Number(ts.dailyGrossPay), 0);
 

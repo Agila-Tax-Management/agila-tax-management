@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionWithAccess, getClientIdFromSession } from '@/lib/session';
 import { computeTimesheetFields, type DayType } from '@/lib/timesheet-calc';
+import { resolveHrSettingFlags, applyHrSettingGuards } from '@/lib/hr-settings-guard';
 import {
   getSSSEmployeeDeduction,
   getPhilHealthEmployeeDeduction,
@@ -152,6 +153,12 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   // Pre-compute daily rate (used in punch-row recalc and OT-only row handling below)
   const dailyRate = Number(compensation?.calculatedDailyRate ?? 0);
 
+  // ── Load HrSetting guard flags for this employee ─────────────────────────
+  // Strict OT: zeros punch-derived OT buckets; approved OT requests merge back in after.
+  // Disable late/undertime: zeros lateMinutes + undertimeMinutes and restores dailyGrossPay.
+  const guardFlags = await resolveHrSettingFlags(clientId, employeeId);
+  const isVariable = (compensation?.payType ?? 'FIXED_PAY') === 'VARIABLE_PAY';
+
   // ── 3. Recalculate ALL rows that have timeIn + timeOut ───────────────────
   // Covers: COA-corrected rows added after generation, rows where dailyGrossPay
   // was never computed (e.g. punched before this field existed), rows where
@@ -196,44 +203,48 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       dayType,
     );
 
+    // Apply HR setting guards:
+    //  - strictOvertimeApproval → zeroes punch-derived OT (approved OT merges in after)
+    //  - disableLateUndertimeGlobal → zeroes late/undertime minutes + adjusts dailyGrossPay
+    const guarded = applyHrSettingGuards(computed, guardFlags, dailyRate, isVariable);
+
     // ── Merge approved OT hours with punch-derived values ──────────────────
     // Approved OT requests are the authoritative source for OT hour counts.
-    // Regular OT: take the max of punch-derived vs approved (preserve whichever is higher).
-    // Rest-day OT: preserve rdHours/rdOtHours already written by the OT approval handler
-    //   (those were derived from the approved request amount, not from raw punches).
+    // Regular OT: take the max of guarded vs approved (approved OT overrides strict mode).
+    // Rest-day OT: preserve rdHours/rdOtHours already written by the OT approval handler.
     const approvedOt = approvedOtMap.get(dateKey);
     const writeRegOtHours = approvedOt && !approvedOt.hasRestDayOt
-      ? Math.max(computed.regOtHours, approvedOt.regOtHours)
-      : computed.regOtHours;
-    const writeRdHours   = approvedOt?.hasRestDayOt ? Number(ts.rdHours)   : computed.rdHours;
-    const writeRdOtHours = approvedOt?.hasRestDayOt ? Number(ts.rdOtHours) : computed.rdOtHours;
+      ? Math.max(guarded.regOtHours, approvedOt.regOtHours)
+      : guarded.regOtHours;
+    const writeRdHours   = approvedOt?.hasRestDayOt ? Number(ts.rdHours)   : guarded.rdHours;
+    const writeRdOtHours = approvedOt?.hasRestDayOt ? Number(ts.rdOtHours) : guarded.rdOtHours;
 
     // Unpaid leave: employee is punched (COA-corrected) but earns no base pay for the day
-    const writeDailyGrossPay = ts.status === 'UNPAID_LEAVE' ? 0 : computed.dailyGrossPay;
+    const writeDailyGrossPay = ts.status === 'UNPAID_LEAVE' ? 0 : guarded.dailyGrossPay;
 
     await prisma.timesheet.update({
       where: { id: ts.id },
       data: {
-        regularHours:     computed.regularHours,
-        lateMinutes:      computed.lateMinutes,
-        undertimeMinutes: computed.undertimeMinutes,
+        regularHours:     guarded.regularHours,
+        lateMinutes:      guarded.lateMinutes,
+        undertimeMinutes: guarded.undertimeMinutes,
         regOtHours:       writeRegOtHours,
         rdHours:          writeRdHours,
         rdOtHours:        writeRdOtHours,
-        shHours:          computed.shHours,
-        shOtHours:        computed.shOtHours,
-        shRdHours:        computed.shRdHours,
-        shRdOtHours:      computed.shRdOtHours,
-        rhHours:          computed.rhHours,
-        rhOtHours:        computed.rhOtHours,
-        rhRdHours:        computed.rhRdHours,
-        rhRdOtHours:      computed.rhRdOtHours,
+        shHours:          guarded.shHours,
+        shOtHours:        guarded.shOtHours,
+        shRdHours:        guarded.shRdHours,
+        shRdOtHours:      guarded.shRdOtHours,
+        rhHours:          guarded.rhHours,
+        rhOtHours:        guarded.rhOtHours,
+        rhRdHours:        guarded.rhRdHours,
+        rhRdOtHours:      guarded.rhRdOtHours,
         dailyGrossPay:    writeDailyGrossPay,
       },
     });
 
     recalcMessages.push(
-      `${dateKey} [${dayType}]: regularHours=${computed.regularHours}h rdHours=${computed.rdHours}h dailyGross=₱${computed.dailyGrossPay}`,
+      `${dateKey} [${dayType}]: regularHours=${guarded.regularHours}h rdHours=${guarded.rdHours}h dailyGross=₱${guarded.dailyGrossPay}`,
     );
     recalcCount++;
   }
@@ -336,11 +347,14 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const freq = (compensation?.frequency ?? 'TWICE_A_MONTH') as 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
   const freqDiv = freq === 'ONCE_A_MONTH' ? 1 : freq === 'TWICE_A_MONTH' ? 2 : 4;
 
-  // Basic pay: VARIABLE_PAY sums actual per-day earnings; FIXED_PAY uses prorated monthly
+  // Basic pay:
+  //   FIXED_PAY  → full periodic salary regardless of attendance.
+  //   VARIABLE_PAY → sum actual dailyGrossPay from timesheet (reflects absences
+  //                  and late/undertime deductions; absent days have no row).
   const basicPay =
-    payType === 'VARIABLE_PAY'
-      ? updatedTimesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0)
-      : monthlyRate / freqDiv;
+    payType === 'FIXED_PAY'
+      ? monthlyRate / freqDiv
+      : updatedTimesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);
 
   // Allowance: respect allowanceOnFirstCutoffOnly flag
   const allowanceOnFirstCutoffOnly = compensation?.allowanceOnFirstCutoffOnly ?? true;
@@ -357,41 +371,20 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     return (h ?? 0) * 60 + (m ?? 0);
   };
 
-  // Holiday premium pay (public holidays only — rest-day premium is NOT holiday pay):
-  //   VARIABLE_PAY → basicPay already sums dailyGrossPay which includes premiums,
-  //                  so holidayPay resets to 0 to avoid double-counting.
-  //   FIXED_PAY    → basicPay is flat (monthlyRate/freqDiv). The *additional* premium
-  //                  over the base hourly rate for actual PUBLIC HOLIDAY hours worked,
-  //                  prorated by actual hours in each bucket:
-  //                  (dailyRate/8) × hours × (BASE_MULT − 1.0) per bucket.
-  //                  rdHours are excluded — rest-day premium is already embedded in
-  //                  dailyGrossPay (via VARIABLE_PAY) or in basicPay (FIXED_PAY gets
-  //                  the flat monthly rate which covers rest-day work too).
-  const holidayPay =
-    payType === 'VARIABLE_PAY'
-      ? 0
-      : updatedTimesheets.reduce((s, t) => {
-          const hr = dailyRate / 8;
-          // Only public holiday buckets — rdHours (plain rest day, no holiday) excluded
-          return s +
-            Number(t.shHours)   * 0.30 * hr +  // SPECIAL_HOLIDAY:       +30 %
-            Number(t.shRdHours) * 0.50 * hr +  // SPECIAL_HOLIDAY_REST:  +50 %
-            Number(t.rhHours)   * 1.00 * hr +  // REGULAR_HOLIDAY:      +100 %
-            Number(t.rhRdHours) * 1.60 * hr;   // REGULAR_HOLIDAY_REST: +160 %
-        }, 0);
+  // Holiday premium pay: basicPay now sums dailyGrossPay which already embeds all
+  // holiday and rest-day multipliers via computeTimesheetFields(). No separate component
+  // needed — setting to 0 prevents double-counting for all pay types.
+  const holidayPay = 0;
 
-  // Late / undertime deduction:
+  // Late / undertime deduction: per-minute penalty on punched days only.
   //   VARIABLE_PAY → already baked into dailyGrossPay per row (0 here).
-  //   FIXED_PAY    → (lateMin + undertimeMin) / scheduledWorkMin × dailyRate per punched row
-  //                  + dailyRate per UNPAID_LEAVE day (employee not paid for that day)
+  //   FIXED_PAY    → (lateMin + undertimeMin) / scheduledWorkMin × dailyRate per punched row.
+  // Absent days and UNPAID_LEAVE days are already excluded from basicPay
+  // (no row / dailyGrossPay = 0), so no additional full-day deduction is needed.
   const lateUndertimeDeduction = (() => {
     if (payType === 'VARIABLE_PAY') return 0;
     let total = 0;
     for (const t of updatedTimesheets) {
-      if (t.status === 'UNPAID_LEAVE') {
-        total += dailyRate;
-        continue;
-      }
       if (!t.timeIn || !t.timeOut) continue;
       const deductMin = Number(t.lateMinutes) + Number(t.undertimeMinutes);
       if (deductMin <= 0) continue;

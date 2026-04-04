@@ -100,6 +100,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
   let body: unknown;
   try {
     body = await request.json();
@@ -143,16 +146,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Auto-generate employee number if not provided
   let resolvedEmployeeNo = employeeNo ?? null;
   if (!resolvedEmployeeNo) {
-    const lastEmployee = await prisma.employee.findFirst({
-      orderBy: { id: "desc" },
-      select: { id: true },
+    // Use the client's configured prefix (fall back to "EMP" if no setting exists)
+    const hrSetting = await prisma.hrSetting.findUnique({
+      where: { clientId },
+      select: { employeeNumberPrefix: true },
     });
-    const nextNo = (lastEmployee?.id ?? 0) + 1;
-    resolvedEmployeeNo = `EMP-${String(nextNo).padStart(5, "0")}`;
-    // Ensure the auto-generated number doesn't collide
+    const prefix = hrSetting?.employeeNumberPrefix ?? 'EMP';
+
+    // Find the highest existing number for this prefix to increment safely
+    const lastWithPrefix = await prisma.employee.findFirst({
+      where: { employeeNo: { startsWith: `${prefix}-` } },
+      orderBy: { employeeNo: 'desc' },
+      select: { employeeNo: true },
+    });
+
+    let nextNo = 1;
+    if (lastWithPrefix?.employeeNo) {
+      const parts = lastWithPrefix.employeeNo.split('-');
+      const last = parseInt(parts[parts.length - 1]!, 10);
+      if (!isNaN(last)) nextNo = last + 1;
+    }
+
+    resolvedEmployeeNo = `${prefix}-${String(nextNo).padStart(5, "0")}`;
+    // Ensure no collision
     const autoConflict = await prisma.employee.findUnique({ where: { employeeNo: resolvedEmployeeNo } });
     if (autoConflict) {
-      resolvedEmployeeNo = `EMP-${String(nextNo + 1).padStart(5, "0")}`;
+      resolvedEmployeeNo = `${prefix}-${String(nextNo + 1).padStart(5, "0")}`;
     }
   }
 
