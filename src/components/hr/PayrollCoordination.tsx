@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Filter, Play, CheckCircle, PauseCircle, RotateCcw, Zap, Loader2, CalendarDays, Users, ChevronRight, AlertCircle } from 'lucide-react';
+import { Search, Filter, Play, CheckCircle, PauseCircle, RotateCcw, Zap, Loader2, CalendarDays, Users, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -41,12 +41,16 @@ interface PayrollPeriodRow {
   totalDeductionsSum: number;
 }
 
-interface PendingGeneration {
-  schedule: PayrollScheduleItem;
+interface GenerateCandidate {
   periodNumber: 1 | 2;
   year: number;
   month: number;
+  startDay: number;
+  endDay: number;
   label: string;
+  monthLabel: string;
+  dateRange: string;
+  alreadyExists: boolean;
 }
 
 // ─── Date Helpers ─────────────────────────────────────────────────
@@ -61,71 +65,91 @@ function resolveEndDay(year: number, month: number, configuredDay: number): numb
   return Math.min(configuredDay, lastDayOfMonth);
 }
 
-function computePendingGenerations(
-  schedules: PayrollScheduleItem[],
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTH_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/**
+ * Builds all generate-able period candidates for a given schedule over the past N months.
+ * Each candidate carries whether the period already exists in the generated list.
+ */
+function computeCandidates(
+  schedule: PayrollScheduleItem,
   existingPeriods: { payrollScheduleId: string | null; startDate: string; endDate: string }[],
   today: Date,
-): PendingGeneration[] {
-  const pending: PendingGeneration[] = [];
-  const MONTHS_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  monthsBack = 5,
+): GenerateCandidate[] {
+  const candidates: GenerateCandidate[] = [];
 
-  // Check current month and the prior month (to allow late processing)
-  for (let offset = 1; offset >= 0; offset--) {
+  const periodConfigs: {
+    number: 1 | 2;
+    label: string;
+    startDay: number | null;
+    endDayCfg: number | null;
+  }[] = [
+    {
+      number: 1,
+      label: schedule.frequency === 'ONCE_A_MONTH' ? 'Full Month' : '1st Half',
+      startDay: schedule.firstPeriodStartDay,
+      endDayCfg: schedule.firstPeriodEndDay,
+    },
+  ];
+  if (
+    schedule.frequency === 'TWICE_A_MONTH' &&
+    schedule.secondPeriodStartDay !== null &&
+    schedule.secondPeriodEndDay !== null
+  ) {
+    periodConfigs.push({
+      number: 2,
+      label: '2nd Half',
+      startDay: schedule.secondPeriodStartDay,
+      endDayCfg: schedule.secondPeriodEndDay,
+    });
+  }
+
+  for (let offset = monthsBack; offset >= 0; offset--) {
     const refDate = new Date(today.getFullYear(), today.getMonth() - offset, 1);
     const year = refDate.getFullYear();
     const month = refDate.getMonth() + 1; // 1-based
 
-    for (const schedule of schedules) {
-      if (!schedule.isActive) continue;
+    for (const cfg of periodConfigs) {
+      if (cfg.startDay === null || cfg.endDayCfg === null) continue;
+      const resolvedEnd = resolveEndDay(year, month, cfg.endDayCfg);
 
-      const checkPeriod = (periodNumber: 1 | 2) => {
-        const startDay =
-          periodNumber === 1 ? schedule.firstPeriodStartDay : (schedule.secondPeriodStartDay ?? null);
-        const endDayCfg =
-          periodNumber === 1 ? schedule.firstPeriodEndDay : (schedule.secondPeriodEndDay ?? null);
+      const alreadyExists = existingPeriods.some((p) => {
+        if (p.payrollScheduleId !== schedule.id) return false;
+        const ps = new Date(p.startDate);
+        const pe = new Date(p.endDate);
+        return (
+          ps.getFullYear() === year &&
+          ps.getMonth() === month - 1 &&
+          ps.getDate() === cfg.startDay &&
+          pe.getFullYear() === year &&
+          pe.getMonth() === month - 1 &&
+          pe.getDate() === resolvedEnd
+        );
+      });
 
-        if (startDay === null || endDayCfg === null) return;
-
-        const resolvedEnd = resolveEndDay(year, month, endDayCfg);
-        const endDate = new Date(year, month - 1, resolvedEnd);
-
-        // Only show if the cutoff has passed (period has ended)
-        if (endDate >= today) return;
-
-        // Don't show if already generated for this exact date range
-        const alreadyExists = existingPeriods.some((p) => {
-          if (p.payrollScheduleId !== schedule.id) return false;
-          const ps = new Date(p.startDate);
-          const pe = new Date(p.endDate);
-          return (
-            ps.getFullYear() === year &&
-            ps.getMonth() === month - 1 &&
-            ps.getDate() === startDay &&
-            pe.getFullYear() === year &&
-            pe.getMonth() === month - 1 &&
-            pe.getDate() === resolvedEnd
-          );
-        });
-        if (alreadyExists) return;
-
-        const monthName = MONTHS_LABELS[month - 1] ?? '';
-        pending.push({
-          schedule,
-          periodNumber,
-          year,
-          month,
-          label: `${monthName} ${startDay} – ${monthName} ${resolvedEnd}, ${year}`,
-        });
-      };
-
-      checkPeriod(1);
-      if (schedule.frequency === 'TWICE_A_MONTH' && schedule.secondPeriodStartDay !== null) {
-        checkPeriod(2);
-      }
+      candidates.push({
+        periodNumber: cfg.number,
+        year,
+        month,
+        startDay: cfg.startDay,
+        endDay: resolvedEnd,
+        label: cfg.label,
+        monthLabel: `${MONTH_NAMES[month - 1] ?? ''} ${year}`,
+        dateRange: `${MONTH_SHORT[month - 1] ?? ''} ${cfg.startDay} – ${MONTH_SHORT[month - 1] ?? ''} ${resolvedEnd}, ${year}`,
+        alreadyExists,
+      });
     }
   }
 
-  return pending;
+  return candidates;
 }
 
 // ─── Status display config ────────────────────────────────────────
@@ -161,12 +185,18 @@ export function PayrollCoordination() {
   const [schedules, setSchedules] = useState<PayrollScheduleItem[]>([]);
   const [periods, setPeriods] = useState<PayrollPeriodRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [genModalOpen, setGenModalOpen] = useState(false);
+  const [genScheduleId, setGenScheduleId] = useState('');
+  const [genSelectedKey, setGenSelectedKey] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
 
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ periodId: number; label: string } | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // Confirmation modal for status transitions
   const [confirmModal, setConfirmModal] = useState<{
@@ -229,20 +259,42 @@ export function PayrollCoordination() {
     }
   };
 
+  // ── Delete period ──────────────────────────────────────────
+
+  const handleDelete = async () => {
+    if (!deleteModal) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/hr/payroll-periods/${deleteModal.periodId}`, { method: 'DELETE' });
+      const json: { error?: string } = await res.json();
+      if (!res.ok) {
+        error('Delete failed', json.error ?? 'Could not delete payroll period');
+        return;
+      }
+      success('Deleted', `Payroll period "${deleteModal.label}" has been deleted.`);
+      setDeleteModal(null);
+      setDeleteConfirmText('');
+      setPeriods((prev) => prev.filter((p) => p.id !== deleteModal.periodId));
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // ── Generate payroll ──────────────────────────────────────────
 
-  const handleGenerate = async (pending: PendingGeneration) => {
-    const key = `${pending.schedule.id}-${pending.periodNumber}`;
-    setGenerating(key);
+  const handleGenerate = async (candidate: GenerateCandidate, schedule: PayrollScheduleItem) => {
+    setGenerating(true);
     try {
       const res = await fetch('/api/hr/payroll-periods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          payrollScheduleId: pending.schedule.id,
-          periodNumber: pending.periodNumber,
-          year: pending.year,
-          month: pending.month,
+          payrollScheduleId: schedule.id,
+          periodNumber: candidate.periodNumber,
+          year: candidate.year,
+          month: candidate.month,
         }),
       });
       const json: { data?: PayrollPeriodRow; error?: string } = await res.json();
@@ -252,13 +304,16 @@ export function PayrollCoordination() {
       }
       success(
         'Payroll generated',
-        `Draft payslips created for ${pending.schedule.name} · ${pending.label}`,
+        `Draft payslips created for ${schedule.name} · ${candidate.dateRange}`,
       );
+      setGenModalOpen(false);
+      setGenScheduleId('');
+      setGenSelectedKey(null);
       await fetchData();
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
-      setGenerating(null);
+      setGenerating(false);
     }
   };
 
@@ -266,10 +321,22 @@ export function PayrollCoordination() {
 
   const today = useMemo(() => new Date(), []);
 
-  const pendingGenerations = useMemo(
-    () => computePendingGenerations(schedules, periods, today),
-    [schedules, periods, today],
-  );
+  const genCandidates = useMemo(() => {
+    if (!genScheduleId) return [] as GenerateCandidate[];
+    const sched = schedules.find((s) => s.id === genScheduleId);
+    if (!sched) return [] as GenerateCandidate[];
+    return computeCandidates(sched, periods, today);
+  }, [genScheduleId, schedules, periods, today]);
+
+  const genCandidatesGrouped = useMemo(() => {
+    const grouped = new Map<string, GenerateCandidate[]>();
+    for (const c of [...genCandidates].reverse()) {
+      const arr = grouped.get(c.monthLabel) ?? [];
+      arr.push(c);
+      grouped.set(c.monthLabel, arr);
+    }
+    return [...grouped.entries()];
+  }, [genCandidates]);
 
   const filtered = useMemo(() => {
     return periods.filter((p) => {
@@ -291,53 +358,20 @@ export function PayrollCoordination() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-foreground">Payroll Coordination</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage payroll periods and employee compensation disbursements.
-        </p>
-      </div>
-
-      {/* ── Pending Generation Banners ── */}
-      {!loading && pendingGenerations.length > 0 && (
-        <div className="space-y-2">
-          {pendingGenerations.map((pending) => {
-            const key = `${pending.schedule.id}-${pending.periodNumber}`;
-            const isGen = generating === key;
-            return (
-              <div
-                key={`${pending.year}-${pending.month}-${pending.schedule.id}-${pending.periodNumber}`}
-                className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 dark:border-amber-700 px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-200 flex items-center justify-center shrink-0">
-                    <Zap size={15} className="text-amber-700" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-black-800">
-                      Ready to Generate: {pending.label}
-                    </p>
-                    <p className="text-xs text-black-800">
-                      {pending.schedule.name} · Period {pending.periodNumber}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  onClick={() => { void handleGenerate(pending); }}
-                  disabled={!!generating}
-                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shrink-0"
-                >
-                  {isGen ? (
-                    <><Loader2 size={14} className="animate-spin" /> Generating…</>
-                  ) : (
-                    <><Zap size={14} /> Generate Payroll</>
-                  )}
-                </Button>
-              </div>
-            );
-          })}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-foreground">Payroll Coordination</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage payroll periods and employee compensation disbursements.
+          </p>
         </div>
-      )}
+        <Button
+          onClick={() => setGenModalOpen(true)}
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+        >
+          <Zap size={15} /> Generate Payroll
+        </Button>
+      </div>
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -454,21 +488,34 @@ export function PayrollCoordination() {
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {p.status === 'DRAFT' && (
-                          <Button
-                            variant="ghost"
-                            className="h-8 px-2.5 gap-1.5 text-xs text-blue-600"
-                            onClick={() => setConfirmModal({
-                              periodId: p.id,
-                              targetStatus: 'PROCESSING',
-                              title: 'Start Processing',
-                              message: `Move "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}" to Processing? You will be able to review and edit individual payslips.`,
-                              btnClass: 'bg-blue-600 hover:bg-blue-700 text-white',
-                              icon: <Play size={14} />,
-                            })}
-                            title="Start Processing"
-                          >
-                            <Play size={14} /> Process
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              className="h-8 px-2.5 gap-1.5 text-xs text-blue-600"
+                              onClick={() => setConfirmModal({
+                                periodId: p.id,
+                                targetStatus: 'PROCESSING',
+                                title: 'Start Processing',
+                                message: `Move "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}" to Processing? You will be able to review and edit individual payslips.`,
+                                btnClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+                                icon: <Play size={14} />,
+                              })}
+                              title="Start Processing"
+                            >
+                              <Play size={14} /> Process
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                setDeleteConfirmText('');
+                                setDeleteModal({ periodId: p.id, label: `${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}` });
+                              }}
+                              title="Delete period"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </>
                         )}
                         {p.status === 'PROCESSING' && (
                           <>
@@ -564,6 +611,164 @@ export function PayrollCoordination() {
           </div>
         )}
       </Card>
+
+      {/* ── Delete Confirmation Modal ── */}
+      <Modal
+        isOpen={deleteModal !== null}
+        onClose={() => { setDeleteModal(null); setDeleteConfirmText(''); }}
+        title="Delete Payroll Period"
+        size="sm"
+      >
+        <div className="p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+              <Trash2 size={16} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground mb-1">This action cannot be undone.</p>
+              <p className="text-sm text-muted-foreground">
+                All draft payslips for <span className="font-semibold text-foreground">{deleteModal?.label}</span> will be permanently removed.
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Type <span className="text-red-500 font-mono">delete</span> to confirm
+            </label>
+            <input
+              type="text"
+              placeholder="delete"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => { setDeleteModal(null); setDeleteConfirmText(''); }}>
+              Cancel
+            </Button>
+            <Button
+              className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteConfirmText !== 'delete' || deleting}
+              onClick={() => { void handleDelete(); }}
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Delete Period
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Generate Payroll Modal ── */}
+      <Modal
+        isOpen={genModalOpen}
+        onClose={() => { setGenModalOpen(false); setGenScheduleId(''); setGenSelectedKey(null); }}
+        title="Generate Payroll"
+        size="md"
+      >
+        <div className="p-5 space-y-5">
+          {/* Schedule selector */}
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Payroll Schedule
+            </label>
+            <select
+              className="w-full px-3 py-2.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              value={genScheduleId}
+              onChange={(e) => { setGenScheduleId(e.target.value); setGenSelectedKey(null); }}
+            >
+              <option value="">— Select a schedule —</option>
+              {schedules.filter((s) => s.isActive).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Period candidates */}
+          {genScheduleId && (
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                Select Period
+              </label>
+              {genCandidatesGrouped.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  No periods available for this schedule.
+                </p>
+              ) : (
+                <div className="space-y-4 max-h-64 overflow-y-auto pr-1">
+                  {genCandidatesGrouped.map(([monthLabel, cands]) => (
+                    <div key={monthLabel}>
+                      <p className="text-xs font-bold text-foreground mb-2">{monthLabel}</p>
+                      <div className={`grid gap-2 ${cands.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {cands.map((c) => {
+                          const key = `${c.year}-${c.month}-${c.periodNumber}`;
+                          const isSelected = genSelectedKey === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              disabled={c.alreadyExists}
+                              onClick={() => setGenSelectedKey(isSelected ? null : key)}
+                              className={`text-left rounded-xl border p-3 transition-all ${
+                                c.alreadyExists
+                                  ? 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/20 cursor-pointer'
+                                    : 'border-border hover:border-blue-300 hover:bg-muted/30 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-bold text-foreground">{c.label}</p>
+                                {c.alreadyExists ? (
+                                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    ✓ Generated
+                                  </span>
+                                ) : isSelected ? (
+                                  <CheckCircle size={14} className="text-blue-500 shrink-0" />
+                                ) : null}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">{c.dateRange}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              onClick={() => { setGenModalOpen(false); setGenScheduleId(''); setGenSelectedKey(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={!genSelectedKey || generating}
+              onClick={() => {
+                if (!genSelectedKey) return;
+                const candidate = genCandidates.find(
+                  (c) => `${c.year}-${c.month}-${c.periodNumber}` === genSelectedKey,
+                );
+                const sched = schedules.find((s) => s.id === genScheduleId);
+                if (!candidate || !sched) return;
+                void handleGenerate(candidate, sched);
+              }}
+            >
+              {generating ? (
+                <><Loader2 size={14} className="animate-spin" /> Generating…</>
+              ) : (
+                <><Zap size={14} /> Generate Payroll</>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Confirmation Modal ── */}
       <Modal
