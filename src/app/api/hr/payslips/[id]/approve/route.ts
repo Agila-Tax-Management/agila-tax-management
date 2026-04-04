@@ -43,9 +43,9 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     return NextResponse.json({ error: "This payslip has already been approved" }, { status: 409 });
   }
 
-  if (!["DRAFT", "PROCESSING"].includes(payslip.payrollPeriod.status)) {
+  if (payslip.payrollPeriod.status !== "PROCESSING") {
     return NextResponse.json(
-      { error: "Payslip can only be approved when the period is in Draft or Processing status" },
+      { error: "Payslip can only be approved when the period is in Processing status" },
       { status: 409 },
     );
   }

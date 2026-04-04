@@ -168,6 +168,11 @@ model EmployeeCompensation {
     // ─── Basic Compensation (From your UI) ───
     baseRate            Decimal  @db.Decimal(10, 2) 
     allowanceRate       Decimal  @db.Decimal(10, 2) @default(0.00)
+
+    // ─── Allowance Payout Behavior ───
+    // If true: Give 100% of the allowance on the 1st payroll of the month
+    // If false: Split it evenly across all pay periods (e.g., 50/50 for semi-monthly).
+    allowanceOnFirstCutoffOnly Boolean @default(true)
     
     // ─── Salary Configuration ───
     rateType            SalaryRateType    @default(DAILY)

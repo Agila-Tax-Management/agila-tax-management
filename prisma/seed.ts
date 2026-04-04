@@ -1303,6 +1303,47 @@ async function main(): Promise<void> {
     });
   }
   console.log(`  ✓ ${LEAVE_TYPE_SEEDS.length} leave type(s) seeded`);
+
+  // ── 15. Seed 2026 Philippine + Cebu Local Holidays ────────────────
+  const HOLIDAY_SEEDS = [
+    // ── Regular Holidays (Art. 94, Labor Code) ──
+    { name: "New Year's Day",        date: new Date('2026-01-01'), type: 'REGULAR' as const },
+    { name: 'Araw ng Kagitingan',    date: new Date('2026-04-09'), type: 'REGULAR' as const },
+    { name: 'Maundy Thursday',       date: new Date('2026-04-02'), type: 'REGULAR' as const },
+    { name: 'Good Friday',           date: new Date('2026-04-03'), type: 'REGULAR' as const },
+    { name: 'Labor Day',             date: new Date('2026-05-01'), type: 'REGULAR' as const },
+    { name: 'Independence Day',      date: new Date('2026-06-12'), type: 'REGULAR' as const },
+    { name: 'National Heroes Day',   date: new Date('2026-08-31'), type: 'REGULAR' as const },
+    { name: 'Bonifacio Day',         date: new Date('2026-11-30'), type: 'REGULAR' as const },
+    { name: 'Christmas Day',         date: new Date('2026-12-25'), type: 'REGULAR' as const },
+    { name: 'Rizal Day',             date: new Date('2026-12-30'), type: 'REGULAR' as const },
+    // ── Special Non-Working Holidays ──
+    { name: 'Chinese New Year',               date: new Date('2026-02-17'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: 'EDSA People Power Anniversary',  date: new Date('2026-02-25'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: 'Black Saturday',                 date: new Date('2026-04-04'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: 'Ninoy Aquino Day',               date: new Date('2026-08-21'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: "All Saints' Day",                date: new Date('2026-11-01'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: "All Souls' Day",                 date: new Date('2026-11-02'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: 'Christmas Eve',                  date: new Date('2026-12-24'), type: 'SPECIAL_NON_WORKING' as const },
+    { name: "New Year's Eve",                 date: new Date('2026-12-31'), type: 'SPECIAL_NON_WORKING' as const },
+    // ── Cebu Local Holidays ──
+    { name: 'Sinulog Festival',       date: new Date('2026-01-18'), type: 'LOCAL_HOLIDAY' as const },
+    { name: 'Cebu City Charter Day',  date: new Date('2026-02-24'), type: 'LOCAL_HOLIDAY' as const },
+  ];
+
+  let holidayCount = 0;
+  for (const h of HOLIDAY_SEEDS) {
+    const exists = await prisma.holiday.findFirst({
+      where: { clientId: atmsClient.id, date: h.date },
+    });
+    if (!exists) {
+      await prisma.holiday.create({
+        data: { clientId: atmsClient.id, name: h.name, date: h.date, type: h.type },
+      });
+      holidayCount++;
+    }
+  }
+  console.log(`  ✓ ${holidayCount} holiday(s) seeded (${HOLIDAY_SEEDS.length - holidayCount} already existed)`);
 }
 
 main()

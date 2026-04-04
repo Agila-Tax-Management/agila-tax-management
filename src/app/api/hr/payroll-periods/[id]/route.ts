@@ -210,3 +210,47 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 
   return NextResponse.json({ data: updated });
 }
+
+/**
+ * DELETE /api/hr/payroll-periods/[id]
+ * Permanently deletes a payroll period that is still in DRAFT status.
+ * Any other status is rejected.
+ */
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
+  const { id } = await params;
+  const periodId = parseInt(id, 10);
+  if (isNaN(periodId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+
+  const existing = await prisma.payrollPeriod.findFirst({ where: { id: periodId, clientId } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (existing.status !== "DRAFT") {
+    return NextResponse.json(
+      { error: "Only payroll periods in Draft status can be deleted." },
+      { status: 409 },
+    );
+  }
+
+  await prisma.payrollPeriod.delete({ where: { id: periodId } });
+
+  void logActivity({
+    userId: session.user.id,
+    action: "DELETED",
+    entity: "PayrollPeriod",
+    entityId: String(periodId),
+    description: `Deleted draft payroll period #${periodId}`,
+    ...getRequestMeta(request),
+  });
+
+  return NextResponse.json({ data: { id: periodId } });
+}

@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { computeTimesheetFields, type DayType } from "@/lib/timesheet-calc";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -149,6 +150,85 @@ export async function PATCH(
     description: `${action === "APPROVE" ? "Approved" : "Rejected"} overtime request for ${existing.employee.firstName} ${existing.employee.lastName}`,
     ...getRequestMeta(request),
   });
+
+  // After approving, recompute dailyGrossPay on the affected timesheet so the
+  // payslip daily breakdown reflects the premium pay immediately (before Refresh).
+  if (action === "APPROVE") {
+    const BASE_MULT: Record<DayType, number> = {
+      REGULAR: 1.00, REST_DAY: 1.30, SPECIAL_HOLIDAY: 1.30,
+      SPECIAL_HOLIDAY_REST: 1.50, REGULAR_HOLIDAY: 2.00, REGULAR_HOLIDAY_REST: 2.60,
+    };
+
+    const [updatedTs, empComp, holidayRec] = await Promise.all([
+      prisma.timesheet.findUnique({
+        where: { employeeId_date: { employeeId: existing.employeeId, date: existing.date } },
+      }),
+      prisma.employeeCompensation.findFirst({
+        where: {
+          isActive: true,
+          contract: {
+            status: 'ACTIVE',
+            employments: { some: { employeeId: existing.employeeId, employmentStatus: 'ACTIVE' } },
+          },
+        },
+        select: {
+          calculatedDailyRate: true,
+          payType: true,
+          contract: { select: { schedule: { select: { days: true } } } },
+        },
+      }),
+      prisma.holiday.findFirst({
+        where: { clientId: existing.clientId, date: existing.date },
+        select: { type: true },
+      }),
+    ]);
+
+    if (updatedTs && empComp) {
+      const dow = (existing.date as Date).getDay();
+      const schedule = empComp.contract.schedule;
+      const restDaySet = new Set(
+        schedule?.days.filter((d) => !d.isWorkingDay).map((d) => d.dayOfWeek) ?? [],
+      );
+      const isRestDay = restDaySet.has(dow);
+      const holidayType = holidayRec?.type ?? null;
+
+      let dayType: DayType = isRestDay ? 'REST_DAY' : 'REGULAR';
+      if (holidayType === 'REGULAR') {
+        dayType = isRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
+      } else if (holidayType === 'SPECIAL_NON_WORKING' || holidayType === 'LOCAL_HOLIDAY') {
+        dayType = isRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
+      }
+
+      const dailyRate = Number(empComp.calculatedDailyRate);
+      let newDailyGrossPay: number;
+
+      if (updatedTs.timeIn && updatedTs.timeOut) {
+        // Has time punches — run full compute so all fields are consistent
+        const scheduleDay = schedule?.days.find((d) => d.dayOfWeek === dow) ?? null;
+        const computed = computeTimesheetFields(
+          updatedTs.timeIn,
+          updatedTs.timeOut,
+          updatedTs.lunchStart,
+          updatedTs.lunchEnd,
+          scheduleDay,
+          { calculatedDailyRate: empComp.calculatedDailyRate.toString(), payType: empComp.payType },
+          dayType,
+        );
+        // Unpaid leave earns no base pay
+        newDailyGrossPay = updatedTs.status === 'UNPAID_LEAVE' ? 0 : computed.dailyGrossPay;
+      } else {
+        // Rest-day or holiday OT only — no punch; base premium pay for being present
+        // Pro-rate by actual approved hours (up to 8) — no punch means we use the request hours
+        const otBaseHrs = Math.min(parseFloat(existing.hours.toString()), 8);
+        newDailyGrossPay = dayType === 'REGULAR' ? 0 : (dailyRate / 8) * otBaseHrs * BASE_MULT[dayType];
+      }
+
+      await prisma.timesheet.update({
+        where: { id: updatedTs.id },
+        data: { dailyGrossPay: parseFloat(newDailyGrossPay.toFixed(2)) },
+      });
+    }
+  }
 
   return NextResponse.json({ data: { id, status: newStatus } });
 }

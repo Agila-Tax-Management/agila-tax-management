@@ -2,19 +2,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { ArrowLeft, Check, ChevronRight, Loader2, Search, SkipForward, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Loader2, SkipForward, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { useRouter } from 'next/navigation';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
-
-interface UserOption {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
 
 interface DepartmentOption {
   id: number;
@@ -48,7 +41,7 @@ interface WorkScheduleOption {
   days: WorkScheduleDay[];
 }
 
-type UserLinkMode = 'none' | 'existing' | 'create';
+type UserLinkMode = 'create';
 
 interface Step1Data {
   firstName: string;
@@ -70,7 +63,6 @@ interface Step1Data {
   email: string;
   employeeNo: string;
   userLinkMode: UserLinkMode;
-  selectedUserId: string;
   newUserName: string;
   newUserEmail: string;
   newUserPassword: string;
@@ -115,6 +107,7 @@ interface Step3CompensationData {
   deductPhilhealth: boolean;
   deductPagibig: boolean;
   pagibigType: 'REGULAR' | 'MINIMUM';
+  allowanceOnFirstCutoff: boolean;
 }
 
 interface Step4Data {
@@ -179,6 +172,7 @@ const DEFAULT_S3C: Step3CompensationData = {
   deductPhilhealth: false,
   deductPagibig: false,
   pagibigType: 'REGULAR',
+  allowanceOnFirstCutoff: true,
 };
 
 const inputCls =
@@ -207,8 +201,7 @@ export default function AddNewEmployeePage(): React.ReactNode {
   const [createdEmploymentId, setCreatedEmploymentId] = useState<number | null>(null);
   const [createdContractId, setCreatedContractId] = useState<number | null>(null);
 
-  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
-  const [userSearch, setUserSearch] = useState('');
+
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [positions, setPositions] = useState<PositionOption[]>([]);
   const [levels, setLevels] = useState<EmployeeLevelOption[]>([]);
@@ -222,7 +215,7 @@ export default function AddNewEmployeePage(): React.ReactNode {
     currentStreet: '', currentBarangay: '', currentCity: '', currentProvince: '', currentZip: '',
     permanentStreet: '', permanentBarangay: '', permanentCity: '', permanentProvince: '', permanentZip: '',
     email: '', employeeNo: '',
-    userLinkMode: 'none', selectedUserId: '',
+    userLinkMode: 'create',
     newUserName: '', newUserEmail: '', newUserPassword: '', newUserRole: 'EMPLOYEE',
   });
 
@@ -249,7 +242,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
         fetch('/api/admin/employee-levels'),
         fetch('/api/hr/work-schedules'),
       ]);
-      const unlinkedUsers = await fetch('/api/hr/users').then((r) => r.json()).catch(() => ({ data: [] }));
 
       const [deptData, levelData, schedData] = await Promise.all([
         deptRes.json().catch(() => ({ data: [] })),
@@ -258,7 +250,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
       ]);
 
       setDepartments(deptData.data ?? []);
-      setUserOptions((unlinkedUsers as { data: UserOption[] }).data ?? []);
       setLevels((levelData.data ?? []).sort((a: EmployeeLevelOption, b: EmployeeLevelOption) => a.position - b.position));
       setSchedules(schedData.data ?? []);
     } catch {
@@ -313,32 +304,28 @@ export default function AddNewEmployeePage(): React.ReactNode {
     try {
       let resolvedUserId: string | null = null;
 
-      if (s1.userLinkMode === 'create') {
-        if (!s1.newUserEmail || !s1.newUserPassword || !s1.newUserName) {
-          error('Missing fields', 'Name, email, and password are required to create a user account.');
-          setLoading(false);
-          return;
-        }
-        const userRes = await fetch('/api/hr/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: s1.newUserName,
-            email: s1.newUserEmail,
-            password: s1.newUserPassword,
-            role: s1.newUserRole,
-          }),
-        });
-        const userData = (await userRes.json()) as { data?: { id: string }; error?: string };
-        if (!userRes.ok) {
-          error('Failed to create user', userData.error ?? 'An error occurred.');
-          setLoading(false);
-          return;
-        }
-        resolvedUserId = userData.data!.id;
-      } else if (s1.userLinkMode === 'existing') {
-        resolvedUserId = s1.selectedUserId || null;
+      if (!s1.newUserEmail || !s1.newUserPassword || !s1.newUserName) {
+        error('Missing fields', 'Name, email, and password are required to create a portal account.');
+        setLoading(false);
+        return;
       }
+      const userRes = await fetch('/api/hr/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: s1.newUserName,
+          email: s1.newUserEmail,
+          password: s1.newUserPassword,
+          role: s1.newUserRole,
+        }),
+      });
+      const userData = (await userRes.json()) as { data?: { id: string }; error?: string };
+      if (!userRes.ok) {
+        error('Failed to create user', userData.error ?? 'An error occurred.');
+        setLoading(false);
+        return;
+      }
+      resolvedUserId = userData.data!.id;
 
       const res = await fetch('/api/hr/employees', {
         method: 'POST',
@@ -489,6 +476,7 @@ export default function AddNewEmployeePage(): React.ReactNode {
             deductPagibig: s3c.deductPagibig,
             pagibigType: s3c.pagibigType,
             deductTax: false,
+            allowanceOnFirstCutoffOnly: s3c.allowanceOnFirstCutoff,
           }),
         });
 
@@ -579,12 +567,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
   };
 
   const handleCancel = () => router.push('/portal/hr/employee-management');
-
-  const filteredUsers = userOptions.filter(
-    (u) =>
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase()),
-  );
 
   /* ─── Render ────────────────────────────────────────────────────── */
 
@@ -770,93 +752,36 @@ export default function AddNewEmployeePage(): React.ReactNode {
 
             {/* User Linkage */}
             <div className="border border-border rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-foreground">Portal Account Linkage</p>
-              <div className="flex flex-wrap gap-2">
-                {(['none', 'existing', 'create'] as UserLinkMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setS1((p) => ({ ...p, userLinkMode: mode }))}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      s1.userLinkMode === mode
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'border-border text-muted-foreground hover:border-blue-400'
-                    }`}
-                  >
-                    {mode === 'none' && 'No portal access'}
-                    {mode === 'existing' && 'Link existing user'}
-                    {mode === 'create' && 'Create & link new user'}
-                  </button>
-                ))}
+              <div>
+                <p className="text-sm font-semibold text-foreground">Portal Account</p>
+                <p className="text-xs text-muted-foreground mt-0.5">A new portal account will be created and linked to this employee.</p>
               </div>
-
-              {s1.userLinkMode === 'existing' && (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      className={`${inputCls} pl-9`}
-                      placeholder="Search user by name or email..."
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="max-h-36 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                    {filteredUsers.length === 0 ? (
-                      <p className="text-xs text-muted-foreground p-3 text-center">No unlinked users found</p>
-                    ) : (
-                      filteredUsers.map((u) => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => setS1((p) => ({ ...p, selectedUserId: u.id }))}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors ${
-                            s1.selectedUserId === u.id ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
-                            {u.name.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{u.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                          </div>
-                          {s1.selectedUserId === u.id && <Check size={14} className="text-blue-600 shrink-0" />}
-                        </button>
-                      ))
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
+                  <input className={inputCls} value={s1.newUserName}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserName: e.target.value }))} />
                 </div>
-              )}
-
-              {s1.userLinkMode === 'create' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
-                    <input className={inputCls} value={s1.newUserName}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserName: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Email <span className="text-red-500">*</span></label>
-                    <input type="email" className={inputCls} value={s1.newUserEmail}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserEmail: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Password <span className="text-red-500">*</span></label>
-                    <input type="password" className={inputCls} value={s1.newUserPassword}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserPassword: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Role</label>
-                    <select className={selectCls} value={s1.newUserRole}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserRole: e.target.value }))}>
-                      <option value="EMPLOYEE">Employee</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="SUPER_ADMIN">Super Admin</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className={labelCls}>Email <span className="text-red-500">*</span></label>
+                  <input type="email" className={inputCls} value={s1.newUserEmail}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserEmail: e.target.value }))} />
                 </div>
-              )}
+                <div>
+                  <label className={labelCls}>Password <span className="text-red-500">*</span></label>
+                  <input type="password" className={inputCls} value={s1.newUserPassword}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserPassword: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Role</label>
+                  <select className={selectCls} value={s1.newUserRole}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserRole: e.target.value }))}>
+                    <option value="EMPLOYEE">Employee</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="SUPER_ADMIN">Super Admin</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1031,6 +956,26 @@ export default function AddNewEmployeePage(): React.ReactNode {
                       placeholder="0.00" min="0" step="0.01" />
                   </div>
                 </div>
+                {parseFloat(s3c.allowanceRate) > 0 && (
+                  <div>
+                    <label className={labelCls}>Allowance Payout Schedule</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'First cutoff only' }, { value: false, label: 'Split across periods' }] as const).map(({ value, label }) => (
+                        <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-allowanceOnFirstCutoff" checked={s3c.allowanceOnFirstCutoff === value}
+                            onChange={() => setS3c((p) => ({ ...p, allowanceOnFirstCutoff: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {s3c.allowanceOnFirstCutoff
+                        ? 'Full allowance released only on the first payroll cutoff of the month.'
+                        : 'Allowance is divided equally across all payroll periods in the month.'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* ── Section 3: Salary Configuration ── */}

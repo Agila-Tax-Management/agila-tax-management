@@ -91,6 +91,8 @@ model Client {
   payments      Payment[]
   cashAdvances  CashAdvance[]
 
+  hrSetting         HrSetting?
+
   payrollSchedules  PayrollSchedule[]
 
   holidays         Holiday[]

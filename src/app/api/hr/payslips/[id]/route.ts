@@ -120,7 +120,17 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
 
   if (!payslip) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json({ data: payslip });
+  const hrSetting = await prisma.hrSetting.findUnique({
+    where: { clientId },
+    select: { strictOvertimeApproval: true, disableLateUndertimeGlobal: true },
+  });
+
+  return NextResponse.json({
+    data: {
+      ...payslip,
+      hrSetting: hrSetting ?? { strictOvertimeApproval: true, disableLateUndertimeGlobal: true },
+    },
+  });
 }
 
 /**

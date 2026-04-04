@@ -123,6 +123,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       deductPagibig: d.deductPagibig,
       pagibigType: d.pagibigType as PagibigContributionType,
       deductTax: d.deductTax,
+      allowanceOnFirstCutoffOnly: d.allowanceOnFirstCutoffOnly,
       calculatedDailyRate,
       calculatedMonthlyRate,
       payrollScheduleId: d.payrollScheduleId ?? null,
