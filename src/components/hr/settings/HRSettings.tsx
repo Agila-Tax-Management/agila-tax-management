@@ -1,19 +1,21 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CalendarClock, CalendarDays, Layers, CalendarRange } from 'lucide-react';
+import { CalendarClock, CalendarDays, Layers, CalendarRange, CalendarX } from 'lucide-react';
 import { WorkingSchedulesSettingsTab } from './WorkingSchedulesSettingsTab';
 import { LeaveTypesSettingsTab } from './LeaveTypesSettingsTab';
 import { EmployeeLevelSettingsTab } from '@/components/hr/settings/EmployeeLevelSettingsTab';
 import { PayrollSchedulesSettingsTab } from '@/components/hr/settings/PayrollSchedulesSettingsTab';
+import { HolidaysSettingsTab } from '@/components/hr/settings/HolidaysSettingsTab';
 
-type SettingsTab = 'working-schedules' | 'leave-types' | 'employee-level' | 'payroll-schedules';
+type SettingsTab = 'working-schedules' | 'leave-types' | 'employee-level' | 'payroll-schedules' | 'holidays';
 
 const SETTINGS_TABS: { key: SettingsTab; label: string; icon: typeof CalendarClock }[] = [
   { key: 'working-schedules', label: 'Working Schedules', icon: CalendarClock },
   { key: 'leave-types', label: 'Leave Types', icon: CalendarDays },
   { key: 'employee-level', label: 'Employee Level', icon: Layers },
   { key: 'payroll-schedules', label: 'Payroll Schedules', icon: CalendarRange },
+  { key: 'holidays', label: 'Holidays', icon: CalendarX },
 ];
 
 export function HRSettings() {
@@ -52,6 +54,8 @@ export function HRSettings() {
       {activeTab === 'employee-level' && <EmployeeLevelSettingsTab />}
 
       {activeTab === 'payroll-schedules' && <PayrollSchedulesSettingsTab />}
+
+      {activeTab === 'holidays' && <HolidaysSettingsTab />}
     </div>
   );
 }

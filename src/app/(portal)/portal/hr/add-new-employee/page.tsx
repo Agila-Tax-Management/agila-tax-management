@@ -115,6 +115,7 @@ interface Step3CompensationData {
   deductPhilhealth: boolean;
   deductPagibig: boolean;
   pagibigType: 'REGULAR' | 'MINIMUM';
+  allowanceOnFirstCutoff: boolean;
 }
 
 interface Step4Data {
@@ -179,6 +180,7 @@ const DEFAULT_S3C: Step3CompensationData = {
   deductPhilhealth: false,
   deductPagibig: false,
   pagibigType: 'REGULAR',
+  allowanceOnFirstCutoff: true,
 };
 
 const inputCls =
@@ -489,6 +491,7 @@ export default function AddNewEmployeePage(): React.ReactNode {
             deductPagibig: s3c.deductPagibig,
             pagibigType: s3c.pagibigType,
             deductTax: false,
+            allowanceOnFirstCutoffOnly: s3c.allowanceOnFirstCutoff,
           }),
         });
 
@@ -1031,6 +1034,26 @@ export default function AddNewEmployeePage(): React.ReactNode {
                       placeholder="0.00" min="0" step="0.01" />
                   </div>
                 </div>
+                {parseFloat(s3c.allowanceRate) > 0 && (
+                  <div>
+                    <label className={labelCls}>Allowance Payout Schedule</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'First cutoff only' }, { value: false, label: 'Split across periods' }] as const).map(({ value, label }) => (
+                        <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-allowanceOnFirstCutoff" checked={s3c.allowanceOnFirstCutoff === value}
+                            onChange={() => setS3c((p) => ({ ...p, allowanceOnFirstCutoff: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {s3c.allowanceOnFirstCutoff
+                        ? 'Full allowance released only on the first payroll cutoff of the month.'
+                        : 'Allowance is divided equally across all payroll periods in the month.'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* ── Section 3: Salary Configuration ── */}

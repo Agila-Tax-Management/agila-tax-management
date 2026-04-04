@@ -4,9 +4,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Loader2, Save, RotateCcw, CheckCircle, FileText,
+  ArrowLeft, Loader2, RotateCcw, CheckCircle, FileText,
   User, Calendar, CreditCard, Briefcase, Building2, DollarSign,
-  Banknote, ThumbsUp, RefreshCw,
+  Banknote, ThumbsUp, RefreshCw, Info,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -158,8 +158,10 @@ const fmtDateTime = (d: string) =>
 const fmtTime = (dt: string | null): string => {
   if (!dt) return '—';
   const d = new Date(dt);
-  const h = d.getHours();
-  const m = d.getMinutes();
+  // Punch times are stored as UTC-anchored datetimes (e.g. T08:00:00.000Z means 8 AM).
+  // Using UTC accessors prevents the browser timezone from shifting the display.
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
   const ampm = h >= 12 ? 'pm' : 'am';
   const h12 = h % 12 || 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
@@ -244,7 +246,6 @@ export function PayslipEditor() {
 
   const [payslip, setPayslip] = useState<PayslipDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -338,43 +339,6 @@ export function PayslipEditor() {
       payslip.payrollPeriod.status === 'PROCESSING');
 
   const canPDF = payslip !== null;
-
-  const handleSave = async () => {
-    if (!payslip) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/hr/payslips/${payslip.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-    basicPay: Number(basicPay),
-          holidayPay: Number(holidayPay),
-          overtimePay: Number(overtimePay),
-          paidLeavePay: Number(paidLeavePay),
-          allowance: Number(allowance),
-          sssDeduction: Number(sss),
-          philhealthDeduction: Number(philhealth),
-          pagibigDeduction: Number(pagibig),
-          withholdingTax: Number(tax),
-          lateUndertimeDeduction: Number(lateUnder),
-          pagibigLoan: Number(pagibigLoan),
-          sssLoan: Number(sssLoan),
-          cashAdvanceRepayment: Number(cashAdv),
-        }),
-      });
-      const json: { data?: PayslipDetail; error?: string } = await res.json();
-      if (!res.ok) {
-        error('Save failed', json.error ?? 'Could not save payslip changes');
-        return;
-      }
-      success('Saved', 'Payslip has been updated successfully.');
-      await fetchPayslip();
-    } catch {
-      error('Network error', 'Could not reach the server');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleAcknowledge = async () => {
     if (!payslip) return;
@@ -487,24 +451,23 @@ export function PayslipEditor() {
     }
   };
 
-  const handleRefreshDeductions = async () => {
+  const handleRefreshAndSave = async () => {
+    if (!payslip) return;
     setRefreshing(true);
     try {
-      // Step 1: Run server-side recalculation (fixes timesheet rows, aggregates OT + leave)
-      // Step 2: Re-fetch fresh payslip (for up-to-date employee/comp/audit data)
-      const [recalcRes, psRes] = await Promise.all([
-        fetch(`/api/hr/payslips/${payslipId}/recalculate`, { method: 'POST' }),
-        fetch(`/api/hr/payslips/${payslipId}`),
-      ]);
+      // Step 1: Re-check timesheets (COA corrections), approved OT (DOLE rates), paid/unpaid leave
+      const recalcRes = await fetch(`/api/hr/payslips/${payslipId}/recalculate`, { method: 'POST' });
 
       interface RecalcResponse {
         data?: {
           timesheets: TimesheetRecord[];
           suggestions: {
             basicPay: number;
+            holidayPay: number;
             allowance: number;
             overtimePay: number;
             paidLeavePay: number;
+            lateUndertimeDeduction: number;
             sssDeduction: number;
             philhealthDeduction: number;
             pagibigDeduction: number;
@@ -520,64 +483,51 @@ export function PayslipEditor() {
       }
 
       const recalcJson: RecalcResponse = await recalcRes.json();
-      const psJson: { data?: PayslipDetail; error?: string } = await psRes.json();
-
       if (!recalcRes.ok) {
         error('Recalculation failed', recalcJson.error ?? 'Server error during recalculation');
         return;
       }
-      if (!psRes.ok || !psJson.data) {
-        error('Failed to refresh', psJson.error ?? 'Could not load payslip');
+
+      const { timesheets: freshTs, suggestions, meta } = recalcJson.data!;
+
+      // Step 2: Immediately persist the computed suggestions to the database
+      const patchRes = await fetch(`/api/hr/payslips/${payslip.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          basicPay:                suggestions.basicPay,
+          holidayPay:              suggestions.holidayPay,
+          allowance:               suggestions.allowance,
+          overtimePay:             suggestions.overtimePay,
+          paidLeavePay:            suggestions.paidLeavePay,
+          lateUndertimeDeduction:  suggestions.lateUndertimeDeduction,
+          sssDeduction:            suggestions.sssDeduction,
+          philhealthDeduction:     suggestions.philhealthDeduction,
+          pagibigDeduction:        suggestions.pagibigDeduction,
+          // loans, cashAdv, tax — not touched; kept as saved
+        }),
+      });
+      const patchJson: { error?: string } = await patchRes.json();
+      if (!patchRes.ok) {
+        error('Save failed', patchJson.error ?? 'Could not save refreshed values');
         return;
       }
 
-      const fresh = psJson.data;
-      const { timesheets: freshTs, suggestions, meta } = recalcJson.data!;
-
-      // Update UI state
-      setPayslip(fresh);
+      // Step 3: Re-fetch the payslip to sync all state from DB
+      await fetchPayslip();
       setTimesheets(freshTs);
-
-      // Helper: if the DB-saved value is already non-zero, keep it;
-      // otherwise fall back to the server's computed suggestion.
-      // This preserves manually-entered or previously-refreshed values.
-      const retainOrSuggest = (savedVal: string, suggestion: number): string =>
-        Number(savedVal) > 0 ? savedVal : suggestion.toFixed(2);
-
-      // ── Earnings ────────────────────────────────────────────────
-      // basicPay is always recomputed (it directly tracks timesheet data)
-      setBasicPay(suggestions.basicPay.toFixed(2));
-      // allowance, overtimePay, paidLeavePay: keep saved value if already set
-      setAllowance(retainOrSuggest(fresh.allowance, suggestions.allowance));
-      setOvertimePay(retainOrSuggest(fresh.overtimePay, suggestions.overtimePay));
-      setPaidLeavePay(retainOrSuggest(fresh.paidLeavePay, suggestions.paidLeavePay));
-      // holidayPay is always purely manual — sync from saved DB value, never overwrite
-      setHolidayPay(fresh.holidayPay);
-
-      // ── Government contributions from server suggestions ───────
-      // Always recompute these from current compensation config
-      setSss(suggestions.sssDeduction.toFixed(2));
-      setPhilhealth(suggestions.philhealthDeduction.toFixed(2));
-      setPagibig(suggestions.pagibigDeduction.toFixed(2));
-
-      // ── Other deductions — always sync from saved DB values ────
-      setLateUnder(fresh.lateUndertimeDeduction);
-      setPagibigLoan(fresh.pagibigLoan);
-      setSssLoan(fresh.sssLoan);
-      setCashAdv(fresh.cashAdvanceRepayment);
-      setTax(fresh.withholdingTax);
 
       // Build summary message
       const parts: string[] = [];
       if (meta.recalcCount > 0)
         parts.push(`${meta.recalcCount} timesheet row${meta.recalcCount > 1 ? 's' : ''} recomputed`);
       if (meta.otRequestCount > 0)
-        parts.push(`${meta.otRequestCount} approved OT request${meta.otRequestCount > 1 ? 's' : ''} applied`);
+        parts.push(`${meta.otRequestCount} OT request${meta.otRequestCount > 1 ? 's' : ''} applied`);
       if (meta.leaveRequestCount > 0)
-        parts.push(`${meta.leaveRequestCount} paid leave request${meta.leaveRequestCount > 1 ? 's' : ''} applied`);
+        parts.push(`${meta.leaveRequestCount} leave request${meta.leaveRequestCount > 1 ? 's' : ''} applied`);
       if (parts.length === 0) parts.push('all values are up to date');
 
-      success('Refreshed', parts.join(' · '));
+      success('Payslip refreshed & saved', parts.join(' · '));
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
@@ -670,16 +620,7 @@ export function PayslipEditor() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0 mt-1">
-          <Button
-            variant="outline"
-            className="gap-1.5 text-xs h-8"
-            disabled={refreshing || payslip.approvedAt !== null}
-            onClick={() => { void handleRefreshDeductions(); }}
-            title={payslip.approvedAt !== null ? 'Cannot refresh an approved payslip' : 'Refresh employee compensation & recompute government deductions'}
-          >
-            {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            Refresh
-          </Button>
+
           <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]}>
             {STATUS_LABEL[payslip.payrollPeriod.status]}
           </Badge>
@@ -880,7 +821,7 @@ export function PayslipEditor() {
               <tr className="bg-muted/50 border-b border-border">
                 {['Date', 'Day', 'Time In', 'Lunch Start', 'Lunch End', 'Time Out', 'Status',
                   'Reg Pay', 'Reg OT', 'RD', 'RD OT', 'SH', 'SH OT', 'SH RD', 'SH RD OT',
-                  'RH', 'RH OT', 'RH RD', 'RH RD OT', 'Late', 'Under', 'Gross'].map((h) => (
+                  'RH', 'RH OT', 'RH RD', 'RH RD OT', 'OT Pay', 'Late', 'Under', 'Gross'].map((h) => (
                   <th key={h} className="px-2 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider text-[9px]">{h}</th>
                 ))}
               </tr>
@@ -897,7 +838,7 @@ export function PayslipEditor() {
                       <td className="px-2 py-2">—</td><td className="px-2 py-2">—</td>
                       <td className="px-2 py-2">—</td><td className="px-2 py-2">—</td>
                       <td className={`px-2 py-2 font-semibold ${noTsColor}`}>{noTsLabel}</td>
-                      {Array.from({ length: 12 }, (_, i) => <td key={i} className="px-2 py-2 text-right">—</td>)}
+                      {Array.from({ length: 13 }, (_, i) => <td key={i} className="px-2 py-2 text-right">—</td>)}
                       <td className="px-2 py-2 text-right text-red-500">—</td>
                       <td className="px-2 py-2 text-right text-amber-500">—</td>
                       <td className="px-2 py-2 text-right font-bold text-emerald-600">—</td>
@@ -916,7 +857,7 @@ export function PayslipEditor() {
                     <td className="px-2 py-2">{fmtTime(ts.lunchEnd)}</td>
                     <td className="px-2 py-2">{fmtTime(ts.timeOut)}</td>
                     <td className={`px-2 py-2 font-semibold ${statusColor}`}>{statusLabel}</td>
-                    <td className="px-2 py-2 text-right">{Number(ts.dailyGrossPay) > 0 ? fmt(tableDailyRate) : '—'}</td>
+                    <td className="px-2 py-2 text-right">{Number(ts.dailyGrossPay) > 0 ? fmt(Number(ts.dailyGrossPay)) : '—'}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdOtHours)}</td>
@@ -928,15 +869,39 @@ export function PayslipEditor() {
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdOtHours)}</td>
+                    {(() => {
+                      const hr = tableDailyRate / 8;
+                      const pay =
+                        Number(ts.regOtHours)  * 1.25 * hr +
+                        Number(ts.rdOtHours)   * 1.69 * hr +
+                        Number(ts.shOtHours)   * 1.69 * hr +
+                        Number(ts.shRdOtHours) * 1.95 * hr +
+                        Number(ts.rhOtHours)   * 2.60 * hr +
+                        Number(ts.rhRdOtHours) * 3.38 * hr;
+                      return <td className="px-2 py-2 text-right text-blue-600 font-semibold">{pay > 0 ? fmt(parseFloat(pay.toFixed(2))) : '—'}</td>;
+                    })()}
                     <td className="px-2 py-2 text-right text-red-500">
                       {lateDeduct > 0 ? `-${fmt(lateDeduct)}` : ts.lateMinutes > 0 ? `${ts.lateMinutes}m` : '—'}
                     </td>
                     <td className="px-2 py-2 text-right text-amber-500">
                       {undertimeDeduct > 0 ? `-${fmt(undertimeDeduct)}` : ts.undertimeMinutes > 0 ? `${ts.undertimeMinutes}m` : '—'}
                     </td>
-                    <td className="px-2 py-2 text-right font-bold text-emerald-600">
-                      {Number(ts.dailyGrossPay) > 0 ? `₱${Number(ts.dailyGrossPay).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                    </td>
+                    {(() => {
+                      const hr2 = tableDailyRate / 8;
+                      const rowOtPay =
+                        Number(ts.regOtHours)  * 1.25 * hr2 +
+                        Number(ts.rdOtHours)   * 1.69 * hr2 +
+                        Number(ts.shOtHours)   * 1.69 * hr2 +
+                        Number(ts.shRdOtHours) * 1.95 * hr2 +
+                        Number(ts.rhOtHours)   * 2.60 * hr2 +
+                        Number(ts.rhRdOtHours) * 3.38 * hr2;
+                      const rowGross = Number(ts.dailyGrossPay) + rowOtPay;
+                      return (
+                        <td className="px-2 py-2 text-right font-bold text-emerald-600">
+                          {rowGross > 0 ? `₱${rowGross.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                        </td>
+                      );
+                    })()}
                   </tr>
                 );
               })}
@@ -944,7 +909,7 @@ export function PayslipEditor() {
                 <td className="px-2 py-2 text-xs font-bold" colSpan={7}>TOTALS</td>
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
-                    const total = periodDays.reduce((s, { ts: t }) => t && Number(t.dailyGrossPay) > 0 ? s + tableDailyRate : s, 0);
+                    const total = timesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);
                     return total > 0 ? fmt(total) : '—';
                   })()}
                 </td>
@@ -959,6 +924,19 @@ export function PayslipEditor() {
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhOtHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdOtHours), 0)))}</td>
+                <td className="px-2 py-2 text-right text-xs text-blue-600">
+                  {(() => {
+                    const hr = tableDailyRate / 8;
+                    const total = timesheets.reduce((s, t) =>
+                      s + Number(t.regOtHours)  * 1.25 * hr
+                        + Number(t.rdOtHours)   * 1.69 * hr
+                        + Number(t.shOtHours)   * 1.69 * hr
+                        + Number(t.shRdOtHours) * 1.95 * hr
+                        + Number(t.rhOtHours)   * 2.60 * hr
+                        + Number(t.rhRdOtHours) * 3.38 * hr, 0);
+                    return total > 0 ? fmt(parseFloat(total.toFixed(2))) : '—';
+                  })()}
+                </td>
                 <td className="px-2 py-2 text-right text-red-500">
                   {(() => {
                     if (tablePayType !== 'VARIABLE_PAY') {
@@ -989,7 +967,17 @@ export function PayslipEditor() {
                 </td>
                 <td className="px-2 py-2 text-right text-emerald-600">
                   {(() => {
-                    const total = timesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);
+                    const hr2 = tableDailyRate / 8;
+                    const total = timesheets.reduce((s, t) => {
+                      const otPay =
+                        Number(t.regOtHours)  * 1.25 * hr2 +
+                        Number(t.rdOtHours)   * 1.69 * hr2 +
+                        Number(t.shOtHours)   * 1.69 * hr2 +
+                        Number(t.shRdOtHours) * 1.95 * hr2 +
+                        Number(t.rhOtHours)   * 2.60 * hr2 +
+                        Number(t.rhRdOtHours) * 3.38 * hr2;
+                      return s + Number(t.dailyGrossPay) + otPay;
+                    }, 0);
                     return total > 0 ? `₱${total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—';
                   })()}
                 </td>
@@ -1051,6 +1039,15 @@ export function PayslipEditor() {
         </div>
       )}
 
+      {/* ── Info callout ── */}
+      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-800">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        <span>
+          <strong>Values are auto-computed</strong> from timesheets (including COA corrections), approved overtime requests, paid and unpaid leave.
+          {' '}Click <strong>Refresh &amp; Save</strong> to re-check all attendance data and update this payslip.
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Earnings ── */}
         <Card className="p-5 space-y-4">
@@ -1059,30 +1056,18 @@ export function PayslipEditor() {
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">Earnings</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {canEdit ? (
-              <>
-                {numInput(basicPay, setBasicPay, 'Basic Pay')}
-                {numInput(holidayPay, setHolidayPay, 'Holiday Pay')}
-                {numInput(overtimePay, setOvertimePay, 'Overtime Pay')}
-                {numInput(paidLeavePay, setPaidLeavePay, 'Paid Leave Pay')}
-                {numInput(allowance, setAllowance, 'Allowance')}
-              </>
-            ) : (
-              <>
-                {[
-                  ['Basic Pay', basicPay],
-                  ['Holiday Pay', holidayPay],
-                  ['Overtime Pay', overtimePay],
-                  ['Paid Leave Pay', paidLeavePay],
-                  ['Allowance', allowance],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
-                    <p className="text-sm font-semibold text-foreground">{fmt(Number(val))}</p>
-                  </div>
-                ))}
-              </>
-            )}
+            {[
+              ['Basic Pay', basicPay],
+              ['Holiday Pay', holidayPay],
+              ['Overtime Pay', overtimePay],
+              ['Paid Leave Pay', paidLeavePay],
+              ['Allowance', allowance],
+            ].map(([label, val]) => (
+              <div key={label}>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
+                <p className="text-sm font-semibold text-foreground">{fmt(Number(val))}</p>
+              </div>
+            ))}
           </div>
           <div className="pt-3 border-t border-border flex justify-between items-center">
             <span className="text-xs font-bold text-muted-foreground uppercase">Gross Pay</span>
@@ -1097,36 +1082,21 @@ export function PayslipEditor() {
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">Deductions</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {canEdit ? (
-              <>
-                {numInput(sss, setSss, 'SSS')}
-                {numInput(philhealth, setPhilhealth, 'PhilHealth')}
-                {numInput(pagibig, setPagibig, 'Pag-IBIG')}
-                {numInput(tax, setTax, 'Withholding Tax')}
-                {numInput(lateUnder, setLateUnder, 'Late / Undertime')}
-                {numInput(sssLoan, setSssLoan, 'SSS Loan')}
-                {numInput(pagibigLoan, setPagibigLoan, 'Pag-IBIG Loan')}
-                {numInput(cashAdv, setCashAdv, 'Cash Advance')}
-              </>
-            ) : (
-              <>
-                {[
-                  ['SSS', sss],
-                  ['PhilHealth', philhealth],
-                  ['Pag-IBIG', pagibig],
-                  ['Withholding Tax', tax],
-                  ['Late / Undertime', lateUnder],
-                  ['SSS Loan', sssLoan],
-                  ['Pag-IBIG Loan', pagibigLoan],
-                  ['Cash Advance', cashAdv],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
-                    <p className="text-sm font-semibold text-foreground">{fmt(Number(val))}</p>
-                  </div>
-                ))}
-              </>
-            )}
+            {[
+              ['SSS', sss],
+              ['PhilHealth', philhealth],
+              ['Pag-IBIG', pagibig],
+              ['Withholding Tax', tax],
+              ['Late / Undertime', lateUnder],
+              ['SSS Loan', sssLoan],
+              ['Pag-IBIG Loan', pagibigLoan],
+              ['Cash Advance', cashAdv],
+            ].map(([label, val]) => (
+              <div key={label}>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
+                <p className="text-sm font-semibold text-foreground">{fmt(Number(val))}</p>
+              </div>
+            ))}
           </div>
           <div className="pt-3 border-t border-border flex justify-between items-center">
             <span className="text-xs font-bold text-muted-foreground uppercase">Total Deductions</span>
@@ -1149,14 +1119,15 @@ export function PayslipEditor() {
 
       {/* ── Actions ── */}
       <div className="flex flex-wrap gap-3">
-        {canEdit && (
+        {!payslip.approvedAt && (
           <Button
             className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={saving}
-            onClick={() => { void handleSave(); }}
+            disabled={refreshing}
+            onClick={() => { void handleRefreshAndSave(); }}
+            title="Re-check all timesheets (including COA corrections), apply approved OT at DOLE-compliant rates, apply paid and unpaid leave, recompute government deductions, and save"
           >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            Save Changes
+            {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            Refresh &amp; Save
           </Button>
         )}
 

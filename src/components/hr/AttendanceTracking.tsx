@@ -2,10 +2,11 @@
 
 // src/components/hr/AttendanceTracking.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, Calendar } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, Calendar, Upload } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { useToast } from '@/context/ToastContext';
+import { AttendanceImportModal } from '@/components/hr/AttendanceImportModal';
 
 type UIStatus = 'Present' | 'Late' | 'Absent' | 'Half Day' | 'On Leave' | 'Day Off' | 'Holiday';
 
@@ -325,6 +326,7 @@ export function AttendanceTracking(): React.ReactNode {
 
   const [editRecord, setEditRecord] = useState<AttendanceRecord | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<AttendanceRecord | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -395,9 +397,18 @@ export function AttendanceTracking(): React.ReactNode {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-slate-900">Attendance Tracking</h1>
-        <p className="text-sm text-slate-500 mt-1">View and manage employee attendance from timesheet records</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">Attendance Tracking</h1>
+          <p className="text-sm text-slate-500 mt-1">View and manage employee attendance from timesheet records</p>
+        </div>
+        <button
+          onClick={() => setShowImportModal(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors shrink-0"
+        >
+          <Upload size={15} />
+          Import
+        </button>
       </div>
 
       {/* Date Navigation & Stats */}
@@ -605,6 +616,12 @@ export function AttendanceTracking(): React.ReactNode {
           record={deleteRecord}
           onClose={() => setDeleteRecord(null)}
           onDeleted={refresh}
+        />
+      )}
+      {showImportModal && (
+        <AttendanceImportModal
+          onClose={() => setShowImportModal(false)}
+          onImported={refresh}
         />
       )}
     </div>

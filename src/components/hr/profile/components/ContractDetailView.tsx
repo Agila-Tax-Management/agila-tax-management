@@ -25,6 +25,7 @@ interface PayrollScheduleOption {
 interface CompFormData {
   baseRate: string;
   allowanceRate: string;
+  allowanceOnFirstCutoff: boolean;
   rateType: RateType;
   frequency: SalaryFrequency;
   payType: PayType;
@@ -63,6 +64,7 @@ function getDoleFactor(isPaidRestDays: boolean, restDaysPerWeek: number): number
 const DEFAULT_COMP_FORM: CompFormData = {
   baseRate: '',
   allowanceRate: '',
+  allowanceOnFirstCutoff: true,
   rateType: 'DAILY',
   frequency: 'TWICE_A_MONTH',
   payType: 'VARIABLE_PAY',
@@ -152,6 +154,7 @@ export function ContractDetailView({
       setCompForm({
         baseRate: compensation.baseRate,
         allowanceRate: compensation.allowanceRate,
+        allowanceOnFirstCutoff: compensation.allowanceOnFirstCutoffOnly ?? true,
         rateType: compensation.rateType,
         frequency: compensation.frequency,
         payType: compensation.payType,
@@ -185,6 +188,7 @@ export function ContractDetailView({
           contractId: contract.id,
           baseRate: compForm.baseRate,
           allowanceRate: compForm.allowanceRate || '0',
+          allowanceOnFirstCutoffOnly: compForm.allowanceOnFirstCutoff,
           rateType: compForm.rateType,
           frequency: compForm.frequency,
           payType: compForm.payType,
@@ -376,6 +380,11 @@ export function ContractDetailView({
                     <p className="text-[11px] text-muted-foreground">Allowance</p>
                     <p className="text-sm font-bold text-foreground">
                       {fmtRate(parseFloat(compensation.allowanceRate))}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {(compensation.allowanceOnFirstCutoffOnly ?? true)
+                        ? 'First cutoff only'
+                        : 'Split across periods'}
                     </p>
                   </div>
                 )}
@@ -586,6 +595,33 @@ export function ContractDetailView({
                   />
                 </div>
               </div>
+              {parseFloat(compForm.allowanceRate) > 0 && (
+                <div>
+                  <label className={labelCls}>Allowance Payout Schedule</label>
+                  <div className="flex gap-4 mt-1">
+                    {([
+                      { value: true,  label: 'First cutoff only' },
+                      { value: false, label: 'Split across periods' },
+                    ] as const).map(({ value, label }) => (
+                      <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="cdv-allowanceOnFirstCutoff"
+                          checked={compForm.allowanceOnFirstCutoff === value}
+                          onChange={() => setCompForm((p) => ({ ...p, allowanceOnFirstCutoff: value }))}
+                          className="h-4 w-4 accent-blue-600"
+                        />
+                        <span className="text-sm text-foreground">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {compForm.allowanceOnFirstCutoff
+                      ? 'Full allowance released only on the first payroll cutoff of the month.'
+                      : 'Allowance is divided equally across all payroll periods in the month.'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Section: Salary Configuration */}

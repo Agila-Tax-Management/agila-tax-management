@@ -158,6 +158,7 @@ export const createCompensationSchema = z.object({
   deductPagibig: z.boolean().default(false),
   pagibigType: z.enum(['REGULAR', 'MINIMUM']).default('REGULAR'),
   deductTax: z.boolean().default(false),
+  allowanceOnFirstCutoffOnly: z.boolean().default(true),
   payrollScheduleId: z.string().nullable().optional(),
 });
 
