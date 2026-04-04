@@ -78,7 +78,7 @@ export function RecordPaymentForm(): React.ReactNode {
   const unallocated = amountNum - totalApplied;
   const isOverApplied = unallocated < -0.001;
 
-  /* eslint-disable react-hooks/set-state-in-effect -- API fetches on mount and triggered by deps */
+   
   const fetchClients = useCallback(async (query: string) => {
     setIsSearchingClients(true);
     try {
@@ -125,7 +125,7 @@ export function RecordPaymentForm(): React.ReactNode {
     };
     void loadInvoices();
   }, [selectedClient]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const handleClientSearchChange = (value: string) => {
     setClientSearch(value);

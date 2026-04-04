@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/UI/button';
 import {
-  X, Calendar, User, Send, Clock, CheckSquare, Square, ChevronDown, Layers, MessageSquare, History,
+  X, Calendar, Send, Clock, CheckSquare, Square, ChevronDown, Layers, MessageSquare, History,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import type { AOTaskSubtask, AOTeamMember } from '@/lib/types';
@@ -61,8 +61,8 @@ export function SubtaskDetailModal({
   onUpdate,
   onDelete,
   taskId,
-  deptStatuses,
-  currentUser = { id: '', name: 'You' },
+  deptStatuses: _deptStatuses,
+  currentUser: _currentUser = { id: '', name: 'You' },
   activityLog,
   onAddActivity,
   departments,

@@ -186,11 +186,11 @@ export function AOClientList() {
     }
   }, [aoDept?.id, toastError]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching AO clients/tasks data */
+   
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => {

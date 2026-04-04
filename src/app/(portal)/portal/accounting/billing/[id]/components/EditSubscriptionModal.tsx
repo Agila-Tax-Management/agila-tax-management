@@ -72,11 +72,11 @@ export function EditSubscriptionModal({
     setPlans(raw.map((p) => ({ id: p.id, name: p.name, serviceRate: Number(p.serviceRate) })));
   }, []);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Fetch plans when modal opens */
+   
   useEffect(() => {
     if (isOpen && plans.length === 0) void loadPlans();
   }, [isOpen, plans.length, loadPlans]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   function handlePlanChange(planId: number) {
     setServicePlanId(planId);

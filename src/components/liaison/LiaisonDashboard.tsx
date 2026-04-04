@@ -49,7 +49,7 @@ export function LiaisonDashboard() {
   const [data, setData] = useState<LiaisonDashboardData>(EMPTY_DASHBOARD_DATA);
   const [isLoading, setIsLoading] = useState(true);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching dashboard data from API */
+   
   useEffect(() => {
     async function loadDashboard(): Promise<void> {
       setIsLoading(true);
@@ -70,7 +70,7 @@ export function LiaisonDashboard() {
 
     void loadDashboard();
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-PH', {

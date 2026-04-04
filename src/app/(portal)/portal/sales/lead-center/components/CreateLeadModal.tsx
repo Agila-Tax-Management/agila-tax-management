@@ -10,17 +10,6 @@ import { useToast } from '@/context/ToastContext';
 import { BUSINESS_TYPES, LEAD_SOURCES } from '@/lib/constants';
 import type { Lead } from './lead-types';
 
-interface LeadStatus {
-  id: number;
-  name: string;
-  color: string | null;
-  sequence: number;
-  isOnboarding: boolean;
-  isConverted: boolean;
-}
-
-interface AssignedAgent { id: string; name: string; email: string; }
-
 interface CreateLeadModalProps {
   isOpen: boolean;
   onClose: () => void;

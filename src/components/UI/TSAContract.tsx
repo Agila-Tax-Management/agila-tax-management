@@ -56,7 +56,7 @@ interface TurnoverSuccessModalProps {
   allServices: ServiceItem[];
 }
 
-function downloadDocument(html: string, filename: string): void {
+function downloadDocument(html: string, _filename: string): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('Please allow pop-ups to download documents.');
@@ -84,7 +84,7 @@ export const TurnoverSuccessModal: React.FC<TurnoverSuccessModalProps> = ({
       try {
         const response = await fetch('/api/services');
         if (response.ok) {
-          const data = await response.json();
+          const _data = await response.json();
           // Services are already provided via props, no need to fetch
         }
       } finally {
@@ -355,7 +355,7 @@ export const TurnoverSuccessModal: React.FC<TurnoverSuccessModalProps> = ({
   );
 };
 
-function generateTOSHTML(clientData: ClientData, allServices: ServiceItem[]): string {
+function _generateTOSHTML(clientData: ClientData, allServices: ServiceItem[]): string {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');

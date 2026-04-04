@@ -100,6 +100,8 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
 
   // Edit mode
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
+  // Capture initial edit mode from URL — used in load effect without adding isEditing to deps
+  const initialEditingRef = useRef(searchParams.get('edit') === 'true');
   const [editDueDate, setEditDueDate] = useState('');
   const [editTerms, setEditTerms] = useState('');
   const [editNotes, setEditNotes] = useState('');
@@ -125,7 +127,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
   const servicePickerRef = useRef<HTMLDivElement>(null);
 
   // Load invoice
-  /* eslint-disable react-hooks/set-state-in-effect -- API fetch on mount */
+   
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
@@ -136,7 +138,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
         const loadedInvoice = data.data as InvoiceRecord;
         setInvoice(loadedInvoice);
         // If page opened directly in edit mode (?edit=true), populate edit fields now
-        if (isEditing) {
+        if (initialEditingRef.current) {
           setEditDueDate(loadedInvoice.dueDate.split('T')[0]);
           setEditTerms(loadedInvoice.terms ?? '');
           setEditNotes(loadedInvoice.notes ?? '');
@@ -180,7 +182,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   // Populate edit fields when entering edit mode
   const enterEditMode = useCallback(() => {

@@ -766,15 +766,15 @@ function BusinessForm({ form, setForm, saving, onCancel, onSave, inputCls }: {
 
 // ─── Corporate Form ───────────────────────────────────────────────────────────
 
-function CorporateForm({ form, setForm, saving, onCancel, onSave, inputCls }: {
-  form: CorporateDetailsData;
-  setForm: React.Dispatch<React.SetStateAction<CorporateDetailsData>>;
-  saving: boolean; onCancel: () => void; onSave: () => Promise<void>; inputCls: string;
-}) {
-  function set(k: keyof CorporateDetailsData, v: string | number | boolean | null) { setForm((p) => ({ ...p, [k]: v })); }
+type OfficerPrefix = 'president' | 'treasurer' | 'secretary';
 
-  type OfficerPrefix = 'president' | 'treasurer' | 'secretary';
-  function OfficerFields({ prefix, label }: { prefix: OfficerPrefix; label: string }) {
+function OfficerFields({ prefix, label, form, set, inputCls }: {
+  prefix: OfficerPrefix;
+  label: string;
+  form: CorporateDetailsData;
+  set: (k: keyof CorporateDetailsData, v: string | number | boolean | null) => void;
+  inputCls: string;
+}) {
     const fk = `${prefix}FirstName` as keyof CorporateDetailsData;
     const mk = `${prefix}MiddleName` as keyof CorporateDetailsData;
     const lk = `${prefix}LastName` as keyof CorporateDetailsData;
@@ -806,7 +806,14 @@ function CorporateForm({ form, setForm, saving, onCancel, onSave, inputCls }: {
         </div>
       </div>
     );
-  }
+}
+
+function CorporateForm({ form, setForm, saving, onCancel, onSave, inputCls }: {
+  form: CorporateDetailsData;
+  setForm: React.Dispatch<React.SetStateAction<CorporateDetailsData>>;
+  saving: boolean; onCancel: () => void; onSave: () => Promise<void>; inputCls: string;
+}) {
+  function set(k: keyof CorporateDetailsData, v: string | number | boolean | null) { setForm((p) => ({ ...p, [k]: v })); }
 
   return (
     <div className="space-y-4">
@@ -841,9 +848,9 @@ function CorporateForm({ form, setForm, saving, onCancel, onSave, inputCls }: {
         <Field label="Primary Contact No."><input className={inputCls} value={form.primaryContactNo} onChange={(e) => set('primaryContactNo', e.target.value)} /></Field>
         <Field label="Secondary Contact No."><input className={inputCls} value={form.secondaryContactNo} onChange={(e) => set('secondaryContactNo', e.target.value)} /></Field>
       </div>
-      <OfficerFields prefix="president" label="President" />
-      <OfficerFields prefix="treasurer" label="Treasurer" />
-      <OfficerFields prefix="secretary" label="Secretary" />
+      <OfficerFields prefix="president" label="President" form={form} set={set} inputCls={inputCls} />
+      <OfficerFields prefix="treasurer" label="Treasurer" form={form} set={set} inputCls={inputCls} />
+      <OfficerFields prefix="secretary" label="Secretary" form={form} set={set} inputCls={inputCls} />
       <div className="flex gap-3 justify-end pt-2">
         <button onClick={onCancel} className="px-4 py-2 text-sm font-semibold text-muted-foreground border border-border rounded-xl hover:bg-muted transition-colors"><X size={14} className="inline mr-1" />Cancel</button>
         <button disabled={saving} onClick={onSave} className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#25238e] text-white rounded-xl hover:bg-[#1e1c7a] transition-colors disabled:opacity-60">

@@ -84,7 +84,7 @@ export function AODashboard() {
   const [data, setData] = useState<AODashboardData>(EMPTY_DASHBOARD_DATA);
   const [isLoading, setIsLoading] = useState(true);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Fetching dashboard data on mount */
+   
   useEffect(() => {
     const loadDashboard = async () => {
       setIsLoading(true);
@@ -107,7 +107,7 @@ export function AODashboard() {
 
     void loadDashboard();
   }, [toastError]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'No due date';

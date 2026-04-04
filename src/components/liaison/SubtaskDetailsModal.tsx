@@ -6,16 +6,16 @@ import { X, Calendar } from 'lucide-react';
 import { LIAISON_TEAM } from '@/lib/mock-liaison-data';
 import type { AOTask, AOTaskStatus, AOTaskPriority } from '@/lib/types';
 
-const STATUS_OPTIONS: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
+const _STATUS_OPTIONS: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
 
-const STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warning' | 'success'; color: string }> = {
+const _STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warning' | 'success'; color: string }> = {
   'To Do': { variant: 'neutral', color: 'bg-slate-500' },
   'In Progress': { variant: 'info', color: 'bg-blue-500' },
   'Review': { variant: 'warning', color: 'bg-amber-500' },
   'Done': { variant: 'success', color: 'bg-emerald-500' },
 };
 
-const STATUS_SELECT_COLOR: Record<AOTaskStatus, string> = {
+const _STATUS_SELECT_COLOR: Record<AOTaskStatus, string> = {
   'To Do': 'bg-slate-100 text-slate-700',
   'In Progress': 'bg-blue-100 text-blue-700',
   'Review': 'bg-amber-100 text-amber-700',
@@ -55,7 +55,7 @@ export function SubtaskDetailsModal({
     ? LIAISON_TEAM.find(member => member.id === selectedSubtask.assigneeId)
     : assignee;
 
-  const formattedDueDate = new Intl.DateTimeFormat('en-PH', {
+  const _formattedDueDate = new Intl.DateTimeFormat('en-PH', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

@@ -191,7 +191,7 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
         setClientOptions(d.data.map(c => ({ id: String(c.id), name: c.businessName })));
       })
       .catch(() => undefined);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   const handleAddSubtaskActivity = (kind: ActivityEntry['kind'], message: string) => {
@@ -1225,7 +1225,7 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
                   );
                 }
                 // History entry — compact changelog style
-                const initials = item.actor.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                const _initials = item.actor.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
                 return (
                   <div key={`h-${item.id}`} className="flex gap-2.5 items-start">
                     <div className="w-7 h-7 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 mt-0.5">

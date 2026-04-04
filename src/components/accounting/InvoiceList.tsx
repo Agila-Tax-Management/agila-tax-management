@@ -125,11 +125,11 @@ export function InvoiceList() {
     [toastError],
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- API data fetch on dependency change */
+   
   useEffect(() => {
     void loadInvoices(page, search, statusFilter);
   }, [page, search, statusFilter, loadInvoices]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const handleDelete = async () => {
     if (!deleteTarget) return;

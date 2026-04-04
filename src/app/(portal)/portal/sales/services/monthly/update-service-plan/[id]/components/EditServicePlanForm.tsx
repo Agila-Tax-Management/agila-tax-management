@@ -407,8 +407,8 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
   const [inclusions, setInclusions] = useState<RefItem[]>([]);
   const [promos, setPromos] = useState<RefItem[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplateOption[]>([]);
-  const [templateSearch, setTemplateSearch] = useState('');
-  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  const [_templateSearch, _setTemplateSearch] = useState('');
+  const [_showTemplateDropdown, _setShowTemplateDropdown] = useState(false);
 
   useEffect(() => {
     Promise.all([

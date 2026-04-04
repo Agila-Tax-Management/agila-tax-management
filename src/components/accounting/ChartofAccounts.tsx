@@ -106,7 +106,7 @@ function SearchableSelect({ options, value, onChange, placeholder, disabled, err
 
   const filtered = options.filter((o) => o.toLowerCase().includes(query.toLowerCase()));
 
-  /* eslint-disable react-hooks/set-state-in-effect -- close on outside click */
+   
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
@@ -118,7 +118,7 @@ function SearchableSelect({ options, value, onChange, placeholder, disabled, err
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   return (
     <div ref={ref} className="relative">

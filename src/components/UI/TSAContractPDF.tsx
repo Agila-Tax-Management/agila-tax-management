@@ -583,6 +583,7 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
       <Page size="A4" style={styles.page}>
         {/* Header image — full-bleed banner at top of every page */}
         {data.headerSrc && (
+          // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image does not support alt prop
           <Image src={data.headerSrc} style={styles.headerImage} />
         )}
 

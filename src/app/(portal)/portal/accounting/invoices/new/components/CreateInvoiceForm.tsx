@@ -69,7 +69,7 @@ export function CreateInvoiceForm() {
   const clientDropdownRef = useRef<HTMLDivElement>(null);
 
   // Load next invoice number + services on mount
-  /* eslint-disable react-hooks/set-state-in-effect -- API fetch on mount, async setState is intentional */
+   
   useEffect(() => {
     const load = async () => {
       const [numRes, svcRes] = await Promise.all([
@@ -98,7 +98,7 @@ export function CreateInvoiceForm() {
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   // Client search fetch (debounced, called from event handler — not useEffect)
   const fetchClients = useCallback(async (query: string) => {

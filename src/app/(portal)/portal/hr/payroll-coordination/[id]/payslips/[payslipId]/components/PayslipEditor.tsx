@@ -226,7 +226,7 @@ const FREQ_LABEL: Record<string, string> = {
   ONCE_A_MONTH: 'Once a Month', TWICE_A_MONTH: 'Twice a Month', WEEKLY: 'Weekly',
 };
 
-function numInput(value: string, onChange: (v: string) => void, label: string) {
+function _numInput(value: string, onChange: (v: string) => void, label: string) {
   return (
     <div>
       <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">

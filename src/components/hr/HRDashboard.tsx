@@ -100,7 +100,7 @@ export function HRDashboard(): React.ReactNode {
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Hydration-safe: fetch on mount */
+   
   useEffect(() => {
     void fetch('/api/hr/dashboard')
       .then(r => r.json())
@@ -114,7 +114,7 @@ export function HRDashboard(): React.ReactNode {
       .catch(() => toastError('Failed to load dashboard', 'Network error.'))
       .finally(() => setIsLoading(false));
   }, [toastError]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   if (isLoading) {
     return (

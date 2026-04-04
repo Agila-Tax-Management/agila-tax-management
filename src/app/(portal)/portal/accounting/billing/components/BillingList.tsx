@@ -59,11 +59,11 @@ export function BillingList(): React.ReactNode {
     }
   }, [toastError]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- API fetch on mount */
+   
   useEffect(() => {
     void load();
   }, [load]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const filtered = subscriptions.filter((s) => {
     const q = search.toLowerCase();

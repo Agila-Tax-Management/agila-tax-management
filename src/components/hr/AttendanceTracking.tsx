@@ -330,7 +330,7 @@ export function AttendanceTracking(): React.ReactNode {
 
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Hydration-safe: fetch on mount */
+   
   useEffect(() => {
     void fetch('/api/hr/departments')
       .then(r => r.json())
@@ -338,7 +338,7 @@ export function AttendanceTracking(): React.ReactNode {
         if (json.data) setDepartments(json.data);
       });
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const fetchAttendance = useCallback(async (
     date: string,

@@ -31,7 +31,7 @@ function ProfileDropdown() {
     .toUpperCase()
     .slice(0, 2) || '?';
 
-  /* eslint-disable react-hooks/set-state-in-effect -- closes dropdown on outside click */
+   
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
@@ -42,7 +42,7 @@ function ProfileDropdown() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const navigate = (href: string) => {
     setOpen(false);
@@ -120,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Hydration-safe: sets document.title based on pathname */
+   
   useEffect(() => {
     const titleMap: Record<string, string> = {
       '/dashboard':                                        'Dashboard | Agila Tax Management System',
@@ -149,7 +149,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .find(key => pathname === key || pathname.startsWith(key + '/'));
     document.title = matched ? titleMap[matched] : 'Dashboard | Agila Tax Management System';
   }, [pathname]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   return (
     <RoleProvider>
