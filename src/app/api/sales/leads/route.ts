@@ -9,9 +9,32 @@ import { logLeadHistory } from "@/lib/lead-history";
 const LEAD_INCLUDE = {
   status: { select: { id: true, name: true, color: true, sequence: true, isOnboarding: true, isConverted: true } },
   assignedAgent: { select: { id: true, name: true, email: true } },
-  servicePlans: { select: { id: true, name: true, serviceRate: true, recurring: true } },
-  serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true } },
-  promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true, promoFor: true } },
+  promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true } },
+  quotes: {
+    orderBy: { createdAt: "desc" as const },
+    include: {
+      lineItems: {
+        include: {
+          service: { select: { id: true, name: true, billingType: true, frequency: true } },
+          sourcePackage: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
+  tsaContracts: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: {
+      id: true,
+      referenceNumber: true,
+      status: true,
+      documentDate: true,
+      businessName: true,
+      quoteId: true,
+      pdfUrl: true,
+      clientSignedAt: true,
+    },
+  },
   invoices: {
     select: { id: true, invoiceNumber: true, status: true },
     orderBy: { issueDate: "asc" as const },
@@ -82,15 +105,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const { servicePlanIds, serviceOneTimeIds, promoId, ...leadData } = parsed.data;
+  const { promoId, ...leadData } = parsed.data;
 
   const lead = await prisma.lead.create({
     data: {
       ...leadData,
       statusId,
       ...(promoId ? { promoId } : {}),
-      ...(servicePlanIds?.length ? { servicePlans: { connect: servicePlanIds.map((id) => ({ id })) } } : {}),
-      ...(serviceOneTimeIds?.length ? { serviceOneTimePlans: { connect: serviceOneTimeIds.map((id) => ({ id })) } } : {}),
     },
     include: LEAD_INCLUDE,
   });

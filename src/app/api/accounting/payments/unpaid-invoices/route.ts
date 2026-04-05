@@ -17,7 +17,12 @@ export async function GET(request: NextRequest) {
 
   const invoices = await prisma.invoice.findMany({
     where: {
-      clientId,
+      // Invoices properly linked to clientId OR still linked to a lead
+      // whose account was later provisioned into this client (pre-migration data).
+      OR: [
+        { clientId },
+        { lead: { convertedClientId: clientId } },
+      ],
       status: { in: ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'] },
     },
     select: {

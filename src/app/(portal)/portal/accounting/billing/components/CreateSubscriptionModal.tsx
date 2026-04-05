@@ -148,7 +148,7 @@ export function CreateSubscriptionModal({
     try {
       const result = await createSubscriptionAction({
         clientId: selectedClient.id,
-        servicePlanId: servicePlanId as number,
+        serviceId: servicePlanId as number,
         agreedRate: parseFloat(agreedRate),
         billingCycle,
         effectiveDate,

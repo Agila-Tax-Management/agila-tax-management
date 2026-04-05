@@ -21,39 +21,42 @@ import {
   List,
 } from 'lucide-react';
 
-interface ServiceOneTimeItem {
+interface ServiceItem {
   id: number;
+  code: string | null;
   name: string;
   description: string | null;
+  billingType: 'RECURRING' | 'ONE_TIME';
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUALLY' | 'ANNUALLY' | 'NONE';
   serviceRate: string;
+  isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   governmentOffices: { id: number; code: string; name: string }[];
   cities: { id: number; name: string }[];
   inclusions: { id: number; name: string }[];
   createdAt: string;
-  updatedAt: string;
 }
 
 export function OneTimeServicePlans(): React.ReactNode {
   const router = useRouter();
   const { success, error } = useToast();
-  const [services, setServices] = useState<ServiceOneTimeItem[]>([]);
+  const [services, setServices] = useState<ServiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [servicesPerPage, setServicesPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Delete Confirmation Modal
-  const [deleteTarget, setDeleteTarget] = useState<ServiceOneTimeItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // View mode
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   useEffect(() => {
-    fetch('/api/sales/service-one-time')
+    fetch('/api/sales/services?billingType=ONE_TIME')
       .then((res) => res.json())
-      .then((data: { data?: ServiceOneTimeItem[] }) => {
+      .then((data: { data?: ServiceItem[] }) => {
         setServices(data.data ?? []);
         setIsLoading(false);
       })
@@ -88,7 +91,7 @@ export function OneTimeServicePlans(): React.ReactNode {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/sales/service-one-time/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/sales/services/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         error('Failed to delete service', (data as { error?: string }).error ?? 'An error occurred.');

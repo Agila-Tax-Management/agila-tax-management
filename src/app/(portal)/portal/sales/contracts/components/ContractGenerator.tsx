@@ -11,6 +11,7 @@ import { Card } from '@/components/UI/Card';
 import { useToast } from '@/context/ToastContext';
 import type { ContractData } from '@/components/UI/TSAContractPDF';
 import type { ContractClientResult } from '@/app/api/sales/contracts/clients/route';
+import type { TsaContractSearchResult } from '@/app/api/sales/contracts/leads/route';
 import type { ServicePlanOption } from '@/types/accounting.types';
 
 // ── Empty defaults ───────────────────────────────────────────────────────────
@@ -30,6 +31,8 @@ const EMPTY: ContractData = {
   planName: '',
   planPrice: '',
   actualMonthlySubscription: '',
+  planServices: [],
+  additionalServices: [],
   headerSrc: '',
   isDTI: false, isDTIReg: false, isDTIClosure: false, isBMBE: false,
   isSEC: false, isSECReg: false, isEfast: false, isStockTransfer: false,
@@ -49,7 +52,68 @@ const EMPTY: ContractData = {
 // ── Section collapse state ────────────────────────────────────────────────────
 
 type SectionKey = 'client' | 'plan' | 'dti' | 'sec' | 'lgu' | 'bir' | 'birc' | 'emp' | 'rem';
+// ── Service name → boolean flag helper ──────────────────────────────────
 
+type FlagFields = Omit<ContractData,
+  'clientNo' | 'businessName' | 'authorizedRep' | 'email' | 'phone' | 'tin' |
+  'businessAddress' | 'residenceAddress' | 'civilStatus' | 'isBusinessRegistered' |
+  'tosDate' | 'planName' | 'planPrice' | 'actualMonthlySubscription' | 'headerSrc' |
+  'planServices' | 'additionalServices'
+>;
+
+function buildFlagsFromNames(names: string[]): FlagFields {
+  const has = (...kw: string[]) =>
+    names.some((n) => kw.some((k) => n.toLowerCase().includes(k.toLowerCase())));
+  return {
+    isDTI: has('DTI', 'Department of Trade', 'Business Name'),
+    isDTIReg: has('DTI Registration', 'DTI Certificate'),
+    isDTIClosure: has('DTI Closure', 'Business Name Closure'),
+    isBMBE: has('BMBE'),
+    isSEC: has('SEC', 'Securities', 'Corporation'),
+    isSECReg: has('SEC Registration', 'Corporate Registration', 'Incorporation'),
+    isEfast: has('eFast', 'Efast'),
+    isStockTransfer: has('Stock Transfer'),
+    isSECAmendments: has('SEC Amendment', 'Amendment'),
+    isAppointment: has('Appointment of Officers', 'One-Person Corporation'),
+    isGIS: has('GIS', 'General Information Sheet'),
+    isAFS: has('AFS', 'Audited Financial', 'Financial Statement'),
+    isLGU: has('Mayor', 'Permit', 'LGU', 'Business Permit'),
+    isMayorReg: has("Mayor's Permit Registration", 'Mayor Permit Processing'),
+    isMayorRenewal: has("Mayor's Permit Renewal", 'Permit Renewal'),
+    isMayorClosure: has('Mayor', 'Closure', 'Retirement'),
+    isTempPermit: has('Temporary Permit'),
+    isSanitary: has('Sanitary Permit'),
+    isFire: has('Fire', 'Fire Safety', 'FSIC'),
+    isCCENRO: has('CCENRO', 'Environmental Certificate'),
+    isProfessionalTax: has('Professional Tax', 'Occupational Tax', 'Cedula'),
+    isBIR: has('BIR', 'Bureau of Internal Revenue'),
+    isBIRReg: has('BIR Registration', 'BIR Business Registration', 'Certificate of Registration', '2303'),
+    isBIRBranch: has('Add Branch', 'Branch Registration'),
+    isBIRClosure: has('BIR Closure'),
+    isORUS: has('ORUS'),
+    isBooksReg: has('Books Registration', 'Register Books'),
+    isInvoicePrint: has('Invoice Printing', 'Official Receipt', 'Sales Invoice'),
+    isAddTaxType: has('Add Tax Type', 'Tax Type'),
+    isRentalDocStamp: has('Rental', 'Doc Stamp', 'Documentary Stamp'),
+    isStocksDocStamp: has('Stocks', 'Doc Stamp'),
+    isAuditorsReport: has("Auditor's Report", 'Auditors Report'),
+    isOpenCase: has('Open Case', 'Case Report'),
+    isBIRCompliance: has('Tax Return', 'ITR', 'VAT', 'Withholding', 'BIR Compliance', 'Filing'),
+    isEWT: has('Expanded Withholding', 'EWT'),
+    isFWT: has('Final Withholding', 'FWT'),
+    isCWT: has('Compensation Withholding', 'CWT'),
+    isPercentageTax: has('Percentage Tax'),
+    isVATReturn: has('VAT Return', 'Value-Added Tax'),
+    isITR: has('Income Tax Return', 'ITR'),
+    isEmployerReg: has('Employer Registration', 'SSS', 'PhilHealth', 'PAGIBIG', 'Pag-IBIG', 'DOLE'),
+    isSSS: has('SSS', 'Social Security'),
+    isPhilHealth: has('PhilHealth', 'PHIC'),
+    isPagibig: has('PAGIBIG', 'Pag-IBIG', 'HDMF'),
+    isBIREmployer: has('BIR Employer'),
+    isDOLE: has('DOLE', 'Department of Labor'),
+    isRemittances: has('Remittance', 'Contribution', 'Government Remittance'),
+  };
+}
 // ── Client search combobox ────────────────────────────────────────────────────
 
 interface ClientSearchProps {
@@ -184,6 +248,163 @@ function ClientSearchDropdown({ onSelect }: ClientSearchProps) {
         {isOpen && !isLoading && results.length === 0 && query.trim().length > 0 && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 text-sm text-slate-500">
             No clients found for &ldquo;{query}&rdquo;
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Lead / TSA search combobox ────────────────────────────────────────────────
+
+const TSA_STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Draft',
+  PENDING_APPROVAL: 'Pending Approval',
+  APPROVED: 'Approved',
+  SENT_TO_CLIENT: 'Sent to Client',
+  SIGNED: 'Signed',
+};
+
+const TSA_STATUS_COLOR: Record<string, string> = {
+  DRAFT: 'bg-slate-100 text-slate-600',
+  PENDING_APPROVAL: 'bg-amber-100 text-amber-700',
+  APPROVED: 'bg-blue-100 text-blue-700',
+  SENT_TO_CLIENT: 'bg-indigo-100 text-indigo-700',
+  SIGNED: 'bg-emerald-100 text-emerald-700',
+};
+
+interface LeadSearchProps {
+  onSelect: (result: TsaContractSearchResult) => void;
+}
+
+function LeadSearchDropdown({ onSelect }: LeadSearchProps) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<TsaContractSearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchTsas = useCallback(async (search: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/sales/contracts/leads?search=${encodeURIComponent(search)}`);
+      if (res.ok) {
+        const json = await res.json() as { data: TsaContractSearchResult[] };
+        setResults(json.data);
+        setIsOpen(true);
+      }
+    } catch {
+      // silently ignore network errors on search
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  function handleInputChange(value: string) {
+    setQuery(value);
+    setSelectedLabel('');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length === 0) {
+      setResults([]);
+      setIsOpen(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => fetchTsas(value.trim()), 300);
+  }
+
+  function handleSelect(result: TsaContractSearchResult) {
+    setSelectedLabel(`${result.businessName} (${result.referenceNumber})`);
+    setQuery('');
+    setResults([]);
+    setIsOpen(false);
+    onSelect(result);
+  }
+
+  function handleClear() {
+    setSelectedLabel('');
+    setQuery('');
+    setResults([]);
+    setIsOpen(false);
+  }
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <FieldLabel>Search &amp; Auto-fill from TSA / Lead Contract</FieldLabel>
+      <div className="relative">
+        {selectedLabel ? (
+          <div className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900">
+            <UserCheck size={14} className="text-emerald-600 shrink-0" />
+            <span className="flex-1 truncate font-medium">{selectedLabel}</span>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="text-emerald-400 hover:text-emerald-700 transition-colors shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            {isLoading && (
+              <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin pointer-events-none" />
+            )}
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onFocus={() => query.trim() && setIsOpen(true)}
+              placeholder="Type business name or TSA reference no..."
+              className="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+        )}
+
+        {isOpen && results.length > 0 && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+            {results.map((result) => (
+              <button
+                key={result.id}
+                type="button"
+                onClick={() => handleSelect(result)}
+                className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors border-b border-slate-100 last:border-0"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{result.businessName}</p>
+                    {result.authorizedRep && (
+                      <p className="text-xs text-slate-500 truncate">{result.authorizedRep}</p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right space-y-0.5">
+                    <span className="block text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                      {result.referenceNumber}
+                    </span>
+                    <span className={`block text-xs px-2 py-0.5 rounded font-medium ${TSA_STATUS_COLOR[result.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                      {TSA_STATUS_LABEL[result.status] ?? result.status}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {isOpen && !isLoading && results.length === 0 && query.trim().length > 0 && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 text-sm text-slate-500">
+            No TSA contracts found for &ldquo;{query}&rdquo;
           </div>
         )}
       </div>
@@ -368,6 +589,30 @@ export function ContractGenerator() {
     setOpen((prev) => ({ ...prev, client: true }));
   }
 
+  function handleLeadSelect(result: TsaContractSearchResult) {
+    const flags = buildFlagsFromNames(result.serviceNames);
+    setData((prev) => ({
+      ...prev,
+      clientNo: result.referenceNumber,
+      businessName: result.businessName,
+      authorizedRep: result.authorizedRep,
+      email: result.email ?? '',
+      phone: result.phone ?? '',
+      tin: result.tin ?? '',
+      businessAddress: result.businessAddress ?? '',
+      residenceAddress: result.residenceAddress ?? '',
+      civilStatus: result.civilStatus ?? 'single',
+      isBusinessRegistered: result.isBusinessRegistered,
+      tosDate: result.documentDate.slice(0, 10),
+      planName: result.packageName ?? '',
+      actualMonthlySubscription: result.totalMonthlyRecurring.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
+      planServices: result.recurringServiceNames,
+      additionalServices: result.oneTimeServiceNames,
+      ...flags,
+    }));
+    setOpen({ client: true, plan: true, dti: true, sec: true, lgu: true, bir: true, birc: true, emp: true, rem: true });
+  }
+
   function validate(): boolean {
     if (!data.clientNo || !data.businessName || !data.authorizedRep) {
       error('Required fields missing', 'Please fill in Client No., Business Name, and Authorized Representative.');
@@ -457,11 +702,18 @@ export function ContractGenerator() {
         </div>
       </div>
 
-      {/* ── Client Search ──────────────────────────────────────────────── */}
-      <Card className="border-slate-200 p-5">
+      {/* ── Search ──────────────────────────────────────────────────────────────── */}
+      <Card className="border-slate-200 p-5 space-y-4">
+        {/* Lead / TSA search — populates client info AND service checkboxes */}
+        <LeadSearchDropdown onSelect={handleLeadSelect} />
+        <div className="flex items-center gap-3">
+          <hr className="flex-1 border-slate-200" />
+          <span className="text-xs text-slate-400 shrink-0">or search existing client</span>
+          <hr className="flex-1 border-slate-200" />
+        </div>
         <ClientSearchDropdown onSelect={handleClientSelect} />
-        <p className="text-xs text-slate-400 mt-2">
-          Selecting a client auto-fills the fields below. You can still edit any field manually.
+        <p className="text-xs text-slate-400">
+          Selecting a TSA auto-fills all fields and checks the applicable services. Selecting a client only fills in the contact info.
         </p>
       </Card>
 

@@ -79,12 +79,12 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
   const items: JoItem[] = [];
 
   if (changePlanId !== undefined) {
-    const plan = await prisma.servicePlan.findUnique({
+    const plan = await prisma.service.findUnique({
       where: { id: changePlanId },
       select: { id: true, name: true, serviceRate: true },
     });
     if (!plan) {
-      return NextResponse.json({ error: 'Service plan not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Service not found' }, { status: 404 });
     }
     const rate = Number(plan.serviceRate);
     items.push({
@@ -98,8 +98,8 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
   }
 
   if (oneTimeServiceIds && oneTimeServiceIds.length > 0) {
-    const services = await prisma.serviceOneTime.findMany({
-      where: { id: { in: oneTimeServiceIds }, status: { not: 'ARCHIVED' } },
+    const services = await prisma.service.findMany({
+      where: { id: { in: oneTimeServiceIds }, billingType: 'ONE_TIME', status: { not: 'ARCHIVED' } },
       select: { id: true, name: true, serviceRate: true },
     });
 

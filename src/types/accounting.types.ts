@@ -289,8 +289,8 @@ export interface SubscriptionListRecord {
   id: number;
   clientId: number;
   client: { id: number; businessName: string; clientNo: string | null };
-  servicePlanId: number;
-  servicePlan: { id: number; name: string; serviceRate: number };
+  serviceId: number;
+  service: { id: number; name: string; serviceRate: number };
   billingCycle: BillingCycleType;
   agreedRate: number;
   effectiveDate: string;

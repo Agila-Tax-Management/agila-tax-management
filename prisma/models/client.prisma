@@ -73,6 +73,7 @@ model Client {
 
   lead Lead?
   jobOrders   JobOrder[]
+  tsaContracts TsaContract[]
 
   activityLogs ActivityLog[]
 

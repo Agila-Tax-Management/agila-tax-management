@@ -29,19 +29,16 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
           subtasks: { orderBy: { subtaskOrder: "asc" } },
         },
       },
-      servicePlanLinks: {
-        include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } },
-      },
-      serviceOneTimeLinks: {
-        include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } },
+      services: {
+        include: { service: { select: { id: true, name: true, serviceRate: true, billingType: true, frequency: true, status: true } } },
       },
     },
   });
 
-  const templates = raw.map(({ servicePlanLinks, serviceOneTimeLinks, ...tpl }) => ({
+  const templates = raw.map(({ services, ...tpl }) => ({
     ...tpl,
-    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
-    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+    servicePlans: services.filter((l) => l.service.billingType === 'RECURRING').map((l) => l.service),
+    serviceOneTimePlans: services.filter((l) => l.service.billingType === 'ONE_TIME').map((l) => l.service),
   }));
 
   return NextResponse.json({ data: templates });
@@ -84,20 +81,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           subtasks: true,
         },
       },
-      servicePlanLinks: {
-        include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } },
-      },
-      serviceOneTimeLinks: {
-        include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } },
+      services: {
+        include: { service: { select: { id: true, name: true, serviceRate: true, billingType: true, frequency: true, status: true } } },
       },
     },
   });
 
-  const { servicePlanLinks, serviceOneTimeLinks, ...rest } = rawTemplate;
+  const { services, ...rest } = rawTemplate;
   const template = {
     ...rest,
-    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
-    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+    servicePlans: services.filter((l) => l.service.billingType === 'RECURRING').map((l) => l.service),
+    serviceOneTimePlans: services.filter((l) => l.service.billingType === 'ONE_TIME').map((l) => l.service),
   };
 
   void logActivity({

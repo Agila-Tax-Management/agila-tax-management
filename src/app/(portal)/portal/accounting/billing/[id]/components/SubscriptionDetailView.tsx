@@ -183,7 +183,7 @@ export function SubscriptionDetailView({ id }: Props): React.ReactNode {
                   <div>
                     <p className="text-xs text-muted-foreground">Service Plan</p>
                     <p className="text-sm font-medium text-foreground">
-                      {subscription.servicePlan.name}
+                      {subscription.service.name}
                     </p>
                   </div>
                 </div>

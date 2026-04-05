@@ -45,10 +45,12 @@ export function CreateJobOrderModal({ isOpen, onClose, lead, onCreated }: Create
     }
   };
 
-  const allServices = [
-    ...lead.servicePlans.map((p) => ({ name: p.name, rate: p.serviceRate, type: 'Recurring' as const })),
-    ...lead.serviceOneTimePlans.map((s) => ({ name: s.name, rate: s.serviceRate, type: 'One-Time' as const })),
-  ];
+  const acceptedQuote = lead.quotes.find((q) => q.status === 'ACCEPTED');
+  const allServices = (acceptedQuote?.lineItems ?? []).map((li) => ({
+    name: li.customName ?? li.service.name,
+    rate: li.negotiatedRate,
+    type: li.service.billingType === 'RECURRING' ? 'Recurring' as const : 'One-Time' as const,
+  }));
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Job Order" size="lg">

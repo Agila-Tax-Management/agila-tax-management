@@ -113,6 +113,7 @@ model Lead {
     comments    LeadComment[]
     historyLogs LeadHistory[]
 
+    tsaContracts TsaContract[]
     invoices Invoice[]
     jobOrders   JobOrder[]
 

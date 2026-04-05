@@ -11,8 +11,8 @@ interface RouteParams {
 /**
  * POST /api/admin/settings/task-workflow/templates/[id]/duplicate
  * Deep-copies a template (routes + subtasks). The copy is named "<original> (Copy)".
- * Service links (servicePlans / serviceOneTimePlans) are NOT copied — a new template
- * starts unlinked so the user can intentionally link the right services.
+ * Service links are NOT copied — a new template starts unlinked so the user can
+ * intentionally link the right services.
  */
 export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -64,26 +64,17 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
           subtasks: { orderBy: { subtaskOrder: "asc" } },
         },
       },
-      servicePlanLinks:    { include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } } },
-      serviceOneTimeLinks: { include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } } },
     },
   });
-
-  const { servicePlanLinks, serviceOneTimeLinks, ...copyRest } = rawCopy;
-  const copy = {
-    ...copyRest,
-    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
-    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
-  };
 
   void logActivity({
     userId:      session.user.id,
     action:      "CREATED",
     entity:      "TaskTemplate",
-    entityId:    String(copy.id),
-    description: `Duplicated template "${source.name}" as "${copy.name}"`,
+    entityId:    String(rawCopy.id),
+    description: `Duplicated template "${source.name}" as "${rawCopy.name}"`,
     ...getRequestMeta(request),
   });
 
-  return NextResponse.json({ data: copy }, { status: 201 });
+  return NextResponse.json({ data: rawCopy }, { status: 201 });
 }

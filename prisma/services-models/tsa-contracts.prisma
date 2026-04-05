@@ -1,0 +1,67 @@
+enum TsaStatus {
+    DRAFT
+    PENDING_APPROVAL
+    APPROVED
+    SENT_TO_CLIENT
+    SIGNED
+    VOID
+}
+
+// ─── TSA Contract (The Legal Agreement) ───────────────────────────
+model TsaContract {
+    id                  String      @id @default(cuid())
+    referenceNumber     String      @unique // e.g., "TSA-2026-0001"
+
+    // ─── Core Relations ───
+    leadId              Int?
+    lead                Lead?       @relation(fields: [leadId], references: [id])
+    
+    clientId            Int?
+    client              Client?     @relation(fields: [clientId], references: [id])
+
+    // ─── THE MAGIC LINK ───
+    // The PDF generator will query tsa.quote.lineItems to print the services and prices!
+    quoteId             String?     @unique 
+    quote               Quote?      @relation(fields: [quoteId], references: [id])
+
+    status              TsaStatus   @default(DRAFT)
+
+    // ─── Snapshot: Client Information at time of signing ───
+    documentDate        DateTime    @db.Date
+    clientNo            String?
+    businessName        String
+    authorizedRep       String
+    email               String?
+    phone               String?
+    tin                 String?
+    civilStatus         String?     
+    businessAddress     String?     @db.Text
+    residenceAddress    String?     @db.Text
+    isBusinessRegistered Boolean    @default(true)
+
+    // ─── Document Storage & Legal Terms ───
+    pdfUrl              String?     
+    lockInMonths        Int         @default(6) 
+    billingCycleStart   Int         @default(1) 
+
+    // ─── Workflow: Internal Maker-Checker ───
+    preparedById        String?
+    preparedBy          User?       @relation("TsaPreparer", fields: [preparedById], references: [id])
+    preparedAt          DateTime?
+
+    approvedById        String?
+    approvedBy          User?       @relation("TsaApprover", fields: [approvedById], references: [id])
+    approvedAt          DateTime?
+
+    // ─── Workflow: Client Signature ───
+    clientSignedAt      DateTime?
+    clientSignerName    String?     
+    clientSignatureIp   String?     
+
+    createdAt           DateTime    @default(now())
+    updatedAt           DateTime    @updatedAt
+
+    @@index([leadId])
+    @@index([clientId])
+    @@map("tsa_contract")
+}

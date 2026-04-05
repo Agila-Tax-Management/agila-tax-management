@@ -11,9 +11,32 @@ type Params = { params: Promise<{ id: string }> };
 const LEAD_INCLUDE = {
   status: { select: { id: true, name: true, color: true, sequence: true, isOnboarding: true, isConverted: true } },
   assignedAgent: { select: { id: true, name: true, email: true } },
-  servicePlans: { select: { id: true, name: true, serviceRate: true, recurring: true } },
-  serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true } },
-  promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true, promoFor: true } },
+  promo: { select: { id: true, name: true, code: true, discountType: true, discountRate: true } },
+  quotes: {
+    orderBy: { createdAt: "desc" as const },
+    include: {
+      lineItems: {
+        include: {
+          service: { select: { id: true, name: true, billingType: true, frequency: true } },
+          sourcePackage: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
+  tsaContracts: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: {
+      id: true,
+      referenceNumber: true,
+      status: true,
+      documentDate: true,
+      businessName: true,
+      quoteId: true,
+      pdfUrl: true,
+      clientSignedAt: true,
+    },
+  },
   comments: {
     include: { author: { select: { id: true, name: true, image: true } } },
     orderBy: { createdAt: "asc" as const },
@@ -52,8 +75,15 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: {
-      servicePlans: { select: { id: true, name: true, serviceRate: true } },
-      serviceOneTimePlans: { select: { id: true, name: true, serviceRate: true } },
+      quotes: {
+        where: { status: "ACCEPTED" },
+        include: { lineItems: { include: { service: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+      invoices: {
+        select: { id: true, status: true },
+      },
     },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
@@ -62,6 +92,13 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
   }
   if (lead.isCreatedJobOrder) {
     return NextResponse.json({ error: "A job order has already been created for this lead." }, { status: 409 });
+  }
+  const hasPaidInvoice = lead.invoices.some((inv) => inv.status === "PAID");
+  if (!hasPaidInvoice) {
+    return NextResponse.json(
+      { error: "The client must have at least one paid invoice before a job order can be created." },
+      { status: 400 },
+    );
   }
 
   let body: unknown;
@@ -94,6 +131,11 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       }
       const jobOrderNumber = `${prefix}${String(nextSeq).padStart(4, "0")}`;
 
+      // Derive line items from accepted quote
+      const acceptedQuote = lead.quotes[0] ?? null;
+      const recurringItems = acceptedQuote?.lineItems.filter((li) => li.service.billingType === "RECURRING") ?? [];
+      const oneTimeItems = acceptedQuote?.lineItems.filter((li) => li.service.billingType === "ONE_TIME") ?? [];
+
       // Create the job order
       await tx.jobOrder.create({
         data: {
@@ -106,19 +148,19 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
           datePrepared: new Date(),
           items: {
             create: [
-              ...lead.servicePlans.map((plan) => ({
+              ...recurringItems.map((li) => ({
                 itemType: "SUBSCRIPTION" as const,
-                serviceName: plan.name,
-                rate: Number(plan.serviceRate),
+                serviceName: li.service.name,
+                rate: Number(li.negotiatedRate),
                 discount: 0,
-                total: Number(plan.serviceRate),
+                total: Number(li.negotiatedRate),
               })),
-              ...lead.serviceOneTimePlans.map((svc) => ({
+              ...oneTimeItems.map((li) => ({
                 itemType: "ONE_TIME" as const,
-                serviceName: svc.name,
-                rate: Number(svc.serviceRate),
+                serviceName: li.service.name,
+                rate: Number(li.negotiatedRate),
                 discount: 0,
-                total: Number(svc.serviceRate),
+                total: Number(li.negotiatedRate),
               })),
             ],
           },

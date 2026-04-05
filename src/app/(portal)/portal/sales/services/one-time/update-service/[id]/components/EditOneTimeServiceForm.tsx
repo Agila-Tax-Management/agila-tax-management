@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/sales/services/one-time/update-service/[id]/components/EditOneTimeServiceForm.tsx
+﻿// src/app/(portal)/portal/sales/services/one-time/update-service/[id]/components/EditOneTimeServiceForm.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -7,245 +7,19 @@ import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { useToast } from '@/context/ToastContext';
-import { ArrowLeft, FileText, Layout, Plus, Save, Search, X } from 'lucide-react';
-
-interface RefItem {
-  id: number;
-  name: string;
-  code?: string;
-  province?: string | null;
-  category?: string | null;
-}
+import { CreateTaskTemplateModal } from '@/components/task-management/CreateTaskTemplateModal';
+import type { ApiTemplate } from '@/components/task-management/CreateTaskTemplateModal';
+import { ArrowLeft, FileText, Layout, Plus, Save, X } from 'lucide-react';
 
 interface ServiceOneTimeDetail {
   id: number;
+  code: string | null;
   name: string;
   description: string | null;
   serviceRate: string;
+  isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
-  governmentOffices: { id: number; code: string; name: string }[];
-  cities: { id: number; name: string; province?: string | null }[];
-  inclusions: { id: number; name: string; category?: string | null }[];
-  taskTemplates: { taskTemplate: { id: number; name: string } }[];
-}
-
-interface TaskTemplateOption {
-  id: number;
-  name: string;
-  description: string | null;
-}
-
-function SearchableMultiSelect({
-  label,
-  items,
-  selectedIds,
-  onToggle,
-  getLabel,
-  getSubLabel,
-  placeholder,
-}: {
-  label: string;
-  items: RefItem[];
-  selectedIds: number[];
-  onToggle: (id: number) => void;
-  getLabel: (item: RefItem) => string;
-  getSubLabel?: (item: RefItem) => string | undefined;
-  placeholder: string;
-}) {
-  const [search, setSearch] = useState('');
-  const filtered = useMemo(
-    () => items.filter((i) => getLabel(i).toLowerCase().includes(search.toLowerCase())),
-    [items, search, getLabel],
-  );
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">{label}</label>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-            {selectedIds.length} selected
-          </span>
-        )}
-      </div>
-      <div className="border border-slate-200 rounded-xl overflow-hidden">
-        <div className="p-2 border-b border-slate-100 bg-slate-50">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-            <input
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
-              placeholder={placeholder}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
-          {filtered.length === 0 && (
-            <p className="p-3 text-xs text-slate-400 text-center">
-              {items.length === 0 ? 'No options available' : 'No matches'}
-            </p>
-          )}
-          {filtered.map((item) => {
-            const checked = selectedIds.includes(item.id);
-            return (
-              <label
-                key={item.id}
-                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onToggle(item.id)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-400"
-                />
-                <div>
-                  <p className="text-xs font-bold text-slate-800">{getLabel(item)}</p>
-                  {getSubLabel && getSubLabel(item) && (
-                    <p className="text-[10px] text-slate-400">{getSubLabel(item)}</p>
-                  )}
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InclusionTagInput({
-  inclusions,
-  selectedIds,
-  onAdd,
-  onRemove,
-  onCreateNew,
-}: {
-  inclusions: RefItem[];
-  selectedIds: number[];
-  onAdd: (id: number) => void;
-  onRemove: (id: number) => void;
-  onCreateNew?: (name: string) => Promise<void>;
-}) {
-  const [inputValue, setInputValue] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-
-  const filtered = useMemo(
-    () =>
-      inclusions.filter(
-        (i) =>
-          i.name.toLowerCase().includes(inputValue.toLowerCase()) &&
-          !selectedIds.includes(i.id),
-      ),
-    [inclusions, inputValue, selectedIds],
-  );
-
-  const handleSelect = (id: number) => {
-    onAdd(id);
-    setInputValue('');
-    setShowDropdown(false);
-  };
-
-  const handleCreateNew = async () => {
-    if (!inputValue.trim() || !onCreateNew || isCreating) return;
-    setIsCreating(true);
-    await onCreateNew(inputValue.trim());
-    setInputValue('');
-    setShowDropdown(false);
-    setIsCreating(false);
-  };
-
-  const selectedItems = inclusions.filter((i) => selectedIds.includes(i.id));
-  const hasInput = inputValue.trim().length > 0;
-  const exactMatch = inclusions.some((i) => i.name.toLowerCase() === inputValue.toLowerCase());
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-          Service Inclusions
-        </label>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-            {selectedIds.length} added
-          </span>
-        )}
-      </div>
-
-      <div className="relative">
-        <input
-          className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="Search inclusions..."
-          value={inputValue}
-          onChange={(e) => { setInputValue(e.target.value); setShowDropdown(true); }}
-          onFocus={() => setShowDropdown(true)}
-          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              if (filtered.length > 0) handleSelect(filtered[0].id);
-              else if (hasInput && onCreateNew && !exactMatch) void handleCreateNew();
-            }
-          }}
-        />
-        {showDropdown && (
-          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-            <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
-              {filtered.length > 0 ? (
-                filtered.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 transition-colors"
-                    onMouseDown={() => handleSelect(item.id)}
-                  >
-                    <span className="font-semibold text-slate-800">{item.name}</span>
-                    {item.category && (
-                      <span className="ml-2 text-slate-400">{item.category}</span>
-                    )}
-                  </button>
-                ))
-              ) : (
-                <p className="p-3 text-xs text-slate-400 text-center">
-                  {hasInput ? 'No matches' : 'Type to search inclusions'}
-                </p>
-              )}
-            </div>
-            {onCreateNew && hasInput && !exactMatch && (
-              <div className="border-t border-slate-100 bg-slate-50">
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors flex items-center gap-2 disabled:opacity-50"
-                  onMouseDown={handleCreateNew}
-                  disabled={isCreating}
-                >
-                  <Plus size={11} className="shrink-0" />
-                  {isCreating ? 'Adding...' : `Add "${inputValue.trim()}" as new inclusion`}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {selectedItems.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {selectedItems.map((item) => (
-            <span
-              key={item.id}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800"
-            >
-              {item.name}
-              <button type="button" onClick={() => onRemove(item.id)}>
-                <X size={10} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  taskTemplates: { taskTemplate: { id: number; name: string; description: string | null } }[];
 }
 
 interface TaskTemplateOption {
@@ -259,11 +33,13 @@ function TaskTemplateTagInput({
   selectedIds,
   onAdd,
   onRemove,
+  onNewTemplate,
 }: {
   templates: TaskTemplateOption[];
   selectedIds: number[];
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
+  onNewTemplate: () => void;
 }) {
   const [inputValue, setInputValue] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -292,11 +68,21 @@ function TaskTemplateTagInput({
         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
           Task Templates
         </label>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-            {selectedIds.length} linked
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+              {selectedIds.length} linked
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onNewTemplate}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+          >
+            <Plus size={10} />
+            New Template
+          </button>
+        </div>
       </div>
 
       <div className="relative">
@@ -362,13 +148,12 @@ function TaskTemplateTagInput({
 }
 
 interface FormState {
+  code: string;
   name: string;
   description: string;
   serviceRate: string;
+  isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
-  governmentOfficeIds: number[];
-  cityIds: number[];
-  inclusionIds: number[];
   taskTemplateIds: number[];
 }
 
@@ -377,32 +162,25 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
   const { success, error } = useToast();
 
   const [form, setForm] = useState<FormState>({
+    code: '',
     name: '',
     description: '',
     serviceRate: '',
+    isVatable: false,
     status: 'ACTIVE',
-    governmentOfficeIds: [],
-    cityIds: [],
-    inclusionIds: [],
     taskTemplateIds: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
-
-  const [govOffices, setGovOffices] = useState<RefItem[]>([]);
-  const [cities, setCities] = useState<RefItem[]>([]);
-  const [inclusions, setInclusions] = useState<RefItem[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplateOption[]>([]);
+  const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/sales/service-one-time/${serviceId}`).then((r) => r.json()),
-      fetch('/api/sales/government-offices').then((r) => r.json()),
-      fetch('/api/sales/cities').then((r) => r.json()),
-      fetch('/api/sales/service-inclusions').then((r) => r.json()),
+      fetch(`/api/sales/services/${serviceId}`).then((r) => r.json()),
       fetch('/api/sales/task-templates').then((r) => r.json()),
     ])
-      .then(([svcData, govData, cityData, incData, tmplData]) => {
+      .then(([svcData, tmplData]) => {
         const svc = (svcData as { data?: ServiceOneTimeDetail }).data;
         if (!svc) {
           error('Service not found', 'The requested service could not be loaded.');
@@ -410,18 +188,14 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
           return;
         }
         setForm({
+          code: svc.code ?? '',
           name: svc.name,
           description: svc.description ?? '',
           serviceRate: String(parseFloat(svc.serviceRate)),
+          isVatable: svc.isVatable,
           status: svc.status,
-          governmentOfficeIds: svc.governmentOffices.map((g) => g.id),
-          cityIds: svc.cities.map((c) => c.id),
-          inclusionIds: svc.inclusions.map((i) => i.id),
           taskTemplateIds: svc.taskTemplates.map((t) => t.taskTemplate.id),
         });
-        setGovOffices((govData as { data?: RefItem[] }).data ?? []);
-        setCities((cityData as { data?: RefItem[] }).data ?? []);
-        setInclusions((incData as { data?: RefItem[] }).data ?? []);
         setTaskTemplates((tmplData as { data?: TaskTemplateOption[] }).data ?? []);
       })
       .catch(() => {
@@ -431,34 +205,10 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId]);
 
-  const toggleId = (key: 'governmentOfficeIds' | 'cityIds' | 'inclusionIds', id: number) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(id)
-        ? prev[key].filter((v) => v !== id)
-        : [...prev[key], id],
-    }));
-  };
-
-  const handleCreateInclusion = async (name: string) => {
-    try {
-      const res = await fetch('/api/sales/service-inclusions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error('Failed to create inclusion', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      const newItem = data.data as RefItem;
-      setInclusions((prev) => [...prev, newItem]);
-      setForm((prev) => ({ ...prev, inclusionIds: [...prev.inclusionIds, newItem.id] }));
-      success('Inclusion added', `"${name}" was created and added.`);
-    } catch {
-      error('Failed to create inclusion', 'An unexpected error occurred.');
-    }
+  const handleTemplateCreated = (t: ApiTemplate) => {
+    setTaskTemplates((prev) => [...prev, { id: t.id, name: t.name, description: t.description ?? null }]);
+    setForm((prev) => ({ ...prev, taskTemplateIds: [...prev.taskTemplateIds, t.id] }));
+    setShowNewTemplateModal(false);
   };
 
   const isValid = form.name.trim() !== '' && form.serviceRate !== '' && Number(form.serviceRate) > 0;
@@ -467,17 +217,16 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
     if (!isValid) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/sales/service-one-time/${serviceId}`, {
+      const res = await fetch(`/api/sales/services/${serviceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          code: form.code.trim() || undefined,
           name: form.name.trim(),
           description: form.description.trim() || null,
           serviceRate: parseFloat(form.serviceRate),
+          isVatable: form.isVatable,
           status: form.status,
-          governmentOfficeIds: form.governmentOfficeIds,
-          cityIds: form.cityIds,
-          inclusionIds: form.inclusionIds,
           taskTemplateIds: form.taskTemplateIds,
         }),
       });
@@ -499,7 +248,7 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="w-8 h-8 border-[3px] border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm text-slate-500 font-medium">Loading service...</p>
         </div>
       </div>
@@ -534,9 +283,20 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Basic Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2 space-y-1.5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                Service Code <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="e.g. OT-001"
+                className="bg-white border-slate-200 font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">
                 Service Name <span className="text-rose-500">*</span>
               </label>
@@ -586,39 +346,19 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
                 <option value="ARCHIVED">Archived</option>
               </select>
             </div>
-          </div>
 
-          {/* Reference Data */}
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <SearchableMultiSelect
-                label="Government Offices"
-                items={govOffices}
-                selectedIds={form.governmentOfficeIds}
-                onToggle={(id) => toggleId('governmentOfficeIds', id)}
-                getLabel={(item) => item.name}
-                getSubLabel={(item) => item.code}
-                placeholder="Search offices..."
+            <div className="sm:col-span-2 flex items-center gap-3 pt-1">
+              <input
+                type="checkbox"
+                id="isVatable"
+                checked={form.isVatable}
+                onChange={(e) => setForm({ ...form, isVatable: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-400"
               />
-
-              <SearchableMultiSelect
-                label="Cities / Coverage"
-                items={cities}
-                selectedIds={form.cityIds}
-                onToggle={(id) => toggleId('cityIds', id)}
-                getLabel={(item) => item.name}
-                getSubLabel={(item) => item.province ?? undefined}
-                placeholder="Search cities..."
-              />
+              <label htmlFor="isVatable" className="text-sm text-slate-700 cursor-pointer">
+                Subject to VAT (12%)
+              </label>
             </div>
-
-            <InclusionTagInput
-              inclusions={inclusions}
-              selectedIds={form.inclusionIds}
-              onAdd={(id) => toggleId('inclusionIds', id)}
-              onRemove={(id) => toggleId('inclusionIds', id)}
-              onCreateNew={handleCreateInclusion}
-            />
           </div>
 
           {/* Task Templates */}
@@ -627,54 +367,8 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
             selectedIds={form.taskTemplateIds}
             onAdd={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: [...prev.taskTemplateIds, id] }))}
             onRemove={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: prev.taskTemplateIds.filter((v) => v !== id) }))}
+            onNewTemplate={() => setShowNewTemplateModal(true)}
           />
-
-          {/* Selection Summary */}
-          {(form.governmentOfficeIds.length > 0 || form.cityIds.length > 0) && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Selection Summary
-              </p>
-              {form.governmentOfficeIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {form.governmentOfficeIds.map((id) => {
-                    const office = govOffices.find((g) => g.id === id);
-                    if (!office) return null;
-                    return (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800"
-                      >
-                        {office.code ?? office.name}
-                        <button type="button" onClick={() => toggleId('governmentOfficeIds', id)}>
-                          <X size={10} />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-              {form.cityIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {form.cityIds.map((id) => {
-                    const city = cities.find((c) => c.id === id);
-                    if (!city) return null;
-                    return (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800"
-                      >
-                        {city.name}
-                        <button type="button" onClick={() => toggleId('cityIds', id)}>
-                          <X size={10} />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Actions */}
@@ -696,6 +390,14 @@ export function EditOneTimeServiceForm({ serviceId }: { serviceId: number }): Re
           </Button>
         </div>
       </Card>
+
+      {showNewTemplateModal && (
+        <CreateTaskTemplateModal
+          onClose={() => setShowNewTemplateModal(false)}
+          onCreated={handleTemplateCreated}
+        />
+      )}
     </div>
   );
 }
+

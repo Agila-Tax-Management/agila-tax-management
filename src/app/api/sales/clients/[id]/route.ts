@@ -164,10 +164,10 @@ export async function GET(_request: NextRequest, { params }: Params): Promise<Ne
         where: { isActive: true },
         select: {
           id: true,
-          servicePlanId: true,
+          serviceId: true,
           agreedRate: true,
           billingCycle: true,
-          servicePlan: {
+          service: {
             select: {
               name: true,
               inclusions: { select: { id: true, name: true, category: true } },

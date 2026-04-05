@@ -21,40 +21,47 @@ import {
   DollarSign,
 } from 'lucide-react';
 
-interface ServicePlanItem {
+interface ServiceItem {
   id: number;
+  code: string | null;
   name: string;
   description: string | null;
-  recurring: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  billingType: 'RECURRING' | 'ONE_TIME';
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUALLY' | 'ANNUALLY' | 'NONE';
   serviceRate: string;
+  isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   governmentOffices: { id: number; code: string; name: string }[];
   cities: { id: number; name: string; province: string | null }[];
   inclusions: { id: number; name: string; category: string | null }[];
-  taskTemplate: { id: number; name: string } | null;
+  taskTemplates: { taskTemplate: { id: number; name: string } }[];
+  promos: { id: number; name: string }[];
   createdAt: string;
-  updatedAt: string;
 }
 
-const RECURRING_LABEL: Record<string, string> = {
+const FREQUENCY_LABEL: Record<string, string> = {
   DAILY: 'Daily',
   WEEKLY: 'Weekly',
   MONTHLY: 'Monthly',
+  QUARTERLY: 'Quarterly',
+  SEMI_ANNUALLY: 'Semi-Annually',
+  ANNUALLY: 'Annually',
+  NONE: 'One-Time',
 };
 
 export function MonthlyServicePlans(): React.ReactNode {
   const router = useRouter();
   const { success, error } = useToast();
-  const [plans, setPlans] = useState<ServicePlanItem[]>([]);
+  const [plans, setPlans] = useState<ServiceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<ServicePlanItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [viewTarget, setViewTarget] = useState<ServicePlanItem | null>(null);
+  const [viewTarget, setViewTarget] = useState<ServiceItem | null>(null);
 
   useEffect(() => {
-    fetch('/api/sales/service-plans')
+    fetch('/api/sales/services?billingType=RECURRING')
       .then((res) => res.json())
-      .then((data: { data?: ServicePlanItem[] }) => {
+      .then((data: { data?: ServiceItem[] }) => {
         setPlans(data.data ?? []);
         setIsLoading(false);
       })
@@ -74,7 +81,7 @@ export function MonthlyServicePlans(): React.ReactNode {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/sales/service-plans/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/sales/services/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         error('Failed to delete plan', (data as { error?: string }).error ?? 'An error occurred.');
@@ -111,10 +118,10 @@ export function MonthlyServicePlans(): React.ReactNode {
           </div>
           <div>
             <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
-              Monthly Service Plans
+              Recurring Services
             </h2>
             <p className="text-sm text-slate-500 mt-1">
-              Pre-configured subscription packages with recurring services
+              These are recurring service plans that clients can subscribe to on a monthly, quarterly, or annual basis.
             </p>
           </div>
         </div>
@@ -138,7 +145,7 @@ export function MonthlyServicePlans(): React.ReactNode {
       {/* Add Plan Button */}
       <div className="flex justify-end">
         <Button
-          onClick={() => router.push('/portal/sales/services/monthly/new-service-plan')}
+          onClick={() => router.push('/portal/sales/services/monthly/new-service')}
           className="bg-purple-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-purple-700 shadow-sm"
         >
           <Plus size={14} className="mr-1" />
@@ -184,7 +191,7 @@ export function MonthlyServicePlans(): React.ReactNode {
                     </Badge>
                     <Badge variant="info" className="text-[9px] font-bold flex items-center gap-1">
                       <Clock size={10} />
-                      {RECURRING_LABEL[plan.recurring]}
+                      {FREQUENCY_LABEL[plan.frequency]}
                     </Badge>
                   </div>
 
@@ -200,7 +207,7 @@ export function MonthlyServicePlans(): React.ReactNode {
                     <span className="text-2xl font-black text-slate-900">
                       {parseFloat(plan.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </span>
-                    <span className="text-xs text-slate-400">/{RECURRING_LABEL[plan.recurring].toLowerCase()}</span>
+                    <span className="text-xs text-slate-400">/{FREQUENCY_LABEL[plan.frequency].toLowerCase()}</span>
                   </div>
 
                   <div className="space-y-1.5 mb-4">
@@ -268,7 +275,7 @@ export function MonthlyServicePlans(): React.ReactNode {
               </Badge>
               <Badge variant="info" className="text-[10px] font-bold flex items-center gap-1">
                 <Clock size={10} />
-                {RECURRING_LABEL[viewTarget.recurring]}
+                {FREQUENCY_LABEL[viewTarget.frequency]}
               </Badge>
             </div>
 
@@ -286,7 +293,7 @@ export function MonthlyServicePlans(): React.ReactNode {
               <span className="text-2xl font-black text-slate-900">
                 ₱{parseFloat(viewTarget.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
               </span>
-              <span className="text-xs text-slate-400">/ {RECURRING_LABEL[viewTarget.recurring].toLowerCase()}</span>
+              <span className="text-xs text-slate-400">/ {FREQUENCY_LABEL[viewTarget.frequency].toLowerCase()}</span>
             </div>
 
             {/* Government Offices */}

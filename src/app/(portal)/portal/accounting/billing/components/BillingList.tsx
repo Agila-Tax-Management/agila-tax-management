@@ -71,7 +71,7 @@ export function BillingList(): React.ReactNode {
       !search ||
       s.client.businessName.toLowerCase().includes(q) ||
       (s.client.clientNo ?? '').toLowerCase().includes(q) ||
-      s.servicePlan.name.toLowerCase().includes(q);
+      s.service.name.toLowerCase().includes(q);
     const matchStatus =
       filterStatus === 'all' ||
       (filterStatus === 'active' && s.isActive) ||
@@ -209,7 +209,7 @@ export function BillingList(): React.ReactNode {
                       </p>
                     </td>
                     <td className="px-4 py-3 text-foreground">
-                      {sub.servicePlan.name}
+                      {sub.service.name}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {CYCLE_LABELS[sub.billingCycle] ?? sub.billingCycle}

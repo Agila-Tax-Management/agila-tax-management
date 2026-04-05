@@ -49,47 +49,20 @@ export const createServiceInclusionSchema = z.object({
   category: z.string().optional(),
 });
 
-/* ─── Service Plan (Recurring) ───────────────────────────────────── */
+/* ─── Service (Unified) ─────────────────────────────────────────── */
 
-export const createServicePlanSchema = z.object({
-  name: z.string().min(1, "Plan name is required"),
-  description: z.string().optional(),
-  recurring: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).default("MONTHLY"),
-  serviceRate: z
-    .number({ message: "Service rate is required" })
-    .positive("Service rate must be positive"),
-  status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).default("ACTIVE"),
-  governmentOfficeIds: z.array(z.number().int().positive()).default([]),
-  cityIds: z.array(z.number().int().positive()).default([]),
-  inclusionIds: z.array(z.number().int().positive()).default([]),
-  taskTemplateIds: z.array(z.number().int().positive()).default([]),
-  promoIds: z.array(z.number().int().positive()).default([]),
-});
-
-export const updateServicePlanSchema = z.object({
-  name: z.string().min(1, "Plan name is required").optional(),
-  description: z.string().optional().nullable(),
-  recurring: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
-  serviceRate: z.number().positive("Service rate must be positive").optional(),
-  status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
-  governmentOfficeIds: z.array(z.number().int().positive()).optional(),
-  cityIds: z.array(z.number().int().positive()).optional(),
-  inclusionIds: z.array(z.number().int().positive()).optional(),
-  taskTemplateIds: z.array(z.number().int().positive()).optional(),
-  promoIds: z.array(z.number().int().positive()).optional(),
-});
-
-export type CreateServicePlanInput = z.infer<typeof createServicePlanSchema>;
-export type UpdateServicePlanInput = z.infer<typeof updateServicePlanSchema>;
-
-/* ─── Service One-Time ───────────────────────────────────────────── */
-
-export const createServiceOneTimeSchema = z.object({
+export const createServiceSchema = z.object({
+  code: z.string().min(1, "Service code is required"),
   name: z.string().min(1, "Service name is required"),
   description: z.string().optional(),
+  billingType: z.enum(["RECURRING", "ONE_TIME"]).default("RECURRING"),
+  frequency: z
+    .enum(["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "SEMI_ANNUALLY", "ANNUALLY", "NONE"])
+    .default("MONTHLY"),
   serviceRate: z
     .number({ message: "Service rate is required" })
     .positive("Service rate must be positive"),
+  isVatable: z.boolean().default(false),
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).default("ACTIVE"),
   governmentOfficeIds: z.array(z.number().int().positive()).default([]),
   cityIds: z.array(z.number().int().positive()).default([]),
@@ -98,10 +71,16 @@ export const createServiceOneTimeSchema = z.object({
   promoIds: z.array(z.number().int().positive()).default([]),
 });
 
-export const updateServiceOneTimeSchema = z.object({
+export const updateServiceSchema = z.object({
+  code: z.string().min(1, "Service code is required").optional(),
   name: z.string().min(1, "Service name is required").optional(),
   description: z.string().optional().nullable(),
+  billingType: z.enum(["RECURRING", "ONE_TIME"]).optional(),
+  frequency: z
+    .enum(["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "SEMI_ANNUALLY", "ANNUALLY", "NONE"])
+    .optional(),
   serviceRate: z.number().positive("Service rate must be positive").optional(),
+  isVatable: z.boolean().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
   governmentOfficeIds: z.array(z.number().int().positive()).optional(),
   cityIds: z.array(z.number().int().positive()).optional(),
@@ -110,8 +89,51 @@ export const updateServiceOneTimeSchema = z.object({
   promoIds: z.array(z.number().int().positive()).optional(),
 });
 
-export type CreateServiceOneTimeInput = z.infer<typeof createServiceOneTimeSchema>;
-export type UpdateServiceOneTimeInput = z.infer<typeof updateServiceOneTimeSchema>;
+export type CreateServiceInput = z.infer<typeof createServiceSchema>;
+export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
+
+/* ─── Service Package ────────────────────────────────────────────── */
+
+export const createServicePackageSchema = z.object({
+  code: z.string().min(1, "Package code is required"),
+  name: z.string().min(1, "Package name is required"),
+  description: z.string().optional(),
+  packageRate: z
+    .number({ message: "Package rate is required" })
+    .positive("Package rate must be positive"),
+  isVatable: z.boolean().default(false),
+  status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).default("ACTIVE"),
+  items: z
+    .array(
+      z.object({
+        serviceId: z.number().int().positive(),
+        quantity: z.number().int().positive().default(1),
+        overrideRate: z.number().positive().optional().nullable(),
+      }),
+    )
+    .default([]),
+});
+
+export const updateServicePackageSchema = z.object({
+  code: z.string().min(1, "Package code is required").optional(),
+  name: z.string().min(1, "Package name is required").optional(),
+  description: z.string().optional().nullable(),
+  packageRate: z.number().positive("Package rate must be positive").optional(),
+  isVatable: z.boolean().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
+  items: z
+    .array(
+      z.object({
+        serviceId: z.number().int().positive(),
+        quantity: z.number().int().positive().default(1),
+        overrideRate: z.number().positive().optional().nullable(),
+      }),
+    )
+    .optional(),
+});
+
+export type CreateServicePackageInput = z.infer<typeof createServicePackageSchema>;
+export type UpdateServicePackageInput = z.infer<typeof updateServicePackageSchema>;
 
 /* ─── Promo ──────────────────────────────────────────────────────── */
 
@@ -119,7 +141,6 @@ export const createPromoSchema = z.object({
   name: z.string().min(1, "Promo name is required"),
   description: z.string().optional(),
   code: z.string().optional().nullable(),
-  promoFor: z.enum(["SERVICE_PLAN", "SERVICE_ONE_TIME", "BOTH"]).default("BOTH"),
   discountType: z.enum(["PERCENTAGE", "FIXED"]),
   discountRate: z
     .number({ message: "Discount rate is required" })
@@ -129,15 +150,13 @@ export const createPromoSchema = z.object({
   validFrom: z.string().datetime({ offset: true }).optional().nullable(),
   validUntil: z.string().datetime({ offset: true }).optional().nullable(),
   isActive: z.boolean().default(true),
-  servicePlanIds: z.array(z.number().int().positive()).default([]),
-  serviceOneTimePlanIds: z.array(z.number().int().positive()).default([]),
+  serviceIds: z.array(z.number().int().positive()).default([]),
 });
 
 export const updatePromoSchema = z.object({
   name: z.string().min(1, "Promo name is required").optional(),
   description: z.string().optional().nullable(),
   code: z.string().optional().nullable(),
-  promoFor: z.enum(["SERVICE_PLAN", "SERVICE_ONE_TIME", "BOTH"]).optional(),
   discountType: z.enum(["PERCENTAGE", "FIXED"]).optional(),
   discountRate: z.number().nonnegative().optional(),
   minimumRate: z.number().nonnegative().optional().nullable(),
@@ -145,8 +164,7 @@ export const updatePromoSchema = z.object({
   validFrom: z.string().datetime({ offset: true }).optional().nullable(),
   validUntil: z.string().datetime({ offset: true }).optional().nullable(),
   isActive: z.boolean().optional(),
-  servicePlanIds: z.array(z.number().int().positive()).optional(),
-  serviceOneTimePlanIds: z.array(z.number().int().positive()).optional(),
+  serviceIds: z.array(z.number().int().positive()).optional(),
 });
 
 export type CreatePromoInput = z.infer<typeof createPromoSchema>;
@@ -189,9 +207,6 @@ export const createLeadSchema = z.object({
   notes: z.string().optional().nullable(),
   statusId: z.number().int().positive().optional(),
   assignedAgentId: z.string().optional().nullable(),
-  // Services Interested In
-  servicePlanIds: z.array(z.number().int().positive()).default([]).optional(),
-  serviceOneTimeIds: z.array(z.number().int().positive()).default([]).optional(),
   promoId: z.number().int().positive().optional().nullable(),
   // Scheduling & Engagements
   officeVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
@@ -219,9 +234,6 @@ export const updateLeadSchema = z.object({
   // TSA Document
   signedTsaUrl: z.string().url('Invalid URL format').optional().nullable(),
   isSignedTSA: z.boolean().optional(),
-  // Services Interested In
-  servicePlanIds: z.array(z.number().int().positive()).optional(),
-  serviceOneTimeIds: z.array(z.number().int().positive()).optional(),
   promoId: z.number().int().positive().optional().nullable(),
   // Scheduling & Engagements
   officeVisitSchedule: z.string().datetime({ offset: true }).optional().nullable(),
