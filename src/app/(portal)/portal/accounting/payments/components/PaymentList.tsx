@@ -59,7 +59,7 @@ export function PaymentList(): React.ReactNode {
     setPage(1);
   }
 
-  /* eslint-disable react-hooks/set-state-in-effect -- API fetch */
+   
   const load = useCallback(async (s: string, m: string, p: number) => {
     setIsLoading(true);
     try {
@@ -80,7 +80,7 @@ export function PaymentList(): React.ReactNode {
   useEffect(() => {
     void load(search, methodFilter, page);
   }, [load, search, methodFilter, page]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   return (
     <div className="p-6 space-y-6">

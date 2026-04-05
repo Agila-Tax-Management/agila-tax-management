@@ -12,7 +12,7 @@ const BILLING_CYCLES = ['MONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUALLY'] as 
 
 const createSubscriptionSchema = z.object({
   clientId: z.number().int().positive('Client is required'),
-  servicePlanId: z.number().int().positive('Service plan is required'),
+  serviceId: z.number().int().positive('Service is required'),
   agreedRate: z.number().positive('Agreed rate must be greater than zero'),
   billingCycle: z.enum(BILLING_CYCLES),
   effectiveDate: z.string().min(1, 'Effective date is required'),
@@ -20,7 +20,7 @@ const createSubscriptionSchema = z.object({
 });
 
 const updateSubscriptionSchema = z.object({
-  servicePlanId: z.number().int().positive('Service plan is required'),
+  serviceId: z.number().int().positive('Service is required'),
   agreedRate: z.number().positive('Agreed rate must be greater than zero'),
   billingCycle: z.enum(BILLING_CYCLES),
   effectiveDate: z.string().min(1, 'Effective date is required'),
@@ -54,8 +54,8 @@ export async function createSubscriptionAction(
     };
   }
 
-  const plan = await prisma.servicePlan.findUnique({
-    where: { id: data.servicePlanId },
+  const plan = await prisma.service.findUnique({
+    where: { id: data.serviceId },
     select: { name: true },
   });
 
@@ -64,7 +64,7 @@ export async function createSubscriptionAction(
       const sub = await tx.clientSubscription.create({
         data: {
           clientId: data.clientId,
-          servicePlanId: data.servicePlanId,
+          serviceId: data.serviceId,
           agreedRate: data.agreedRate,
           billingCycle: data.billingCycle,
           effectiveDate: new Date(data.effectiveDate),
@@ -78,7 +78,7 @@ export async function createSubscriptionAction(
           subscriptionId: sub.id,
           actorId: session.user.id,
           changeType: 'SUBSCRIPTION_CREATED',
-          newValue: `Plan: ${plan?.name ?? data.servicePlanId}, Rate: \u20b1${data.agreedRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}, Cycle: ${data.billingCycle}`,
+          newValue: `Plan: ${plan?.name ?? data.serviceId}, Rate: ₱${data.agreedRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}, Cycle: ${data.billingCycle}`,
         },
       });
 
@@ -90,7 +90,7 @@ export async function createSubscriptionAction(
       action: 'CREATED',
       entity: 'ClientSubscription',
       entityId: String(subscription.id),
-      description: `Created subscription for client #${data.clientId} — ${plan?.name ?? 'Plan #' + data.servicePlanId}`,
+      description: `Created subscription for client #${data.clientId} — ${plan?.name ?? 'Service #' + data.serviceId}`,
     });
 
     revalidatePath('/portal/accounting/billing');
@@ -116,23 +116,23 @@ export async function updateSubscriptionAction(
   const existing = await prisma.clientSubscription.findUnique({
     where: { id: subscriptionId },
     select: {
-      servicePlanId: true,
+      serviceId: true,
       agreedRate: true,
       billingCycle: true,
       isActive: true,
-      servicePlan: { select: { name: true } },
+      service: { select: { name: true } },
     },
   });
   if (!existing) return { error: 'Subscription not found' };
 
-  // Fetch new plan name if plan changed
-  let newPlanName = existing.servicePlan?.name ?? String(data.servicePlanId);
-  if (existing.servicePlanId !== data.servicePlanId) {
-    const newPlan = await prisma.servicePlan.findUnique({
-      where: { id: data.servicePlanId },
+  // Fetch new service name if service changed
+  let newPlanName = existing.service?.name ?? String(data.serviceId);
+  if (existing.serviceId !== data.serviceId) {
+    const newPlan = await prisma.service.findUnique({
+      where: { id: data.serviceId },
       select: { name: true },
     });
-    newPlanName = newPlan?.name ?? String(data.servicePlanId);
+    newPlanName = newPlan?.name ?? String(data.serviceId);
   }
 
   try {
@@ -140,7 +140,7 @@ export async function updateSubscriptionAction(
       await tx.clientSubscription.update({
         where: { id: subscriptionId },
         data: {
-          servicePlanId: data.servicePlanId,
+          serviceId: data.serviceId,
           agreedRate: data.agreedRate,
           billingCycle: data.billingCycle,
           effectiveDate: new Date(data.effectiveDate),
@@ -153,14 +153,14 @@ export async function updateSubscriptionAction(
         },
       });
 
-      // Log plan change
-      if (existing.servicePlanId !== data.servicePlanId) {
+      // Log service change
+      if (existing.serviceId !== data.serviceId) {
         await tx.subscriptionHistory.create({
           data: {
             subscriptionId,
             actorId: session.user.id,
             changeType: 'PLAN_CHANGED',
-            oldValue: `Plan: ${existing.servicePlan?.name ?? existing.servicePlanId}`,
+            oldValue: `Plan: ${existing.service?.name ?? existing.serviceId}`,
             newValue: `Plan: ${newPlanName}`,
           },
         });

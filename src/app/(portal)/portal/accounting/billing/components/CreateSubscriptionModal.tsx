@@ -92,11 +92,11 @@ export function CreateSubscriptionModal({
     setPlans(raw.map((p) => ({ id: p.id, name: p.name, serviceRate: Number(p.serviceRate) })));
   }, []);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Fetch service plans when modal opens */
+   
   useEffect(() => {
     if (isOpen) void loadPlans();
   }, [isOpen, loadPlans]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   // Close client dropdown on outside click
   useEffect(() => {
@@ -148,7 +148,7 @@ export function CreateSubscriptionModal({
     try {
       const result = await createSubscriptionAction({
         clientId: selectedClient.id,
-        servicePlanId: servicePlanId as number,
+        serviceId: servicePlanId as number,
         agreedRate: parseFloat(agreedRate),
         billingCycle,
         effectiveDate,

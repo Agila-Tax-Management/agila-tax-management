@@ -1,21 +1,21 @@
 // src/app/(portal)/portal/sales/contracts/page.tsx
 import React from 'react';
-import { ContractGenerator } from './components/ContractGenerator';
+import { ContractsPageClient } from './components/ContractsPageClient';
 
 export const metadata = {
-  title: 'Contract Generator | Sales Portal',
+  title: 'Contracts | Sales Portal',
 };
 
 export default function ContractsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">Contract Generator</h1>
+        <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">TSA Contracts</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Generate a Terms of Service Agreement PDF for any client — fill in the details, select applicable services, then download.
+          View and manage all client TSA contracts, or generate a new contract PDF.
         </p>
       </div>
-      <ContractGenerator />
+      <ContractsPageClient />
     </div>
   );
 }

@@ -954,11 +954,12 @@ async function main(): Promise<void> {
     { name: "Proposal",             color: "#f59e0b", sequence: 4,  isDefault: false, isOnboarding: false, isConverted: false },
     { name: "Negotiation",          color: "#f97316", sequence: 5,  isDefault: false, isOnboarding: false, isConverted: false },
     { name: "Closed Won",           color: "#16a34a", sequence: 6,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Pending Onboarding",   color: "#8b5cf6", sequence: 7,  isDefault: false, isOnboarding: true,  isConverted: false },
-    { name: "Contract Signing",     color: "#6366f1", sequence: 8,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Waiting for Payment",  color: "#eab308", sequence: 9,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Turn Over",            color: "#0d9488", sequence: 10, isDefault: false, isOnboarding: false, isConverted: true  },
-    { name: "Lost",                 color: "#ef4444", sequence: 11, isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "Account Creation",     color: "#8b5cf6", sequence: 7,  isDefault: false, isOnboarding: true,  isConverted: false },
+    { name: "Contract Signing",     color: "#6366f1", sequence: 8,  isDefault: false, isOnboarding: true,  isConverted: false },
+    { name: "Waiting for Payment",  color: "#eab308", sequence: 9,  isDefault: false, isOnboarding: true,  isConverted: false },
+    { name: "Job Order",            color: "#f97316", sequence: 10, isDefault: false, isOnboarding: true,  isConverted: false },
+    { name: "Turn Over",            color: "#0d9488", sequence: 11, isDefault: false, isOnboarding: false, isConverted: true  },
+    { name: "Lost",                 color: "#ef4444", sequence: 12, isDefault: false, isOnboarding: false, isConverted: false },
   ];
 
   for (const status of LEAD_STATUSES) {
@@ -973,41 +974,6 @@ async function main(): Promise<void> {
     }
   }
   console.log(`  ✓ ${LEAD_STATUSES.length} lead pipeline statuses seeded`);
-
-  // ── 10. Seed Sample Leads ─────────────────────────────────────────
-  const newStatus   = await prisma.leadStatus.findFirst({ where: { name: "New" } });
-  const contactedStatus = await prisma.leadStatus.findFirst({ where: { name: "Contacted" } });
-
-  if (newStatus && contactedStatus) {
-    const sampleLeads = [
-      {
-        firstName: "Roberto",
-        lastName: "Villanueva",
-        contactNumber: "09171234567",
-        businessType: "Sole Proprietorship",
-        leadSource: "Walk-in",
-        statusId: newStatus.id,
-      },
-      {
-        firstName: "Patricia",
-        lastName: "Lim",
-        contactNumber: "09189876543",
-        businessType: "Corporation",
-        leadSource: "Referral",
-        statusId: contactedStatus.id,
-      },
-    ];
-
-    for (const lead of sampleLeads) {
-      const existingLead = await prisma.lead.findFirst({
-        where: { firstName: lead.firstName, lastName: lead.lastName },
-      });
-      if (!existingLead) {
-        await prisma.lead.create({ data: lead });
-      }
-    }
-    console.log(`  ✓ 2 sample leads seeded`);
-  }
 
   // ── 10.5. Seed Department Task Statuses ──────────────────────────
   const allDepts = await prisma.department.findMany({
@@ -1098,79 +1064,423 @@ async function main(): Promise<void> {
   }
   console.log(`  ✓ ${SERVICE_INCLUSIONS.length} service inclusions seeded`);
 
-  const birOffice   = await prisma.governmentOffice.findUnique({ where: { code: "BIR" } });
-  const mayorOffice = await prisma.governmentOffice.findUnique({ where: { code: "MAYOR" } });
-  const cebuCity    = await prisma.city.findUnique({ where: { name: "Cebu City" } });
+  const birOffice      = await prisma.governmentOffice.findUnique({ where: { code: "BIR" } });
+  const mayorOffice    = await prisma.governmentOffice.findUnique({ where: { code: "MAYOR" } });
+  const cebuCity       = await prisma.city.findUnique({ where: { name: "Cebu City" } });
 
-  const vatTemplate = await prisma.taskTemplate.findFirst({ where: { name: "BIR 2550M – Monthly VAT Return" } });
-  const tinTemplate = await prisma.taskTemplate.findFirst({ where: { name: "BIR TIN Registration – New Business" } });
-
-  // Service Plan: Starter VAT Monthly
-  const existingPlan = await prisma.servicePlan.findFirst({ where: { name: "Starter VAT Monthly Plan" } });
-  if (!existingPlan) {
-    await prisma.servicePlan.create({
-      data: {
-        name: "Starter VAT Monthly Plan",
-        description: "Essential monthly tax compliance package for VAT-registered sole proprietors and professionals. Covers monthly VAT filing, withholding tax, bookkeeping, and government remittances.",
-        recurring: "MONTHLY",
-        serviceRate: 3500,
-        status: "ACTIVE",
-        taskTemplates: vatTemplate ? { create: [{ taskTemplateId: vatTemplate.id }] } : undefined,
-        governmentOffices: birOffice   ? { connect: [{ id: birOffice.id }] }   : undefined,
-        cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
-        inclusions: {
-          connect: [
-            "BIR Monthly VAT Filing (2550M)",
-            "BIR Quarterly Income Tax (1701Q)",
-            "BIR Withholding Tax (1601C)",
-            "Bookkeeping",
-            "Government Remittances",
-          ].map((name) => ({ name })),
-        },
-      },
-    });
-    console.log("  ✓ Service plan 'Starter VAT Monthly Plan' seeded");
-  }
-
-  // One-Time Service: BIR TIN Registration
-  const existingOneTime = await prisma.serviceOneTime.findFirst({ where: { name: "BIR TIN Registration (New Business)" } });
-  if (!existingOneTime) {
-    await prisma.serviceOneTime.create({
-      data: {
-        name: "BIR TIN Registration (New Business)",
-        description: "End-to-end processing of BIR TIN application and Certificate of Registration (COR) for newly registered businesses. Includes form preparation, RDO submission, and Books of Accounts registration.",
-        serviceRate: 1500,
-        status: "ACTIVE",
-        taskTemplates: tinTemplate ? { create: [{ taskTemplateId: tinTemplate.id }] } : undefined,
-        governmentOffices: birOffice  ? { connect: [{ id: birOffice.id }] }  : undefined,
-        cities:            cebuCity   ? { connect: [{ id: cebuCity.id }] }   : undefined,
-        inclusions: {
-          connect: [{ name: "BIR TIN Registration" }],
-        },
-      },
-    });
-    console.log("  ✓ One-time service 'BIR TIN Registration (New Business)' seeded");
-  }
-
-  // One-Time Service: Mayor's Permit Renewal
+  const vatTemplate    = await prisma.taskTemplate.findFirst({ where: { name: "BIR 2550M – Monthly VAT Return" } });
+  const tinTemplate    = await prisma.taskTemplate.findFirst({ where: { name: "BIR TIN Registration – New Business" } });
   const permitTemplate = await prisma.taskTemplate.findFirst({ where: { name: "Mayor's Permit Renewal" } });
-  const existingPermitService = await prisma.serviceOneTime.findFirst({ where: { name: "Mayor's Permit Renewal (Annual)" } });
-  if (!existingPermitService) {
-    await prisma.serviceOneTime.create({
-      data: {
-        name: "Mayor's Permit Renewal (Annual)",
-        description: "Annual renewal of the LGU Business Permit / Mayor's Permit. Includes barangay clearance processing, BPLO submission, fee payment, and permit delivery to the client.",
-        serviceRate: 1200,
-        status: "ACTIVE",
-        taskTemplates: permitTemplate ? { create: [{ taskTemplateId: permitTemplate.id }] } : undefined,
-        governmentOffices: mayorOffice ? { connect: [{ id: mayorOffice.id }] } : undefined,
-        cities:            cebuCity    ? { connect: [{ id: cebuCity.id }] }    : undefined,
-        inclusions: {
-          connect: [{ name: "Business Permit Renewal" }],
-        },
+
+  // ── 1. RECURRING COMPLIANCE SERVICE: Expanded Withholding Tax & VAT
+  const ewtService = await prisma.service.upsert({
+    where: { code: "TAX-EWT-MO" },
+    update: {},
+    create: {
+      code: "TAX-EWT-MO",
+      name: "Expanded Withholding Tax & VAT Filing",
+      description: "Monthly preparation and filing of EWT (1601-C/0619-E) and VAT (2550M) returns. Includes automated maker-checker workflows.",
+      billingType: "RECURRING",
+      frequency: "MONTHLY",
+      serviceRate: 3500,
+      isVatable: true,
+      status: "ACTIVE",
+      taskTemplates: vatTemplate ? { create: [{ taskTemplateId: vatTemplate.id }] } : undefined,
+      governmentOffices: birOffice ? { connect: [{ id: birOffice.id }] } : undefined,
+      cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
+      inclusions: {
+        connect: [
+          { name: "BIR Monthly VAT Filing (2550M)" },
+          { name: "BIR Withholding Tax (1601C)" },
+        ],
       },
-    });
-    console.log("  ✓ One-time service 'Mayor's Permit Renewal (Annual)' seeded");
+    },
+  });
+  console.log("  ✓ Recurring Service 'Expanded Withholding Tax & VAT' seeded");
+
+  // ── 2. ONE-TIME SERVICE: BIR TIN Registration
+  const birRegService = await prisma.service.upsert({
+    where: { code: "REG-BIR-NEW" },
+    update: {},
+    create: {
+      code: "REG-BIR-NEW",
+      name: "BIR TIN Registration (New Business)",
+      description: "End-to-end processing of BIR TIN application and Certificate of Registration (COR) for newly registered businesses.",
+      billingType: "ONE_TIME",
+      frequency: "NONE",
+      serviceRate: 1500,
+      isVatable: true,
+      status: "ACTIVE",
+      taskTemplates: tinTemplate ? { create: [{ taskTemplateId: tinTemplate.id }] } : undefined,
+      governmentOffices: birOffice ? { connect: [{ id: birOffice.id }] } : undefined,
+      cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
+      inclusions: { connect: [{ name: "BIR TIN Registration" }] },
+    },
+  });
+  console.log("  ✓ One-time service 'BIR TIN Registration' seeded");
+
+  // ── 3. ONE-TIME SERVICE: Mayor's Permit Renewal
+  await prisma.service.upsert({
+    where: { code: "REG-LGU-REN" },
+    update: {},
+    create: {
+      code: "REG-LGU-REN",
+      name: "Mayor's Permit Renewal",
+      description: "Annual renewal of the LGU Business Permit / Mayor's Permit.",
+      billingType: "ONE_TIME",
+      frequency: "NONE",
+      serviceRate: 1200,
+      isVatable: true,
+      status: "ACTIVE",
+      taskTemplates: permitTemplate ? { create: [{ taskTemplateId: permitTemplate.id }] } : undefined,
+      governmentOffices: mayorOffice ? { connect: [{ id: mayorOffice.id }] } : undefined,
+      cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
+      inclusions: { connect: [{ name: "Business Permit Renewal" }] },
+    },
+  });
+  console.log("  ✓ One-time service 'Mayor's Permit Renewal' seeded");
+
+  // ── 4. SERVICE PACKAGE: Business Starter Kit (Bundle)
+  await prisma.servicePackage.upsert({
+    where: { code: "PKG-STARTER" },
+    update: {},
+    create: {
+      code: "PKG-STARTER",
+      name: "Business Starter Kit",
+      description: "Complete compliance setup for new businesses: BIR Registration + 1st Month EWT/VAT Filing.",
+      packageRate: 4500,
+      isVatable: true,
+      isActive: true,
+      items: {
+        create: [
+          { serviceId: birRegService.id, quantity: 1, overrideRate: 1500 },
+          { serviceId: ewtService.id,    quantity: 1, overrideRate: 3000 },
+        ],
+      },
+    },
+  });
+  console.log("  ✓ Service Package 'Business Starter Kit' seeded");
+
+  // ── 10.8. Seed Sample Leads (Pipeline Demo) ──────────────────────
+  {
+    const ewtSvc    = await prisma.service.findUnique({ where: { code: "TAX-EWT-MO" } });
+    const birRegSvc = await prisma.service.findUnique({ where: { code: "REG-BIR-NEW" } });
+    const sAdmin    = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
+
+    const [
+      statusNew, statusProposal, statusNegotiation,
+      statusContractSigning, statusWaitingPayment, statusAccountCreation,
+    ] = await Promise.all([
+      prisma.leadStatus.findFirst({ where: { name: "New" } }),
+      prisma.leadStatus.findFirst({ where: { name: "Proposal" } }),
+      prisma.leadStatus.findFirst({ where: { name: "Negotiation" } }),
+      prisma.leadStatus.findFirst({ where: { name: "Contract Signing" } }),
+      prisma.leadStatus.findFirst({ where: { name: "Waiting for Payment" } }),
+      prisma.leadStatus.findFirst({ where: { name: "Account Creation" } }),
+    ]);
+
+    if (
+      !ewtSvc || !birRegSvc ||
+      !statusNew || !statusProposal || !statusNegotiation ||
+      !statusContractSigning || !statusWaitingPayment || !statusAccountCreation
+    ) {
+      console.warn("  ⚠ Skipping sample leads — required statuses or services not found");
+    } else {
+      let leadCount = 0;
+
+      // ── Lead 1: Roberto Villanueva — bare lead (New) ──────────────
+      const exists1 = await prisma.lead.findFirst({ where: { firstName: "Roberto", lastName: "Villanueva" } });
+      if (!exists1) {
+        await prisma.lead.create({
+          data: {
+            firstName: "Roberto",
+            lastName: "Villanueva",
+            contactNumber: "09171234567",
+            businessType: "Sole Proprietorship",
+            leadSource: "Walk-in",
+            statusId: statusNew.id,
+          },
+        });
+        leadCount++;
+      }
+
+      // ── Lead 2: Patricia Lim — draft quote (Proposal) ─────────────
+      let lead2 = await prisma.lead.findFirst({ where: { firstName: "Patricia", lastName: "Lim" } });
+      if (!lead2) {
+        lead2 = await prisma.lead.create({
+          data: {
+            firstName: "Patricia",
+            lastName: "Lim",
+            contactNumber: "09189876543",
+            businessType: "Corporation",
+            leadSource: "Referral",
+            statusId: statusProposal.id,
+          },
+        });
+        leadCount++;
+      }
+      const existsQ1 = await prisma.quote.findFirst({ where: { quoteNumber: "QT-2026-0001" } });
+      if (!existsQ1) {
+        await prisma.quote.create({
+          data: {
+            quoteNumber: "QT-2026-0001",
+            leadId: lead2.id,
+            status: "DRAFT",
+            subTotal: 3500,
+            totalDiscount: 0,
+            grandTotal: 3920,
+            lineItems: {
+              create: [{ serviceId: ewtSvc.id, quantity: 1, negotiatedRate: 3500, isVatable: true }],
+            },
+          },
+        });
+      }
+
+      // ── Lead 3: Miguel Santos — negotiating quote (Negotiation) ───
+      let lead3 = await prisma.lead.findFirst({ where: { firstName: "Miguel", lastName: "Santos" } });
+      if (!lead3) {
+        lead3 = await prisma.lead.create({
+          data: {
+            firstName: "Miguel",
+            lastName: "Santos",
+            contactNumber: "09207654321",
+            businessType: "Sole Proprietorship",
+            leadSource: "Facebook",
+            statusId: statusNegotiation.id,
+          },
+        });
+        leadCount++;
+      }
+      const existsQ2 = await prisma.quote.findFirst({ where: { quoteNumber: "QT-2026-0002" } });
+      if (!existsQ2) {
+        await prisma.quote.create({
+          data: {
+            quoteNumber: "QT-2026-0002",
+            leadId: lead3.id,
+            status: "NEGOTIATING",
+            subTotal: 4500,
+            totalDiscount: 0,
+            grandTotal: 5040,
+            lineItems: {
+              create: [
+                { serviceId: birRegSvc.id, quantity: 1, negotiatedRate: 1500, isVatable: true },
+                { serviceId: ewtSvc.id,    quantity: 1, negotiatedRate: 3000, isVatable: true },
+              ],
+            },
+          },
+        });
+      }
+
+      // ── Lead 4: Grace Reyes — accepted quote + TSA pending (Contract Signing) ──
+      let lead4 = await prisma.lead.findFirst({ where: { firstName: "Grace", lastName: "Reyes" } });
+      if (!lead4) {
+        lead4 = await prisma.lead.create({
+          data: {
+            firstName: "Grace",
+            lastName: "Reyes",
+            contactNumber: "09351234567",
+            businessType: "Professional",
+            leadSource: "Referral",
+            statusId: statusContractSigning.id,
+          },
+        });
+        leadCount++;
+      }
+      let quote4 = await prisma.quote.findFirst({ where: { quoteNumber: "QT-2026-0003" } });
+      if (!quote4) {
+        quote4 = await prisma.quote.create({
+          data: {
+            quoteNumber: "QT-2026-0003",
+            leadId: lead4.id,
+            status: "ACCEPTED",
+            subTotal: 5000,
+            totalDiscount: 0,
+            grandTotal: 5600,
+            lineItems: {
+              create: [
+                { serviceId: ewtSvc.id,    quantity: 1, negotiatedRate: 3500, isVatable: true },
+                { serviceId: birRegSvc.id, quantity: 1, negotiatedRate: 1500, isVatable: true },
+              ],
+            },
+          },
+        });
+      }
+      const existsTSA1 = await prisma.tsaContract.findFirst({ where: { referenceNumber: "TSA-2026-0001" } });
+      if (!existsTSA1) {
+        await prisma.tsaContract.create({
+          data: {
+            referenceNumber: "TSA-2026-0001",
+            leadId: lead4.id,
+            quoteId: quote4.id,
+            status: "PENDING_APPROVAL",
+            documentDate: new Date("2026-04-01"),
+            businessName: "Reyes Consulting Services",
+            authorizedRep: "Grace T. Reyes",
+            isBusinessRegistered: true,
+            preparedById: sAdmin?.id,
+          },
+        });
+      }
+
+      // ── Lead 5: Danilo Cruz — signed TSA + unpaid invoice (Waiting for Payment) ──
+      let lead5 = await prisma.lead.findFirst({ where: { firstName: "Danilo", lastName: "Cruz" } });
+      if (!lead5) {
+        lead5 = await prisma.lead.create({
+          data: {
+            firstName: "Danilo",
+            lastName: "Cruz",
+            contactNumber: "09178885566",
+            businessType: "Sole Proprietorship",
+            leadSource: "Walk-in",
+            statusId: statusWaitingPayment.id,
+            isSignedTSA: true,
+            isCreatedInvoice: true,
+          },
+        });
+        leadCount++;
+      }
+      let quote5 = await prisma.quote.findFirst({ where: { quoteNumber: "QT-2026-0004" } });
+      if (!quote5) {
+        quote5 = await prisma.quote.create({
+          data: {
+            quoteNumber: "QT-2026-0004",
+            leadId: lead5.id,
+            status: "ACCEPTED",
+            subTotal: 3500,
+            totalDiscount: 0,
+            grandTotal: 3920,
+            lineItems: {
+              create: [{ serviceId: ewtSvc.id, quantity: 1, negotiatedRate: 3500, isVatable: true }],
+            },
+          },
+        });
+      }
+      const existsTSA2 = await prisma.tsaContract.findFirst({ where: { referenceNumber: "TSA-2026-0002" } });
+      if (!existsTSA2) {
+        await prisma.tsaContract.create({
+          data: {
+            referenceNumber: "TSA-2026-0002",
+            leadId: lead5.id,
+            quoteId: quote5.id,
+            status: "SIGNED",
+            documentDate: new Date("2026-04-02"),
+            businessName: "Cruz General Services",
+            authorizedRep: "Danilo P. Cruz",
+            isBusinessRegistered: false,
+            preparedById: sAdmin?.id,
+            approvedById: sAdmin?.id,
+            clientSignedAt: new Date("2026-04-03"),
+          },
+        });
+      }
+      const existsINV1 = await prisma.invoice.findFirst({ where: { invoiceNumber: "INV-2026-0001" } });
+      if (!existsINV1) {
+        await prisma.invoice.create({
+          data: {
+            invoiceNumber: "INV-2026-0001",
+            leadId: lead5.id,
+            status: "UNPAID",
+            dueDate: new Date("2026-04-18"),
+            subTotal: 3500,
+            taxAmount: 420,
+            discountAmount: 0,
+            totalAmount: 3920,
+            balanceDue: 3920,
+            terms: "Net 14",
+            items: {
+              create: [{
+                description: "Expanded Withholding Tax & VAT Filing",
+                quantity: 1,
+                unitPrice: 3500,
+                total: 3500,
+                isVatable: true,
+              }],
+            },
+          },
+        });
+      }
+
+      // ── Lead 6: Elena Fernandez — paid invoice + onboarding (Account Creation) ──
+      let lead6 = await prisma.lead.findFirst({ where: { firstName: "Elena", lastName: "Fernandez" } });
+      if (!lead6) {
+        lead6 = await prisma.lead.create({
+          data: {
+            firstName: "Elena",
+            lastName: "Fernandez",
+            contactNumber: "09199998877",
+            businessType: "Corporation",
+            leadSource: "Referral",
+            statusId: statusAccountCreation.id,
+            isSignedTSA: true,
+            isCreatedInvoice: true,
+            isAccountCreated: true,
+          },
+        });
+        leadCount++;
+      }
+      let quote6 = await prisma.quote.findFirst({ where: { quoteNumber: "QT-2026-0005" } });
+      if (!quote6) {
+        quote6 = await prisma.quote.create({
+          data: {
+            quoteNumber: "QT-2026-0005",
+            leadId: lead6.id,
+            status: "ACCEPTED",
+            subTotal: 5000,
+            totalDiscount: 0,
+            grandTotal: 5600,
+            lineItems: {
+              create: [
+                { serviceId: birRegSvc.id, quantity: 1, negotiatedRate: 1500, isVatable: true },
+                { serviceId: ewtSvc.id,    quantity: 1, negotiatedRate: 3500, isVatable: true },
+              ],
+            },
+          },
+        });
+      }
+      const existsTSA3 = await prisma.tsaContract.findFirst({ where: { referenceNumber: "TSA-2026-0003" } });
+      if (!existsTSA3) {
+        await prisma.tsaContract.create({
+          data: {
+            referenceNumber: "TSA-2026-0003",
+            leadId: lead6.id,
+            quoteId: quote6.id,
+            status: "SIGNED",
+            documentDate: new Date("2026-04-03"),
+            businessName: "Fernandez Accounting Services",
+            authorizedRep: "Elena M. Fernandez",
+            isBusinessRegistered: true,
+            preparedById: sAdmin?.id,
+            approvedById: sAdmin?.id,
+            clientSignedAt: new Date("2026-04-04"),
+          },
+        });
+      }
+      const existsINV2 = await prisma.invoice.findFirst({ where: { invoiceNumber: "INV-2026-0002" } });
+      if (!existsINV2) {
+        await prisma.invoice.create({
+          data: {
+            invoiceNumber: "INV-2026-0002",
+            leadId: lead6.id,
+            status: "PAID",
+            dueDate: new Date("2026-04-10"),
+            subTotal: 5000,
+            taxAmount: 600,
+            discountAmount: 0,
+            totalAmount: 5600,
+            balanceDue: 0,
+            terms: "Net 7",
+            items: {
+              create: [
+                { description: "BIR TIN Registration (New Business)",          quantity: 1, unitPrice: 1500, total: 1500, isVatable: true },
+                { description: "Expanded Withholding Tax & VAT Filing", quantity: 1, unitPrice: 3500, total: 3500, isVatable: true },
+              ],
+            },
+          },
+        });
+      }
+
+      console.log(`  ✓ ${leadCount} sample lead(s) seeded (pipeline demo)`);
+    }
   }
 
   // ── 11. Seed Sample Tasks ─────────────────────────────────────────

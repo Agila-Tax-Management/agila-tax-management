@@ -21,6 +21,9 @@ export interface ContractData {
   planName: string;
   planPrice: string;
   actualMonthlySubscription: string;
+  // Dynamic service lists for Section I
+  planServices?: string[];       // Recurring/package-included services
+  additionalServices?: string[]; // One-time or add-on services
   headerSrc?: string;
   // DTI
   isDTI: boolean;
@@ -401,6 +404,58 @@ const styles = StyleSheet.create({
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+// Agency grouping for dynamic Section II
+const AGENCY_GROUPS: { title: string; keywords: string[] }[] = [
+  { title: 'Department of Trade and Industry (DTI)', keywords: ['dti', 'business name registration', 'business name closure', 'bmbe'] },
+  { title: 'Securities and Exchange Commission (SEC)', keywords: ['sec', 'general information sheet', 'gis', 'audited financial', 'afs', 'efast', 'stock transfer', 'articles of incorporation', 'certificate of incorporation', 'by-laws', 'one-person corporation', 'opc', 'corporate registration', 'incorporation'] },
+  { title: "Local Government Unit (LGU) / Mayor's Permit", keywords: ["mayor's", 'mayor permit', 'business permit', 'sanitary permit', 'fire safety', 'fsic', 'ccenro', 'occupational tax', 'professional tax', 'cedula', 'barangay clearance', 'zoning', 'bfp'] },
+  { title: 'Bureau of Internal Revenue (BIR)', keywords: ['bir', 'books of account', 'authority to print', 'atp', 'loose leaf', 'cas', 'pos permit', 'doc stamp', 'documentary stamp', 'orus', 'tin application', 'tax clearance', 'slsp', 'alpha list', 'withholding', 'vat filing', 'vat return', 'itr filing', 'income tax return', 'income tax', 'percentage tax', 'annual registration', 'cor update', 'certificate of registration', 'business registration', 'add branch', 'closure processing', 'open case', 'tax type'] },
+  { title: 'Social Security System (SSS)', keywords: ['sss', 'social security'] },
+  { title: 'Philippine Health Insurance Corporation (PhilHealth)', keywords: ['philhealth', 'phic'] },
+  { title: 'Home Development Mutual Fund (PAGIBIG)', keywords: ['pagibig', 'pag-ibig', 'hdmf'] },
+  { title: 'Department of Labor and Employment (DOLE)', keywords: ['dole', 'department of labor'] },
+  { title: 'Accounting and Bookkeeping', keywords: ['bookkeeping', 'financial statement', 'trial balance', 'bank reconciliation', 'payroll', 'accounts receivable', 'accounts payable', 'chart of accounts'] },
+  { title: 'Special Registrations and Consulting', keywords: ['peza', 'boi', 'import', 'export', 'audit assistance', 'compliance calendar', 'consultation', 'change of business'] },
+];
+
+function ServiceSectionsDynamic({ d }: { d: ContractData }) {
+  const allServices = [...(d.planServices ?? []), ...(d.additionalServices ?? [])];
+  if (allServices.length === 0) return null;
+
+  const grouped = new Set<string>();
+  const result: { title: string; services: string[] }[] = [];
+
+  for (const group of AGENCY_GROUPS) {
+    const matched = allServices.filter(
+      (svc) =>
+        !grouped.has(svc) &&
+        group.keywords.some((kw) => svc.toLowerCase().includes(kw)),
+    );
+    if (matched.length > 0) {
+      matched.forEach((svc) => grouped.add(svc));
+      result.push({ title: group.title, services: matched });
+    }
+  }
+
+  const ungrouped = allServices.filter((svc) => !grouped.has(svc));
+  if (ungrouped.length > 0) {
+    result.push({ title: 'Other Services', services: ungrouped });
+  }
+
+  return (
+    <View>
+      {result.map((group, i) => (
+        <View key={i}>
+          <Text style={styles.serviceGroupTitle}>{group.title}</Text>
+          {group.services.map((svc, j) => (
+            <Text key={j} style={styles.serviceItem}>{'\u2611 '}{svc}</Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function SectionTitle({ number, title }: { number: string; title: string }) {
   return (
     <View style={styles.sectionTitleBar}>
@@ -583,6 +638,7 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
       <Page size="A4" style={styles.page}>
         {/* Header image — full-bleed banner at top of every page */}
         {data.headerSrc && (
+          // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image does not support alt prop
           <Image src={data.headerSrc} style={styles.headerImage} />
         )}
 
@@ -624,29 +680,58 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
         {/* I. Service Rates and Fees */}
         <SectionTitle number="I" title="SERVICE RATES AND FEES" />
         <Text style={styles.body}>The Client agrees to pay Agila Tax Management Services the following:</Text>
+
+        {/* Subscription line — shown only when a plan is present */}
         {data.planName ? (
-          <View>
+          <View style={{ marginBottom: 6 }}>
             <Text style={[styles.indent, styles.bold]}>
-              {'• Subscription Fee for '}{data.planName}{': Php '}{data.planPrice}{' per month'}
+              {'• Subscription Fee for '}{data.planName}
+              {data.planPrice ? (': Php '  + data.planPrice + ' per month') : ''}
             </Text>
+            {/* Per-plan service list */}
+            {(data.planServices ?? []).length > 0 ? (
+              <View style={{ marginLeft: 36, marginTop: 2 }}>
+                {(data.planServices ?? []).map((svc, i) => (
+                  <Text key={i} style={[styles.serviceItem, { marginLeft: 0 }]}>
+                    {'- '}{svc}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
             {data.actualMonthlySubscription ? (
-              <Text style={[styles.indent, styles.bold]}>
-                {'Actual Monthly Subscription: Php '}{data.actualMonthlySubscription}
+              <Text style={[styles.indent, { marginTop: 4, fontSize: 9 }]}>
+                {'Actual Monthly Subscription: Php '}{data.actualMonthlySubscription}{' per month'}
               </Text>
             ) : null}
           </View>
         ) : null}
-        <Text style={styles.body}>
-          <Text style={styles.bold}>Additional Services / One-Time Fees: </Text>
-          Rates are based on selected service plans and will be confirmed prior to commencement of work.
-        </Text>
+
+        {/* Additional / one-time services */}
+        <View style={{ marginBottom: 6 }}>
+          <Text style={[styles.indent, styles.bold]}>{'• Additional Services / One-Time Fees:'}</Text>
+          {(data.additionalServices ?? []).length > 0 ? (
+            <View style={{ marginLeft: 36, marginTop: 2 }}>
+              {(data.additionalServices ?? []).map((svc, i) => (
+                <Text key={i} style={[styles.serviceItem, { marginLeft: 0 }]}>
+                  {'- '}{svc}
+                </Text>
+              ))}
+            </View>
+          ) : (
+            <Text style={[styles.indent, { fontSize: 9, color: '#64748b' }]}>
+              {'Rates are based on selected service plans and will be confirmed prior to commencement of work.'}
+            </Text>
+          )}
+        </View>
 
         {/* II. Scope of Services */}
         <SectionTitle number="II" title="SCOPE OF SERVICES" />
         <Text style={styles.body}>
           Agila Tax Management Services agrees to provide the services selected and agreed upon by the Client, which may include:
         </Text>
-        <ServiceSections d={data} />
+        {(data.planServices ?? []).length > 0 || (data.additionalServices ?? []).length > 0
+          ? <ServiceSectionsDynamic d={data} />
+          : <ServiceSections d={data} />}
 
         {/* III. Billing and Payment Terms */}
         <SectionTitle number="III" title="BILLING AND PAYMENT TERMS" />

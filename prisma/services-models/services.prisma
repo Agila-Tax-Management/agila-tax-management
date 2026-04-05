@@ -1,11 +1,22 @@
 // prisma/models/services.prisma
 
-// ─── Enums ────────────────────────────────────────────────────────
+// ==========================================
+// 📚 ENUMS (Services & Sales)
+// ==========================================
 
-enum ServiceRecurring {
+enum ServiceBillingType {
+    RECURRING
+    ONE_TIME
+}
+
+enum ServiceFrequency {
     DAILY
     WEEKLY
     MONTHLY
+    QUARTERLY     // For 2550Q, 1702Q
+    SEMI_ANNUALLY
+    ANNUALLY      // For Annual ITR, Renewals
+    NONE          // For ONE_TIME services
 }
 
 enum ServiceStatus {
@@ -19,180 +30,215 @@ enum DiscountType {
     FIXED
 }
 
-enum PromoFor {
-    SERVICE_PLAN
-    SERVICE_ONE_TIME
-    BOTH
+enum QuoteStatus {
+    DRAFT
+    SENT_TO_CLIENT
+    NEGOTIATING
+    ACCEPTED      // Triggers Operations handoff!
+    REJECTED
 }
 
-// ─── Reference: Government Offices ───────────────────────────────
-// PH agency catalog (BIR, SEC, DTI, SSS, PhilHealth, PAGIBIG, etc.)
+// ==========================================
+// 🏷️ METADATA CATALOGS (Tags for Services)
+// ==========================================
 
 model GovernmentOffice {
-    id          Int     @id @default(autoincrement())
-    code        String  @unique // e.g. "BIR", "SEC", "DTI"
+    id          Int       @id @default(autoincrement())
+    code        String    @unique // e.g., "BIR", "SEC"
     name        String
     description String?
-    isActive    Boolean @default(true)
+    isActive    Boolean   @default(true)
 
-    servicePlans        ServicePlan[]    @relation("ServicePlanGovOffices")
-    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimeGovOffices")
+    services    Service[] @relation("ServiceGovOffices")
 
-    createdAt DateTime @default(now())
-
+    createdAt   DateTime  @default(now())
     @@map("government_office")
 }
 
-// ─── Reference: Cities ────────────────────────────────────────────
-// PH city/municipality catalog for service coverage areas
-
 model City {
-    id       Int     @id @default(autoincrement())
-    name     String  @unique
-    province String?
-    region   String?
-    zipCode  String?
-    isActive Boolean @default(true)
+    id          Int       @id @default(autoincrement())
+    name        String    @unique
+    province    String?
+    region      String?
+    zipCode     String?
+    isActive    Boolean   @default(true)
 
-    servicePlans        ServicePlan[]    @relation("ServicePlanCities")
-    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimeCities")
+    services    Service[] @relation("ServiceCities")
 
-    createdAt DateTime @default(now())
-
+    createdAt   DateTime  @default(now())
     @@map("city")
 }
 
-// ─── Service Inclusion Catalog ────────────────────────────────────
-// Named deliverables bundled into service plans (e.g. "BIR Filing", "Payroll")
-
 model ServiceInclusion {
-    id          Int     @id @default(autoincrement())
-    name        String  @unique
+    id          Int       @id @default(autoincrement())
+    name        String    @unique
     description String?
-    category    String? // e.g. "Tax Filing", "Compliance", "Payroll"
-    isActive    Boolean @default(true)
+    category    String?   // e.g., "Tax Filing", "Payroll"
+    isActive    Boolean   @default(true)
 
-    servicePlans        ServicePlan[]    @relation("ServicePlanInclusions")
-    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimeInclusions")
+    services    Service[] @relation("ServiceInclusions")
 
-    createdAt DateTime @default(now())
-
+    createdAt   DateTime  @default(now())
     @@map("service_inclusion")
 }
 
-// ─── Service Plan (Recurring) ─────────────────────────────────────
+// ==========================================
+// 🛠️ THE CORE MASTER CATALOG
+// ==========================================
 
-model ServicePlan {
-    id Int @id @default(autoincrement())
+model Service {
+    id                Int                  @id @default(autoincrement())
+    code              String?              @unique // e.g., "TAX-EWT-MO"
+    name              String
+    description       String?              @db.Text
+    
+    billingType       ServiceBillingType
+    frequency         ServiceFrequency     @default(NONE)
+    serviceRate       Decimal              @db.Decimal(10, 2)
+    isVatable         Boolean              @default(true)
+    status            ServiceStatus        @default(ACTIVE)
 
-    name        String
-    description String?
+    // Tagging Relations
+    governmentOffices GovernmentOffice[]   @relation("ServiceGovOffices")
+    cities            City[]               @relation("ServiceCities")
+    inclusions        ServiceInclusion[]   @relation("ServiceInclusions")
+    promos            Promo[]              @relation("ServicePromos")
 
-    recurring   ServiceRecurring @default(MONTHLY)
-    serviceRate Decimal          @db.Decimal(10, 2)
-    status      ServiceStatus    @default(ACTIVE)
+    // Master Links
+    packages          ServicePackageItem[]
+    taskTemplates     ServiceTaskTemplate[]
+    clientCompliances ClientCompliance[]
+    quoteLineItems    QuoteLineItem[]
+    subscriptions     ClientSubscription[]
 
-    governmentOffices GovernmentOffice[] @relation("ServicePlanGovOffices")
-    cities            City[]             @relation("ServicePlanCities")
-    inclusions        ServiceInclusion[] @relation("ServicePlanInclusions")
-    promos            Promo[]            @relation("ServicePlanPromos")
-
-    taskTemplates       ServicePlanTaskTemplate[]
-
-    leads               Lead[]
-    clientSubscriptions ClientSubscription[]
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@map("service_plan")
+    createdAt         DateTime             @default(now())
+    updatedAt         DateTime             @updatedAt
+    @@map("service")
 }
 
-// ─── Service One-Time ─────────────────────────────────────────────
-
-model ServiceOneTime {
-    id Int @id @default(autoincrement())
-
-    name        String
-    description String?
-
-    serviceRate Decimal       @db.Decimal(10, 2)
-    status      ServiceStatus @default(ACTIVE)
-
-    governmentOffices GovernmentOffice[] @relation("ServiceOneTimeGovOffices")
-    cities            City[]             @relation("ServiceOneTimeCities")
-    inclusions        ServiceInclusion[] @relation("ServiceOneTimeInclusions")
-    promos            Promo[]            @relation("ServiceOneTimePromos")
-
-    taskTemplates ServiceOneTimeTaskTemplate[]
-
-    leads Lead[]
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@map("service_one_time")
-}
-
-// ─── Service Plan ↔ Task Template (Many-to-Many) ─────────────────
-
-model ServicePlanTaskTemplate {
-    servicePlanId  Int
+model ServiceTaskTemplate {
+    serviceId      Int
     taskTemplateId Int
 
-    servicePlan  ServicePlan  @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
-    taskTemplate TaskTemplate @relation("ServicePlanTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
+    service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+    taskTemplate   TaskTemplate @relation("ServiceTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
 
-    @@id([servicePlanId, taskTemplateId])
+    @@id([serviceId, taskTemplateId])
     @@index([taskTemplateId])
-    @@map("service_plan_task_template")
+    @@map("service_task_template")
 }
 
-// ─── Service One-Time ↔ Task Template (Many-to-Many) ──────────────
+// ==========================================
+// 📦 PACKAGES & BUNDLES (The Menu)
+// ==========================================
 
-model ServiceOneTimeTaskTemplate {
-    serviceOneTimeId Int
-    taskTemplateId   Int
+model ServicePackage {
+    id              Int                  @id @default(autoincrement())
+    code            String?              @unique 
+    name            String               
+    description     String?              @db.Text
+    
+    packageRate     Decimal              @db.Decimal(10, 2)
+    isVatable       Boolean              @default(true)
+    isActive        Boolean              @default(true)
 
-    serviceOneTime ServiceOneTime @relation(fields: [serviceOneTimeId], references: [id], onDelete: Cascade)
-    taskTemplate   TaskTemplate   @relation("ServiceOneTimeTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
+    items           ServicePackageItem[]
+    quotedAsSource  QuoteLineItem[]      // Links to Quotes that used this bundle
 
-    @@id([serviceOneTimeId, taskTemplateId])
-    @@index([taskTemplateId])
-    @@map("service_one_time_task_template")
+    createdAt       DateTime             @default(now())
+    updatedAt       DateTime             @updatedAt
+    @@map("service_package")
 }
 
-// ─── Promo ────────────────────────────────────────────────────────
+model ServicePackageItem {
+    id              Int            @id @default(autoincrement())
+    packageId       Int
+    package         ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+    
+    serviceId       Int
+    service         Service        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+    quantity        Int            @default(1)
+    overrideRate    Decimal?       @db.Decimal(10, 2)
+
+    @@unique([packageId, serviceId])
+    @@map("service_package_item")
+}
+
+// ==========================================
+// 🤝 QUOTES & NEGOTIATIONS (Dynamic Sales)
+// ==========================================
+
+model Quote {
+    id              String          @id @default(cuid())
+    quoteNumber     String          @unique 
+    leadId          Int
+    lead            Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+    status          QuoteStatus     @default(DRAFT)
+    lineItems       QuoteLineItem[]
+
+    subTotal        Decimal         @db.Decimal(10, 2) @default(0.00)
+    totalDiscount   Decimal         @db.Decimal(10, 2) @default(0.00)
+    grandTotal      Decimal         @db.Decimal(10, 2) @default(0.00)
+
+    validUntil      DateTime?       @db.Date
+    notes           String?         @db.Text
+
+    tsaContract         TsaContract?
+
+    createdAt       DateTime        @default(now())
+    updatedAt       DateTime        @updatedAt
+    @@map("quote")
+}
+
+model QuoteLineItem {
+    id                String          @id @default(cuid())
+    quoteId           String
+    quote             Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+    serviceId         Int
+    service           Service         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+    sourcePackageId   Int?
+    sourcePackage     ServicePackage? @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
+
+    customName        String?         
+    quantity          Int             @default(1)
+    negotiatedRate    Decimal         @db.Decimal(10, 2) 
+    isVatable         Boolean         @default(true)
+
+    subscription ClientSubscription?
+
+    @@index([quoteId])
+    @@map("quote_line_item")
+}
+
+// ==========================================
+// 🏷️ PROMOS (Discounts)
+// ==========================================
 
 model Promo {
-    id Int @id @default(autoincrement())
-
-    name        String
-    description String?
-    code        String? @unique // optional promo code for client-entered discounts
-
-    promoFor PromoFor @default(BOTH)
+    id           Int          @id @default(autoincrement())
+    name         String
+    description  String?
+    code         String?      @unique
 
     discountType DiscountType
-    discountRate Decimal      @db.Decimal(10, 2) // percentage (0-100) or fixed amount
-    minimumRate  Decimal?     @db.Decimal(10, 2) // minimum service rate required to qualify
+    discountRate Decimal      @db.Decimal(10, 2) 
+    minimumRate  Decimal?     @db.Decimal(10, 2) 
 
-    maxUsage   Int? // null = unlimited
-    usageCount Int  @default(0)
+    maxUsage     Int? 
+    usageCount   Int          @default(0)
 
-    validFrom  DateTime?
-    validUntil DateTime?
-    isActive   Boolean   @default(true)
+    validFrom    DateTime?
+    validUntil   DateTime?
+    isActive     Boolean      @default(true)
 
-    // Plan-specific targeting (used alongside promoFor for granular control)
-    servicePlans        ServicePlan[]    @relation("ServicePlanPromos")
-    serviceOneTimePlans ServiceOneTime[] @relation("ServiceOneTimePromos")
+    services     Service[]    @relation("ServicePromos")
+    leads        Lead[]
 
-    // Leads that have this promo applied
-    leads Lead[]
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
+    createdAt    DateTime     @default(now())
+    updatedAt    DateTime     @updatedAt
     @@map("promo")
 }

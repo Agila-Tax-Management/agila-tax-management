@@ -6,7 +6,7 @@ import {
   Plus, FileText, Clock, Users, ChevronRight, ChevronLeft,
   Trash2, Search, Briefcase, Copy,
   X, Check, AlertTriangle, Loader2,
-  ArrowUp, ArrowDown, ListChecks, ChevronDown, ChevronUp, Minus, Pencil,
+  ArrowUp, ArrowDown, ListChecks, Minus, Pencil,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';

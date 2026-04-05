@@ -164,9 +164,9 @@ export function LiaisonTaskBoard() {
     }
   }, [liaisonDept]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching data from external API */
+   
   useEffect(() => { void fetchTasks(); }, [fetchTasks]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const openCreateModal = () => {
     const entry = liaisonStatuses.find(s => s.isEntryStep) ?? liaisonStatuses[0];

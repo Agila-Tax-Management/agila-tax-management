@@ -548,7 +548,7 @@ export function TaskDetailModal({ task, isOpen, onClose, onUpdate, onDelete }: T
           isOpen={isSubtaskModalOpen}
           onClose={() => setIsSubtaskModalOpen(false)}
           onUpdate={handleUpdateSubtask}
-          onDelete={subtaskId => { handleDeleteSubtask(subtaskId); setIsSubtaskModalOpen(false); } } activityLog={[]} onAddActivity={function (kind: ActivityEntry['kind'], message: string): void {
+          onDelete={subtaskId => { handleDeleteSubtask(subtaskId); setIsSubtaskModalOpen(false); } } activityLog={[]} onAddActivity={function (_kind: ActivityEntry['kind'], _message: string): void {
             throw new Error('Function not implemented.');
           } }      />
     )}

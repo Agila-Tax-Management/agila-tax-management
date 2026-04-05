@@ -73,6 +73,7 @@ model Client {
 
   lead Lead?
   jobOrders   JobOrder[]
+  tsaContracts TsaContract[]
 
   activityLogs ActivityLog[]
 
@@ -103,6 +104,9 @@ model Client {
   leaveRequests    LeaveRequest[]
   payrollPeriods   PayrollPeriod[]
   governmentLoans  GovernmentLoan[]
+
+  //Compliances
+  compliances ClientCompliance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

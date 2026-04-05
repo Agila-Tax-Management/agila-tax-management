@@ -211,6 +211,7 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
           {/* Left: Company info */}
           <View>
             <View style={s.logoRow}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image does not support alt prop */}
               <Image src="/images/agila_logo.webp" style={s.logoImg} />
               <View>
                 <Text style={s.companyName}>AGILA TAX MANAGEMENT</Text>

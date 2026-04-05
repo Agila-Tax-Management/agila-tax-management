@@ -9,33 +9,18 @@ export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const [plans, oneTime] = await Promise.all([
-    prisma.servicePlan.findMany({
-      where: { status: 'ACTIVE' },
-      select: { id: true, name: true, serviceRate: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.serviceOneTime.findMany({
-      where: { status: 'ACTIVE' },
-      select: { id: true, name: true, serviceRate: true },
-      orderBy: { name: 'asc' },
-    }),
-  ]);
+  const services = await prisma.service.findMany({
+    where: { status: 'ACTIVE' },
+    select: { id: true, name: true, serviceRate: true, billingType: true },
+    orderBy: { name: 'asc' },
+  });
 
-  const options: ServiceOption[] = [
-    ...plans.map((p) => ({
-      id: p.id,
-      type: 'plan' as const,
-      name: p.name,
-      rate: Number(p.serviceRate),
-    })),
-    ...oneTime.map((o) => ({
-      id: o.id,
-      type: 'one-time' as const,
-      name: o.name,
-      rate: Number(o.serviceRate),
-    })),
-  ];
+  const options: ServiceOption[] = services.map((s) => ({
+    id: s.id,
+    type: s.billingType === 'RECURRING' ? ('plan' as const) : ('one-time' as const),
+    name: s.name,
+    rate: Number(s.serviceRate),
+  }));
 
   return NextResponse.json({ data: options });
 }

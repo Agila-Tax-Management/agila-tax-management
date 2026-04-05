@@ -7,28 +7,20 @@ import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { useToast } from '@/context/ToastContext';
-import { ArrowLeft, CalendarClock, Save, Search, X, Layout, Plus } from 'lucide-react';
-
-interface RefItem {
-  id: number;
-  name: string;
-  code?: string;
-  province?: string | null;
-  category?: string | null;
-}
+import { CreateTaskTemplateModal } from '@/components/task-management/CreateTaskTemplateModal';
+import type { ApiTemplate } from '@/components/task-management/CreateTaskTemplateModal';
+import { ArrowLeft, CalendarClock, Layout, Plus, Save, X } from 'lucide-react';
 
 interface ServicePlanDetail {
   id: number;
+  code: string | null;
   name: string;
   description: string | null;
-  recurring: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUALLY' | 'ANNUALLY' | 'NONE';
   serviceRate: string;
+  isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
-  governmentOffices: { id: number; code: string; name: string }[];
-  cities: { id: number; name: string; province: string | null }[];
-  inclusions: { id: number; name: string; category: string | null }[];
-  promos: { id: number; name: string }[];
-  taskTemplates: { taskTemplate: { id: number; name: string } }[];
+  taskTemplates: { taskTemplate: { id: number; name: string; description: string | null } }[];
 }
 
 interface TaskTemplateOption {
@@ -37,238 +29,29 @@ interface TaskTemplateOption {
   description: string | null;
 }
 
-function SearchableMultiSelect({
-  label,
-  items,
-  selectedIds,
-  onToggle,
-  getLabel,
-  getSubLabel,
-  placeholder,
-}: {
-  label: string;
-  items: RefItem[];
-  selectedIds: number[];
-  onToggle: (id: number) => void;
-  getLabel: (item: RefItem) => string;
-  getSubLabel?: (item: RefItem) => string | undefined;
-  placeholder: string;
-}) {
-  const [search, setSearch] = useState('');
-  const filtered = useMemo(
-    () => items.filter((i) => getLabel(i).toLowerCase().includes(search.toLowerCase())),
-    [items, search, getLabel],
-  );
+const FREQUENCY_OPTIONS = [
+  { value: 'MONTHLY', label: 'Monthly' },
+  { value: 'QUARTERLY', label: 'Quarterly' },
+  { value: 'SEMI_ANNUALLY', label: 'Semi-Annually' },
+  { value: 'ANNUALLY', label: 'Annually' },
+  { value: 'WEEKLY', label: 'Weekly' },
+  { value: 'DAILY', label: 'Daily' },
+] as const;
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">{label}</label>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
-            {selectedIds.length} selected
-          </span>
-        )}
-      </div>
-      <div className="border border-slate-200 rounded-xl overflow-hidden">
-        <div className="p-2 border-b border-slate-100 bg-slate-50">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-            <input
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-400"
-              placeholder={placeholder}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
-          {filtered.length === 0 && (
-            <p className="p-3 text-xs text-slate-400 text-center">
-              {items.length === 0 ? 'No options available' : 'No matches'}
-            </p>
-          )}
-          {filtered.map((item) => {
-            const checked = selectedIds.includes(item.id);
-            return (
-              <label
-                key={item.id}
-                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onToggle(item.id)}
-                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-400"
-                />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800">{getLabel(item)}</p>
-                  {getSubLabel && getSubLabel(item) && (
-                    <p className="text-[10px] text-slate-400">{getSubLabel(item)}</p>
-                  )}
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function InclusionTagInput({
-  inclusions,
-  selectedIds,
-  onAdd,
-  onRemove,
-  onCreateNew,
-}: {
-  inclusions: RefItem[];
-  selectedIds: number[];
-  onAdd: (id: number) => void;
-  onRemove: (id: number) => void;
-  onCreateNew?: (name: string) => Promise<void>;
-}) {
-  const [inputValue, setInputValue] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-
-  const filtered = useMemo(
-    () =>
-      inclusions.filter(
-        (i) =>
-          i.name.toLowerCase().includes(inputValue.toLowerCase()) &&
-          !selectedIds.includes(i.id),
-      ),
-    [inclusions, inputValue, selectedIds],
-  );
-
-  const handleSelect = (id: number) => {
-    onAdd(id);
-    setInputValue('');
-    setShowDropdown(false);
-  };
-
-  const handleCreateNew = async () => {
-    if (!inputValue.trim() || !onCreateNew || isCreating) return;
-    setIsCreating(true);
-    await onCreateNew(inputValue.trim());
-    setInputValue('');
-    setShowDropdown(false);
-    setIsCreating(false);
-  };
-
-  const selectedItems = inclusions.filter((i) => selectedIds.includes(i.id));
-  const hasInput = inputValue.trim().length > 0;
-  const exactMatch = inclusions.some((i) => i.name.toLowerCase() === inputValue.toLowerCase());
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-          Plan Inclusions
-        </label>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
-            {selectedIds.length} added
-          </span>
-        )}
-      </div>
-
-      <div className="relative">
-        <input
-          className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
-          placeholder="Search inclusions..."
-          value={inputValue}
-          onChange={(e) => { setInputValue(e.target.value); setShowDropdown(true); }}
-          onFocus={() => setShowDropdown(true)}
-          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              if (filtered.length > 0) handleSelect(filtered[0].id);
-              else if (hasInput && onCreateNew && !exactMatch) void handleCreateNew();
-            }
-          }}
-        />
-        {showDropdown && (
-          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-            <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
-              {filtered.length > 0 ? (
-                filtered.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-purple-50 text-slate-800 transition-colors flex items-center gap-2"
-                    onMouseDown={() => handleSelect(item.id)}
-                  >
-                    <Plus size={11} className="text-purple-400 shrink-0" />
-                    <span>
-                      <span className="font-semibold">{item.name}</span>
-                      {item.category && (
-                        <span className="text-slate-400 ml-1">· {item.category}</span>
-                      )}
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <p className="px-3 py-3 text-xs text-slate-400 text-center">
-                  {hasInput ? 'No matching inclusions' : 'All inclusions have been added'}
-                </p>
-              )}
-            </div>
-            {onCreateNew && hasInput && !exactMatch && (
-              <div className="border-t border-slate-100 bg-slate-50">
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2.5 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition-colors flex items-center gap-2 disabled:opacity-50"
-                  onMouseDown={handleCreateNew}
-                  disabled={isCreating}
-                >
-                  <Plus size={11} className="shrink-0" />
-                  {isCreating ? 'Adding...' : `Add "${inputValue}" as new inclusion`}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {selectedItems.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {selectedItems.map((item) => (
-            <span
-              key={item.id}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800"
-            >
-              {item.name}
-              <button type="button" onClick={() => onRemove(item.id)}>
-                <X size={10} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface TaskTemplateOption {
-  id: number;
-  name: string;
-  description: string | null;
-}
 
 function TaskTemplateTagInput({
   templates,
   selectedIds,
   onAdd,
   onRemove,
+  onNewTemplate,
 }: {
   templates: TaskTemplateOption[];
   selectedIds: number[];
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
+  onNewTemplate: () => void;
 }) {
   const [inputValue, setInputValue] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -297,11 +80,21 @@ function TaskTemplateTagInput({
         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
           Task Templates
         </label>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
-            {selectedIds.length} linked
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+              {selectedIds.length} linked
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onNewTemplate}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+          >
+            <Plus size={10} />
+            New Template
+          </button>
+        </div>
       </div>
 
       <div className="relative">
@@ -367,15 +160,13 @@ function TaskTemplateTagInput({
 }
 
 interface FormState {
+  code: string;
   name: string;
   description: string;
-  recurring: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUALLY' | 'ANNUALLY';
   serviceRate: string;
+  isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
-  governmentOfficeIds: number[];
-  cityIds: number[];
-  inclusionIds: number[];
-  promoIds: number[];
   taskTemplateIds: number[];
 }
 
@@ -388,55 +179,37 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
   const { success, error } = useToast();
 
   const [form, setForm] = useState<FormState>({
+    code: '',
     name: '',
     description: '',
-    recurring: 'MONTHLY',
+    frequency: 'MONTHLY',
     serviceRate: '',
+    isVatable: false,
     status: 'ACTIVE',
-    governmentOfficeIds: [],
-    cityIds: [],
-    inclusionIds: [],
-    promoIds: [],
     taskTemplateIds: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
-  const [govOffices, setGovOffices] = useState<RefItem[]>([]);
-  const [cities, setCities] = useState<RefItem[]>([]);
-  const [inclusions, setInclusions] = useState<RefItem[]>([]);
-  const [promos, setPromos] = useState<RefItem[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplateOption[]>([]);
-  const [templateSearch, setTemplateSearch] = useState('');
-  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/sales/service-plans/${planId}`).then((r) => r.json()),
-      fetch('/api/sales/government-offices').then((r) => r.json()),
-      fetch('/api/sales/cities').then((r) => r.json()),
-      fetch('/api/sales/service-inclusions').then((r) => r.json()),
-      fetch('/api/sales/promos').then((r) => r.json()),
+      fetch(`/api/sales/services/${planId}`).then((r) => r.json()),
       fetch('/api/sales/task-templates').then((r) => r.json()),
     ])
-      .then(([planRes, gov, cty, inc, prm, tmpl]) => {
+      .then(([planRes, tmpl]) => {
         const plan: ServicePlanDetail = planRes.data;
         setForm({
+          code: plan.code ?? '',
           name: plan.name,
           description: plan.description ?? '',
-          recurring: plan.recurring,
+          frequency: (plan.frequency === 'NONE' ? 'MONTHLY' : plan.frequency) as FormState['frequency'],
           serviceRate: String(parseFloat(plan.serviceRate)),
+          isVatable: plan.isVatable,
           status: plan.status,
-          governmentOfficeIds: plan.governmentOffices.map((g) => g.id),
-          cityIds: plan.cities.map((c) => c.id),
-          inclusionIds: plan.inclusions.map((i) => i.id),
-          promoIds: plan.promos.map((p) => p.id),
           taskTemplateIds: plan.taskTemplates.map((t) => t.taskTemplate.id),
         });
-        setGovOffices(gov.data ?? []);
-        setCities(cty.data ?? []);
-        setInclusions(inc.data ?? []);
-        setPromos(prm.data ?? []);
         setTaskTemplates(tmpl.data ?? []);
       })
       .catch(() => {
@@ -446,32 +219,10 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId]);
 
-  const toggleId = (key: 'governmentOfficeIds' | 'cityIds' | 'inclusionIds' | 'promoIds', id: number) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(id) ? prev[key].filter((v) => v !== id) : [...prev[key], id],
-    }));
-  };
-
-  const handleCreateInclusion = async (name: string) => {
-    try {
-      const res = await fetch('/api/sales/service-inclusions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error('Failed to create inclusion', (data as { error?: string }).error ?? 'An error occurred.');
-        return;
-      }
-      const newItem = data.data as RefItem;
-      setInclusions((prev) => [...prev, newItem]);
-      setForm((prev) => ({ ...prev, inclusionIds: [...prev.inclusionIds, newItem.id] }));
-      success('Inclusion added', `"${name}" was created and added.`);
-    } catch {
-      error('Failed to create inclusion', 'An unexpected error occurred.');
-    }
+  const handleTemplateCreated = (t: ApiTemplate) => {
+    setTaskTemplates((prev) => [...prev, { id: t.id, name: t.name, description: t.description ?? null }]);
+    setForm((prev) => ({ ...prev, taskTemplateIds: [...prev.taskTemplateIds, t.id] }));
+    setShowNewTemplateModal(false);
   };
 
   const isValid = form.name.trim() !== '' && form.serviceRate !== '' && Number(form.serviceRate) > 0;
@@ -481,19 +232,17 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(`/api/sales/service-plans/${planId}`, {
+      const res = await fetch(`/api/sales/services/${planId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          code: form.code.trim() || undefined,
           name: form.name.trim(),
           description: form.description.trim() || null,
-          recurring: form.recurring,
+          frequency: form.frequency,
           serviceRate: parseFloat(form.serviceRate),
+          isVatable: form.isVatable,
           status: form.status,
-          governmentOfficeIds: form.governmentOfficeIds,
-          cityIds: form.cityIds,
-          inclusionIds: form.inclusionIds,
-          promoIds: form.promoIds,
           taskTemplateIds: form.taskTemplateIds,
         }),
       });
@@ -552,7 +301,19 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
 
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2 space-y-1.5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                Service Code <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="e.g. SVC-001"
+                className="bg-white border-slate-200 font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">
                 Plan Name <span className="text-rose-500">*</span>
               </label>
@@ -591,13 +352,16 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Recurring</label>
+              <label className="text-xs font-bold text-slate-700">Billing Frequency</label>
               <select
-                value={form.recurring}
-                onChange={(e) => setForm({ ...form, recurring: e.target.value as typeof form.recurring })}
+                value={form.frequency}
+                onChange={(e) => setForm({ ...form, frequency: e.target.value as typeof form.frequency })}
                 className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
               >
                 <option value="MONTHLY">Monthly</option>
+                <option value="QUARTERLY">Quarterly</option>
+                <option value="SEMI_ANNUALLY">Semi-Annually</option>
+                <option value="ANNUALLY">Annually</option>
                 <option value="WEEKLY">Weekly</option>
                 <option value="DAILY">Daily</option>
               </select>
@@ -615,46 +379,20 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
                 <option value="ARCHIVED">Archived</option>
               </select>
             </div>
+
+            <div className="sm:col-span-2 flex items-center gap-3 pt-1">
+              <input
+                type="checkbox"
+                id="isVatable"
+                checked={form.isVatable}
+                onChange={(e) => setForm({ ...form, isVatable: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-400"
+              />
+              <label htmlFor="isVatable" className="text-sm text-slate-700 cursor-pointer">
+                Subject to VAT (12%)
+              </label>
+            </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <SearchableMultiSelect
-              label="Government Offices"
-              items={govOffices}
-              selectedIds={form.governmentOfficeIds}
-              onToggle={(id) => toggleId('governmentOfficeIds', id)}
-              getLabel={(item) => item.name}
-              getSubLabel={(item) => item.code}
-              placeholder="Search offices..."
-            />
-
-            <SearchableMultiSelect
-              label="Cities / Coverage"
-              items={cities}
-              selectedIds={form.cityIds}
-              onToggle={(id) => toggleId('cityIds', id)}
-              getLabel={(item) => item.name}
-              getSubLabel={(item) => item.province ?? undefined}
-              placeholder="Search cities..."
-            />
-
-            <SearchableMultiSelect
-              label="Linked Promos"
-              items={promos}
-              selectedIds={form.promoIds}
-              onToggle={(id) => toggleId('promoIds', id)}
-              getLabel={(item) => item.name}
-              placeholder="Search promos..."
-            />
-          </div>
-
-          <InclusionTagInput
-            inclusions={inclusions}
-            selectedIds={form.inclusionIds}
-            onAdd={(id) => toggleId('inclusionIds', id)}
-            onRemove={(id) => toggleId('inclusionIds', id)}
-            onCreateNew={handleCreateInclusion}
-          />
 
           {/* Task Templates */}
           <TaskTemplateTagInput
@@ -662,53 +400,8 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
             selectedIds={form.taskTemplateIds}
             onAdd={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: [...prev.taskTemplateIds, id] }))}
             onRemove={(id) => setForm((prev) => ({ ...prev, taskTemplateIds: prev.taskTemplateIds.filter((v) => v !== id) }))}
+            onNewTemplate={() => setShowNewTemplateModal(true)}
           />
-
-          {/* Selection Summary */}
-          {(form.governmentOfficeIds.length > 0 ||
-            form.cityIds.length > 0) && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Selection Summary
-              </p>
-              {form.governmentOfficeIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {form.governmentOfficeIds.map((id) => {
-                    const item = govOffices.find((g) => g.id === id);
-                    return item ? (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800"
-                      >
-                        {item.code ?? item.name}
-                        <button type="button" onClick={() => toggleId('governmentOfficeIds', id)}>
-                          <X size={10} />
-                        </button>
-                      </span>
-                    ) : null;
-                  })}
-                </div>
-              )}
-              {form.cityIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {form.cityIds.map((id) => {
-                    const item = cities.find((c) => c.id === id);
-                    return item ? (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800"
-                      >
-                        {item.name}
-                        <button type="button" onClick={() => toggleId('cityIds', id)}>
-                          <X size={10} />
-                        </button>
-                      </span>
-                    ) : null;
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex gap-3 justify-end">
@@ -729,6 +422,13 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
           </Button>
         </div>
       </Card>
+
+      {showNewTemplateModal && (
+        <CreateTaskTemplateModal
+          onClose={() => setShowNewTemplateModal(false)}
+          onCreated={handleTemplateCreated}
+        />
+      )}
     </div>
   );
 }

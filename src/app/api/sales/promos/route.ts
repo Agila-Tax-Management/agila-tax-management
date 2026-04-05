@@ -6,11 +6,8 @@ import { createPromoSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 
 const PROMO_INCLUDE = {
-  servicePlans: {
-    select: { id: true, name: true, serviceRate: true, recurring: true },
-  },
-  serviceOneTimePlans: {
-    select: { id: true, name: true, serviceRate: true },
+  services: {
+    select: { id: true, name: true, serviceRate: true, billingType: true },
   },
 } as const;
 
@@ -71,18 +68,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const { servicePlanIds, serviceOneTimePlanIds, ...rest } = parsed.data;
+  const { serviceIds, ...rest } = parsed.data;
 
   const promo = await prisma.promo.create({
     data: {
       ...rest,
-      servicePlans:
-        servicePlanIds.length > 0
-          ? { connect: servicePlanIds.map((id) => ({ id })) }
-          : undefined,
-      serviceOneTimePlans:
-        serviceOneTimePlanIds.length > 0
-          ? { connect: serviceOneTimePlanIds.map((id) => ({ id })) }
+      services:
+        serviceIds.length > 0
+          ? { connect: serviceIds.map((id) => ({ id })) }
           : undefined,
     },
     include: PROMO_INCLUDE,

@@ -178,11 +178,11 @@ export function TaskBoard() {
     }
   }, [aoDept?.id]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching tasks from API on mount */
+   
   useEffect(() => {
     if (departments.length > 0) void fetchTasks();
   }, [fetchTasks, departments.length]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   /* â”€â”€â”€ Helpers â”€â”€â”€ */
   const formatDate = (dateStr: string) =>

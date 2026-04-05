@@ -66,13 +66,18 @@ interface PromoApiItem {
   name: string;
   code: string | null;
   description: string | null;
-  promoFor: 'SERVICE_PLAN' | 'SERVICE_ONE_TIME' | 'BOTH';
   discountType: 'PERCENTAGE' | 'FIXED';
   discountRate: string;
   isActive: boolean;
   validUntil: string | null;
-  servicePlans: { id: number; name: string; serviceRate: string; recurring: string }[];
-  serviceOneTimePlans: { id: number; name: string; serviceRate: string }[];
+  services: { id: number; name: string; serviceRate: string; billingType: string }[];
+}
+
+interface ServiceApiItem {
+  id: number;
+  name: string;
+  serviceRate: string;
+  billingType: string;
 }
 
 
@@ -122,8 +127,7 @@ export function PromotionsServicePlans(): React.ReactNode {
 
   const { success, error } = useToast();
 
-  const [offeringApiPlans, setOfferingApiPlans] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
-  const [offeringApiOneTime, setOfferingApiOneTime] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
+  const [offeringApiServices, setOfferingApiServices] = useState<ServiceApiItem[]>([]);
 
   const [discountForm, setDiscountForm] = useState({
     name: '',
@@ -154,26 +158,22 @@ export function PromotionsServicePlans(): React.ReactNode {
   useEffect(() => {
     Promise.all([
       fetch('/api/sales/promos').then((r) => r.json()),
-      fetch('/api/sales/service-plans').then((r) => r.json()),
-      fetch('/api/sales/service-one-time').then((r) => r.json()),
+      fetch('/api/sales/services').then((r) => r.json()),
     ])
-      .then(([promosData, plansData, oneTimeData]) => {
+      .then(([promosData, servicesData]) => {
         const promos: PromoApiItem[] = (promosData as { data?: PromoApiItem[] }).data ?? [];
-        const plans = (plansData as { data?: { id: number; name: string; serviceRate: string }[] }).data ?? [];
-        const oneTime = (oneTimeData as { data?: { id: number; name: string; serviceRate: string }[] }).data ?? [];
+        const services = (servicesData as { data?: ServiceApiItem[] }).data ?? [];
 
-        setOfferingApiPlans(plans);
-        setOfferingApiOneTime(oneTime);
+        setOfferingApiServices(services);
 
         const discounted: DiscountedService[] = [];
         const bundles: PromoBundle[] = [];
 
         for (const promo of promos) {
-          const total = promo.servicePlans.length + promo.serviceOneTimePlans.length;
+          const total = promo.services.length;
           if (total <= 1) {
-            const allSvcs = [...promo.servicePlans, ...promo.serviceOneTimePlans];
-            const firstSvc = allSvcs[0];
-            const isPlan = promo.servicePlans.length > 0;
+            const firstSvc = promo.services[0];
+            const isRecurring = firstSvc?.billingType === 'RECURRING';
             const origPrice = firstSvc ? parseFloat(firstSvc.serviceRate) : 0;
             const discValue = parseFloat(promo.discountRate);
             const discPrice =
@@ -182,12 +182,12 @@ export function PromotionsServicePlans(): React.ReactNode {
                 : Math.max(origPrice - discValue, 0);
             discounted.push({
               id: String(promo.id),
-              serviceId: firstSvc ? (isPlan ? `plan-${firstSvc.id}` : `svc-${firstSvc.id}`) : '',
+              serviceId: firstSvc ? String(firstSvc.id) : '',
               promoName: promo.name,
               promoCode: promo.code ?? null,
               serviceName: firstSvc?.name ?? promo.name,
-              category: isPlan ? 'Monthly Plan' : 'One-Time Service',
-              teamInCharge: isPlan ? 'Monthly Plan' : 'One-Time Service',
+              category: isRecurring ? 'Monthly Plan' : 'One-Time Service',
+              teamInCharge: isRecurring ? 'Monthly Plan' : 'One-Time Service',
               discountType: promo.discountType === 'PERCENTAGE' ? 'percentage' : 'fixed',
               discountValue: discValue,
               originalPrice: origPrice,
@@ -197,22 +197,16 @@ export function PromotionsServicePlans(): React.ReactNode {
               status: promo.isActive ? 'Active' : 'Draft',
             });
           } else {
-            const allNames = [
-              ...promo.servicePlans.map((s) => s.name),
-              ...promo.serviceOneTimePlans.map((s) => s.name),
-            ];
-            const origPrice = [...promo.servicePlans, ...promo.serviceOneTimePlans].reduce(
-              (sum, s) => sum + parseFloat(s.serviceRate),
-              0,
-            );
+            const allNames = promo.services.map((s) => s.name);
+            const origPrice = promo.services.reduce((sum, s) => sum + parseFloat(s.serviceRate), 0);
             const discAmount =
               promo.discountType === 'FIXED'
                 ? parseFloat(promo.discountRate)
                 : Math.round((origPrice * parseFloat(promo.discountRate)) / 100);
             const promoPrice = Math.max(origPrice - discAmount, 0);
             const cats: PromotionOffering['category'][] = [];
-            if (promo.servicePlans.length > 0) cats.push('Monthly Plan');
-            if (promo.serviceOneTimePlans.length > 0) cats.push('One-Time Service');
+            if (promo.services.some((s) => s.billingType === 'RECURRING')) cats.push('Monthly Plan');
+            if (promo.services.some((s) => s.billingType === 'ONE_TIME')) cats.push('One-Time Service');
             bundles.push({
               id: String(promo.id),
               name: promo.name,
@@ -237,22 +231,14 @@ export function PromotionsServicePlans(): React.ReactNode {
   }, []);
 
   const offeringOptions = useMemo<PromotionOffering[]>(() => {
-    const monthlyPlanOptions = offeringApiPlans.map((p) => ({
-      id: `plan-${p.id}`,
-      name: p.name,
-      category: 'Monthly Plan' as const,
-      teamLabel: 'Monthly Plan',
-      rate: parseFloat(p.serviceRate),
-    }));
-    const oneTimeOptions = offeringApiOneTime.map((s) => ({
-      id: `svc-${s.id}`,
+    return offeringApiServices.map((s) => ({
+      id: String(s.id),
       name: s.name,
-      category: 'One-Time Service' as const,
-      teamLabel: 'One-Time Service',
+      category: (s.billingType === 'RECURRING' ? 'Monthly Plan' : 'One-Time Service') as PromotionOffering['category'],
+      teamLabel: s.billingType === 'RECURRING' ? 'Monthly Plan' : 'One-Time Service',
       rate: parseFloat(s.serviceRate),
     }));
-    return [...monthlyPlanOptions, ...oneTimeOptions];
-  }, [offeringApiPlans, offeringApiOneTime]);
+  }, [offeringApiServices]);
 
   const stats = useMemo(() => {
     const activeDiscounts = discountedServices.filter((item) => item.status === 'Active').length;
@@ -350,8 +336,7 @@ export function PromotionsServicePlans(): React.ReactNode {
       return;
     }
 
-    const isPlan = selectedDiscountOffering.id.startsWith('plan-');
-    const numericId = parseInt(selectedDiscountOffering.id.replace(/^(plan|svc)-/, ''), 10);
+    const numericId = parseInt(selectedDiscountOffering.id, 10);
 
     try {
       const res = await fetch('/api/sales/promos', {
@@ -366,8 +351,7 @@ export function PromotionsServicePlans(): React.ReactNode {
           validFrom: discountForm.validFrom ? `${discountForm.validFrom}T00:00:00.000Z` : null,
           validUntil: `${discountForm.validUntil}T23:59:59.000Z`,
           maxUsage: discountForm.maxUsage ? parseInt(discountForm.maxUsage, 10) : null,
-          servicePlanIds: isPlan ? [numericId] : [],
-          serviceOneTimePlanIds: isPlan ? [] : [numericId],
+          serviceIds: [numericId],
         }),
       });
       const data = await res.json() as { data?: PromoApiItem; error?: string };
@@ -376,8 +360,7 @@ export function PromotionsServicePlans(): React.ReactNode {
         return;
       }
       const promo = data.data!;
-      const allSvcs = [...promo.servicePlans, ...promo.serviceOneTimePlans];
-      const firstSvc = allSvcs[0];
+      const firstSvc = promo.services[0];
       const origPrice = firstSvc ? parseFloat(firstSvc.serviceRate) : 0;
       const discValue = parseFloat(promo.discountRate);
       const discPrice =
@@ -416,12 +399,7 @@ export function PromotionsServicePlans(): React.ReactNode {
       return;
     }
 
-    const planIds = promoForm.serviceIds
-      .filter((id) => id.startsWith('plan-'))
-      .map((id) => parseInt(id.replace('plan-', ''), 10));
-    const oneTimeIds = promoForm.serviceIds
-      .filter((id) => id.startsWith('svc-'))
-      .map((id) => parseInt(id.replace('svc-', ''), 10));
+    const serviceIds = promoForm.serviceIds.map((id) => parseInt(id, 10));
 
     const includedServices = offeringOptions.filter((s) => promoForm.serviceIds.includes(s.id));
     const originalPrice = includedServices.reduce((sum, s) => sum + s.rate, 0);
@@ -441,8 +419,7 @@ export function PromotionsServicePlans(): React.ReactNode {
           validFrom: promoForm.validFrom ? `${promoForm.validFrom}T00:00:00.000Z` : null,
           validUntil: `${promoForm.validUntil}T23:59:59.000Z`,
           maxUsage: promoForm.maxUsage ? parseInt(promoForm.maxUsage, 10) : null,
-          servicePlanIds: planIds,
-          serviceOneTimePlanIds: oneTimeIds,
+          serviceIds,
         }),
       });
       const data = await res.json() as { data?: PromoApiItem; error?: string };
@@ -451,13 +428,10 @@ export function PromotionsServicePlans(): React.ReactNode {
         return;
       }
       const promo = data.data!;
-      const allNames = [
-        ...promo.servicePlans.map((s) => s.name),
-        ...promo.serviceOneTimePlans.map((s) => s.name),
-      ];
+      const allNames = promo.services.map((s) => s.name);
       const cats: PromotionOffering['category'][] = [];
-      if (promo.servicePlans.length > 0) cats.push('Monthly Plan');
-      if (promo.serviceOneTimePlans.length > 0) cats.push('One-Time Service');
+      if (promo.services.some((s) => s.billingType === 'RECURRING')) cats.push('Monthly Plan');
+      if (promo.services.some((s) => s.billingType === 'ONE_TIME')) cats.push('One-Time Service');
       const created: PromoBundle = {
         id: String(promo.id),
         name: promo.name,

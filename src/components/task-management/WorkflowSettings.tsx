@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
-  ChevronLeft, Pencil, Check, X, Loader2, Settings2, ArrowRight,
+  Pencil, Check, X, Loader2, Settings2, ArrowRight,
   Building2, ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
@@ -428,6 +428,7 @@ function DepartmentPanel({
 
 // ── Template tab content ────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future template editing UI
 function TemplateEditor({
   template,
   allDepartments,
@@ -612,6 +613,7 @@ function TemplateEditor({
 
 // ── Department manager ──────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future department management UI
 function DepartmentManager({
   departments,
   setDepartments,
@@ -892,6 +894,7 @@ function DepartmentManager({
 // ── Dept status panel ─────────────────────────────────────────────────
 // Self-contained panel rendering the statuses for a single active department.
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future per-dept status panel UI
 function DeptStatusPanel({
   dept,
   setDepts,
@@ -1103,6 +1106,7 @@ export function WorkflowSettings(): React.ReactNode {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching callback: loadData sets loading state before await
   useEffect(() => { loadData(); }, [loadData]);
 
   // ── Drag-to-reorder ──────────────────────────────────────────────

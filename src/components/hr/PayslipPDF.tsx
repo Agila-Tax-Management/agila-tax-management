@@ -364,6 +364,7 @@ function PayslipPage({
       {/* Header */}
       <View style={s.header}>
         <View style={s.logoRow}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image does not support alt prop */}
           <Image src="/images/agila_logo.webp" style={s.logoImg} />
           <View>
             <Text style={s.companyName}>AGILA TAX MANAGEMENT</Text>

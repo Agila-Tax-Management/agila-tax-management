@@ -36,7 +36,7 @@ export function TaskDetailPage({
   const { data: session } = authClient.useSession();
   const [teamMembers, setTeamMembers] = useState<AOTeamMember[]>([]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching team members on mount */
+   
   useEffect(() => {
     fetch('/api/hr/employees')
       .then(r => r.ok ? r.json() : null)
@@ -52,7 +52,7 @@ export function TaskDetailPage({
       })
       .catch(() => undefined);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const liaisonDept = departments.find(d => d.name === 'Liaison');
   const deptStatuses = liaisonDept?.statuses ?? [];

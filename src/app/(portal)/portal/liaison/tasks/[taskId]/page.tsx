@@ -87,7 +87,7 @@ function TaskDetailContent({ taskId }: { taskId: number }) {
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching task from API on mount */
+   
   useEffect(() => {
     void (async () => {
       const res = await fetch(`/api/tasks/${taskId}`);
@@ -112,7 +112,7 @@ function TaskDetailContent({ taskId }: { taskId: number }) {
       setIsLoading(false);
     })();
   }, [taskId]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   if (isLoading) {
     return (

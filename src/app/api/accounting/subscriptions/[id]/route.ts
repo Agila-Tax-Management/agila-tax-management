@@ -14,8 +14,8 @@ const DETAIL_SELECT = {
   id: true,
   clientId: true,
   client: { select: { id: true, businessName: true, clientNo: true } },
-  servicePlanId: true,
-  servicePlan: { select: { id: true, name: true, serviceRate: true } },
+  serviceId: true,
+  service: { select: { id: true, name: true, serviceRate: true } },
   billingCycle: true,
   agreedRate: true,
   effectiveDate: true,
@@ -40,13 +40,13 @@ const DETAIL_SELECT = {
 
 function serialize(s: unknown): SubscriptionDetailRecord {
   const sub = s as Record<string, unknown>;
-  const plan = sub.servicePlan as Record<string, unknown>;
+  const plan = sub.service as Record<string, unknown>;
   return {
     id: sub.id as number,
     clientId: sub.clientId as number,
     client: sub.client as SubscriptionDetailRecord['client'],
-    servicePlanId: sub.servicePlanId as number,
-    servicePlan: {
+    serviceId: sub.serviceId as number,
+    service: {
       id: plan.id as number,
       name: plan.name as string,
       serviceRate: Number(plan.serviceRate),

@@ -114,7 +114,7 @@ export function MyTask() {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
   // Resolve current user -> employee ID
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching data from external API */
+   
   useEffect(() => {
     if (!sessionData?.user?.id) return;
     void (async () => {
@@ -125,7 +125,7 @@ export function MyTask() {
       if (emp) setCurrentEmployeeId(emp.id);
     })();
   }, [sessionData?.user?.id]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const fetchTasks = useCallback(async () => {
     if (!liaisonDept || !currentEmployeeId) return;
@@ -140,9 +140,9 @@ export function MyTask() {
     }
   }, [liaisonDept, currentEmployeeId]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching data from external API */
+   
   useEffect(() => { void fetchTasks(); }, [fetchTasks]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const handleCardDrop = async (statusId: number, statusName: string) => {
     if (!draggedTaskId) return;

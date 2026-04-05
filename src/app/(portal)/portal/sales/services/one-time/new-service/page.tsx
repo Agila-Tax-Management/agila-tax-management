@@ -1,6 +1,6 @@
 // src/app/(portal)/portal/sales/services/one-time/new-service/page.tsx
-import { NewOneTimeServiceForm } from './components/NewOneTimeServiceForm';
+import { NewServiceForm } from '@/components/sales/NewServiceForm';
 
 export default function NewOneTimeServicePage() {
-  return <NewOneTimeServiceForm />;
+  return <NewServiceForm billingType="ONE_TIME" />;
 }

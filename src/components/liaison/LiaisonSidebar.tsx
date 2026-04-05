@@ -42,7 +42,7 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
     ];
   }, [badgeData.dashboardBadge, badgeData.myTasksBadge, badgeData.taskBoardBadge]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching sidebar badge counts from API */
+   
   useEffect(() => {
     async function loadSidebarCounts(): Promise<void> {
       try {
@@ -61,7 +61,7 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
 
     void loadSidebarCounts();
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const handleNavigation = (href: string) => {
     router.push(href);

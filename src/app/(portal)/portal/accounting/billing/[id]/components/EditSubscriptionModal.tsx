@@ -34,7 +34,7 @@ export function EditSubscriptionModal({
   const { success, error: toastError } = useToast();
 
   const [plans, setPlans] = useState<ServicePlanOption[]>([]);
-  const [servicePlanId, setServicePlanId] = useState(subscription.servicePlanId);
+  const [servicePlanId, setServicePlanId] = useState(subscription.serviceId);
   const [agreedRate, setAgreedRate] = useState(String(subscription.agreedRate));
   const [billingCycle, setBillingCycle] = useState<BillingCycleValue>(
     subscription.billingCycle,
@@ -52,7 +52,7 @@ export function EditSubscriptionModal({
   const [prevSubId, setPrevSubId] = useState(subscription.id);
   if (subscription.id !== prevSubId) {
     setPrevSubId(subscription.id);
-    setServicePlanId(subscription.servicePlanId);
+    setServicePlanId(subscription.serviceId);
     setAgreedRate(String(subscription.agreedRate));
     setBillingCycle(subscription.billingCycle);
     setEffectiveDate(subscription.effectiveDate.split('T')[0]);
@@ -72,11 +72,11 @@ export function EditSubscriptionModal({
     setPlans(raw.map((p) => ({ id: p.id, name: p.name, serviceRate: Number(p.serviceRate) })));
   }, []);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Fetch plans when modal opens */
+   
   useEffect(() => {
     if (isOpen && plans.length === 0) void loadPlans();
   }, [isOpen, plans.length, loadPlans]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   function handlePlanChange(planId: number) {
     setServicePlanId(planId);
@@ -89,7 +89,7 @@ export function EditSubscriptionModal({
     setIsSaving(true);
     try {
       const result = await updateSubscriptionAction(subscription.id, {
-        servicePlanId,
+        serviceId: servicePlanId,
         agreedRate: parseFloat(agreedRate),
         billingCycle,
         effectiveDate,
@@ -130,8 +130,8 @@ export function EditSubscriptionModal({
           >
             {/* Show current plan as fallback while plans load */}
             {plans.length === 0 && (
-              <option value={subscription.servicePlanId}>
-                {subscription.servicePlan.name}
+              <option value={subscription.serviceId}>
+                {subscription.service.name}
               </option>
             )}
             {plans.map((p) => (

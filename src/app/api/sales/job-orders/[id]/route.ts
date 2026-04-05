@@ -236,56 +236,45 @@ export async function PATCH(
       const lead = await tx.lead.findUnique({
         where: { id: existing.leadId },
         include: {
-          servicePlans: {
+          quotes: {
+            where: { status: "ACCEPTED" },
             include: {
-              taskTemplates: {
+              lineItems: {
                 include: {
-                  taskTemplate: {
+                  service: {
                     include: {
-                      departmentRoutes: {
-                        orderBy: { routeOrder: "asc" },
-                        include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
+                      taskTemplates: {
+                        include: {
+                          taskTemplate: {
+                            include: {
+                              departmentRoutes: {
+                                orderBy: { routeOrder: "asc" },
+                                include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
+                              },
+                            },
+                          },
+                        },
                       },
                     },
                   },
                 },
               },
             },
-          },
-          serviceOneTimePlans: {
-            include: {
-              taskTemplates: {
-                include: {
-                  taskTemplate: {
-                    include: {
-                      departmentRoutes: {
-                        orderBy: { routeOrder: "asc" },
-                        include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            orderBy: { createdAt: "desc" },
+            take: 1,
           },
         },
       });
 
       if (lead) {
         const clientId = existing.clientId ?? lead.convertedClientId ?? null;
+        const lineItems = lead.quotes[0]?.lineItems ?? [];
 
         // Deduplicate templates across all attached services
-        type TplEntry = typeof lead.servicePlans[0]["taskTemplates"][0]["taskTemplate"];
+        type TplEntry = typeof lineItems[0]["service"]["taskTemplates"][0]["taskTemplate"];
         const templateMap = new Map<number, TplEntry>();
-        for (const plan of lead.servicePlans) {
-          for (const link of plan.taskTemplates) {
-            if (!templateMap.has(link.taskTemplate.id)) {
-              templateMap.set(link.taskTemplate.id, link.taskTemplate);
-            }
-          }
-        }
-        for (const svc of lead.serviceOneTimePlans) {
-          for (const link of svc.taskTemplates) {
+        for (const li of lineItems) {
+          for (const link of li.service.taskTemplates) {
             if (!templateMap.has(link.taskTemplate.id)) {
               templateMap.set(link.taskTemplate.id, link.taskTemplate);
             }

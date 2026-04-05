@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     },
     include: {
       client: { select: { id: true, businessName: true } },
-      servicePlan: { select: { id: true, name: true } },
+      service: { select: { id: true, name: true } },
     },
   });
 
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         await tx.invoiceItem.create({
           data: {
             invoiceId: invoice.id,
-            description: `${sub.servicePlan.name} \u2014 ${monthYear}`,
+            description: `${sub.service.name} \u2014 ${monthYear}`,
             quantity: 1,
             unitPrice: agreedRate,
             total: agreedRate,

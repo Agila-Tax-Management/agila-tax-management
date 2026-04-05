@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, List, Wallet,
   ShoppingBag, BarChart3, ChevronDown, ChevronUp,
-  CalendarClock, FileText, TicketPercent, Settings, FileSignature, ClipboardList
+  CalendarClock, FileText, TicketPercent, Settings, FileSignature, ClipboardList, Boxes
 } from 'lucide-react';
 
 interface NavItem {
@@ -32,8 +32,9 @@ const ASP_NAV_ITEMS: NavItem[] = [
     icon: Briefcase,
     isDropdown: true,
     children: [
-      { id: 'monthly-services', label: 'Monthly Service Plans', icon: CalendarClock, href: '/portal/sales/services/monthly' },
+      { id: 'monthly-services', label: 'Recurring Services', icon: CalendarClock, href: '/portal/sales/services/monthly' },
       { id: 'one-time-services', label: 'One-Time Service Plans', icon: FileText, href: '/portal/sales/services/one-time' },
+      { id: 'service-packages', label: 'Service Packages', icon: Boxes, href: '/portal/sales/services/packages' },
       { id: 'promotions', label: 'Promotions', icon: TicketPercent, href: '/portal/sales/services/promotions' },
     ],
   },

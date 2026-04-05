@@ -37,22 +37,23 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
           subtasks: { orderBy: { subtaskOrder: "asc" } },
         },
       },
-      servicePlanLinks: {
-        include: { servicePlan: { select: { id: true, name: true, serviceRate: true, recurring: true, status: true } } },
-      },
-      serviceOneTimeLinks: {
-        include: { serviceOneTime: { select: { id: true, name: true, serviceRate: true, status: true } } },
+      services: {
+        include: { service: { select: { id: true, name: true, serviceRate: true, billingType: true, frequency: true, status: true } } },
       },
     },
   });
 
   if (!raw) return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
-  const { servicePlanLinks, serviceOneTimeLinks, ...rest } = raw;
+  const { services, ...rest } = raw;
   const template = {
     ...rest,
-    servicePlans: servicePlanLinks.map((l) => l.servicePlan),
-    serviceOneTimePlans: serviceOneTimeLinks.map((l) => l.serviceOneTime),
+    servicePlans: services
+      .filter((l) => l.service.billingType === 'RECURRING')
+      .map((l) => l.service),
+    serviceOneTimePlans: services
+      .filter((l) => l.service.billingType === 'ONE_TIME')
+      .map((l) => l.service),
   };
 
   return NextResponse.json({ data: template });

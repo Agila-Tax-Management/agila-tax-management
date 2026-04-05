@@ -53,31 +53,36 @@ enum BillingCycle {
 
 // ─── Client Service Subscription (Replaces acs_client_service_plan)
 // Tracks the active recurring plans a client has agreed to.
+// Tracks the active recurring plans a client has agreed to.
 model ClientSubscription {
-    id Int @id @default(autoincrement())
+    id              Int          @id @default(autoincrement())
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+    clientId        Int
+    client          Client       @relation(fields: [clientId], references: [id])
 
-    // We still link the original plan so we know what to generate, 
-    // but the actual billed price is snapshot below in `agreedRate`.
-    servicePlanId Int
-    servicePlan   ServicePlan @relation(fields: [servicePlanId], references: [id])
+    // ─── UPDATED: Links to the Unified Service Catalog ───
+    serviceId       Int
+    service         Service      @relation(fields: [serviceId], references: [id], onDelete: Restrict)
 
-    // ─── NEW: Automation Triggers ───
+    // ─── NEW: Audit Trail back to Sales ───
+    // Which negotiated quote generated this subscription?
+    quoteLineItemId String?      @unique
+    quoteLineItem   QuoteLineItem? @relation(fields: [quoteLineItemId], references: [id], onDelete: SetNull)
+
+    // ─── Automation Triggers ───
     billingCycle    BillingCycle @default(MONTHLY)
-    nextBillingDate DateTime? // The cron job looks for this date; null = not yet scheduled
+    nextBillingDate DateTime? 
 
-    agreedRate    Decimal   @db.Decimal(10, 2)
-    effectiveDate DateTime
-    inactiveDate  DateTime?
+    agreedRate      Decimal      @db.Decimal(10, 2)
+    effectiveDate   DateTime
+    inactiveDate    DateTime?
 
-    isActive Boolean @default(true)
+    isActive        Boolean      @default(true)
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    createdAt       DateTime     @default(now())
+    updatedAt       DateTime     @updatedAt
 
-    historyLogs SubscriptionHistory[]
+    historyLogs     SubscriptionHistory[]
 
     @@index([clientId, isActive])
     @@index([nextBillingDate])
@@ -126,20 +131,24 @@ model Invoice {
 
 // ─── Invoice Item (Snapshot of the service rendered) ──────────────
 model InvoiceItem {
-    id Int @id @default(autoincrement())
+    id          Int      @id @default(autoincrement())
 
-    invoiceId String
-    invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+    invoiceId   String
+    invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
     // NO FOREIGN KEYS TO SERVICES. This is a hardcoded snapshot.
-    description String // e.g., "Monthly Bookkeeping - March 2026"
-    quantity    Int     @default(1)
-    unitPrice   Decimal @db.Decimal(10, 2)
-    total       Decimal @db.Decimal(10, 2)
-    remarks     String? @db.Text // e.g., "March 2026", "Q1 2026"
+    description String   // e.g., "Monthly Bookkeeping - March 2026"
+    quantity    Int      @default(1)
+    unitPrice   Decimal  @db.Decimal(10, 2)
+    total       Decimal  @db.Decimal(10, 2)
+    
+    // ─── NEW: Tax Snapshot ───
+    isVatable   Boolean  @default(true) 
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    remarks     String?  @db.Text 
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
     @@index([invoiceId])
     @@map("invoice_item")

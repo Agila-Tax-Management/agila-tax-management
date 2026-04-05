@@ -3,15 +3,15 @@
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, ClipboardList, Users, MessageSquare,
-  Bell, UserCircle, DollarSign
+  LayoutDashboard, ClipboardList, Users,
+  UserCircle,
 } from 'lucide-react';
 import { INITIAL_AO_TASKS, INITIAL_AO_NOTIFICATIONS, INITIAL_AO_DISCUSSIONS } from '@/lib/mock-ao-data';
 
 // Mock badge counts derived from mock data
 const TASK_BADGE_COUNT = INITIAL_AO_TASKS.filter(t => t.status !== 'Done').length;
-const NOTIF_BADGE_COUNT = INITIAL_AO_NOTIFICATIONS.filter(n => !n.isRead).length;
-const DISCUSSION_BADGE_COUNT = (() => {
+const _NOTIF_BADGE_COUNT = INITIAL_AO_NOTIFICATIONS.filter(n => !n.isRead).length;
+const _DISCUSSION_BADGE_COUNT = (() => {
   // Count client messages that came after the last AO reply per thread
   const clientIds = [...new Set(INITIAL_AO_DISCUSSIONS.map(m => m.clientId))];
   let total = 0;

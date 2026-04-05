@@ -83,7 +83,7 @@ export function ClientList(): React.ReactNode {
   const hasLoadedServices = useRef(false);
 
   // ─── Fetch clients ─────────────────────────────────────────────
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- Standard async data fetching pattern
+   
   useEffect(() => {
     setIsLoading(true);
     const params = new URLSearchParams({

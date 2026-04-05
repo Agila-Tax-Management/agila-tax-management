@@ -104,11 +104,11 @@ function endOfWeek(date: Date): Date {
   return end;
 }
 
-function startOfMonth(date: Date): Date {
+function _startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
 }
 
-function endOfMonth(date: Date): Date {
+function _endOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 }
 
@@ -120,7 +120,7 @@ function fmtDate(date: Date): string {
   }).format(date);
 }
 
-function statusVariant(name: string): 'neutral' | 'info' | 'warning' | 'success' | 'danger' {
+function _statusVariant(name: string): 'neutral' | 'info' | 'warning' | 'success' | 'danger' {
   const lower = name.toLowerCase();
   if (/done|complet|finish/.test(lower)) return 'success';
   if (/progress|doing|active|ongoing/.test(lower)) return 'info';
@@ -153,7 +153,7 @@ export function LiaisonReports() {
     return new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(month);
   }, [mode, dayValue, weekAnchorValue, monthValue]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- fetching liaison report data from API */
+   
   useEffect(() => {
     async function loadReport(): Promise<void> {
       setIsLoading(true);
@@ -185,7 +185,7 @@ export function LiaisonReports() {
 
     void loadReport();
   }, [mode, dayValue, weekAnchorValue, monthValue]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">

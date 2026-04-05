@@ -41,12 +41,6 @@ function toSlug(name: string): string {
     .trim();
 }
 
-// ─── Helper: derive company code prefix (4 uppercase alphanumeric chars) ─
-function toCompanyCodePrefix(name: string): string {
-  const stripped = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return stripped.substring(0, 4).padEnd(4, 'X') || 'CLIE';
-}
-
 // ─── Server Action ───────────────────────────────────────────────
 export async function provisionLeadAccountAction(
   input: ProvisionLeadAccountInput,
@@ -71,10 +65,9 @@ export async function provisionLeadAccountAction(
 
   try {
     await prisma.$transaction(async (tx) => {
-      // ── Fetch the lead (with services) inside the transaction ──
+      // ── Fetch the lead inside the transaction ──────────────────
       const lead = await tx.lead.findUnique({
         where: { id: leadId },
-        include: { servicePlans: true, serviceOneTimePlans: true },
       });
       if (!lead) throw new Error('Lead not found');
       if (lead.isAccountCreated) throw new Error('Account has already been provisioned for this lead');
@@ -88,11 +81,27 @@ export async function provisionLeadAccountAction(
         portalName = `${baseSlug}-${slugSuffix}`;
       }
 
-      // ── Step 1b: Generate unique companyCode (e.g. ACME-001) ──
-      const prefix = toCompanyCodePrefix(businessName);
-      const codePrefix = `${prefix}-`;
+      // ── Step 1b: Generate unique clientNo (e.g. 2026-0001) and companyCode ──
+      const year = new Date().getFullYear();
+      const yearPrefix = `${year}-`;
+
+      // clientNo sequence (YEAR-0001) — the human-readable client number
+      const latestClientNo = await tx.client.findFirst({
+        where: { clientNo: { startsWith: yearPrefix } },
+        orderBy: { clientNo: 'desc' },
+        select: { clientNo: true },
+      });
+      let nextClientNoSeq = 1;
+      if (latestClientNo?.clientNo) {
+        const parts = latestClientNo.clientNo.split('-');
+        const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+        if (!isNaN(lastSeq)) nextClientNoSeq = lastSeq + 1;
+      }
+      const clientNo = `${yearPrefix}${String(nextClientNoSeq).padStart(4, '0')}`;
+
+      // companyCode sequence (YEAR-0001) — portal identifier
       const latestCode = await tx.client.findFirst({
-        where: { companyCode: { startsWith: codePrefix } },
+        where: { companyCode: { startsWith: yearPrefix } },
         orderBy: { companyCode: 'desc' },
         select: { companyCode: true },
       });
@@ -102,13 +111,14 @@ export async function provisionLeadAccountAction(
         const lastSeq = parseInt(parts[parts.length - 1]!, 10);
         if (!isNaN(lastSeq)) nextCodeSeq = lastSeq + 1;
       }
-      const companyCode = `${codePrefix}${String(nextCodeSeq).padStart(3, '0')}`;
+      const companyCode = `${yearPrefix}${String(nextCodeSeq).padStart(4, '0')}`;
 
       // ── Step 1c: Create Client (active) ───────────────────────
       const newClient = await tx.client.create({
         data: {
           portalName,
           companyCode,
+          clientNo,
           businessName,
           businessEntity,
           active: true,
@@ -138,95 +148,13 @@ export async function provisionLeadAccountAction(
         },
       });
 
-      // ── Step 2: Generate invoice number atomically ─────────────
-      const year = new Date().getFullYear();
-      const invPrefix = `INV-${year}-`;
-      const latestInvoice = await tx.invoice.findFirst({
-        where: { invoiceNumber: { startsWith: invPrefix } },
-        orderBy: { invoiceNumber: 'desc' },
-        select: { invoiceNumber: true },
-      });
-      let nextSeq = 1;
-      if (latestInvoice) {
-        const parts = latestInvoice.invoiceNumber.split('-');
-        const lastSeq = parseInt(parts[parts.length - 1]!, 10);
-        if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
-      }
-      const invoiceNumber = `${invPrefix}${String(nextSeq).padStart(4, '0')}`;
-
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 30);
-
-      const newInvoice = await tx.invoice.create({
-        data: {
-          invoiceNumber,
-          clientId: newClient.id,
-          leadId: leadId,
-          status: 'UNPAID',
-          dueDate,
-        },
-        select: { id: true },
+      // ── Step 1e: Migrate lead invoices to the new client ─────
+      await tx.invoice.updateMany({
+        where: { leadId },
+        data: { clientId: newClient.id, leadId: null },
       });
 
-      // ── Step 2a: One-time service invoice items ────────────────
-      let subTotal = 0;
-
-      for (const svc of lead.serviceOneTimePlans) {
-        const unitPrice = Number(svc.serviceRate);
-        await tx.invoiceItem.create({
-          data: {
-            invoiceId: newInvoice.id,
-            description: svc.name,
-            quantity: 1,
-            unitPrice,
-            total: unitPrice,
-          },
-        });
-        subTotal += unitPrice;
-      }
-
-      // ── Step 2b: Recurring subscriptions + invoice items ───────
-      const currentMonthLabel = new Date().toLocaleString('en-PH', {
-        month: 'long',
-        year: 'numeric',
-      });
-
-      for (const plan of lead.servicePlans) {
-        await tx.clientSubscription.create({
-          data: {
-            clientId: newClient.id,
-            servicePlanId: plan.id,
-            agreedRate: plan.serviceRate,
-            effectiveDate: new Date(),
-            isActive: true,
-          },
-        });
-
-        const unitPrice = Number(plan.serviceRate);
-        await tx.invoiceItem.create({
-          data: {
-            invoiceId: newInvoice.id,
-            description: `${plan.name} — 1st Month`,
-            quantity: 1,
-            unitPrice,
-            total: unitPrice,
-            remarks: `Initial month — ${currentMonthLabel}`,
-          },
-        });
-        subTotal += unitPrice;
-      }
-
-      // ── Step 2c: Update invoice totals ─────────────────────────
-      await tx.invoice.update({
-        where: { id: newInvoice.id },
-        data: {
-          subTotal,
-          totalAmount: subTotal,
-          balanceDue: subTotal,
-        },
-      });
-
-      // ── Step 3: Update the lead record ─────────────────────────
+      // ── Step 2: Update the lead record ────────────────────────
       await tx.lead.update({
         where: { id: leadId },
         data: {
@@ -235,23 +163,13 @@ export async function provisionLeadAccountAction(
         },
       });
 
-      // ── Step 3a: Lead history — ACCOUNT_CREATED ────────────────
+      // ── Step 2a: Lead history — ACCOUNT_CREATED ───────────────
       await tx.leadHistory.create({
         data: {
           leadId,
           actorId: session.user.id,
           changeType: 'ACCOUNT_CREATED',
           newValue: `Provisioned Client "${businessName}" and portal user for ${email}`,
-        },
-      });
-
-      // ── Step 3b: Lead history — INVOICE_GENERATED ──────────────
-      await tx.leadHistory.create({
-        data: {
-          leadId,
-          actorId: session.user.id,
-          changeType: 'INVOICE_GENERATED',
-          newValue: `Generated initial onboarding invoice ${invoiceNumber} — ₱${subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
         },
       });
     });

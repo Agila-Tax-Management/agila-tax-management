@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasActiveCompensation, setHasActiveCompensation] = useState(false);
   const [isLoadingEmployee,     setIsLoadingEmployee]     = useState(true);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Seeds real employee data from API after mount */
+   
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const updateClockedIn      = (val: boolean)       => setUser(p => p ? { ...p, isClockedIn:    val } : p);
   const updateLunchStatus    = (val: boolean)       => setUser(p => p ? { ...p, isOnLunch:       val } : p);

@@ -2,7 +2,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, User, Trash2, Save, ChevronDown, UserPlus, CheckCircle2, ExternalLink, Clock, FileText } from 'lucide-react';
+import {
+  Loader2, User, Trash2, Save, ChevronDown, UserPlus, CheckCircle2,
+  Clock, FileText, Plus, FilePen, Receipt,
+} from 'lucide-react';
 import Image from 'next/image';
 import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
@@ -11,7 +14,9 @@ import { BUSINESS_TYPES, LEAD_SOURCES } from '@/lib/constants';
 import { LeadHistoryTimeline, type LeadCommentEntry, type LeadHistoryEntry } from './LeadHistoryTimeline';
 import { ProvisionAccountModal } from './ProvisionAccountModal';
 import { CreateJobOrderModal } from './CreateJobOrderModal';
-import type { Lead, LeadStatus, LeadPromo } from './lead-types';
+import { QuotationModal } from './QuotationModal';
+import { TsaModal } from './TsaModal';
+import type { Lead, LeadStatus, LeadQuote, LeadTsaInfo } from './lead-types';
 
 export type { Lead } from './lead-types';
 
@@ -58,20 +63,11 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const [deleting, setDeleting] = useState(false);
   const [isProvisionOpen, setIsProvisionOpen] = useState(false);
   const [isJobOrderOpen, setIsJobOrderOpen] = useState(false);
-  const [tsaUrl, setTsaUrl] = useState('');
-  const [tsaEditMode, setTsaEditMode] = useState(false);
-  const [savingTsa, setSavingTsa] = useState(false);
-  const [signingTsa, setSigningTsa] = useState(false);
+  const [isQuotationOpen, setIsQuotationOpen] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<LeadQuote | null>(null);
+  const [isTsaOpen, setIsTsaOpen] = useState(false);
   const [agents, setAgents] = useState<{ id: string; name: string | null; email: string; image: string | null }[]>([]);
-  const [servicePlans, setServicePlans] = useState<{ id: number; name: string; serviceRate: string; recurring: string }[]>([]);
-  const [serviceOneTime, setServiceOneTime] = useState<{ id: number; name: string; serviceRate: string }[]>([]);
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  const [selectedOneTimeIds, setSelectedOneTimeIds] = useState<number[]>([]);
-  const [promos, setPromos] = useState<LeadPromo[]>([]);
-  const [selectedPromoId, setSelectedPromoId] = useState<number | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
-  const [promoSearch, setPromoSearch] = useState('');
-  const [promoOpen, setPromoOpen] = useState(false);
 
   useEffect(() => {
     const fetchAgents = async () => {
@@ -82,23 +78,6 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
       } catch { /* non-critical */ }
     };
     void fetchAgents();
-
-    const fetchServices = async () => {
-      try {
-        const [plansRes, oneTimeRes, promosRes] = await Promise.all([
-          fetch('/api/sales/service-plans'),
-          fetch('/api/sales/service-one-time'),
-          fetch('/api/sales/promos?active=true'),
-        ]);
-        const plansData = (await plansRes.json()) as { data?: { id: number; name: string; serviceRate: string; recurring: string }[] };
-        const oneTimeData = (await oneTimeRes.json()) as { data?: { id: number; name: string; serviceRate: string }[] };
-        const promosData = (await promosRes.json()) as { data?: LeadPromo[] };
-        if (plansRes.ok && plansData.data) setServicePlans(plansData.data);
-        if (oneTimeRes.ok && oneTimeData.data) setServiceOneTime(oneTimeData.data);
-        if (promosRes.ok && promosData.data) setPromos(promosData.data);
-      } catch { /* non-critical */ }
-    };
-    void fetchServices();
   }, []);
 
   const [form, setForm] = useState({
@@ -149,11 +128,6 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
       virtualMeetingSchedule: toLocalDatetime(l.virtualMeetingSchedule),
       onboardingSchedule: toLocalDatetime(l.onboardingSchedule),
     });
-    setSelectedPlanId(l.servicePlans[0]?.id ?? null);
-    setSelectedOneTimeIds(l.serviceOneTimePlans.map((s) => s.id));
-    setSelectedPromoId(l.promo?.id ?? null);
-    setTsaUrl(l.signedTsaUrl ?? '');
-    setTsaEditMode(false);
   }, []);
 
   useEffect(() => {
@@ -197,9 +171,6 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
         notes: form.notes.trim() || null,
         assignedAgentId: form.assignedAgentId || null,
         statusId: form.statusId,
-        servicePlanIds: selectedPlanId !== null ? [selectedPlanId] : [],
-        serviceOneTimeIds: selectedOneTimeIds,
-        promoId: selectedPromoId,
         isCallRequest: form.isCallRequest,
         phoneCallSchedule: form.isCallRequest && form.phoneCallSchedule ? new Date(form.phoneCallSchedule).toISOString() : null,
         isOfficeVisit: form.isOfficeVisit,
@@ -248,10 +219,11 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   if (!lead) return null;
 
   const handleCreateAccount = () => {
-    if (lead.servicePlans.length === 0 && lead.serviceOneTimePlans.length === 0) {
+    const acceptedQuote = (fullLead ?? lead).quotes.find((q) => q.status === 'ACCEPTED');
+    if (!acceptedQuote) {
       error(
         'Cannot create account',
-        'No services or plans attached to this lead.',
+        'An accepted quotation is required before creating a provisional account.',
       );
       return;
     }
@@ -262,66 +234,12 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
     onUpdated(updatedLead);
   };
 
-  const handleSaveTsaUrl = async () => {
-    if (!lead) return;
-    if (lead.servicePlans.length === 0 && lead.serviceOneTimePlans.length === 0) {
-      error('Cannot save TSA', 'Please attach at least one service or plan to this lead first.');
-      return;
-    }
-    setSavingTsa(true);
-    try {
-      const res = await fetch(`/api/sales/leads/${lead.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signedTsaUrl: tsaUrl.trim() || null }),
-      });
-      const data = (await res.json()) as { data?: Lead; error?: string };
-      if (!res.ok) { error('Save failed', data.error ?? 'Could not save TSA URL.'); return; }
-      success('TSA URL saved', 'The TSA document URL has been saved.');
-      onUpdated(data.data!);
-      setTsaEditMode(false);
-    } catch {
-      error('Network error', 'Could not connect to the server.');
-    } finally {
-      setSavingTsa(false);
-    }
-  };
-
-  const handleSignTsa = async () => {
-    if (!lead) return;
-    setSigningTsa(true);
-    try {
-      const res = await fetch(`/api/sales/leads/${lead.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isSignedTSA: true }),
-      });
-      const data = (await res.json()) as { data?: Lead; error?: string };
-      if (!res.ok) { error('Failed', data.error ?? 'Could not mark TSA as signed.'); return; }
-      success('TSA Signed', 'The TSA has been marked as signed and recorded in the timeline.');
-      onUpdated(data.data!);
-    } catch {
-      error('Network error', 'Could not connect to the server.');
-    } finally {
-      setSigningTsa(false);
-    }
-  };
-
-  const appliedPromo = selectedPromoId !== null ? (promos.find((p) => p.id === selectedPromoId) ?? null) : null;
+  const appliedLead = fullLead ?? lead;
   const selectedAgent = agents.find((a) => a.id === form.assignedAgentId) ?? null;
-  const primaryInvoice = (fullLead ?? lead).invoices?.[0] ?? null;
+  const primaryInvoice = appliedLead.invoices?.[0] ?? null;
   const invoicePaid = primaryInvoice?.status === 'PAID';
-  const filteredPromos = promos
-    .filter((p) =>
-      p.promoFor === 'BOTH' ||
-      (p.promoFor === 'SERVICE_PLAN' && selectedPlanId !== null) ||
-      (p.promoFor === 'SERVICE_ONE_TIME' && selectedOneTimeIds.length > 0)
-    )
-    .filter((p) =>
-      promoSearch === '' ||
-      p.name.toLowerCase().includes(promoSearch.toLowerCase()) ||
-      (p.code?.toLowerCase().includes(promoSearch.toLowerCase()) ?? false)
-    );
+  const acceptedQuote: LeadQuote | null = appliedLead.quotes.find((q) => q.status === 'ACCEPTED') ?? null;
+  const activeTsa: LeadTsaInfo | null = appliedLead.tsaContracts?.[0] ?? null;
 
   return (
     <Modal
@@ -550,226 +468,136 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
             </div>
           </div>
 
-          {/* Services Interested In */}
-          <div className="border-t border-border pt-5 space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-              Services Interested In
-            </h4>
-
-            {/* Recurring Plan — single select via radio */}
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground mb-2">
-                Recurring Plan <span className="font-normal">(one only)</span>
-              </p>
-              {servicePlans.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No active recurring plans available.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {servicePlans.map((plan) => (
-                    <label key={plan.id} className="flex items-center gap-2.5 cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="detailLeadPlan"
-                        className="accent-blue-600 shrink-0"
-                        checked={selectedPlanId === plan.id}
-                        onChange={() => { setSelectedPlanId(plan.id); setSelectedPromoId(null); }}
-                      />
-                      <span className="text-sm text-foreground group-hover:text-blue-600 transition-colors">{plan.name}</span>
-                      <span className="ml-auto text-xs text-muted-foreground shrink-0">
-                        ₱{Number(plan.serviceRate).toLocaleString()}/{plan.recurring.toLowerCase()}
-                      </span>
-                    </label>
-                  ))}
-                  {selectedPlanId !== null && (
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedPlanId(null); setSelectedPromoId(null); }}
-                      className="text-xs text-muted-foreground hover:text-red-500 transition-colors mt-0.5"
-                    >
-                      ✕ Clear plan
-                    </button>
-                  )}
-                </div>
-              )}
+          {/* ── Quotations Section ──────────────────────────────────────── */}
+          <div className="border-t border-border pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                Quotations
+              </h4>
+              <button
+                type="button"
+                onClick={() => { setEditingQuote(null); setIsQuotationOpen(true); }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#25238e] hover:opacity-75 transition-opacity"
+              >
+                <Plus size={13} /> New Quote
+              </button>
             </div>
 
-            {/* One-Time Services — multi-select */}
-            {serviceOneTime.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">One-Time Services</p>
-                <div className="space-y-1.5">
-                  {serviceOneTime.map((svc) => (
-                    <label key={svc.id} className="flex items-center gap-2.5 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border accent-blue-600 shrink-0"
-                        checked={selectedOneTimeIds.includes(svc.id)}
-                        onChange={(e) =>
-                          setSelectedOneTimeIds((prev) =>
-                            e.target.checked ? [...prev, svc.id] : prev.filter((x) => x !== svc.id)
-                          )
-                        }
-                      />
-                      <span className="text-sm text-foreground group-hover:text-blue-600 transition-colors">{svc.name}</span>
-                      <span className="ml-auto text-xs text-muted-foreground shrink-0">₱{Number(svc.serviceRate).toLocaleString()}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Promo — visible only when at least one service is chosen */}
-            {(selectedPlanId !== null || selectedOneTimeIds.length > 0) && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">
-                  Apply Promo <span className="font-normal">(optional, one only)</span>
-                </p>
-                <div className="relative">
-                  {selectedPromoId !== null ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm">
-                      <span className="flex-1 text-foreground">
-                        {appliedPromo?.name}{appliedPromo?.code ? ` (${appliedPromo.code})` : ''}
-                      </span>
-                      <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:text-green-400 text-xs font-semibold">
-                        {appliedPromo?.discountType === 'PERCENTAGE'
-                          ? `−${appliedPromo.discountRate}%`
-                          : `−₱${Number(appliedPromo?.discountRate).toLocaleString()}`}
+            {appliedLead.quotes.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                No quotations yet. Click &ldquo;New Quote&rdquo; to create one.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {appliedLead.quotes.map((q) => {
+                  const statusBg: Record<string, string> = {
+                    DRAFT: 'bg-slate-100 text-slate-700',
+                    SENT_TO_CLIENT: 'bg-indigo-100 text-indigo-700',
+                    NEGOTIATING: 'bg-amber-100 text-amber-700',
+                    ACCEPTED: 'bg-emerald-100 text-emerald-700',
+                    REJECTED: 'bg-red-100 text-red-600',
+                  };
+                  return (
+                    <div
+                      key={q.id}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
+                    >
+                      <FilePen size={14} className="text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{q.quoteNumber}</p>
+                        <p className="text-xs text-muted-foreground">
+                          ₱{Number(q.grandTotal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          {' · '}{q.lineItems.length} item{q.lineItems.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${statusBg[q.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {q.status.replace(/_/g, ' ')}
                       </span>
                       <button
                         type="button"
-                        onClick={() => { setSelectedPromoId(null); setPromoSearch(''); }}
-                        className="text-muted-foreground hover:text-red-500 transition-colors ml-1"
+                        onClick={() => { setEditingQuote(q); setIsQuotationOpen(true); }}
+                        className="text-xs text-blue-600 hover:underline shrink-0"
                       >
-                        ✕
+                        View
                       </button>
                     </div>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        className={inputClass}
-                        placeholder="Search by promo name or code..."
-                        value={promoSearch}
-                        onChange={(e) => { setPromoSearch(e.target.value); setPromoOpen(true); }}
-                        onFocus={() => setPromoOpen(true)}
-                        onBlur={() => setTimeout(() => setPromoOpen(false), 100)}
-                      />
-                      {promoOpen && filteredPromos.length > 0 && (
-                        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-background border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                          {filteredPromos.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setSelectedPromoId(p.id);
-                                setPromoSearch('');
-                                setPromoOpen(false);
-                              }}
-                            >
-                              <span>{p.name}{p.code ? ` (${p.code})` : ''}</span>
-                              <span className="shrink-0 text-xs font-semibold text-green-600 dark:text-green-400">
-                                {p.discountType === 'PERCENTAGE'
-                                  ? `−${p.discountRate}%`
-                                  : `−₱${Number(p.discountRate).toLocaleString()}`}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Pipeline Documents — TSA */}
+          {/* ── Pipeline Documents — TSA ───────────────────────────────── */}
           <div className="border-t border-border pt-5">
-            <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-3">
-              Pipeline Documents
-            </h4>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Signed TSA URL
-              </label>
-              {lead.isSignedTSA ? (
-                /* ── Signed & locked ── */
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5">
-                  <a
-                    href={lead.signedTsaUrl ?? '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 text-sm text-blue-600 hover:underline truncate"
-                  >
-                    {lead.signedTsaUrl}
-                  </a>
-                  <ExternalLink size={12} className="text-blue-600 shrink-0" />
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:text-green-400 text-[11px] font-semibold shrink-0">
-                    <CheckCircle2 size={10} /> TSA Signed
-                  </span>
-                </div>
-              ) : lead.signedTsaUrl && !tsaEditMode ? (
-                /* ── Has URL, not signed, view mode ── */
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5">
-                  <a
-                    href={lead.signedTsaUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 text-sm text-blue-600 hover:underline truncate"
-                  >
-                    {lead.signedTsaUrl}
-                  </a>
-                  <ExternalLink size={12} className="text-blue-600 shrink-0" />
-                  <button
-                    type="button"
-                    onClick={() => setTsaEditMode(true)}
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border transition-colors shrink-0"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { void handleSignTsa(); }}
-                    disabled={signingTsa}
-                    className="text-xs font-semibold px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 shrink-0 flex items-center gap-1"
-                  >
-                    {signingTsa ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
-                    Signed
-                  </button>
-                </div>
-              ) : (
-                /* ── No URL or edit mode — show input + save ── */
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    className={inputClass}
-                    placeholder="https://drive.google.com/..."
-                    value={tsaUrl}
-                    onChange={(e) => setTsaUrl(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { void handleSaveTsaUrl(); }}
-                    disabled={savingTsa || !tsaUrl.trim()}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#25238e] text-white hover:bg-[#1e1c7a] disabled:opacity-50 shrink-0 flex items-center gap-1.5"
-                  >
-                    {savingTsa ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                    Save
-                  </button>
-                  {lead.signedTsaUrl && tsaEditMode && (
-                    <button
-                      type="button"
-                      onClick={() => { setTsaUrl(lead.signedTsaUrl ?? ''); setTsaEditMode(false); }}
-                      className="text-xs text-muted-foreground px-2 py-1 rounded-lg border border-border hover:text-foreground transition-colors shrink-0"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              )}
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                Pipeline Documents
+              </h4>
             </div>
+
+            {/* TSA row */}
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FileText size={14} className="text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Tax Service Agreement</p>
+                    {activeTsa ? (
+                      <p className="text-xs text-muted-foreground">{activeTsa.referenceNumber}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        {acceptedQuote ? 'No TSA yet — click to create' : 'Requires an accepted quotation'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeTsa && (
+                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      activeTsa.status === 'SIGNED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : activeTsa.status === 'VOID'
+                        ? 'bg-red-100 text-red-600'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {activeTsa.status.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsTsaOpen(true)}
+                    disabled={!acceptedQuote && !activeTsa}
+                    className="text-xs py-1 px-2.5 h-auto"
+                  >
+                    {activeTsa ? 'Manage TSA' : 'Create TSA'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Invoice status row — visible when invoice was already created */}
+            {lead.isCreatedInvoice && primaryInvoice && (
+              <div className={`mt-3 rounded-xl border px-4 py-3 flex items-center gap-3 ${
+                invoicePaid
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : 'border-amber-200 bg-amber-50'
+              }`}>
+                <Receipt size={14} className={invoicePaid ? 'text-emerald-700' : 'text-amber-700'} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${invoicePaid ? 'text-emerald-800' : 'text-amber-800'}`}>
+                    {primaryInvoice.invoiceNumber}
+                  </p>
+                  <p className={`text-xs ${invoicePaid ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {invoicePaid ? 'Paid — Ready for Job Order' : 'Waiting for Payment'}
+                  </p>
+                </div>
+                <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
+                  invoicePaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {primaryInvoice.status}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Footer actions */}
@@ -784,47 +612,49 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               Delete Lead
             </Button>
             <div className="flex items-center gap-2">
-            {lead.status.isOnboarding && (
-                lead.isAccountCreated ? (
-                  lead.isSignedTSA && invoicePaid ? (
-                    lead.isCreatedJobOrder ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
-                        <CheckCircle2 size={13} /> Job Order Created
-                        {(fullLead ?? lead).jobOrders?.[0] && (
-                          <a
-                            href="/portal/sales/job-orders"
-                            className="ml-1.5 underline underline-offset-2 hover:text-violet-900 dark:hover:text-violet-200 transition-colors"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            View &rarr;
-                          </a>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-semibold">
-                        <Clock size={13} /> Ready for Turn Over
-                      </span>
-                    )
-                  ) : (
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold ${
-                      invoicePaid
-                        ? 'bg-blue-50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
-                        : 'bg-amber-50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
-                    }`}>
-                      <Clock size={13} /> {invoicePaid ? 'Ready for Turn Over' : 'Waiting for Payment'}
-                    </span>
-                  )
+              {/* Create Account — available once a quote is accepted */}
+              {acceptedQuote && !lead.isAccountCreated && (
+                <Button
+                  onClick={handleCreateAccount}
+                  disabled={saving || deleting}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <UserPlus size={14} className="mr-2" />
+                  Create Account
+                </Button>
+              )}
+
+              {/* Pipeline status indicator — shown when account is created */}
+              {lead.isAccountCreated && (
+                lead.isCreatedJobOrder ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
+                    <CheckCircle2 size={13} /> Job Order Created
+                    {(fullLead ?? lead).jobOrders?.[0] && (
+                      <a
+                        href="/portal/sales/job-orders"
+                        className="ml-1.5 underline underline-offset-2 hover:text-violet-900 dark:hover:text-violet-200 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        View &rarr;
+                      </a>
+                    )}
+                  </span>
+                ) : invoicePaid ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+                    <Clock size={13} /> Ready for Turn Over
+                  </span>
+                ) : lead.isCreatedInvoice ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+                    <Clock size={13} /> Waiting for Payment
+                  </span>
                 ) : (
-                  <Button
-                    onClick={handleCreateAccount}
-                    disabled={saving || deleting}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    <UserPlus size={14} className="mr-2" />
-                    Create Account
-                  </Button>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-slate-50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-semibold">
+                    <Clock size={13} /> {lead.isSignedTSA ? 'TSA Signed — Pending Invoice' : 'Account Created'}
+                  </span>
                 )
               )}
+
+              {/* Create Job Order — shown once invoice is paid */}
               {lead.isAccountCreated && lead.isSignedTSA && invoicePaid && !lead.isCreatedJobOrder && (
                 <Button
                   onClick={() => setIsJobOrderOpen(true)}
@@ -866,6 +696,37 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
           )}
         </div>
       </div>
+
+      {/* Quotation Modal */}
+      {isQuotationOpen && (
+        <QuotationModal
+          leadId={lead.id}
+          lead={appliedLead}
+          existingQuote={editingQuote}
+          isOpen={isQuotationOpen}
+          onClose={() => { setIsQuotationOpen(false); setEditingQuote(null); }}
+          onSaved={(updatedLead) => {
+            onUpdated(updatedLead);
+            setFullLead((prev) => prev ? { ...prev, ...updatedLead } : null);
+            setIsQuotationOpen(false);
+            setEditingQuote(null);
+          }}
+        />
+      )}
+
+      {/* TSA Modal */}
+      {isTsaOpen && (
+        <TsaModal
+          lead={appliedLead}
+          tsa={activeTsa}
+          acceptedQuote={acceptedQuote}
+          isOpen={isTsaOpen}
+          onClose={() => setIsTsaOpen(false)}
+          onUpdated={(updatedLead) => {
+            onUpdated(updatedLead);
+          }}
+        />
+      )}
 
       {/* Account Provisioning Modal */}
       {isProvisionOpen && (

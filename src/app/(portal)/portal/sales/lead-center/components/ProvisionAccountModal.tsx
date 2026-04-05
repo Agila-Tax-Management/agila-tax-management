@@ -250,39 +250,40 @@ export function ProvisionAccountModal({
             </select>
           </div>
 
-          {/* Services summary */}
-          {(lead.servicePlans.length > 0 || lead.serviceOneTimePlans.length > 0) && (
-            <div className="bg-muted/40 rounded-lg p-3 space-y-2">
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-                Services to Invoice
-              </p>
-              {lead.servicePlans.map((p) => (
-                <div key={p.id} className="flex items-center justify-between text-xs">
-                  <span className="text-foreground">
-                    {p.name}{' '}
-                    <span className="text-muted-foreground">
-                      (Recurring &mdash;{' '}
-                      {p.recurring.charAt(0) + p.recurring.slice(1).toLowerCase()})
+          {/* Services summary — from accepted quote */}
+          {(() => {
+            const acceptedQuote = lead.quotes.find((q) => q.status === 'ACCEPTED');
+            if (!acceptedQuote || acceptedQuote.lineItems.length === 0) return null;
+            return (
+              <div className="bg-muted/40 rounded-lg p-3 space-y-2">
+                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                  Services to Invoice
+                  <span className="ml-1 font-normal normal-case text-muted-foreground">
+                    ({acceptedQuote.quoteNumber})
+                  </span>
+                </p>
+                {acceptedQuote.lineItems.map((li) => (
+                  <div key={li.id} className="flex items-center justify-between text-xs">
+                    <span className="text-foreground">
+                      {li.customName ?? li.service.name}{' '}
+                      <span className="text-muted-foreground">
+                        ({li.service.billingType === 'RECURRING' ? 'Recurring' : 'One-Time'})
+                      </span>
                     </span>
-                  </span>
-                  <span className="font-semibold text-foreground shrink-0 ml-2">
-                    ₱{Number(p.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              ))}
-              {lead.serviceOneTimePlans.map((s) => (
-                <div key={s.id} className="flex items-center justify-between text-xs">
-                  <span className="text-foreground">
-                    {s.name}{' '}
-                    <span className="text-muted-foreground">(One-Time)</span>
-                  </span>
-                  <span className="font-semibold text-foreground shrink-0 ml-2">
-                    ₱{Number(s.serviceRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    <span className="font-semibold text-foreground shrink-0 ml-2">
+                      ₱{Number(li.negotiatedRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
+                  <span className="font-semibold text-foreground">Grand Total</span>
+                  <span className="font-bold text-foreground">
+                    ₱{Number(acceptedQuote.grandTotal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
           {/* Footer */}
           <div className="flex justify-between items-center pt-2 border-t border-border">

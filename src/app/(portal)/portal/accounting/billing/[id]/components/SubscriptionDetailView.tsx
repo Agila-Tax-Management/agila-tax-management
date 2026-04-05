@@ -85,11 +85,11 @@ export function SubscriptionDetailView({ id }: Props): React.ReactNode {
     }
   }, [subId, toastError]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- API fetch on mount */
+   
   useEffect(() => {
     void load();
   }, [load]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   if (isLoading) {
     return (
@@ -183,7 +183,7 @@ export function SubscriptionDetailView({ id }: Props): React.ReactNode {
                   <div>
                     <p className="text-xs text-muted-foreground">Service Plan</p>
                     <p className="text-sm font-medium text-foreground">
-                      {subscription.servicePlan.name}
+                      {subscription.service.name}
                     </p>
                   </div>
                 </div>

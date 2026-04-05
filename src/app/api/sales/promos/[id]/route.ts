@@ -10,11 +10,8 @@ interface RouteParams {
 }
 
 const PROMO_INCLUDE = {
-  servicePlans: {
-    select: { id: true, name: true, serviceRate: true, recurring: true },
-  },
-  serviceOneTimePlans: {
-    select: { id: true, name: true, serviceRate: true },
+  services: {
+    select: { id: true, name: true, serviceRate: true, billingType: true },
   },
 } as const;
 
@@ -86,17 +83,14 @@ export async function PATCH(
     }
   }
 
-  const { servicePlanIds, serviceOneTimePlanIds, ...rest } = parsed.data;
+  const { serviceIds, ...rest } = parsed.data;
 
   const promo = await prisma.promo.update({
     where: { id: promoId },
     data: {
       ...rest,
-      ...(servicePlanIds !== undefined && {
-        servicePlans: { set: servicePlanIds.map((id) => ({ id })) },
-      }),
-      ...(serviceOneTimePlanIds !== undefined && {
-        serviceOneTimePlans: { set: serviceOneTimePlanIds.map((id) => ({ id })) },
+      ...(serviceIds !== undefined && {
+        services: { set: serviceIds.map((id) => ({ id })) },
       }),
     },
     include: PROMO_INCLUDE,

@@ -17,26 +17,56 @@ export interface AssignedAgent {
   email: string;
 }
 
-export interface LeadServicePlan {
-  id: number;
-  name: string;
-  serviceRate: string;
-  recurring: string;
-}
-
-export interface LeadServiceOneTime {
-  id: number;
-  name: string;
-  serviceRate: string;
-}
-
 export interface LeadPromo {
   id: number;
   name: string;
   code: string | null;
   discountType: 'PERCENTAGE' | 'FIXED';
   discountRate: string;
-  promoFor: 'SERVICE_PLAN' | 'SERVICE_ONE_TIME' | 'BOTH';
+}
+
+export interface QuoteLineItemService {
+  id: number;
+  name: string;
+  billingType: 'RECURRING' | 'ONE_TIME';
+  frequency: string;
+}
+
+export interface QuoteLineItem {
+  id: string;
+  serviceId: number;
+  service: QuoteLineItemService;
+  sourcePackageId: number | null;
+  sourcePackage: { id: number; name: string } | null;
+  customName: string | null;
+  quantity: number;
+  negotiatedRate: string;
+  isVatable: boolean;
+}
+
+export interface LeadQuote {
+  id: string;
+  quoteNumber: string;
+  status: 'DRAFT' | 'SENT_TO_CLIENT' | 'NEGOTIATING' | 'ACCEPTED' | 'REJECTED';
+  lineItems: QuoteLineItem[];
+  subTotal: string;
+  totalDiscount: string;
+  grandTotal: string;
+  validUntil: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadTsaInfo {
+  id: string;
+  referenceNumber: string;
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT_TO_CLIENT' | 'SIGNED' | 'VOID';
+  documentDate: string;
+  businessName: string;
+  quoteId: string | null;
+  pdfUrl: string | null;
+  clientSignedAt: string | null;
 }
 
 export interface Lead {
@@ -55,6 +85,7 @@ export interface Lead {
   assignedAgentId: string | null;
   assignedAgent: AssignedAgent | null;
   isAccountCreated: boolean;
+  isCreatedInvoice: boolean;
   isSignedTSA: boolean;
   signedTsaUrl: string | null;
   isCreatedJobOrder: boolean;
@@ -68,8 +99,8 @@ export interface Lead {
   isVirtualMeeting: boolean;
   virtualMeetingSchedule: string | null;
   onboardingSchedule: string | null;
-  servicePlans: LeadServicePlan[];
-  serviceOneTimePlans: LeadServiceOneTime[];
+  quotes: LeadQuote[];
+  tsaContracts: LeadTsaInfo[];
   promo: LeadPromo | null;
   invoices: { id: string; invoiceNumber: string; status: string }[];
   jobOrders: { id: string; jobOrderNumber: string }[];

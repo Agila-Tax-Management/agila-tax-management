@@ -54,12 +54,15 @@ function fmtDate(iso: string) {
 }
 function getDisplayName(inv: InvoiceRecord) {
   if (inv.client) return inv.client.businessName;
-  if (inv.lead) return [inv.lead.firstName, inv.lead.lastName].filter(Boolean).join(' ');
+  if (inv.lead) return inv.lead.businessName ?? [inv.lead.firstName, inv.lead.lastName].filter(Boolean).join(' ');
   return '—';
 }
 function getSubLabel(inv: InvoiceRecord) {
   if (inv.client) return inv.client.clientNo ?? `Client #${inv.client.id}`;
-  if (inv.lead) return inv.lead.businessName ?? `Lead #${inv.lead.id}`;
+  if (inv.lead) {
+    if (inv.lead.businessName) return [inv.lead.firstName, inv.lead.lastName].filter(Boolean).join(' ');
+    return `Lead #${inv.lead.id}`;
+  }
   return '';
 }
 
@@ -125,11 +128,11 @@ export function InvoiceList() {
     [toastError],
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- API data fetch on dependency change */
+   
   useEffect(() => {
     void loadInvoices(page, search, statusFilter);
   }, [page, search, statusFilter, loadInvoices]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
