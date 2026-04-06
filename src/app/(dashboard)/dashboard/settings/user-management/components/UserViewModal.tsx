@@ -20,7 +20,7 @@ const PORTAL_LABELS: Record<string, string> = {
   SALES: 'Sales Portal',
   COMPLIANCE: 'Compliance Portal',
   LIAISON: 'Liaison Portal',
-  ACCOUNTING: 'Accounting Portal',
+  ACCOUNTING: 'ACF Portal',
   OPERATIONS_MANAGEMENT: 'Operations Management Portal',
   HR: 'HR Portal',
   TASK_MANAGEMENT: 'Task Management Portal',
