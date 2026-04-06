@@ -26,7 +26,7 @@ interface DeptStatus {
   isExitStep: boolean;
 }
 
-interface SubtaskDetailModalProps {
+export interface SubtaskDetailModalProps {
   subtask: AOTaskSubtask;
   parentTaskTitle: string;
   sourceInfo?: SourceInfo;

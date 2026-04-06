@@ -192,7 +192,7 @@ export const ComplianceDashboard: React.FC = () => {
           urgency,
         });
       }
-    });
+    }); 
   });
   upcomingDeadlines.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 

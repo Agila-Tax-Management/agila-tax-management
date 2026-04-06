@@ -9,7 +9,11 @@ import {
   ArrowLeft, Calendar, Tag, Send, Clock,
   ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search, X, Link,
 } from 'lucide-react';
-import { SubtaskDetailModal, type ActivityEntry } from './SubtaskDetailModal';
+import {
+  SubtaskDetailModal,
+  type ActivityEntry,
+  type SubtaskDetailModalProps,
+} from './SubtaskDetailModal';
 import { JobOrderViewModal } from '@/app/(portal)/portal/sales/job-orders/components/JobOrderViewModal';
 import type { JobOrderRecord } from '@/app/(portal)/portal/sales/job-orders/components/JobOrders';
 import { INITIAL_CLIENTS } from '@/lib/mock-clients';
@@ -66,6 +70,7 @@ export interface SharedTaskDetailPageProps {
   initialHistoryLogs?: TaskHistoryEntry[];
   onUpdate?: (updated: AOTask) => void;
   jobOrder?: { id: string; jobOrderNumber: string } | null;
+  SubtaskModalComponent?: (props: SubtaskDetailModalProps) => React.ReactNode;
 }
 
 const DEFAULT_STATUS_COLORS: Record<string, string> = {
@@ -145,6 +150,7 @@ export function SharedTaskDetailPage({
   initialHistoryLogs = [],
   onUpdate,
   jobOrder,
+  SubtaskModalComponent = SubtaskDetailModal,
 }: SharedTaskDetailPageProps): React.ReactNode {
   const router = useRouter();
   const { error: toastError } = useToast();
@@ -1268,7 +1274,7 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
       </div>
 
       {selectedSubtask && (
-        <SubtaskDetailModal
+        <SubtaskModalComponent
           subtask={selectedSubtask}
           parentTaskTitle={editingTask.title}
           sourceInfo={sourceInfo}
