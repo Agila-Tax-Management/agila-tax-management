@@ -230,6 +230,22 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
     setIsProvisionOpen(true);
   };
 
+  const handleDeleteQuote = async (quoteId: string) => {
+    if (!confirm('Delete this draft quotation? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/sales/quotes/${quoteId}`, { method: 'DELETE' });
+      const d = (await res.json()) as { error?: string };
+      if (!res.ok) { error('Delete failed', d.error ?? 'Could not delete quotation.'); return; }
+      if (!fullLead) return;
+      const updatedAfterDelete = { ...fullLead, quotes: fullLead.quotes.filter((q) => q.id !== quoteId) };
+      setFullLead(updatedAfterDelete);
+      onUpdated(updatedAfterDelete);
+      success('Quotation deleted', 'The draft quotation has been removed.');
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    }
+  };
+
   const handleProvisioned = (updatedLead: Lead) => {
     onUpdated(updatedLead);
   };
@@ -520,6 +536,16 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                       >
                         View
                       </button>
+                      {q.status === 'DRAFT' && (
+                        <button
+                          type="button"
+                          onClick={() => { void handleDeleteQuote(q.id); }}
+                          className="text-rose-400 hover:text-rose-600 shrink-0"
+                          title="Delete quotation"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -705,9 +731,16 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
           existingQuote={editingQuote}
           isOpen={isQuotationOpen}
           onClose={() => { setIsQuotationOpen(false); setEditingQuote(null); }}
-          onSaved={(updatedLead) => {
-            onUpdated(updatedLead);
-            setFullLead((prev) => prev ? { ...prev, ...updatedLead } : null);
+          onSaved={(savedQuote) => {
+            if (fullLead) {
+              const exists = fullLead.quotes.find((q) => q.id === savedQuote.id);
+              const updatedQuotes = exists
+                ? fullLead.quotes.map((q) => (q.id === savedQuote.id ? savedQuote : q))
+                : [savedQuote, ...fullLead.quotes];
+              const updatedAfterSave = { ...fullLead, quotes: updatedQuotes };
+              setFullLead(updatedAfterSave);
+              onUpdated(updatedAfterSave);
+            }
             setIsQuotationOpen(false);
             setEditingQuote(null);
           }}

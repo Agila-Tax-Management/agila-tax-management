@@ -251,7 +251,7 @@ export function ServicePackageFormModal({
         items: items.map((i) => ({
           serviceId: i.serviceId,
           quantity: i.quantity,
-          ...(i.overrideRate ? { overrideRate: parseFloat(i.overrideRate) } : {}),
+          ...(i.overrideRate !== '' ? { overrideRate: parseFloat(i.overrideRate) } : {}),
         })),
       };
 

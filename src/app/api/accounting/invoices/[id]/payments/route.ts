@@ -25,7 +25,10 @@ export async function POST(
   const { id } = await params;
   const invoice = await prisma.invoice.findUnique({
     where: { id },
-    include: { allocations: { select: { amountApplied: true } } },
+    include: {
+      allocations: { select: { amountApplied: true } },
+      lead: { select: { convertedClientId: true } },
+    },
   });
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
   if (invoice.status === 'PAID' || invoice.status === 'VOID') {
@@ -42,6 +45,8 @@ export async function POST(
   }
 
   const data = parsed.data;
+  // Resolve client: direct clientId, or the converted client if this is a lead invoice
+  const effectiveClientId = invoice.clientId ?? invoice.lead?.convertedClientId ?? null;
   const currentBalanceDue = Number(invoice.balanceDue);
   const amountApplied = Math.min(data.amount, currentBalanceDue);
   const unusedAmount = Math.max(0, data.amount - currentBalanceDue);
@@ -70,7 +75,7 @@ export async function POST(
     const p = await tx.payment.create({
       data: {
         paymentNumber,
-        clientId: invoice.clientId ?? null,
+        clientId: effectiveClientId,
         recordedById: session.user.id,
         amount: data.amount,
         unusedAmount,

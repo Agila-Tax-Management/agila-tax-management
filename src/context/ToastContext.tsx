@@ -92,13 +92,13 @@ const VARIANT_STYLES: Record<
 > = {
   success: {
     container:
-      'border-emerald-500/30 bg-emerald-50 text-emerald-900 dark:text-emerald-100 dark:border-emerald-400/30',
+      'border-emerald-500/30 bg-emerald-50 text-emerald-900',
     icon: CheckCircleIcon,
     progressBar: 'bg-emerald-500',
   },
   error: {
     container:
-      'border-red-500/30 bg-red-50 text-red-900 dark:text-red-100 dark:border-red-400/30',
+      'border-red-500/30 bg-red-50 text-red-900',
     icon: XCircleIcon,
     progressBar: 'bg-red-500',
   },

@@ -99,9 +99,10 @@ export async function provisionLeadAccountAction(
       }
       const clientNo = `${yearPrefix}${String(nextClientNoSeq).padStart(4, '0')}`;
 
-      // companyCode sequence (YEAR-0001) — portal identifier
+      // companyCode: 4-letter prefix from business name + 3-digit sequence (e.g. ACME-001)
+      const codePrefix = (businessName.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase()) || 'COMP';
       const latestCode = await tx.client.findFirst({
-        where: { companyCode: { startsWith: yearPrefix } },
+        where: { companyCode: { startsWith: `${codePrefix}-` } },
         orderBy: { companyCode: 'desc' },
         select: { companyCode: true },
       });
@@ -111,7 +112,7 @@ export async function provisionLeadAccountAction(
         const lastSeq = parseInt(parts[parts.length - 1]!, 10);
         if (!isNaN(lastSeq)) nextCodeSeq = lastSeq + 1;
       }
-      const companyCode = `${yearPrefix}${String(nextCodeSeq).padStart(4, '0')}`;
+      const companyCode = `${codePrefix}-${String(nextCodeSeq).padStart(3, '0')}`;
 
       // ── Step 1c: Create Client (active) ───────────────────────
       const newClient = await tx.client.create({

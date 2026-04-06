@@ -9,10 +9,10 @@ type Params = { params: Promise<{ id: string }> };
 // ─── Internal raw types ────────────────────────────────────────────
 type RawSubscription = {
   id: number;
-  servicePlanId: number;
+  serviceId: number;
   agreedRate: unknown;
   billingCycle: string;
-  servicePlan: { name: string; inclusions: { id: number; name: string; category: string | null }[] };
+  service: { name: string; inclusions: { id: number; name: string; category: string | null }[] };
 };
 
 type RawClient = {
@@ -86,11 +86,11 @@ function serializeDetail(c: RawClient): ClientDetailRecord {
   const activeSubscription: ClientSubscriptionInfo | null = sub
     ? {
         id: sub.id,
-        servicePlanId: sub.servicePlanId,
-        servicePlanName: sub.servicePlan.name,
+        servicePlanId: sub.serviceId,
+        servicePlanName: sub.service.name,
         agreedRate: Number(sub.agreedRate),
         billingCycle: sub.billingCycle,
-        inclusions: sub.servicePlan.inclusions,
+        inclusions: sub.service.inclusions,
       }
     : null;
 
