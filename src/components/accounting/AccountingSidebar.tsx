@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CreditCard, FileText, Receipt,
-  BarChart3, Calculator, BookOpen, PenLine,
+  BarChart3, Calculator, BookOpen, PenLine, Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
@@ -116,6 +116,23 @@ export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
             );
           })}
         </nav>
+
+        {/* Settings footer */}
+        <div className="p-4 border-t border-slate-100 shrink-0">
+          <button
+            onClick={() => handleNavigation('/portal/accounting-and-finance/settings')}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+              ${pathname === '/portal/accounting-and-finance/settings'
+                ? 'bg-amber-600/10 text-amber-700 shadow-sm font-bold'
+                : 'text-slate-600 hover:bg-slate-50 font-medium'
+              }
+            `}
+          >
+            <Settings size={18} />
+            <span className="text-sm flex-1 text-left">Settings</span>
+          </button>
+        </div>
       </aside>
     </>
   );
