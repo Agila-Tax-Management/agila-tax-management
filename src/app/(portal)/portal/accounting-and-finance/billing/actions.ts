@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/billing/actions.ts
+// src/app/(portal)/portal/accounting-and-finance/billing/actions.ts
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -78,7 +78,7 @@ export async function createSubscriptionAction(
           subscriptionId: sub.id,
           actorId: session.user.id,
           changeType: 'SUBSCRIPTION_CREATED',
-          newValue: `Plan: ${plan?.name ?? data.serviceId}, Rate: ₱${data.agreedRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}, Cycle: ${data.billingCycle}`,
+          newValue: `Plan: ${plan?.name ?? data.serviceId}, Rate: ?${data.agreedRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}, Cycle: ${data.billingCycle}`,
         },
       });
 
@@ -90,10 +90,10 @@ export async function createSubscriptionAction(
       action: 'CREATED',
       entity: 'ClientSubscription',
       entityId: String(subscription.id),
-      description: `Created subscription for client #${data.clientId} — ${plan?.name ?? 'Service #' + data.serviceId}`,
+      description: `Created subscription for client #${data.clientId} � ${plan?.name ?? 'Service #' + data.serviceId}`,
     });
 
-    revalidatePath('/portal/accounting/billing');
+    revalidatePath('/portal/accounting-and-finance/billing');
     return { success: true, id: subscription.id };
   } catch (err) {
     console.error('[createSubscriptionAction]', err);
@@ -201,8 +201,8 @@ export async function updateSubscriptionAction(
       description: `Updated subscription #${subscriptionId}`,
     });
 
-    revalidatePath('/portal/accounting/billing');
-    revalidatePath(`/portal/accounting/billing/${subscriptionId}`);
+    revalidatePath('/portal/accounting-and-finance/billing');
+    revalidatePath(`/portal/accounting-and-finance/billing/${subscriptionId}`);
 
     return { success: true };
   } catch (err) {

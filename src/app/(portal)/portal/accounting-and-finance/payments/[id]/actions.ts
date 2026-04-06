@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/payments/[id]/actions.ts
+﻿// src/app/(portal)/portal/accounting/payments/[id]/actions.ts
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -135,8 +135,8 @@ export async function updatePaymentAction(
     });
 
     // Step 4: Revalidate
-    revalidatePath(`/portal/accounting/payments/${paymentId}`);
-    revalidatePath('/portal/accounting/payments');
+    revalidatePath(`/portal/accounting-and-finance/payments/${paymentId}`);
+    revalidatePath('/portal/accounting-and-finance/payments');
 
     return { success: true };
   } catch (err) {

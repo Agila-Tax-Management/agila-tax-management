@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/invoices/new/page.tsx
+// src/app/(portal)/portal/accounting-and-finance/invoices/new/page.tsx
 'use client';
 
 import { CreateInvoiceForm } from './components/CreateInvoiceForm';

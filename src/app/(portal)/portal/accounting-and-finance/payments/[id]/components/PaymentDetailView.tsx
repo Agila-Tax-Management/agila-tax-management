@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/payments/[id]/components/PaymentDetailView.tsx
+﻿// src/app/(portal)/portal/accounting/payments/[id]/components/PaymentDetailView.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -349,7 +349,7 @@ export function PaymentDetailView({ id }: PaymentDetailViewProps): React.ReactNo
                       {payment.allocations.map((alloc) => (
                         <tr
                           key={alloc.id}
-                          onClick={() => router.push(`/portal/accounting/invoices/${alloc.invoiceId}`)}
+                          onClick={() => router.push(`/portal/accounting-and-finance/invoices/${alloc.invoiceId}`)}
                           className="border-b border-border last:border-none hover:bg-muted/30 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3">

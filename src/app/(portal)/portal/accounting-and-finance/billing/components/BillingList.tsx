@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/billing/components/BillingList.tsx
+// src/app/(portal)/portal/accounting-and-finance/billing/components/BillingList.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -19,11 +19,11 @@ const CYCLE_LABELS: Record<string, string> = {
 };
 
 function fmt(n: number) {
-  return 'â‚±' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+  return '?' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 }
 
 function fmtDate(iso: string | null) {
-  if (!iso) return 'â€”';
+  if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'short',
@@ -196,7 +196,7 @@ export function BillingList(): React.ReactNode {
                   <tr
                     key={sub.id}
                     onClick={() =>
-                      router.push(`/portal/accounting/billing/${sub.id}`)
+                      router.push(`/portal/accounting-and-finance/billing/${sub.id}`)
                     }
                     className="hover:bg-muted/30 cursor-pointer transition-colors"
                   >
@@ -236,7 +236,7 @@ export function BillingList(): React.ReactNode {
         {!isLoading && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
             <p className="text-xs text-muted-foreground">
-              Showing {(currentPage - 1) * PAGE_SIZE + 1}â€“
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}–
               {Math.min(currentPage * PAGE_SIZE, filtered.length)} of{' '}
               {filtered.length}
             </p>

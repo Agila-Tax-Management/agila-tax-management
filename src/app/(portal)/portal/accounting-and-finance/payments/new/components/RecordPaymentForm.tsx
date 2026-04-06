@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/payments/new/components/RecordPaymentForm.tsx
+// src/app/(portal)/portal/accounting-and-finance/payments/new/components/RecordPaymentForm.tsx
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -37,7 +37,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function fmt(n: number) {
-  return 'â‚±' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+  return '?' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 }
 
 function fmtDate(iso: string) {
@@ -50,7 +50,7 @@ export function RecordPaymentForm(): React.ReactNode {
   const router = useRouter();
   const { success, error: toastError } = useToast();
 
-  // â€” Client search state â€”
+  // — Client search state —
   const [selectedClient, setSelectedClient] = useState<ClientOnlyOption | null>(null);
   const [clientSearch, setClientSearch] = useState('');
   const [clientOptions, setClientOptions] = useState<ClientOnlyOption[]>([]);
@@ -59,20 +59,20 @@ export function RecordPaymentForm(): React.ReactNode {
   const clientDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // â€” Payment detail state â€”
+  // — Payment detail state —
   const [amount, setAmount] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [method, setMethod] = useState<PaymentMethodType>('CASH');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
 
-  // â€” Invoice allocation state â€”
+  // — Invoice allocation state —
   const [invoices, setInvoices] = useState<UnpaidInvoiceOption[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [applied, setApplied] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // â€” Computed values â€”
+  // — Computed values —
   const amountNum = parseFloat(amount) || 0;
   const totalApplied = invoices.reduce((s, inv) => s + (parseFloat(applied[inv.id] ?? '0') || 0), 0);
   const unallocated = amountNum - totalApplied;
@@ -209,7 +209,7 @@ export function RecordPaymentForm(): React.ReactNode {
         return;
       }
       success('Payment recorded', 'The payment has been saved successfully.');
-      router.push(`/portal/accounting/payments/${result.paymentId}`);
+      router.push(`/portal/accounting-and-finance/payments/${result.paymentId}`);
     } catch {
       toastError('Payment failed', 'An unexpected error occurred.');
     } finally {
@@ -277,7 +277,7 @@ export function RecordPaymentForm(): React.ReactNode {
                 Amount Received <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">â‚±</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">?</span>
                 <Input
                   type="number"
                   min="0.01"
@@ -452,7 +452,7 @@ export function RecordPaymentForm(): React.ReactNode {
                           <td className="px-4 py-3">
                             <div className="relative">
                               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                                â‚±
+                                ?
                               </span>
                               <input
                                 type="number"

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -20,7 +20,7 @@ const EMPLOYEE_SERVICES = [
 
 const PORTALS = [
   { id: 'sales',      title: 'Sales Portal',         description: 'Manage leads, pipeline, and client engagements.',    href: '/portal/sales',      icon: <Megaphone />,   color: 'bg-rose-600',    stats: { label: 'Active Leads', value: '124' } },
-  { id: 'accounting', title: 'ACF Portal',     description: 'Handle bookkeeping, invoices, and financial reports.',href: '/portal/accounting', icon: <BarChart3 />,   color: 'bg-blue-600',    stats: { label: 'Open Invoices', value: '38' } },
+  { id: 'accounting', title: 'ACF Portal',     description: 'Handle bookkeeping, invoices, and financial reports.',href: '/portal/accounting-and-finance', icon: <BarChart3 />,   color: 'bg-blue-600',    stats: { label: 'Open Invoices', value: '38' } },
   { id: 'compliance', title: 'Compliance Portal',     description: 'Track BIR filings, permits, and regulatory tasks.',  href: '/portal/compliance', icon: <ShieldCheck />, color: 'bg-indigo-600',  stats: { label: 'Pending Filings', value: '7' } },
   { id: 'liaison',    title: 'Liaison Portal',        description: 'Coordinate government agency tasks and schedules.',  href: '/portal/liaison',    icon: <Building2 />,   color: 'bg-amber-600',   stats: { label: 'Active Tasks', value: '15' } },
   { id: 'hr',         title: 'HR Portal',             description: 'Manage employees, onboarding, and company policies.',href: '/portal/hr',         icon: <UserCheck />,   color: 'bg-teal-600',    stats: { label: 'Employees', value: '52' } },

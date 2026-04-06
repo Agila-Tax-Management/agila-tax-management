@@ -113,7 +113,7 @@ const PORTAL_ITEMS = [
   { href: '/portal/sales',           label: 'Sales',           icon: Megaphone  },
   { href: '/portal/compliance',      label: 'Compliance',      icon: ShieldCheck },
   { href: '/portal/liaison',         label: 'Liaison',         icon: Building2  },
-  { href: '/portal/accounting',      label: 'Accounting',      icon: BarChart3  },
+  { href: '/portal/accounting-and-finance',      label: 'ACF',      icon: BarChart3  },
   { href: '/portal/account-officer', label: 'Account Officer', icon: Briefcase  },
   { href: '/portal/hr',              label: 'HR',              icon: UserCheck  },
   { href: '/portal/task-management', label: 'Task Management', icon: UserCheck  },

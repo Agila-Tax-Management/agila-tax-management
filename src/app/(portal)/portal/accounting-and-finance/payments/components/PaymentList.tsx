@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/payments/components/PaymentList.tsx
+// src/app/(portal)/portal/accounting-and-finance/payments/components/PaymentList.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -31,7 +31,7 @@ const METHOD_BADGE: Record<string, 'neutral' | 'info' | 'success' | 'warning'> =
 };
 
 function fmt(n: number) {
-  return 'â‚±' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+  return '?' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 }
 
 function fmtDate(iso: string) {
@@ -144,7 +144,7 @@ export function PaymentList(): React.ReactNode {
             ))}
           </select>
           <Button
-            onClick={() => router.push('/portal/accounting/payments/new')}
+            onClick={() => router.push('/portal/accounting-and-finance/payments/new')}
             className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
           >
             <Plus size={16} />
@@ -183,7 +183,7 @@ export function PaymentList(): React.ReactNode {
                 {payments.map((p) => (
                   <tr
                     key={p.id}
-                    onClick={() => router.push(`/portal/accounting/payments/${p.id}`)}
+                    onClick={() => router.push(`/portal/accounting-and-finance/payments/${p.id}`)}
                     className="border-b border-border last:border-none hover:bg-muted/30 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">
@@ -197,7 +197,7 @@ export function PaymentList(): React.ReactNode {
                           <p className="text-[11px] text-muted-foreground">{p.client.clientNo ?? `#${p.client.id}`}</p>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">â€”</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-foreground">{fmt(p.amount)}</td>
@@ -205,7 +205,7 @@ export function PaymentList(): React.ReactNode {
                       {p.unusedAmount > 0 ? (
                         <span className="text-amber-600 font-medium">{fmt(p.unusedAmount)}</span>
                       ) : (
-                        <span className="text-muted-foreground">â€”</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -214,7 +214,7 @@ export function PaymentList(): React.ReactNode {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs font-mono">
-                      {p.referenceNumber ?? 'â€”'}
+                      {p.referenceNumber ?? '—'}
                     </td>
                   </tr>
                 ))}

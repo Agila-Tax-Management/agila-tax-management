@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/billing/components/CreateSubscriptionModal.tsx
+// src/app/(portal)/portal/accounting-and-finance/billing/components/CreateSubscriptionModal.tsx
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';

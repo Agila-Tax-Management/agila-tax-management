@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/chartofaccounts/page.tsx
+// src/app/(portal)/portal/accounting-and-finance/chartofaccounts/page.tsx
 import { ChartofAccounts } from '@/components/accounting/ChartofAccounts';
 
 export default function ChartofAccountsPage() {

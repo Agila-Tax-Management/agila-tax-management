@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -12,28 +12,28 @@ import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
 const pendingCount = INITIAL_PAYMENTS.filter(p => p.status === 'Pending' || p.status === 'Overdue').length;
 
 const ACCOUNTING_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/accounting' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/accounting-and-finance' },
   {
     id: 'operations',
     label: 'OPERATIONS',
     isSection: true,
   },
-  { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting/payments', badge: pendingCount },
-  { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting/invoices' },
-  { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting/billing' },
+  { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting-and-finance/payments', badge: pendingCount },
+  { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting-and-finance/invoices' },
+  { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting-and-finance/billing' },
   {
     id: 'accounting',
     label: 'ACCOUNTING',
     isSection: true,
   },
-  { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting/journaling' },
-  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting/chartofaccounts' },
+  { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting-and-finance/journaling' },
+  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting-and-finance/chartofaccounts' },
   {
     id: 'analytics',
     label: 'ANALYTICS',
     isSection: true,
   },
-  { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/accounting/reports' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/accounting-and-finance/reports' },
 ];
 
 interface AccountingSidebarProps {

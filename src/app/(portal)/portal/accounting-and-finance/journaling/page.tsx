@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/journaling/page.tsx
+// src/app/(portal)/portal/accounting-and-finance/journaling/page.tsx
 import { Journaling } from '@/components/accounting/Journaling';
 
 export default function JournalingPage() {

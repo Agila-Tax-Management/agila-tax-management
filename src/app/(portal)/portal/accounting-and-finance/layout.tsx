@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -14,7 +14,7 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
   const router = useRouter();
   const pathname = usePathname();
 
-  const moduleRoot = '/portal/accounting';
+  const moduleRoot = '/portal/accounting-and-finance';
   const isRoot = pathname === moduleRoot;
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-// src/app/(portal)/portal/accounting/payments/new/actions.ts
+// src/app/(portal)/portal/accounting-and-finance/payments/new/actions.ts
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -81,7 +81,7 @@ export async function recordPaymentAction(
             invoiceId: alloc.invoiceId,
             actorId: session.user.id,
             changeType: 'PAYMENT_ADDED',
-            newValue: `${input.method} ₱${alloc.amountApplied.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${newPayment.paymentNumber}`,
+            newValue: `${input.method} ?${alloc.amountApplied.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${newPayment.paymentNumber}`,
           },
         });
       }
@@ -94,12 +94,12 @@ export async function recordPaymentAction(
       action: 'CREATED',
       entity: 'Payment',
       entityId: payment.id,
-      description: `Recorded payment ${payment.paymentNumber} of ₱${input.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} for client #${input.clientId}`,
+      description: `Recorded payment ${payment.paymentNumber} of ?${input.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} for client #${input.clientId}`,
     });
 
     // Step 4: Revalidate both lists
-    revalidatePath('/portal/accounting/payments');
-    revalidatePath('/portal/accounting/invoices');
+    revalidatePath('/portal/accounting-and-finance/payments');
+    revalidatePath('/portal/accounting-and-finance/invoices');
 
     return { paymentId: payment.id };
   } catch (err) {
