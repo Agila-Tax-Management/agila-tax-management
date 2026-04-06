@@ -108,6 +108,8 @@ model Client {
   //Compliances
   compliances ClientCompliance[]
 
+  glAccounts GlAccount[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
