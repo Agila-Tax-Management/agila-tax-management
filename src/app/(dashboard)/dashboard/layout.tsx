@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
   Settings, LogOut, ChevronLeft, ChevronRight, X, Menu,
   ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
-  Sun, Moon, User
+  Sun, Moon, User, HelpCircle, BookOpen, Heart, FileWarning
 } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
@@ -103,6 +103,12 @@ const NAV_ITEMS = [
   { href: '/dashboard/hr-apps',            label: 'Application', icon: SendHorizontal },
 ];
 
+const HELP_ITEMS = [
+  { href: '/dashboard/help/incident-report',    label: 'Incident Report',    icon: FileWarning },
+  { href: '/dashboard/help/knowledgebase',      label: 'Knowledge Base',     icon: BookOpen    },
+  { href: '/dashboard/help/workplace-careline', label: 'Workplace Care Line', icon: Heart       },
+];
+
 const PORTAL_ITEMS = [
   { href: '/portal/sales',           label: 'Sales',           icon: Megaphone  },
   { href: '/portal/compliance',      label: 'Compliance',      icon: ShieldCheck },
@@ -143,6 +149,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       '/dashboard/settings/user-management':               'User Management | Agila Tax Management System',
       '/dashboard/settings/user-client-management':        'Client User Management | Agila Tax Management System',
       '/dashboard/settings/client-management':             'Client Management | Agila Tax Management System',
+      '/dashboard/help/incident-report':                   'Incident Report | Agila Tax Management System',
+      '/dashboard/help/knowledgebase':                     'Knowledge Base | Agila Tax Management System',
+      '/dashboard/help/workplace-careline':                'Workplace Care Line | Agila Tax Management System',
     };
     const matched = Object.keys(titleMap)
       .sort((a, b) => b.length - a.length)
@@ -214,6 +223,7 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
   const router = useRouter();
   const [logoHovered, setLogoHovered] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
@@ -301,6 +311,48 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
               </button>
             );
           })}
+
+          {/* Help Dropdown */}
+          <div>
+            <button
+              onClick={() => setHelpOpen((open) => !open)}
+              className={`w-full flex items-center ${
+                isExpanded ? 'gap-3 px-3' : 'justify-center'
+              } p-3 rounded-xl transition-all duration-200 ${
+                helpOpen
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+              title={!isExpanded ? 'Help' : undefined}
+            >
+              <span className="shrink-0"><HelpCircle size={20} /></span>
+              {isExpanded && <span className="font-semibold text-sm whitespace-nowrap">Help</span>}
+              {isExpanded && (
+                <span className="ml-auto transition-transform duration-200" style={{ transform: helpOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  <ChevronDown size={16} />
+                </span>
+              )}
+            </button>
+
+            {helpOpen && isExpanded && (
+              <div className="mt-1 mx-1 rounded-xl border border-slate-700/50 bg-slate-800/40 overflow-hidden">
+                {HELP_ITEMS.map(({ href, label, icon: Icon }) => (
+                  <button
+                    key={href}
+                    onClick={() => navigate(href)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                      isActive(href)
+                        ? 'bg-blue-600/80 text-white'
+                        : 'text-slate-400 hover:bg-slate-700/60 hover:text-white'
+                    }`}
+                  >
+                    <Icon size={15} className="shrink-0" />
+                    <span className="text-[13px] font-medium">{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Portal Dropdown */}
           <div>
