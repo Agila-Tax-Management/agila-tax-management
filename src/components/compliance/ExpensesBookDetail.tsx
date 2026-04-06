@@ -1,15 +1,16 @@
-// src/components/compliance/ExpensesBookDetail.tsx
+﻿// src/components/compliance/ExpensesBookDetail.tsx
 'use client';
 
 import React, { useState, useRef, useMemo } from 'react';
 import {
-  ArrowLeft, FilePlus2, Building2, Plus, Lock,
+  FilePlus2, Building2, Plus, Lock,
   Paperclip, ExternalLink, CheckCircle2, ChevronRight, X,
   ShieldCheck, ShieldX, Eye, AlertCircle,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
+import { Breadcrumb, type BreadcrumbItem } from '@/components/UI/Breadcrumb';
 import type { MockClientWithCompliance } from '@/lib/mock-compliance-data';
 
 // ─── VAT detection ─────────────────────────────────────────────────────────────
@@ -63,6 +64,12 @@ interface SupplierEntry {
   name: string;
   vat: string;
 }
+
+// Navigation view discriminated union
+type NavView =
+  | { type: 'journal' }
+  | { type: 'encode'; monthId: string }
+  | { type: 'record-form'; monthId: string; recordId: string | null };
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -183,212 +190,55 @@ function ReceiptPreviewModal({ url, file, onClose }: { url: string; file: string
   );
 }
 
-// ─── Encode view ────────────────────────────────────────────────────────────────
+// ─── Helpers (encode / form) ───────────────────────────────────────────────────
 
-interface EncodeViewProps {
+function nextReceiptNo(records: ExpenseRecord[]): string {
+  if (records.length === 0) return '301';
+  const nums = records.map(r => parseInt(r.receiptNo, 10)).filter(n => !isNaN(n));
+  return String(Math.max(...nums, 300) + 1);
+}
+
+function calcExpenseTotals(records: ExpenseRecord[]) {
+  return {
+    grossExpenses: records.reduce((s, r) => s + r.amount, 0),
+    netExpenses:   records.reduce((s, r) => s + r.netOfVat, 0),
+    vat:           records.reduce((s, r) => s + r.vat, 0),
+    audited:       records.length > 0 && records.every(r => r.claimable !== null),
+  };
+}
+
+// ─── Encode table (per-month expense records, stateless) ───────────────────────
+
+interface EncodeTableProps {
   month: ExpenseMonth;
   isVat: boolean;
   isSuperAdmin: boolean;
-  accounts: Account[];
-  supplierCache: SupplierEntry[];
-  onBack: () => void;
-  onFinalize: (monthId: string) => void;
-  onUnfinalize: (monthId: string) => void;
-  onUpdateMonth: (updated: ExpenseMonth) => void;
-  onAddAccount: (name: string) => void;
-  onCacheSupplier: (entry: SupplierEntry) => void;
+  onAddRecord: () => void;
+  onEditRecord: (recordId: string) => void;
+  onDeleteRecord: (recordId: string) => void;
+  onSetClaimable: (recordId: string, val: boolean) => void;
+  onFinalize: () => void;
+  onUnfinalize: () => void;
+  onAddAccount: () => void;
+  onViewReceipt: (rec: ExpenseRecord) => void;
 }
 
-function EncodeView({
-  month, isVat, isSuperAdmin, accounts, supplierCache,
-  onBack, onFinalize, onUnfinalize, onUpdateMonth, onAddAccount, onCacheSupplier,
-}: EncodeViewProps): React.ReactNode {
-  const [records, setRecords] = useState<ExpenseRecord[]>(month.records);
-  const [isRecordOpen, setIsRecordOpen]       = useState(false);
-  const [isAddAccOpen, setIsAddAccOpen]        = useState(false);
-  const [editingRecord, setEditingRecord]      = useState<ExpenseRecord | null>(null);
-  const [previewRec, setPreviewRec]            = useState<ExpenseRecord | null>(null);
-  const [newAccName, setNewAccName]            = useState('');
-  const [supplierSuggestions, setSupplierSuggestions] = useState<SupplierEntry[]>([]);
-  const [showSuggestions, setShowSuggestions]  = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+function EncodeTable({
+  month, isVat, isSuperAdmin,
+  onAddRecord, onEditRecord, onDeleteRecord, onSetClaimable,
+  onFinalize, onUnfinalize, onAddAccount, onViewReceipt,
+}: EncodeTableProps): React.ReactNode {
   const locked = month.finalized && !isSuperAdmin;
-
-  // ── computed audit state ───────────────────────────────────────────────────
+  const records = month.records;
   const allAudited = records.length > 0 && records.every(r => r.claimable !== null);
   const unauditedCount = records.filter(r => r.claimable === null).length;
-
-  // ── helpers ────────────────────────────────────────────────────────────────
-  function syncMonth(updated: ExpenseRecord[]) {
-    const gross = updated.reduce((s, r) => s + r.amount, 0);
-    const net   = updated.reduce((s, r) => s + r.netOfVat, 0);
-    const vat   = updated.reduce((s, r) => s + r.vat, 0);
-    const aa    = updated.length > 0 && updated.every(r => r.claimable !== null);
-    onUpdateMonth({ ...month, records: updated, grossExpenses: gross, netExpenses: net, vat, audited: aa });
-  }
-
-  function nextReceiptNo(): string {
-    if (records.length === 0) return '301';
-    const nums = records.map(r => parseInt(r.receiptNo, 10)).filter(n => !isNaN(n));
-    return String(Math.max(...nums, 300) + 1);
-  }
-
-  // ── form state ─────────────────────────────────────────────────────────────
-  const [form, setForm] = useState<{
-    receiptNo: string;
-    invoiceType: InvoiceType;
-    date: string;
-    supplierName: string;
-    supplierVat: string;
-    account: string;
-    amount: number;
-    notes: string;
-    receiptFile: string;
-    receiptUrl: string;
-  }>({
-    receiptNo: nextReceiptNo(),
-    invoiceType: 'Sales Invoice',
-    date: '',
-    supplierName: '',
-    supplierVat: '',
-    account: accounts[0]?.name ?? '',
-    amount: 0,
-    notes: '',
-    receiptFile: '',
-    receiptUrl: '',
-  });
-
-  const computedNet = isVat ? Math.round((form.amount / 1.12) * 100) / 100 : form.amount;
-  const computedVat = isVat ? Math.round((computedNet * 0.12) * 100) / 100 : 0;
-
-  function openNew() {
-    setEditingRecord(null);
-    setForm({
-      receiptNo: nextReceiptNo(),
-      invoiceType: 'Sales Invoice',
-      date: '',
-      supplierName: '',
-      supplierVat: '',
-      account: accounts[0]?.name ?? '',
-      amount: 0,
-      notes: '',
-      receiptFile: '',
-      receiptUrl: '',
-    });
-    setSupplierSuggestions([]);
-    setShowSuggestions(false);
-    setIsRecordOpen(true);
-  }
-
-  function openEdit(rec: ExpenseRecord) {
-    if (locked) return;
-    setEditingRecord(rec);
-    setForm({
-      receiptNo: rec.receiptNo,
-      invoiceType: rec.invoiceType,
-      date: rec.date,
-      supplierName: rec.supplierName,
-      supplierVat: rec.supplierVat,
-      account: rec.account,
-      amount: rec.amount,
-      notes: rec.notes,
-      receiptFile: rec.receiptFile,
-      receiptUrl: rec.receiptUrl,
-    });
-    setSupplierSuggestions([]);
-    setShowSuggestions(false);
-    setIsRecordOpen(true);
-  }
-
-  function handleSupplierNameChange(val: string) {
-    setForm(f => ({ ...f, supplierName: val }));
-    if (val.trim().length >= 2) {
-      const matches = supplierCache.filter(s =>
-        s.name.toLowerCase().includes(val.toLowerCase())
-      );
-      setSupplierSuggestions(matches);
-      setShowSuggestions(matches.length > 0);
-    } else {
-      setShowSuggestions(false);
-    }
-  }
-
-  function selectSupplier(entry: SupplierEntry) {
-    setForm(f => ({ ...f, supplierName: entry.name, supplierVat: entry.vat }));
-    setShowSuggestions(false);
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setForm(f => ({ ...f, receiptFile: file.name, receiptUrl: url }));
-    e.target.value = '';
-  }
-
-  function saveRecord() {
-    const net = isVat ? Math.round((form.amount / 1.12) * 100) / 100 : form.amount;
-    const v   = isVat ? Math.round((net * 0.12) * 100) / 100 : 0;
-    const rec: ExpenseRecord = {
-      id: editingRecord?.id ?? `exp-${Date.now()}`,
-      receiptNo: form.receiptNo,
-      invoiceType: form.invoiceType,
-      date: form.date,
-      supplierName: form.supplierName,
-      supplierVat: form.supplierVat,
-      account: form.account,
-      amount: form.amount,
-      netOfVat: net,
-      vat: v,
-      notes: form.notes,
-      receiptFile: form.receiptFile,
-      receiptUrl: form.receiptUrl,
-      claimable: null,
-    };
-    // Cache supplier
-    if (form.supplierName.trim()) {
-      onCacheSupplier({ name: form.supplierName.trim(), vat: form.supplierVat.trim() });
-    }
-    let updated: ExpenseRecord[];
-    if (editingRecord) {
-      updated = records.map(r => r.id === editingRecord.id ? { ...rec, claimable: r.claimable } : r);
-    } else {
-      updated = [...records, rec];
-    }
-    setRecords(updated);
-    syncMonth(updated);
-    setIsRecordOpen(false);
-  }
-
-  function deleteRecord(id: string) {
-    const updated = records.filter(r => r.id !== id);
-    setRecords(updated);
-    syncMonth(updated);
-  }
-
-  function setClaimable(id: string, val: boolean) {
-    const updated = records.map(r => r.id === id ? { ...r, claimable: val } : r);
-    setRecords(updated);
-    syncMonth(updated);
-  }
-
-  const totalGross  = records.reduce((s, r) => s + r.amount, 0);
-  const totalNet    = records.reduce((s, r) => s + r.netOfVat, 0);
-  const totalVat    = records.reduce((s, r) => s + r.vat, 0);
+  const totalGross    = records.reduce((s, r) => s + r.amount, 0);
+  const totalNet      = records.reduce((s, r) => s + r.netOfVat, 0);
+  const totalVat      = records.reduce((s, r) => s + r.vat, 0);
   const claimableTotal = records.filter(r => r.claimable === true).reduce((s, r) => s + r.amount, 0);
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-      >
-        <ArrowLeft size={16} /> Back to Expenses Journal
-      </button>
-
+    <div className="space-y-5">
       {/* Header card */}
       <Card className="p-5 border-slate-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -415,13 +265,13 @@ function EncodeView({
             {!locked && (
               <>
                 <button
-                  onClick={() => setIsAddAccOpen(true)}
+                  onClick={onAddAccount}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 active:scale-95 transition-all"
                 >
                   <Plus size={12} /> Add Account
                 </button>
                 <button
-                  onClick={openNew}
+                  onClick={onAddRecord}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 active:scale-95 transition-all"
                 >
                   <Plus size={12} /> Record Expense
@@ -476,7 +326,7 @@ function EncodeView({
                   <td className="px-3 py-2.5 text-xs font-mono font-semibold text-slate-800">{fmtPHP(rec.amount)}</td>
                   {isVat && <td className="px-3 py-2.5 text-xs font-mono text-slate-700">{fmtPHP(rec.netOfVat)}</td>}
                   {isVat && <td className="px-3 py-2.5 text-xs font-mono text-blue-700">{fmtPHP(rec.vat)}</td>}
-                  {/* Claimable audit cell */}
+                  {/* Claimable audit */}
                   <td className="px-3 py-2.5">
                     {locked ? (
                       rec.claimable === true ? (
@@ -489,13 +339,13 @@ function EncodeView({
                     ) : (
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => setClaimable(rec.id, true)}
+                          onClick={() => onSetClaimable(rec.id, true)}
                           className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] font-black transition-all ${rec.claimable === true ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
                         >
                           <ShieldCheck size={9} /> Yes
                         </button>
                         <button
-                          onClick={() => setClaimable(rec.id, false)}
+                          onClick={() => onSetClaimable(rec.id, false)}
                           className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] font-black transition-all ${rec.claimable === false ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
                         >
                           <ShieldX size={9} /> No
@@ -503,11 +353,11 @@ function EncodeView({
                       </div>
                     )}
                   </td>
-                  {/* Receipt cell */}
+                  {/* Receipt */}
                   <td className="px-3 py-2.5">
                     {rec.receiptFile ? (
                       <button
-                        onClick={() => setPreviewRec(rec)}
+                        onClick={() => onViewReceipt(rec)}
                         className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:text-emerald-800 transition-colors whitespace-nowrap"
                       >
                         <Eye size={10} /> View
@@ -522,21 +372,13 @@ function EncodeView({
                       <span className="text-xs text-slate-300 flex items-center gap-1"><Lock size={9} /> Locked</span>
                     ) : (
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => openEdit(rec)}
-                          className="rounded-md px-2 py-1 text-[10px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
-                          Edit
-                        </button>
-                        <button onClick={() => deleteRecord(rec.id)}
-                          className="rounded-md p-1 text-[10px] text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                          <X size={11} />
-                        </button>
+                        <button onClick={() => onEditRecord(rec.id)} className="rounded-md px-2 py-1 text-[10px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Edit</button>
+                        <button onClick={() => onDeleteRecord(rec.id)} className="rounded-md p-1 text-[10px] text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"><X size={11} /></button>
                       </div>
                     )}
                   </td>
                 </tr>
               ))}
-
-              {/* Totals row */}
               {records.length > 0 && (
                 <tr className="bg-slate-100 border-t-2 border-slate-200 text-xs font-black">
                   <td colSpan={6} className="px-3 py-2 text-[9px] uppercase tracking-widest text-slate-500">Totals</td>
@@ -569,252 +411,235 @@ function EncodeView({
         </div>
         {month.finalized ? (
           isSuperAdmin && (
-            <button
-              onClick={() => onUnfinalize(month.id)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 active:scale-95 transition-all"
-            >
+            <button onClick={onUnfinalize} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 active:scale-95 transition-all">
               <Lock size={12} /> Unfinalize
             </button>
           )
         ) : (
           <button
             disabled={!allAudited || records.length === 0}
-            onClick={() => onFinalize(month.id)}
+            onClick={onFinalize}
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckCircle2 size={12} /> Finalize Month
           </button>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* ── Record Expense Modal ── */}
-      <Modal isOpen={isRecordOpen} onClose={() => setIsRecordOpen(false)} title="" size="2xl">
-        <div className="overflow-y-auto max-h-[85vh]">
-          <div className="px-6 pt-6 pb-4 border-b border-slate-100">
-            <h2 className="text-lg font-black text-slate-900 tracking-tight">
-              {editingRecord ? 'Edit Expense Record' : 'Add Expense Record'}
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">{month.coverageMonth}</p>
+// ─── Record form page (full subview — no modal) ────────────────────────────────
+
+interface RecordFormPageProps {
+  month: ExpenseMonth;
+  existingRecord: ExpenseRecord | null;
+  isVat: boolean;
+  accounts: Account[];
+  supplierCache: SupplierEntry[];
+  onSave: (record: ExpenseRecord) => void;
+  onCancel: () => void;
+  onCacheSupplier: (entry: SupplierEntry) => void;
+}
+
+function RecordFormPage({
+  month, existingRecord, isVat, accounts, supplierCache,
+  onSave, onCancel, onCacheSupplier,
+}: RecordFormPageProps): React.ReactNode {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({
+    receiptNo:    existingRecord?.receiptNo    ?? nextReceiptNo(month.records),
+    invoiceType:  (existingRecord?.invoiceType ?? 'Sales Invoice') as InvoiceType,
+    date:         existingRecord?.date         ?? '',
+    supplierName: existingRecord?.supplierName ?? '',
+    supplierVat:  existingRecord?.supplierVat  ?? '',
+    account:      existingRecord?.account      ?? accounts[0]?.name ?? '',
+    amount:       existingRecord?.amount       ?? 0,
+    notes:        existingRecord?.notes        ?? '',
+    receiptFile:  existingRecord?.receiptFile  ?? '',
+    receiptUrl:   existingRecord?.receiptUrl   ?? '',
+  });
+  const [suggestions, setSuggestions]           = useState<SupplierEntry[]>([]);
+  const [showSuggestions, setShowSuggestions]   = useState(false);
+
+  const computedNet = isVat ? Math.round((form.amount / 1.12) * 100) / 100 : form.amount;
+  const computedVat = isVat ? Math.round((computedNet * 0.12) * 100) / 100 : 0;
+
+  function handleSupplierNameChange(val: string) {
+    setForm(f => ({ ...f, supplierName: val }));
+    if (val.trim().length >= 2) {
+      const matches = supplierCache.filter(s => s.name.toLowerCase().includes(val.toLowerCase()));
+      setSuggestions(matches);
+      setShowSuggestions(matches.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  }
+
+  function selectSupplier(entry: SupplierEntry) {
+    setForm(f => ({ ...f, supplierName: entry.name, supplierVat: entry.vat }));
+    setShowSuggestions(false);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setForm(f => ({ ...f, receiptFile: file.name, receiptUrl: URL.createObjectURL(file) }));
+    e.target.value = '';
+  }
+
+  function handleSave() {
+    const net = isVat ? Math.round((form.amount / 1.12) * 100) / 100 : form.amount;
+    const v   = isVat ? Math.round((net * 0.12) * 100) / 100 : 0;
+    const rec: ExpenseRecord = {
+      id:           existingRecord?.id ?? `exp-${Date.now()}`,
+      receiptNo:    form.receiptNo,
+      invoiceType:  form.invoiceType,
+      date:         form.date,
+      supplierName: form.supplierName,
+      supplierVat:  form.supplierVat,
+      account:      form.account,
+      amount:       form.amount,
+      netOfVat:     net,
+      vat:          v,
+      notes:        form.notes,
+      receiptFile:  form.receiptFile,
+      receiptUrl:   form.receiptUrl,
+      claimable:    existingRecord?.claimable ?? null,
+    };
+    if (form.supplierName.trim()) {
+      onCacheSupplier({ name: form.supplierName.trim(), vat: form.supplierVat.trim() });
+    }
+    onSave(rec);
+  }
+
+  return (
+    <Card className="border-slate-200 shadow-sm animate-in fade-in duration-200">
+      <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+        <h2 className="text-lg font-black text-slate-900 tracking-tight">
+          {existingRecord ? 'Edit Expense Record' : 'Add Expense Record'}
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">{month.coverageMonth}</p>
+      </div>
+      <div className="px-6 py-6 space-y-5">
+
+        {/* Row 1: Receipt # | Invoice Type | Date */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Receipt #</label>
+            <input type="text" value={form.receiptNo} onChange={e => setForm(f => ({ ...f, receiptNo: e.target.value }))} className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
-
-          <div className="px-6 py-5 space-y-4">
-
-            {/* Row 1: Receipt # | Invoice Type | Date */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Receipt #</label>
-                <input
-                  type="text"
-                  value={form.receiptNo}
-                  onChange={e => setForm(f => ({ ...f, receiptNo: e.target.value }))}
-                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Invoice Type</label>
-                <select
-                  value={form.invoiceType}
-                  onChange={e => setForm(f => ({ ...f, invoiceType: e.target.value as InvoiceType }))}
-                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  {INVOICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Date</label>
-                <input
-                  type="text"
-                  placeholder="MM/DD/YYYY"
-                  value={form.date}
-                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-
-            {/* Row 2: Supplier Name (with autocomplete) | Supplier VAT */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="relative">
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Supplier Name</label>
-                <input
-                  type="text"
-                  value={form.supplierName}
-                  onChange={e => handleSupplierNameChange(e.target.value)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Enter supplier name"
-                  autoComplete="off"
-                />
-                {showSuggestions && (
-                  <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-40 overflow-y-auto">
-                    {supplierSuggestions.map(s => (
-                      <button
-                        key={s.name}
-                        type="button"
-                        onMouseDown={() => selectSupplier(s)}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 transition-colors"
-                      >
-                        <span className="font-semibold text-slate-800">{s.name}</span>
-                        {s.vat && <span className="text-slate-400 ml-2 font-mono">{s.vat}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Supplier VAT</label>
-                <input
-                  type="text"
-                  value={form.supplierVat}
-                  onChange={e => setForm(f => ({ ...f, supplierVat: e.target.value }))}
-                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="TIN (optional)"
-                />
-              </div>
-            </div>
-
-            {/* Row 3: Account + Amount + computed + Notes */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-4">
-                {/* Account */}
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Account</label>
-                  <select
-                    value={form.account}
-                    onChange={e => setForm(f => ({ ...f, account: e.target.value }))}
-                    className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                  </select>
-                </div>
-                {/* Amount */}
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Amount</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.amount || ''}
-                    onChange={e => setForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
-                    className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="0.00"
-                  />
-                </div>
-                {/* Computed display */}
-                {isVat ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
-                      <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 mb-0.5">Net of VAT</p>
-                      <p className="text-sm font-black font-mono text-slate-800">{fmtPHP(computedNet)}</p>
-                    </div>
-                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
-                      <p className="text-[9px] font-black uppercase tracking-wide text-blue-400 mb-0.5">VAT (12%)</p>
-                      <p className="text-sm font-black font-mono text-blue-700">{fmtPHP(computedVat)}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 opacity-50">
-                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 mb-0.5">Net of VAT / VAT</p>
-                    <p className="text-xs text-slate-400">Not applicable (Non-VAT)</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">
-                  Notes <span className="normal-case font-normal text-slate-400">(optional)</span>
-                </label>
-                <textarea
-                  rows={6}
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="Additional notes..."
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-                  style={{ minHeight: '158px' }}
-                />
-              </div>
-            </div>
-
-            {/* Receipt upload */}
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Receipt</label>
-              <div className="flex items-center gap-3 flex-wrap">
-                <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange} />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all"
-                >
-                  <Paperclip size={14} /> Upload Receipt
-                </button>
-                {form.receiptFile ? (
-                  <div className="flex items-center gap-2">
-                    <a href={form.receiptUrl} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition-colors">
-                      <ExternalLink size={11} /> {form.receiptFile}
-                    </a>
-                    <button onClick={() => setForm(f => ({ ...f, receiptFile: '', receiptUrl: '' }))}
-                      className="text-slate-400 hover:text-red-500 transition-colors">
-                      <X size={13} />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-xs text-slate-400">No file selected</span>
-                )}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex gap-3 pt-3 border-t border-slate-100">
-              <Button variant="outline" className="flex-1" onClick={() => setIsRecordOpen(false)}>Cancel</Button>
-              <button
-                disabled={!form.supplierName.trim() || form.amount <= 0}
-                onClick={saveRecord}
-                className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {editingRecord ? 'Save Changes' : 'Add Record'}
-              </button>
-            </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Invoice Type</label>
+            <select value={form.invoiceType} onChange={e => setForm(f => ({ ...f, invoiceType: e.target.value as InvoiceType }))} className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              {INVOICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Date</label>
+            <input type="text" placeholder="MM/DD/YYYY" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
         </div>
-      </Modal>
 
-      {/* ── Add Account Modal ── */}
-      <Modal isOpen={isAddAccOpen} onClose={() => setIsAddAccOpen(false)} title="Add Account" size="sm">
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Account Name</label>
+        {/* Row 2: Supplier Name (with autocomplete) | Supplier VAT */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="relative">
+            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Supplier Name</label>
             <input
               type="text"
-              value={newAccName}
-              onChange={e => setNewAccName(e.target.value)}
-              placeholder="e.g. Insurance Expense"
-              className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={form.supplierName}
+              onChange={e => handleSupplierNameChange(e.target.value)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              placeholder="Enter supplier name"
+              autoComplete="off"
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
+            {showSuggestions && (
+              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-40 overflow-y-auto">
+                {suggestions.map(s => (
+                  <button key={s.name} type="button" onMouseDown={() => selectSupplier(s)} className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 transition-colors">
+                    <span className="font-semibold text-slate-800">{s.name}</span>
+                    {s.vat && <span className="text-slate-400 ml-2 font-mono">{s.vat}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex gap-3 pt-2 border-t border-slate-100">
-            <Button variant="outline" className="flex-1" onClick={() => setIsAddAccOpen(false)}>Cancel</Button>
-            <button
-              disabled={!newAccName.trim()}
-              onClick={() => { onAddAccount(newAccName.trim()); setNewAccName(''); setIsAddAccOpen(false); }}
-              className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Add
-            </button>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Supplier VAT</label>
+            <input type="text" value={form.supplierVat} onChange={e => setForm(f => ({ ...f, supplierVat: e.target.value }))} placeholder="TIN (optional)" className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
         </div>
-      </Modal>
 
-      {/* ── Receipt Preview Modal ── */}
-      {previewRec && (
-        <ReceiptPreviewModal
-          url={previewRec.receiptUrl}
-          file={previewRec.receiptFile}
-          onClose={() => setPreviewRec(null)}
-        />
-      )}
-    </div>
+        {/* Row 3: Account + Amount + computed | Notes */}
+        <div className="grid grid-cols-2 gap-5">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Account</label>
+              <select value={form.account} onChange={e => setForm(f => ({ ...f, account: e.target.value }))} className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Amount</label>
+              <input type="number" min="0" step="0.01" value={form.amount || ''} onChange={e => setForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))} placeholder="0.00" className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            {isVat ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 mb-0.5">Net of VAT</p>
+                  <p className="text-sm font-black font-mono text-slate-800">{fmtPHP(computedNet)}</p>
+                </div>
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
+                  <p className="text-[9px] font-black uppercase tracking-wide text-blue-400 mb-0.5">VAT (12%)</p>
+                  <p className="text-sm font-black font-mono text-blue-700">{fmtPHP(computedVat)}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 opacity-50">
+                <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 mb-0.5">Net of VAT / VAT</p>
+                <p className="text-xs text-slate-400">Not applicable (Non-VAT)</p>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Notes <span className="normal-case font-normal text-slate-400">(optional)</span></label>
+            <textarea rows={6} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Additional notes..." className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" style={{ minHeight: '158px' }} />
+          </div>
+        </div>
+
+        {/* Receipt upload */}
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1.5">Receipt</label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange} />
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all">
+              <Paperclip size={14} /> Upload Receipt
+            </button>
+            {form.receiptFile ? (
+              <div className="flex items-center gap-2">
+                <a href={form.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition-colors">
+                  <ExternalLink size={11} /> {form.receiptFile}
+                </a>
+                <button onClick={() => setForm(f => ({ ...f, receiptFile: '', receiptUrl: '' }))} className="text-slate-400 hover:text-red-500 transition-colors"><X size={13} /></button>
+              </div>
+            ) : <span className="text-xs text-slate-400">No file selected</span>}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-2 border-t border-slate-100">
+          <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
+          <button
+            disabled={!form.supplierName.trim() || form.amount <= 0}
+            onClick={handleSave}
+            className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {existingRecord ? 'Save Changes' : 'Add Record'}
+          </button>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -831,231 +656,262 @@ interface ExpensesBookDetailProps {
 export function ExpensesBookDetail({ client, year, onYearChange, onBack, isSuperAdmin = false }: ExpensesBookDetailProps): React.ReactNode {
   const isVat = isVatClient(client);
 
-  const [months, setMonths] = useState<ExpenseMonth[]>(() => buildMonthRecords(year, isVat));
+  const [navView, setNavView]     = useState<NavView>({ type: 'journal' });
+  const [months, setMonths]       = useState<ExpenseMonth[]>(() => buildMonthRecords(year, isVat));
+  const [accounts, setAccounts]   = useState<Account[]>(INITIAL_ACCOUNTS);
+  const [supplierCache, setSupplierCache] = useState<SupplierEntry[]>(() => [
+    { name: 'Meralco', vat: '004-598-244-000' },
+    { name: 'PLDT Inc.', vat: '000-459-898-000' },
+    { name: 'SM Cebu Office', vat: '034-710-299-000' },
+    { name: 'National Bookstore', vat: '008-204-710-000' },
+    { name: 'Grab Philippines', vat: '' },
+    { name: 'Sun Life Financial', vat: '012-845-667-000' },
+  ]);
+  const [previewRecord, setPreviewRecord]   = useState<ExpenseRecord | null>(null);
+  const [isAddAccOpen, setIsAddAccOpen]     = useState(false);
+  const [isOpenCaseOpen, setIsOpenCaseOpen] = useState(false);
+  const [newAccName, setNewAccName]         = useState('');
+
+  // Year change resets to journal
   const [prevYear, setPrevYear] = useState(year);
   if (prevYear !== year) {
     setPrevYear(year);
     setMonths(buildMonthRecords(year, isVat));
+    setNavView({ type: 'journal' });
   }
 
-  const [encodeMonth, setEncodeMonth] = useState<ExpenseMonth | null>(null);
-  const [isOpenCaseOpen, setIsOpenCaseOpen] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
+  // Derived lookups
+  const selectedMonth = navView.type !== 'journal'
+    ? (months.find(m => m.id === navView.monthId) ?? null)
+    : null;
+  const editingRecord = navView.type === 'record-form' && navView.recordId && selectedMonth
+    ? (selectedMonth.records.find(r => r.id === navView.recordId) ?? null)
+    : null;
 
-  // ── Supplier cache (persisted across months within the session) ─────────────
-  const [supplierCache, setSupplierCache] = useState<SupplierEntry[]>(() => {
-    // Pre-seed from mock data
-    return [
-      { name: 'Meralco', vat: '004-598-244-000' },
-      { name: 'PLDT Inc.', vat: '000-459-898-000' },
-      { name: 'SM Cebu Office', vat: '034-710-299-000' },
-      { name: 'National Bookstore', vat: '008-204-710-000' },
-      { name: 'Grab Philippines', vat: '' },
-      { name: 'Sun Life Financial', vat: '012-845-667-000' },
-    ];
-  });
-
-  function handleAddAccount(name: string) {
-    setAccounts(prev => [...prev, { id: `acc-${Date.now()}`, name }]);
-  }
-
-  function handleCacheSupplier(entry: SupplierEntry) {
-    setSupplierCache(prev => {
-      const existing = prev.find(s => s.name.toLowerCase() === entry.name.toLowerCase());
-      if (existing) {
-        return prev.map(s => s.name.toLowerCase() === entry.name.toLowerCase() ? entry : s);
-      }
-      return [...prev, entry];
-    });
-  }
-
-  function handleYearChange(y: number) {
-    onYearChange(y);
-  }
-
-  function handleFinalize(monthId: string) {
-    setMonths(prev => prev.map(m => m.id === monthId ? { ...m, finalized: true } : m));
-  }
-
-  function handleUnfinalize(monthId: string) {
-    setMonths(prev => prev.map(m => m.id === monthId ? { ...m, finalized: false } : m));
-  }
-
-  function handleUpdateMonth(updated: ExpenseMonth) {
-    setMonths(prev => prev.map(m => m.id === updated.id ? updated : m));
-    setEncodeMonth(prev => prev?.id === updated.id ? updated : prev);
-  }
-
-  // ── YTD summary ─────────────────────────────────────────────────────────────
   const ytd = useMemo(() => ({
     gross: months.reduce((s, m) => s + m.grossExpenses, 0),
     net:   months.reduce((s, m) => s + m.netExpenses, 0),
     vat:   months.reduce((s, m) => s + m.vat, 0),
   }), [months]);
 
-  // ── Encode subview ───────────────────────────────────────────────────────────
-  if (encodeMonth) {
-    return (
-      <EncodeView
-        month={encodeMonth}
-        isVat={isVat}
-        isSuperAdmin={isSuperAdmin}
-        accounts={accounts}
-        supplierCache={supplierCache}
-        onBack={() => setEncodeMonth(null)}
-        onFinalize={handleFinalize}
-        onUnfinalize={handleUnfinalize}
-        onUpdateMonth={handleUpdateMonth}
-        onAddAccount={handleAddAccount}
-        onCacheSupplier={handleCacheSupplier}
-      />
-    );
+  // Mutations
+  function updateMonth(monthId: string, updater: (m: ExpenseMonth) => ExpenseMonth) {
+    setMonths(prev => prev.map(m => m.id === monthId ? updater(m) : m));
   }
 
-  // ── Journal overview ─────────────────────────────────────────────────────────
+  function handleSaveRecord(record: ExpenseRecord) {
+    if (navView.type !== 'record-form') return;
+    const { monthId, recordId } = navView;
+    updateMonth(monthId, m => {
+      const records = recordId
+        ? m.records.map(r => r.id === recordId ? record : r)
+        : [...m.records, record];
+      return { ...m, records, ...calcExpenseTotals(records) };
+    });
+    setNavView({ type: 'encode', monthId });
+  }
+
+  function handleDeleteRecord(monthId: string, recordId: string) {
+    updateMonth(monthId, m => {
+      const records = m.records.filter(r => r.id !== recordId);
+      return { ...m, records, ...calcExpenseTotals(records) };
+    });
+  }
+
+  function handleSetClaimable(monthId: string, recordId: string, val: boolean) {
+    updateMonth(monthId, m => {
+      const records = m.records.map(r => r.id === recordId ? { ...r, claimable: val } : r);
+      return { ...m, records, ...calcExpenseTotals(records) };
+    });
+  }
+
+  function handleFinalize(monthId: string) {
+    updateMonth(monthId, m => ({ ...m, finalized: true }));
+  }
+
+  function handleUnfinalize(monthId: string) {
+    updateMonth(monthId, m => ({ ...m, finalized: false }));
+  }
+
+  function handleCacheSupplier(entry: SupplierEntry) {
+    setSupplierCache(prev => {
+      const existing = prev.find(s => s.name.toLowerCase() === entry.name.toLowerCase());
+      if (existing) return prev.map(s => s.name.toLowerCase() === entry.name.toLowerCase() ? entry : s);
+      return [...prev, entry];
+    });
+  }
+
+  // Breadcrumb
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: 'Working Paper', onClick: onBack },
+    { label: 'Expenses Journal', onClick: navView.type !== 'journal' ? () => setNavView({ type: 'journal' }) : undefined },
+  ];
+  if (navView.type !== 'journal' && selectedMonth) {
+    breadcrumbItems.push({
+      label: selectedMonth.coverageMonth,
+      onClick: navView.type === 'record-form'
+        ? () => setNavView({ type: 'encode', monthId: selectedMonth.id })
+        : undefined,
+    });
+  }
+  if (navView.type === 'record-form') {
+    breadcrumbItems.push({ label: navView.recordId ? 'Edit Expense Record' : 'Add Expense Record' });
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
 
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-      >
-        <ArrowLeft size={16} /> Back to Working Paper
-      </button>
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-      {/* Header card */}
-      <Card className="p-6 border-slate-200 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center shrink-0">
-              <Building2 size={22} className="text-white" />
+      {/* ── Journal overview ── */}
+      {navView.type === 'journal' && (
+        <>
+          <Card className="p-6 border-slate-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center shrink-0">
+                  <Building2 size={22} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 font-medium mb-0.5">{client.businessName} ({client.clientNo})</p>
+                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Expenses Journal</h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {isVat
+                      ? <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">VAT Registered</span>
+                      : <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">Non-VAT</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <select value={year} onChange={e => onYearChange(Number(e.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <button onClick={() => setIsOpenCaseOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all">
+                  <FilePlus2 size={15} /> File Open Case
+                </button>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium mb-0.5">
-                {client.businessName} ({client.clientNo})
-              </p>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">Expenses Journal</h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isVat ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">VAT Registered</span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">Non-VAT</span>
-                )}
-              </p>
+          </Card>
+
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Monthly Expense Records — {year}</p>
+              <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-500">
+                <span>YTD Gross: <span className="text-slate-800 font-black font-mono">{fmtPHP(ytd.gross)}</span></span>
+                {isVat && <span>YTD Net: <span className="text-slate-800 font-black font-mono">{fmtPHP(ytd.net)}</span></span>}
+                {isVat && <span>YTD VAT: <span className="text-blue-700 font-black font-mono">{fmtPHP(ytd.vat)}</span></span>}
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <select
-              value={year}
-              onChange={e => handleYearChange(Number(e.target.value))}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <button
-              onClick={() => setIsOpenCaseOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all"
-            >
-              <FilePlus2 size={15} /> File Open Case
-            </button>
-          </div>
-        </div>
-      </Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse" style={{ minWidth: isVat ? '700px' : '560px' }}>
+                <thead>
+                  <tr className="border-b border-slate-100 bg-white">
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Coverage</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Gross Expenses</th>
+                    {isVat && <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Net Expenses</th>}
+                    {isVat && <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">VAT (12%)</th>}
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Audited</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Finalized</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {months.map(m => (
+                    <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
+                      <td className="px-5 py-3.5 font-semibold text-slate-800">
+                        <span className="flex items-center gap-1.5">
+                          {m.coverageMonth}
+                          <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-500 shrink-0" />
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-sm font-semibold text-slate-800">
+                        {m.grossExpenses > 0 ? fmtPHP(m.grossExpenses) : <span className="text-slate-300">—</span>}
+                      </td>
+                      {isVat && <td className="px-5 py-3.5 font-mono text-sm text-slate-700">{m.netExpenses > 0 ? fmtPHP(m.netExpenses) : <span className="text-slate-300">—</span>}</td>}
+                      {isVat && <td className="px-5 py-3.5 font-mono text-sm text-blue-700">{m.vat > 0 ? fmtPHP(m.vat) : <span className="text-slate-300">—</span>}</td>}
+                      <td className="px-5 py-3.5">
+                        {m.records.length === 0 ? (
+                          <span className="text-xs text-slate-300">—</span>
+                        ) : m.audited ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-700"><ShieldCheck size={10} /> Audited</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-700">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {m.finalized
+                          ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-700"><CheckCircle2 size={10} /> Finalized</span>
+                          : <span className="text-xs text-slate-400 font-semibold">Pending</span>}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          onClick={() => setNavView({ type: 'encode', monthId: m.id })}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all"
+                        >
+                          Encode
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
 
-      {/* Monthly journal table */}
-      <Card className="border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            Monthly Expense Records — {year}
-          </p>
-          <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-500">
-            <span>YTD Gross: <span className="text-slate-800 font-black font-mono">{fmtPHP(ytd.gross)}</span></span>
-            {isVat && <span>YTD Net: <span className="text-slate-800 font-black font-mono">{fmtPHP(ytd.net)}</span></span>}
-            {isVat && <span>YTD VAT: <span className="text-blue-700 font-black font-mono">{fmtPHP(ytd.vat)}</span></span>}
+      {/* ── Encode view ── */}
+      {navView.type === 'encode' && selectedMonth && (
+        <EncodeTable
+          month={selectedMonth}
+          isVat={isVat}
+          isSuperAdmin={isSuperAdmin}
+          onAddRecord={() => setNavView({ type: 'record-form', monthId: selectedMonth.id, recordId: null })}
+          onEditRecord={recordId => setNavView({ type: 'record-form', monthId: selectedMonth.id, recordId })}
+          onDeleteRecord={recordId => handleDeleteRecord(selectedMonth.id, recordId)}
+          onSetClaimable={(recordId, val) => handleSetClaimable(selectedMonth.id, recordId, val)}
+          onFinalize={() => handleFinalize(selectedMonth.id)}
+          onUnfinalize={() => handleUnfinalize(selectedMonth.id)}
+          onAddAccount={() => setIsAddAccOpen(true)}
+          onViewReceipt={rec => setPreviewRecord(rec)}
+        />
+      )}
+
+      {/* ── Record form page ── */}
+      {navView.type === 'record-form' && selectedMonth && (
+        <RecordFormPage
+          month={selectedMonth}
+          existingRecord={editingRecord}
+          isVat={isVat}
+          accounts={accounts}
+          supplierCache={supplierCache}
+          onSave={handleSaveRecord}
+          onCancel={() => {
+            if (navView.type === 'record-form') setNavView({ type: 'encode', monthId: navView.monthId });
+          }}
+          onCacheSupplier={handleCacheSupplier}
+        />
+      )}
+
+      {/* ── Add Account Modal ── */}
+      <Modal isOpen={isAddAccOpen} onClose={() => setIsAddAccOpen(false)} title="Add Account" size="sm">
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Account Name</label>
+            <input type="text" value={newAccName} onChange={e => setNewAccName(e.target.value)} placeholder="e.g. Insurance Expense" className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div className="flex gap-3 pt-2 border-t border-slate-100">
+            <Button variant="outline" className="flex-1" onClick={() => setIsAddAccOpen(false)}>Cancel</Button>
+            <button disabled={!newAccName.trim()} onClick={() => { setAccounts(prev => [...prev, { id: `acc-${Date.now()}`, name: newAccName.trim() }]); setNewAccName(''); setIsAddAccOpen(false); }} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed">Add</button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse" style={{ minWidth: isVat ? '700px' : '560px' }}>
-            <thead>
-              <tr className="border-b border-slate-100 bg-white">
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Coverage</th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Gross Expenses</th>
-                {isVat && <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Net Expenses</th>}
-                {isVat && <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">VAT (12%)</th>}
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Audited</th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Finalized</th>
-                <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {months.map(m => (
-                <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
-                  <td className="px-5 py-3.5 font-semibold text-slate-800">
-                    <span className="flex items-center gap-1.5">
-                      {m.coverageMonth}
-                      <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-500 shrink-0" />
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 font-mono text-sm font-semibold text-slate-800">
-                    {m.grossExpenses > 0 ? fmtPHP(m.grossExpenses) : <span className="text-slate-300">—</span>}
-                  </td>
-                  {isVat && (
-                    <td className="px-5 py-3.5 font-mono text-sm text-slate-700">
-                      {m.netExpenses > 0 ? fmtPHP(m.netExpenses) : <span className="text-slate-300">—</span>}
-                    </td>
-                  )}
-                  {isVat && (
-                    <td className="px-5 py-3.5 font-mono text-sm text-blue-700">
-                      {m.vat > 0 ? fmtPHP(m.vat) : <span className="text-slate-300">—</span>}
-                    </td>
-                  )}
-                  {/* Audited */}
-                  <td className="px-5 py-3.5">
-                    {m.records.length === 0 ? (
-                      <span className="text-xs text-slate-300">—</span>
-                    ) : m.audited ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-700">
-                        <ShieldCheck size={10} /> Audited
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-700">
-                        Pending
-                      </span>
-                    )}
-                  </td>
-                  {/* Finalized */}
-                  <td className="px-5 py-3.5">
-                    {m.finalized ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-700">
-                        <CheckCircle2 size={10} /> Finalized
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400 font-semibold">Pending</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <button
-                      onClick={() => setEncodeMonth(m)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all"
-                    >
-                      Encode
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      </Modal>
 
-      {/* Open Case Modal */}
+      {/* ── File Open Case Modal ── */}
       <Modal isOpen={isOpenCaseOpen} onClose={() => setIsOpenCaseOpen(false)} title="File Open Case" size="lg">
         <div className="p-6 space-y-4">
-          <p className="text-sm text-slate-500">
-            Filing a new open case for <strong className="text-slate-900">{client.businessName}</strong> — Expenses Book.
-          </p>
+          <p className="text-sm text-slate-500">Filing a new open case for <strong className="text-slate-900">{client.businessName}</strong> — Expenses Book.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Case Type</label>
@@ -1069,9 +925,7 @@ export function ExpensesBookDetail({ client, year, onYearChange, onBack, isSuper
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Priority</label>
               <select className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
+                <option>High</option><option>Medium</option><option>Low</option>
               </select>
             </div>
           </div>
@@ -1081,12 +935,19 @@ export function ExpensesBookDetail({ client, year, onYearChange, onBack, isSuper
           </div>
           <div className="flex gap-3 pt-2 border-t border-slate-100">
             <Button variant="outline" className="flex-1" onClick={() => setIsOpenCaseOpen(false)}>Cancel</Button>
-            <button onClick={() => setIsOpenCaseOpen(false)} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all">
-              File Case
-            </button>
+            <button onClick={() => setIsOpenCaseOpen(false)} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 active:scale-95 transition-all">File Case</button>
           </div>
         </div>
       </Modal>
+
+      {/* ── Receipt Preview Modal ── */}
+      {previewRecord && (
+        <ReceiptPreviewModal
+          url={previewRecord.receiptUrl}
+          file={previewRecord.receiptFile}
+          onClose={() => setPreviewRecord(null)}
+        />
+      )}
     </div>
   );
 }
