@@ -18,7 +18,7 @@ export default function AccountingLayout({ children }: { children: React.ReactNo
   const isRoot = pathname === moduleRoot;
 
   useEffect(() => {
-    document.title = 'Accounting Portal | Agila Tax Management System';
+    document.title = 'ACF Portal | Agila Tax Management System';
   }, []);
 
   return (

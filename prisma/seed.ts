@@ -17,7 +17,7 @@ const PORTAL_APPS = [
   { name: "SALES" as const,                label: "Sales Portal" },
   { name: "COMPLIANCE" as const,           label: "Compliance Portal" },
   { name: "LIAISON" as const,              label: "Liaison Portal" },
-  { name: "ACCOUNTING" as const,           label: "Accounting Portal" },
+  { name: "ACCOUNTING" as const,           label: "ACF Portal" },
   { name: "OPERATIONS_MANAGEMENT" as const, label: "Operations Management Portal" },
   { name: "HR" as const,                   label: "HR Portal" },
   { name: "TASK_MANAGEMENT" as const,      label: "Task Management Portal" },

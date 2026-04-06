@@ -8,7 +8,7 @@ import { ChevronRight } from 'lucide-react';
 const MODULE_LABELS: Record<string, string> = {
   sales: 'Sales Portal',
   compliance: 'Compliance Portal',
-  accounting: 'Accounting Portal',
+  accounting: 'ACF Portal',
   hr: 'HR Portal',
   liaison: 'Liaison Portal',
   'account-officer': 'Account Officer Portal',

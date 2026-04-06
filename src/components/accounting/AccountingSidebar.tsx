@@ -21,19 +21,19 @@ const ACCOUNTING_NAV_ITEMS = [
   { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting/payments', badge: pendingCount },
   { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting/invoices' },
   { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting/billing' },
+  {
+    id: 'accounting',
+    label: 'ACCOUNTING',
+    isSection: true,
+  },
   { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting/journaling' },
+  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting/chartofaccounts' },
   {
     id: 'analytics',
     label: 'ANALYTICS',
     isSection: true,
   },
   { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/accounting/reports' },
-  {
-    id: 'tools',
-    label: 'TOOLS',
-    isSection: true,
-  },
-  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting/chartofaccounts' },
 ];
 
 interface AccountingSidebarProps {
@@ -71,9 +71,9 @@ export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
             </div>
             <div>
               <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                Accounting
+                ACF Portal
               </h2>
-              <p className="text-xs text-slate-500">Finance Portal</p>
+              <p className="text-xs text-slate-500">Accounting &amp; Finance</p>
             </div>
           </div>
         </div>
