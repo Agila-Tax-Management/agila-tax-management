@@ -8,10 +8,10 @@ import type { ClientListRecord, ClientSubscriptionInfo } from '@/types/sales-cli
 // ─── Internal raw types ────────────────────────────────────────────
 type RawSubscription = {
   id: number;
-  servicePlanId: number;
+  serviceId: number;
   agreedRate: unknown;
   billingCycle: string;
-  servicePlan: { name: string; inclusions: { id: number; name: string; category: string | null }[] };
+  service: { name: string; inclusions: { id: number; name: string; category: string | null }[] };
 };
 
 type RawClient = {
@@ -77,11 +77,11 @@ function serializeClient(c: RawClient): ClientListRecord {
   const activeSubscription: ClientSubscriptionInfo | null = sub
     ? {
         id: sub.id,
-        servicePlanId: sub.servicePlanId,
-        servicePlanName: sub.servicePlan.name,
+        servicePlanId: sub.serviceId,
+        servicePlanName: sub.service.name,
         agreedRate: Number(sub.agreedRate),
         billingCycle: sub.billingCycle,
-        inclusions: sub.servicePlan.inclusions,
+        inclusions: sub.service.inclusions,
       }
     : null;
 
@@ -131,10 +131,10 @@ const CLIENT_SELECT = {
     where: { isActive: true },
     select: {
       id: true,
-      servicePlanId: true,
+      serviceId: true,
       agreedRate: true,
       billingCycle: true,
-      servicePlan: {
+      service: {
         select: {
           name: true,
           inclusions: { select: { id: true, name: true, category: true } },

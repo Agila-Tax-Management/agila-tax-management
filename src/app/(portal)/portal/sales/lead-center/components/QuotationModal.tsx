@@ -50,7 +50,7 @@ interface QuotationModalProps {
   existingQuote?: LeadQuote | null;
   isOpen: boolean;
   onClose: () => void;
-  onSaved: (updatedLead: Lead) => void;
+  onSaved: (quote: LeadQuote) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ export function QuotationModal({
         });
       }
 
-      const data = (await res.json()) as { data?: Lead; error?: string };
+      const data = (await res.json()) as { data?: LeadQuote; error?: string };
       if (!res.ok) {
         error('Save failed', data.error ?? 'Could not save quotation.');
         return;

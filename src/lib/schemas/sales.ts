@@ -108,7 +108,7 @@ export const createServicePackageSchema = z.object({
       z.object({
         serviceId: z.number().int().positive(),
         quantity: z.number().int().positive().default(1),
-        overrideRate: z.number().positive().optional().nullable(),
+        overrideRate: z.number().min(0).optional().nullable(),
       }),
     )
     .default([]),
@@ -126,7 +126,7 @@ export const updateServicePackageSchema = z.object({
       z.object({
         serviceId: z.number().int().positive(),
         quantity: z.number().int().positive().default(1),
-        overrideRate: z.number().positive().optional().nullable(),
+        overrideRate: z.number().min(0).optional().nullable(),
       }),
     )
     .optional(),
