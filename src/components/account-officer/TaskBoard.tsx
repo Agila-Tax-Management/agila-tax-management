@@ -810,7 +810,7 @@ export function TaskBoard() {
               >
                 {aoDeptStatuses.length > 0
                   ? aoDeptStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
-                  : STATUS_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+                  : kanbanStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
             <div>

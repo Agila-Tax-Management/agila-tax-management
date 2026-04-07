@@ -1,4 +1,4 @@
-// src/components/accounting/InvoiceList.tsx — REPLACED with real API data
+﻿// src/components/accounting/InvoiceList.tsx — REPLACED with real API data
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -158,7 +158,7 @@ export function InvoiceList() {
       const data = await res.json();
       if (!res.ok) { toastError('Duplicate failed', data.error ?? 'An error occurred.'); return; }
       success('Duplicated', `Invoice ${data.data.invoiceNumber} created as a draft.`);
-      router.push(`/portal/accounting/invoices/${data.data.id}`);
+      router.push(`/portal/accounting-and-finance/invoices/${data.data.id}`);
     } catch {
       toastError('Duplicate failed', 'An unexpected error occurred.');
     } finally {
@@ -192,7 +192,7 @@ export function InvoiceList() {
         </div>
         <Button
           variant="default"
-          onClick={() => router.push('/portal/accounting/invoices/new')}
+          onClick={() => router.push('/portal/accounting-and-finance/invoices/new')}
           className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
         >
           <Plus size={16} /> New Invoice
@@ -275,7 +275,7 @@ export function InvoiceList() {
                     <tr
                       key={inv.id}
                       className="hover:bg-slate-50/50 transition-colors cursor-pointer"
-                      onClick={() => router.push(`/portal/accounting/invoices/${inv.id}`)}
+                      onClick={() => router.push(`/portal/accounting-and-finance/invoices/${inv.id}`)}
                     >
                       <td className="px-5 py-4">
                         <p className="font-bold text-amber-700">{inv.invoiceNumber}</p>
@@ -310,13 +310,13 @@ export function InvoiceList() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button title="View" onClick={() => router.push(`/portal/accounting/invoices/${inv.id}`)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
+                          <button title="View" onClick={() => router.push(`/portal/accounting-and-finance/invoices/${inv.id}`)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
                             <Eye size={14} />
                           </button>
                           <button title="Print" onClick={(e) => void handlePrintClick(inv, e)} disabled={printingId === inv.id} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-40">
                             <Printer size={14} className={printingId === inv.id ? 'animate-pulse' : ''} />
                           </button>
-                          <button title="Edit" onClick={(e) => { e.stopPropagation(); router.push(`/portal/accounting/invoices/${inv.id}?edit=true`); }} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors">
+                          <button title="Edit" onClick={(e) => { e.stopPropagation(); router.push(`/portal/accounting-and-finance/invoices/${inv.id}?edit=true`); }} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors">
                             <Pencil size={14} />
                           </button>
                           <button title="Duplicate" disabled={isDuplicating === inv.id} onClick={(e) => { e.stopPropagation(); void handleDuplicate(inv); }} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition-colors disabled:opacity-40">

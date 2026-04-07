@@ -114,6 +114,12 @@ interface BoardEmployee {
   department: string;
 }
 
+interface TaskManagementBoardProps {
+  defaultDepartmentName?: string;
+  taskHrefBase?: string;
+  accentColor?: string;
+}
+
 const DEFAULT_STATUSES: TaskApiStatus[] = [
   { id: -1, name: 'To Do',       color: '#64748b', statusOrder: 1, isEntryStep: true,  isExitStep: false },
   { id: -2, name: 'In Progress', color: '#3b82f6', statusOrder: 2, isEntryStep: false, isExitStep: false },
@@ -130,13 +136,26 @@ function getDeptStatuses(dept: TaskApiDepartment | undefined | null): TaskApiSta
 // ─────────────────────────────────────────────────────────────────
 // Inner component (needs useSearchParams — must be inside Suspense)
 // ─────────────────────────────────────────────────────────────────
-function TaskManagementBoardInner() {
+function TaskManagementBoardInner({
+  defaultDepartmentName,
+  taskHrefBase = '/portal/task-management/tasks',
+  accentColor = '#0f766e',
+}: TaskManagementBoardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deptIdParam = searchParams.get('dept');
-  const activeDeptId: number | null = deptIdParam ? parseInt(deptIdParam, 10) : null;
   const { departments } = useTaskDepartments();
   const { error: toastError } = useToast();
+
+  const defaultDept = useMemo(() => {
+    if (!defaultDepartmentName) return null;
+    return departments.find(d => d.name.toLowerCase() === defaultDepartmentName.toLowerCase())
+      ?? null;
+  }, [defaultDepartmentName, departments]);
+
+  const activeDeptId: number | null = deptIdParam
+    ? parseInt(deptIdParam, 10)
+    : (defaultDept?.id ?? null);
 
   const activeDept = useMemo(
     () => (activeDeptId != null ? (departments.find(d => d.id === activeDeptId) ?? null) : null),
@@ -444,7 +463,7 @@ function TaskManagementBoardInner() {
     return (
       <div
         key={task.id}
-        onClick={() => router.push(`/portal/task-management/tasks/${task.id}`)}
+        onClick={() => router.push(`${taskHrefBase}/${task.id}`)}
         className="grid grid-cols-[1fr_130px_100px_90px_100px_80px] gap-4 px-6 py-3.5 items-center hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-100 last:border-0"
       >
         <div className="min-w-0">
@@ -462,7 +481,7 @@ function TaskManagementBoardInner() {
         </div>
         <span className="text-xs text-slate-600 font-medium truncate">{getClientName(task.clientId)}</span>
         <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 bg-[#0f766e] rounded-full flex items-center justify-center shrink-0">
+          <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: accentColor }}>
             <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
           </div>
           <span className="text-xs text-slate-600 truncate">{assignee?.name.split(' ')[0] ?? 'N/A'}</span>
@@ -490,7 +509,7 @@ function TaskManagementBoardInner() {
         draggable
         onDragStart={e => { e.stopPropagation(); setDraggedTaskId(task.id); }}
         onDragEnd={() => setDraggedTaskId(null)}
-        onClick={() => router.push(`/portal/task-management/tasks/${task.id}`)}
+        onClick={() => router.push(`${taskHrefBase}/${task.id}`)}
         className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 hover:shadow-md cursor-grab active:cursor-grabbing transition-all"
       >
         <p className="text-sm font-bold text-slate-800 line-clamp-2 mb-1">{task.title}</p>
@@ -506,7 +525,7 @@ function TaskManagementBoardInner() {
         )}
         <div className="flex items-center justify-between pt-2 border-t border-slate-50">
           <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 bg-[#0f766e] rounded-full flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: accentColor }}>
               <span className="text-[8px] font-bold text-white">{assignee?.avatar ?? '?'}</span>
             </div>
             <span className="text-[10px] text-slate-500">{assignee?.name.split(' ')[0]}</span>
@@ -712,7 +731,7 @@ function TaskManagementBoardInner() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <Loader2 size={32} className="animate-spin text-[#0f766e]" />
+        <Loader2 size={32} className="animate-spin" style={{ color: accentColor }} />
       </div>
     );
   }
@@ -742,7 +761,7 @@ function TaskManagementBoardInner() {
               <Columns3 size={14} className="inline mr-1" /> Kanban
             </button>
           </div>
-          <Button className="bg-[#0f766e] hover:bg-[#0d6560] text-white" onClick={openCreateModal}>
+          <Button className="text-white" style={{ backgroundColor: accentColor }} onClick={openCreateModal}>
             <Plus size={16} /> New Task
           </Button>
         </div>
@@ -1145,7 +1164,7 @@ function TaskManagementBoardInner() {
 // ─────────────────────────────────────────────────────────────────
 // Public export — wraps inner component in Suspense (required for useSearchParams)
 // ─────────────────────────────────────────────────────────────────
-export function TaskManagementBoard() {
+export function TaskManagementBoard(props: TaskManagementBoardProps) {
   return (
     <Suspense
       fallback={
@@ -1154,7 +1173,7 @@ export function TaskManagementBoard() {
         </div>
       }
     >
-      <TaskManagementBoardInner />
+      <TaskManagementBoardInner {...props} />
     </Suspense>
   );
 }

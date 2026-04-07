@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CreditCard, FileText, Receipt,
-  BarChart3, Calculator, BookOpen, PenLine,
+  BarChart3, Calculator, BookOpen, PenLine, Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
@@ -12,28 +12,28 @@ import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
 const pendingCount = INITIAL_PAYMENTS.filter(p => p.status === 'Pending' || p.status === 'Overdue').length;
 
 const ACCOUNTING_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/accounting' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/accounting-and-finance' },
   {
     id: 'operations',
     label: 'OPERATIONS',
     isSection: true,
   },
-  { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting/payments', badge: pendingCount },
-  { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting/invoices' },
-  { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting/billing' },
-  { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting/journaling' },
+  { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting-and-finance/payments', badge: pendingCount },
+  { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting-and-finance/invoices' },
+  { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting-and-finance/billing' },
+  {
+    id: 'accounting',
+    label: 'ACCOUNTING',
+    isSection: true,
+  },
+  { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting-and-finance/journaling' },
+  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting-and-finance/chartofaccounts' },
   {
     id: 'analytics',
     label: 'ANALYTICS',
     isSection: true,
   },
-  { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/accounting/reports' },
-  {
-    id: 'tools',
-    label: 'TOOLS',
-    isSection: true,
-  },
-  { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting/chartofaccounts' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/accounting-and-finance/reports' },
 ];
 
 interface AccountingSidebarProps {
@@ -71,9 +71,9 @@ export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
             </div>
             <div>
               <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                Accounting
+                ACF Portal
               </h2>
-              <p className="text-xs text-slate-500">Finance Portal</p>
+              <p className="text-xs text-slate-500">Accounting &amp; Finance</p>
             </div>
           </div>
         </div>
@@ -116,6 +116,23 @@ export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
             );
           })}
         </nav>
+
+        {/* Settings footer */}
+        <div className="p-4 border-t border-slate-100 shrink-0">
+          <button
+            onClick={() => handleNavigation('/portal/accounting-and-finance/settings')}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+              ${pathname === '/portal/accounting-and-finance/settings'
+                ? 'bg-amber-600/10 text-amber-700 shadow-sm font-bold'
+                : 'text-slate-600 hover:bg-slate-50 font-medium'
+              }
+            `}
+          >
+            <Settings size={18} />
+            <span className="text-sm flex-1 text-left">Settings</span>
+          </button>
+        </div>
       </aside>
     </>
   );
