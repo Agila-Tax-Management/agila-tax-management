@@ -13,10 +13,10 @@ enum ServiceFrequency {
     DAILY
     WEEKLY
     MONTHLY
-    QUARTERLY     // For 2550Q, 1702Q
+    QUARTERLY // For 2550Q, 1702Q
     SEMI_ANNUALLY
-    ANNUALLY      // For Annual ITR, Renewals
-    NONE          // For ONE_TIME services
+    ANNUALLY // For Annual ITR, Renewals
+    NONE // For ONE_TIME services
 }
 
 enum ServiceStatus {
@@ -34,7 +34,7 @@ enum QuoteStatus {
     DRAFT
     SENT_TO_CLIENT
     NEGOTIATING
-    ACCEPTED      // Triggers Operations handoff!
+    ACCEPTED // Triggers Operations handoff!
     REJECTED
 }
 
@@ -43,42 +43,45 @@ enum QuoteStatus {
 // ==========================================
 
 model GovernmentOffice {
-    id          Int       @id @default(autoincrement())
-    code        String    @unique // e.g., "BIR", "SEC"
+    id          Int     @id @default(autoincrement())
+    code        String  @unique // e.g., "BIR", "SEC"
     name        String
     description String?
-    isActive    Boolean   @default(true)
+    isActive    Boolean @default(true)
 
-    services    Service[] @relation("ServiceGovOffices")
+    services Service[] @relation("ServiceGovOffices")
 
-    createdAt   DateTime  @default(now())
+    createdAt DateTime @default(now())
+
     @@map("government_office")
 }
 
 model City {
-    id          Int       @id @default(autoincrement())
-    name        String    @unique
-    province    String?
-    region      String?
-    zipCode     String?
-    isActive    Boolean   @default(true)
+    id       Int     @id @default(autoincrement())
+    name     String  @unique
+    province String?
+    region   String?
+    zipCode  String?
+    isActive Boolean @default(true)
 
-    services    Service[] @relation("ServiceCities")
+    services Service[] @relation("ServiceCities")
 
-    createdAt   DateTime  @default(now())
+    createdAt DateTime @default(now())
+
     @@map("city")
 }
 
 model ServiceInclusion {
-    id          Int       @id @default(autoincrement())
-    name        String    @unique
+    id          Int     @id @default(autoincrement())
+    name        String  @unique
     description String?
-    category    String?   // e.g., "Tax Filing", "Payroll"
-    isActive    Boolean   @default(true)
+    category    String? // e.g., "Tax Filing", "Payroll"
+    isActive    Boolean @default(true)
 
-    services    Service[] @relation("ServiceInclusions")
+    services Service[] @relation("ServiceInclusions")
 
-    createdAt   DateTime  @default(now())
+    createdAt DateTime @default(now())
+
     @@map("service_inclusion")
 }
 
@@ -87,22 +90,22 @@ model ServiceInclusion {
 // ==========================================
 
 model Service {
-    id                Int                  @id @default(autoincrement())
-    code              String?              @unique // e.g., "TAX-EWT-MO"
-    name              String
-    description       String?              @db.Text
-    
-    billingType       ServiceBillingType
-    frequency         ServiceFrequency     @default(NONE)
-    serviceRate       Decimal              @db.Decimal(10, 2)
-    isVatable         Boolean              @default(true)
-    status            ServiceStatus        @default(ACTIVE)
+    id          Int     @id @default(autoincrement())
+    code        String? @unique // e.g., "TAX-EWT-MO"
+    name        String
+    description String? @db.Text
+
+    billingType ServiceBillingType
+    frequency   ServiceFrequency   @default(NONE)
+    serviceRate Decimal            @db.Decimal(10, 2)
+    isVatable   Boolean            @default(true)
+    status      ServiceStatus      @default(ACTIVE)
 
     // Tagging Relations
-    governmentOffices GovernmentOffice[]   @relation("ServiceGovOffices")
-    cities            City[]               @relation("ServiceCities")
-    inclusions        ServiceInclusion[]   @relation("ServiceInclusions")
-    promos            Promo[]              @relation("ServicePromos")
+    governmentOffices GovernmentOffice[] @relation("ServiceGovOffices")
+    cities            City[]             @relation("ServiceCities")
+    inclusions        ServiceInclusion[] @relation("ServiceInclusions")
+    promos            Promo[]            @relation("ServicePromos")
 
     // Master Links
     packages          ServicePackageItem[]
@@ -111,8 +114,9 @@ model Service {
     quoteLineItems    QuoteLineItem[]
     subscriptions     ClientSubscription[]
 
-    createdAt         DateTime             @default(now())
-    updatedAt         DateTime             @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
     @@map("service")
 }
 
@@ -120,8 +124,8 @@ model ServiceTaskTemplate {
     serviceId      Int
     taskTemplateId Int
 
-    service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-    taskTemplate   TaskTemplate @relation("ServiceTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
+    service      Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+    taskTemplate TaskTemplate @relation("ServiceTemplates", fields: [taskTemplateId], references: [id], onDelete: Cascade)
 
     @@id([serviceId, taskTemplateId])
     @@index([taskTemplateId])
@@ -133,33 +137,34 @@ model ServiceTaskTemplate {
 // ==========================================
 
 model ServicePackage {
-    id              Int                  @id @default(autoincrement())
-    code            String?              @unique 
-    name            String               
-    description     String?              @db.Text
-    
-    packageRate     Decimal              @db.Decimal(10, 2)
-    isVatable       Boolean              @default(true)
-    isActive        Boolean              @default(true)
+    id          Int     @id @default(autoincrement())
+    code        String? @unique
+    name        String
+    description String? @db.Text
 
-    items           ServicePackageItem[]
-    quotedAsSource  QuoteLineItem[]      // Links to Quotes that used this bundle
+    packageRate Decimal @db.Decimal(10, 2)
+    isVatable   Boolean @default(true)
+    isActive    Boolean @default(true)
 
-    createdAt       DateTime             @default(now())
-    updatedAt       DateTime             @updatedAt
+    items          ServicePackageItem[]
+    quotedAsSource QuoteLineItem[] // Links to Quotes that used this bundle
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
     @@map("service_package")
 }
 
 model ServicePackageItem {
-    id              Int            @id @default(autoincrement())
-    packageId       Int
-    package         ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-    
-    serviceId       Int
-    service         Service        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+    id        Int            @id @default(autoincrement())
+    packageId Int
+    package   ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
-    quantity        Int            @default(1)
-    overrideRate    Decimal?       @db.Decimal(10, 2)
+    serviceId Int
+    service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+    quantity     Int      @default(1)
+    overrideRate Decimal? @db.Decimal(10, 2)
 
     @@unique([packageId, serviceId])
     @@map("service_package_item")
@@ -170,43 +175,50 @@ model ServicePackageItem {
 // ==========================================
 
 model Quote {
-    id              String          @id @default(cuid())
-    quoteNumber     String          @unique 
-    leadId          Int
-    lead            Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+    id          String @id @default(cuid())
+    quoteNumber String @unique
+    leadId      Int
+    lead        Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-    status          QuoteStatus     @default(DRAFT)
-    lineItems       QuoteLineItem[]
+    status    QuoteStatus     @default(DRAFT)
+    lineItems QuoteLineItem[]
 
-    subTotal        Decimal         @db.Decimal(10, 2) @default(0.00)
-    totalDiscount   Decimal         @db.Decimal(10, 2) @default(0.00)
-    grandTotal      Decimal         @db.Decimal(10, 2) @default(0.00)
+    subTotal      Decimal @default(0.00) @db.Decimal(10, 2)
+    totalDiscount Decimal @default(0.00) @db.Decimal(10, 2)
+    grandTotal    Decimal @default(0.00) @db.Decimal(10, 2)
 
-    validUntil      DateTime?       @db.Date
-    notes           String?         @db.Text
+    validUntil DateTime? @db.Date
+    notes      String?   @db.Text
 
-    tsaContract         TsaContract?
+    tsaContract TsaContract?
 
-    createdAt       DateTime        @default(now())
-    updatedAt       DateTime        @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
     @@map("quote")
 }
 
 model QuoteLineItem {
-    id                String          @id @default(cuid())
-    quoteId           String
-    quote             Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+    id      String @id @default(cuid())
+    quoteId String
+    quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
-    serviceId         Int
-    service           Service         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+    serviceId Int
+    service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
 
-    sourcePackageId   Int?
-    sourcePackage     ServicePackage? @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
+    sourcePackageId Int?
+    sourcePackage   ServicePackage? @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
 
-    customName        String?         
-    quantity          Int             @default(1)
-    negotiatedRate    Decimal         @db.Decimal(10, 2) 
-    isVatable         Boolean         @default(true)
+    customName     String?
+    quantity       Int     @default(1)
+    negotiatedRate Decimal @db.Decimal(10, 2)
+    isVatable      Boolean @default(true)
+
+    // ─── Subscription Configuration Terms ───
+    billingCycle BillingCycle?
+
+    // Defaults to the standard 6-month lock-in period per the TSA
+    commitmentMonths Int? @default(6)
 
     subscription ClientSubscription?
 
@@ -219,26 +231,27 @@ model QuoteLineItem {
 // ==========================================
 
 model Promo {
-    id           Int          @id @default(autoincrement())
-    name         String
-    description  String?
-    code         String?      @unique
+    id          Int     @id @default(autoincrement())
+    name        String
+    description String?
+    code        String? @unique
 
     discountType DiscountType
-    discountRate Decimal      @db.Decimal(10, 2) 
-    minimumRate  Decimal?     @db.Decimal(10, 2) 
+    discountRate Decimal      @db.Decimal(10, 2)
+    minimumRate  Decimal?     @db.Decimal(10, 2)
 
-    maxUsage     Int? 
-    usageCount   Int          @default(0)
+    maxUsage   Int?
+    usageCount Int  @default(0)
 
-    validFrom    DateTime?
-    validUntil   DateTime?
-    isActive     Boolean      @default(true)
+    validFrom  DateTime?
+    validUntil DateTime?
+    isActive   Boolean   @default(true)
 
-    services     Service[]    @relation("ServicePromos")
-    leads        Lead[]
+    services Service[] @relation("ServicePromos")
+    leads    Lead[]
 
-    createdAt    DateTime     @default(now())
-    updatedAt    DateTime     @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
     @@map("promo")
 }
