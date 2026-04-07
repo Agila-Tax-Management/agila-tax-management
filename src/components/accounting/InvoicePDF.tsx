@@ -163,7 +163,8 @@ const s = StyleSheet.create({
 
 /* ── Helpers ────────────────────────────────────────────────────── */
 function fmt(n: number) {
-  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Use 'PHP ' instead of ₱ — Helvetica does not include the peso glyph (U+20B1)
+  return 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });

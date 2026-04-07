@@ -90,7 +90,7 @@ export async function createSubscriptionAction(
       action: 'CREATED',
       entity: 'ClientSubscription',
       entityId: String(subscription.id),
-      description: `Created subscription for client #${data.clientId} — ${plan?.name ?? 'Service #' + data.serviceId}`,
+      description: `Created subscription for client #${data.clientId} â€” ${plan?.name ?? 'Service #' + data.serviceId}`,
     });
 
     revalidatePath('/portal/accounting-and-finance/billing');

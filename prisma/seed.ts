@@ -1654,6 +1654,245 @@ async function main(): Promise<void> {
     }
   }
   console.log(`  ✓ ${holidayCount} holiday(s) seeded (${HOLIDAY_SEEDS.length - holidayCount} already existed)`);
+
+  // ── 16. Seed Chart of Accounts (AccountType → AccountDetailType → GlAccount) ─
+
+  // 16a. Account Types
+  const AT_DEFS: Array<{ name: string; group: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE'; normalBalance: 'DEBIT' | 'CREDIT' }> = [
+    { name: 'Current Assets',          group: 'ASSET',     normalBalance: 'DEBIT'  },
+    { name: 'Non-Current Assets',      group: 'ASSET',     normalBalance: 'DEBIT'  },
+    { name: 'Current Liabilities',     group: 'LIABILITY', normalBalance: 'CREDIT' },
+    { name: 'Non-Current Liabilities', group: 'LIABILITY', normalBalance: 'CREDIT' },
+    { name: 'Equity',                  group: 'EQUITY',    normalBalance: 'CREDIT' },
+    { name: 'Revenue',                 group: 'REVENUE',   normalBalance: 'CREDIT' },
+    { name: 'Cost of Sales / Service', group: 'EXPENSE',   normalBalance: 'DEBIT'  },
+    { name: 'Expenses',                group: 'EXPENSE',   normalBalance: 'DEBIT'  },
+  ];
+
+  for (const at of AT_DEFS) {
+    await prisma.accountType.upsert({
+      where: { name: at.name },
+      update: { group: at.group, normalBalance: at.normalBalance },
+      create: { name: at.name, group: at.group, normalBalance: at.normalBalance },
+    });
+  }
+  console.log(`  ✓ ${AT_DEFS.length} account types seeded`);
+
+  // 16b. Build a lookup: AccountType.name → id
+  const allAccountTypes = await prisma.accountType.findMany({ select: { id: true, name: true } });
+  const atById = new Map(allAccountTypes.map((a) => [a.name, a.id]));
+
+  // 16c. Account Detail Types  (accountTypeName → detailTypeName[])
+  const ADT_DEFS: Array<{ typeName: string; detailNames: string[] }> = [
+    { typeName: 'Current Assets',          detailNames: ['Cash and Cash Equivalents', 'Accounts Receivables', 'Prepaid Expenses', 'Inventory', 'Loans to Owner'] },
+    { typeName: 'Non-Current Assets',      detailNames: ['Vehicles', 'Properties', 'Equipment'] },
+    { typeName: 'Current Liabilities',     detailNames: ['Accounts Payable', 'Client Funds'] },
+    { typeName: 'Non-Current Liabilities', detailNames: ['Loans Payable'] },
+    { typeName: 'Equity',                  detailNames: ['Capital', 'Drawing', 'Adjustments'] },
+    { typeName: 'Revenue',                 detailNames: ['Service Revenue', 'Sales - Retail', 'Sales - Wholesale', 'Other Income'] },
+    { typeName: 'Cost of Sales / Service', detailNames: ['Cost of Sales / Service'] },
+    { typeName: 'Expenses',                detailNames: ['Expenses'] },
+  ];
+
+  for (const { typeName, detailNames } of ADT_DEFS) {
+    const accountTypeId = atById.get(typeName);
+    if (!accountTypeId) continue;
+    for (const name of detailNames) {
+      await prisma.accountDetailType.upsert({
+        where: { accountTypeId_name: { accountTypeId, name } },
+        update: {},
+        create: { accountTypeId, name },
+      });
+    }
+  }
+  console.log(`  ✓ Account detail types seeded`);
+
+  // 16d. GlAccount seed rows — tied to the ATMS client
+  // Build ADT lookup: accountTypeName|detailName → id
+  const allAdt = await prisma.accountDetailType.findMany({
+    select: { id: true, name: true, accountTypeId: true },
+  });
+  const adtKey = (typeId: number, name: string) => `${typeId}|${name}`;
+  const adtById = new Map(allAdt.map((a) => [adtKey(a.accountTypeId, a.name), a.id]));
+
+  function glAt(typeName: string) { return atById.get(typeName)!; }
+  function glAdt(typeName: string, detailName: string) {
+    return adtById.get(adtKey(atById.get(typeName)!, detailName))!;
+  }
+
+  const GL_DEFS: Array<{
+    accountCode: string; name: string;
+    typeName: string; detailName: string;
+    isBankAccount?: boolean;
+    openingBalance?: number;
+  }> = [
+    // Current Assets
+    { accountCode: '1001', name: 'Cash on Hand',        typeName: 'Current Assets', detailName: 'Cash and Cash Equivalents', openingBalance: 50000 },
+    { accountCode: '1002', name: 'Cash in Bank',        typeName: 'Current Assets', detailName: 'Cash and Cash Equivalents', isBankAccount: true, openingBalance: 250000 },
+    { accountCode: '1003', name: 'Petty Cash Fund',     typeName: 'Current Assets', detailName: 'Cash and Cash Equivalents', openingBalance: 5000 },
+    { accountCode: '1010', name: 'Accounts Receivable', typeName: 'Current Assets', detailName: 'Accounts Receivables',      openingBalance: 45000 },
+    { accountCode: '1020', name: 'Advance Rent',        typeName: 'Current Assets', detailName: 'Prepaid Expenses',          openingBalance: 15000 },
+    { accountCode: '1030', name: 'Inventory',           typeName: 'Current Assets', detailName: 'Inventory' },
+    { accountCode: '1040', name: 'Advances to Owner',   typeName: 'Current Assets', detailName: 'Loans to Owner' },
+    // Non-Current Assets
+    { accountCode: '1101', name: 'Motorcycle',  typeName: 'Non-Current Assets', detailName: 'Vehicles',    openingBalance: 85000 },
+    { accountCode: '1102', name: 'Land',        typeName: 'Non-Current Assets', detailName: 'Properties' },
+    { accountCode: '1103', name: 'Computers',   typeName: 'Non-Current Assets', detailName: 'Equipment',   openingBalance: 120000 },
+    // Current Liabilities
+    { accountCode: '2001', name: 'Accounts Payable', typeName: 'Current Liabilities', detailName: 'Accounts Payable' },
+    { accountCode: '2002', name: 'Client Funds',     typeName: 'Current Liabilities', detailName: 'Client Funds' },
+    // Non-Current Liabilities
+    { accountCode: '2101', name: 'Loans Payable',    typeName: 'Non-Current Liabilities', detailName: 'Loans Payable' },
+    { accountCode: '2102', name: 'Mortgage Payable', typeName: 'Non-Current Liabilities', detailName: 'Loans Payable' },
+    // Equity
+    { accountCode: '3001', name: 'Capital',      typeName: 'Equity', detailName: 'Capital',      openingBalance: 500000 },
+    { accountCode: '3002', name: 'Drawing',      typeName: 'Equity', detailName: 'Drawing' },
+    { accountCode: '3003', name: 'Adjustments',  typeName: 'Equity', detailName: 'Adjustments' },
+    // Revenue
+    { accountCode: '4001', name: 'Service Revenue', typeName: 'Revenue', detailName: 'Service Revenue' },
+    { accountCode: '4002', name: 'Sales (Retail)',   typeName: 'Revenue', detailName: 'Sales - Retail' },
+    { accountCode: '4003', name: 'Sales (Wholesale)',typeName: 'Revenue', detailName: 'Sales - Wholesale' },
+    { accountCode: '4004', name: 'Other Income',     typeName: 'Revenue', detailName: 'Other Income' },
+    // Cost of Sales / Service
+    { accountCode: '5001', name: 'Purchases', typeName: 'Cost of Sales / Service', detailName: 'Cost of Sales / Service' },
+    // Expenses
+    { accountCode: '6001', name: 'Rental Expense',           typeName: 'Expenses', detailName: 'Expenses' },
+    { accountCode: '6002', name: 'Transportation Expense',   typeName: 'Expenses', detailName: 'Expenses' },
+    { accountCode: '6003', name: 'Repairs and Maintenance',  typeName: 'Expenses', detailName: 'Expenses' },
+  ];
+
+  let glCreated = 0;
+  for (const gl of GL_DEFS) {
+    const existing = await prisma.glAccount.findUnique({
+      where: { clientId_accountCode: { clientId: atmsClient.id, accountCode: gl.accountCode } },
+    });
+    if (!existing) {
+      await prisma.glAccount.create({
+        data: {
+          clientId:            atmsClient.id,
+          accountCode:         gl.accountCode,
+          name:                gl.name,
+          accountTypeId:       glAt(gl.typeName),
+          accountDetailTypeId: glAdt(gl.typeName, gl.detailName),
+          isBankAccount:       gl.isBankAccount ?? false,
+          openingBalance:      gl.openingBalance ?? null,
+          isActive:            true,
+        },
+      });
+      glCreated++;
+    } else if (gl.openingBalance != null) {
+      // Back-fill opening balance on existing rows that don't have one yet
+      await prisma.glAccount.update({
+        where: { id: existing.id },
+        data: { openingBalance: gl.openingBalance },
+      });
+    }
+  }
+  console.log(`  ✓ ${GL_DEFS.length} GL accounts checked — ${glCreated} created, ${GL_DEFS.length - glCreated} already existed`);
+
+  // ── 17. Seed Sample Journal Entries ──────────────────────────────
+
+  // Build a quick lookup: accountCode → GlAccount.id
+  const seedAccounts = await prisma.glAccount.findMany({
+    where: { clientId: atmsClient.id },
+    select: { id: true, accountCode: true },
+  });
+  const glId = (code: string) => seedAccounts.find((a) => a.accountCode === code)?.id ?? '';
+
+  const JE_SEEDS: Array<{
+    referenceNo: string;
+    transactionDate: Date;
+    transactionType: 'JOURNAL_ENTRY' | 'INVOICE' | 'PAYMENT' | 'EXPENSE' | 'RECEIPT';
+    status: 'DRAFT' | 'POSTED';
+    notes: string;
+    lines: Array<{ code: string; debit?: number; credit?: number; description: string; name: string; sortOrder: number }>;
+  }> = [
+    {
+      referenceNo: 'JE-2026-0001',
+      transactionDate: new Date('2026-03-15'),
+      transactionType: 'JOURNAL_ENTRY',
+      status: 'POSTED',
+      notes: 'Owner capital contribution — March.',
+      lines: [
+        { code: '1001', debit: 100000, description: 'Capital contribution',  name: 'Owner', sortOrder: 0 },
+        { code: '3001', credit: 100000, description: 'Initial capital',       name: 'Owner', sortOrder: 1 },
+      ],
+    },
+    {
+      referenceNo: 'INV-2026-0001',
+      transactionDate: new Date('2026-03-02'),
+      transactionType: 'INVOICE',
+      status: 'POSTED',
+      notes: 'Tax consultation services billed.',
+      lines: [
+        { code: '1010', debit: 15000, description: 'Invoice #INV-2026-0001', name: 'Santos & Co.',       sortOrder: 0 },
+        { code: '4001', credit: 15000, description: 'Tax consultation — Q1', name: 'Santos & Co.',       sortOrder: 1 },
+      ],
+    },
+    {
+      referenceNo: 'PMT-2026-0001',
+      transactionDate: new Date('2026-03-05'),
+      transactionType: 'PAYMENT',
+      status: 'POSTED',
+      notes: 'Partial payment received — GCash.',
+      lines: [
+        { code: '1001', debit: 7500, description: 'Partial payment received',    name: 'Santos & Co.', sortOrder: 0 },
+        { code: '1010', credit: 7500, description: 'Applied to INV-2026-0001',   name: 'Santos & Co.', sortOrder: 1 },
+      ],
+    },
+    {
+      referenceNo: 'EXP-2026-0001',
+      transactionDate: new Date('2026-03-08'),
+      transactionType: 'EXPENSE',
+      status: 'POSTED',
+      notes: 'March rental payment.',
+      lines: [
+        { code: '6001', debit: 15000, description: 'March office rent',  name: 'Landlord', sortOrder: 0 },
+        { code: '1001', credit: 15000, description: 'Cash payment',       name: 'Landlord', sortOrder: 1 },
+      ],
+    },
+    {
+      referenceNo: 'JE-2026-0002',
+      transactionDate: new Date('2026-03-31'),
+      transactionType: 'JOURNAL_ENTRY',
+      status: 'DRAFT',
+      notes: 'Month-end adjusting entry — accrued income.',
+      lines: [
+        { code: '1010', debit: 8000, description: 'Accrued service fee — March', name: 'Pending Clients', sortOrder: 0 },
+        { code: '4001', credit: 8000, description: 'Accrual adjustment',          name: 'Pending Clients', sortOrder: 1 },
+      ],
+    },
+  ];
+
+  let jeCreated = 0;
+  for (const je of JE_SEEDS) {
+    if (!glId(je.lines[0]!.code)) continue; // skip if accounts not yet seeded
+    const existing = await prisma.journalEntry.findUnique({ where: { referenceNo: je.referenceNo } });
+    if (!existing) {
+      await prisma.journalEntry.create({
+        data: {
+          referenceNo:     je.referenceNo,
+          transactionDate: je.transactionDate,
+          transactionType: je.transactionType,
+          status:          je.status,
+          notes:           je.notes,
+          clientId:        atmsClient.id,
+          lines: {
+            create: je.lines.map((l) => ({
+              glAccountId: glId(l.code),
+              debit:       l.debit  ?? null,
+              credit:      l.credit ?? null,
+              description: l.description,
+              name:        l.name,
+              sortOrder:   l.sortOrder,
+            })),
+          },
+        },
+      });
+      jeCreated++;
+    }
+  }
+  console.log(`  ✓ ${JE_SEEDS.length} journal entries checked — ${jeCreated} created, ${JE_SEEDS.length - jeCreated} already existed`);
 }
 
 main()

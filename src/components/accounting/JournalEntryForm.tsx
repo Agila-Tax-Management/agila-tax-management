@@ -15,10 +15,17 @@ export type JournalStatus = 'Posted' | 'Draft';
 
 export interface JournalLine {
   id: string;
+  glAccountId: string;
   account: string;
   debit: string;
   credit: string;
   description: string;
+  name: string;
+}
+
+export interface GlAccountOption {
+  id: string;
+  accountCode: string;
   name: string;
 }
 
@@ -33,35 +40,10 @@ export interface JournalEntry {
   attachments: string[];
 }
 
-// ─── Account options (mirrors Chart of Accounts seed) ────────────────────────
-
-export const ACCOUNT_OPTIONS = [
-  'Cash on Hand',
-  'Petty Cash Fund',
-  'Accounts Receivable',
-  'Prepaid Expenses',
-  'Inventory',
-  'Loans to Owner',
-  'Vehicles',
-  'Properties',
-  'Office Equipment',
-  'Accounts Payable',
-  'Client Funds',
-  'Loans Payable',
-  'Mortgage Payable',
-  "Owner's Capital",
-  'Drawing',
-  'Adjustments',
-  'Service Revenue',
-  'Sales - Retail',
-  'Sales - Wholesale',
-  'Other Income',
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function emptyLine(): JournalLine {
-  return { id: crypto.randomUUID(), account: '', debit: '', credit: '', description: '', name: '' };
+  return { id: crypto.randomUUID(), glAccountId: '', account: '', debit: '', credit: '', description: '', name: '' };
 }
 
 export function defaultLines(): JournalLine[] {
@@ -86,21 +68,25 @@ export function generateRefNo(entries: JournalEntry[]): string {
 
 export interface JournalEntryFormProps {
   entries: JournalEntry[];
+  glAccounts: GlAccountOption[];
   onSave: (entry: JournalEntry) => void;
   onClose: () => void;
   onSaveNew: (entry: JournalEntry) => void;
+  initialEntry?: JournalEntry;
+  onUpdate?: (entry: JournalEntry) => void;
 }
 
-export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: JournalEntryFormProps): React.ReactNode {
+export function JournalEntryForm({ entries, glAccounts, onSave, onClose, onSaveNew, initialEntry, onUpdate }: JournalEntryFormProps): React.ReactNode {
+  const isEditing = !!initialEntry;
   const today = new Date().toISOString().split('T')[0];
-  const [transactionDate, setTransactionDate] = useState(today);
-  const [status, setStatus] = useState<JournalStatus>('Draft');
-  const [lines, setLines] = useState<JournalLine[]>(defaultLines);
-  const [notes, setNotes] = useState('');
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [transactionDate, setTransactionDate] = useState(() => initialEntry?.transactionDate ?? today);
+  const [status, setStatus] = useState<JournalStatus>(() => initialEntry?.status ?? 'Draft');
+  const [lines, setLines] = useState<JournalLine[]>(() => initialEntry?.lines.length ? initialEntry.lines : defaultLines());
+  const [notes, setNotes] = useState(() => initialEntry?.notes ?? '');
+  const [attachments, setAttachments] = useState<string[]>(() => initialEntry?.attachments ?? []);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const refNo = generateRefNo(entries);
+  const refNo = isEditing ? initialEntry.referenceNo : generateRefNo(entries);
   const totalDebit = lines.reduce((s, l) => s + parseNum(l.debit), 0);
   const totalCredit = lines.reduce((s, l) => s + parseNum(l.credit), 0);
   const hasBalance = totalDebit > 0 || totalCredit > 0;
@@ -110,6 +96,10 @@ export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: Journa
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
   }
 
+  function setLineFields(id: string, fields: Partial<JournalLine>) {
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...fields } : l)));
+  }
+
   function deleteLine(id: string) {
     if (lines.length <= 1) return;
     setLines((prev) => prev.filter((l) => l.id !== id));
@@ -117,7 +107,7 @@ export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: Journa
 
   function buildEntry(): JournalEntry {
     return {
-      id: crypto.randomUUID(),
+      id: isEditing ? initialEntry.id : crypto.randomUUID(),
       transactionDate,
       referenceNo: refNo,
       transactionType: 'Journal Entry',
@@ -143,11 +133,13 @@ export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: Journa
   }
 
   function handleSave() {
-    onSave(buildEntry());
+    if (isEditing) { onUpdate?.(buildEntry()); }
+    else { onSave(buildEntry()); }
   }
 
   function handleSaveClose() {
-    onSave(buildEntry());
+    if (isEditing) { onUpdate?.(buildEntry()); }
+    else { onSave(buildEntry()); }
     onClose();
   }
 
@@ -192,8 +184,8 @@ export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: Journa
             <PenLine size={18} className="text-white" />
           </div>
           <div>
-            <h2 className="text-base font-black text-slate-900">Journal Entry</h2>
-            <p className="text-xs text-slate-500">New entry — {refNo}</p>
+            <h2 className="text-base font-black text-slate-900">{isEditing ? 'Edit Journal Entry' : 'Journal Entry'}</h2>
+            <p className="text-xs text-slate-500">{isEditing ? `Editing — ${refNo}` : `New entry — ${refNo}`}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -230,13 +222,21 @@ export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: Journa
                   <td className="px-3 py-1.5 text-xs text-center text-slate-400 tabular-nums">{idx + 1}</td>
                   <td className="px-1 py-1.5">
                     <select
-                      value={line.account}
-                      onChange={(e) => updateLine(line.id, 'account', e.target.value)}
+                      value={line.glAccountId}
+                      onChange={(e) => {
+                        const selected = glAccounts.find((a) => a.id === e.target.value);
+                        setLineFields(line.id, {
+                          glAccountId: e.target.value,
+                          account: selected ? `${selected.accountCode} · ${selected.name}` : '',
+                        });
+                      }}
                       className={INPUT_CLS}
                     >
                       <option value="">— Select —</option>
-                      {ACCOUNT_OPTIONS.map((a) => (
-                        <option key={a} value={a}>{a}</option>
+                      {glAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.accountCode} · {a.name}
+                        </option>
                       ))}
                     </select>
                   </td>
@@ -411,27 +411,58 @@ export function JournalEntryForm({ entries, onSave, onClose, onSaveNew }: Journa
         >
           Cancel
         </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={handleSaveClose}
-          className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
-        >
-          Save &amp; Close
-        </button>
-        <button
-          type="button"
-          onClick={handleSaveNew}
-          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 active:scale-95 transition-all"
-        >
-          Save &amp; New
-        </button>
+        {isEditing ? (
+          <>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={hasBalance && !isBalanced}
+              title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Update
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveClose}
+              disabled={hasBalance && !isBalanced}
+              title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            >
+              Update &amp; Close
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={hasBalance && !isBalanced}
+              title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveClose}
+              disabled={hasBalance && !isBalanced}
+              title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            >
+              Save &amp; Close
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveNew}
+              disabled={hasBalance && !isBalanced}
+              title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            >
+              Save &amp; New
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

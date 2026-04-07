@@ -50,7 +50,7 @@ export function RecordPaymentForm(): React.ReactNode {
   const router = useRouter();
   const { success, error: toastError } = useToast();
 
-  // — Client search state —
+  // â€” Client search state â€”
   const [selectedClient, setSelectedClient] = useState<ClientOnlyOption | null>(null);
   const [clientSearch, setClientSearch] = useState('');
   const [clientOptions, setClientOptions] = useState<ClientOnlyOption[]>([]);
@@ -59,20 +59,20 @@ export function RecordPaymentForm(): React.ReactNode {
   const clientDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // — Payment detail state —
+  // â€” Payment detail state â€”
   const [amount, setAmount] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [method, setMethod] = useState<PaymentMethodType>('CASH');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
 
-  // — Invoice allocation state —
+  // â€” Invoice allocation state â€”
   const [invoices, setInvoices] = useState<UnpaidInvoiceOption[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [applied, setApplied] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // — Computed values —
+  // â€” Computed values â€”
   const amountNum = parseFloat(amount) || 0;
   const totalApplied = invoices.reduce((s, inv) => s + (parseFloat(applied[inv.id] ?? '0') || 0), 0);
   const unallocated = amountNum - totalApplied;
