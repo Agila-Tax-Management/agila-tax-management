@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Building2, FileText, MapPin, Users, UserCircle2,
-  Pencil, Check, X, Loader2, ShieldCheck, Plus, Trash2, ChevronUp, ChevronDown,
+  Pencil, Check, X, Loader2, ShieldCheck, Plus, Trash2, ChevronUp, ChevronDown, CreditCard,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import type {
@@ -89,7 +89,7 @@ function emptyShareholder(): ShareholderData {
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'core' | 'bir' | 'individual' | 'business' | 'corporate' | 'shareholders' | 'portal-users';
+type TabId = 'core' | 'bir' | 'individual' | 'business' | 'corporate' | 'shareholders' | 'portal-users' | 'subscriptions';
 
 function getAvailableTabs(entity: BusinessEntity): TabId[] {
   const tabs: TabId[] = ['core', 'bir'];
@@ -98,6 +98,7 @@ function getAvailableTabs(entity: BusinessEntity): TabId[] {
   if (entity === 'CORPORATION' || entity === 'COOPERATIVE') tabs.push('corporate');
   if (entity === 'CORPORATION') tabs.push('shareholders');
   tabs.push('portal-users');
+  tabs.push('subscriptions');
   return tabs;
 }
 
@@ -109,6 +110,7 @@ const TAB_META: Record<TabId, { label: string; icon: React.ReactNode }> = {
   corporate: { label: 'Corporate Details', icon: <ShieldCheck size={14} /> },
   shareholders: { label: 'Shareholders', icon: <Users size={14} /> },
   'portal-users': { label: 'Portal Users', icon: <Users size={14} /> },
+  subscriptions: { label: 'Subscriptions', icon: <CreditCard size={14} /> },
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -128,6 +130,23 @@ export function ClientDetailPage({ clientId }: { clientId: number }) {
   const [editingCorporate, setEditingCorporate] = useState(false);
   const [editingShareholders, setEditingShareholders] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Subscriptions tab state
+  interface SubscriptionRecord {
+    id: number;
+    serviceId: number;
+    serviceName: string;
+    billingCycle: string;
+    agreedRate: number;
+    effectiveDate: string;
+    inactiveDate: string | null;
+    nextBillingDate: string | null;
+    isActive: boolean;
+    createdAt: string;
+  }
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [subscriptionsFetched, setSubscriptionsFetched] = useState(false);
 
   // Form states
   const [coreForm, setCoreForm] = useState({ businessName: '', companyCode: '', clientNo: '', portalName: '', active: true, timezone: 'Asia/Manila', branchType: 'MAIN' as 'MAIN' | 'BRANCH' });
@@ -169,6 +188,17 @@ export function ClientDetailPage({ clientId }: { clientId: number }) {
   useEffect(() => {
     void fetchClient();
   }, [fetchClient]);
+
+  // Lazy-fetch subscriptions only when the tab is first opened
+  useEffect(() => {
+    if (activeTab !== 'subscriptions' || subscriptionsFetched) return;
+    setLoadingSubscriptions(true);
+    fetch(`/api/client-gateway/clients/${clientId}/subscriptions`)
+      .then((r) => r.json() as Promise<{ data?: SubscriptionRecord[]; error?: string }>)
+      .then((json) => { setSubscriptions(json.data ?? []); setSubscriptionsFetched(true); })
+      .catch(() => { toastError('Load failed', 'Could not fetch subscriptions.'); })
+      .finally(() => { setLoadingSubscriptions(false); });
+  }, [activeTab, subscriptionsFetched, clientId, toastError]);
 
   async function save(payload: Record<string, unknown>) {
     setSaving(true);
@@ -576,12 +606,67 @@ export function ClientDetailPage({ clientId }: { clientId: number }) {
           </div>
         )}
 
+        {/* ── Subscriptions ──────────────────────────── */}
+        {activeTab === 'subscriptions' && (
+          <div>
+            <h3 className="font-black text-foreground text-base mb-4">Active Subscriptions</h3>
+            {loadingSubscriptions ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                <Loader2 size={16} className="animate-spin" /> Loading subscriptions…
+              </div>
+            ) : subscriptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No subscriptions found for this client.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      <th className="px-4 py-3 text-left">Service</th>
+                      <th className="px-4 py-3 text-left">Billing Cycle</th>
+                      <th className="px-4 py-3 text-right">Rate (₱)</th>
+                      <th className="px-4 py-3 text-left">Start Date</th>
+                      <th className="px-4 py-3 text-left">End Date</th>
+                      <th className="px-4 py-3 text-left">Next Bill Date</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {subscriptions.map((sub) => {
+                      const fmtDate = (iso: string | null) =>
+                        iso ? new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+                      const CYCLE_LABEL: Record<string, string> = {
+                        MONTHLY: 'Monthly', QUARTERLY: 'Quarterly',
+                        SEMI_ANNUALLY: 'Semi-Annually', ANNUALLY: 'Annually',
+                      };
+                      return (
+                        <tr key={sub.id} className="bg-card hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 font-medium text-foreground">{sub.serviceName}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{CYCLE_LABEL[sub.billingCycle] ?? sub.billingCycle}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-foreground">
+                            {sub.agreedRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{fmtDate(sub.effectiveDate)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{fmtDate(sub.inactiveDate)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{fmtDate(sub.nextBillingDate)}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold ${sub.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {sub.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
 }
-
-// ─── Individual Form ──────────────────────────────────────────────────────────
 
 function IndividualForm({ form, setForm, saving, onCancel, onSave, inputCls }: {
   form: IndividualDetailsData;

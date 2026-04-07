@@ -68,6 +68,19 @@ export async function provisionLeadAccountAction(
       // ── Fetch the lead inside the transaction ──────────────────
       const lead = await tx.lead.findUnique({
         where: { id: leadId },
+        include: {
+          quotes: {
+            where: { status: 'ACCEPTED' },
+            include: {
+              lineItems: {
+                include: {
+                  service: { select: { id: true, billingType: true } },
+                },
+              },
+            },
+            take: 1,
+          },
+        },
       });
       if (!lead) throw new Error('Lead not found');
       if (lead.isAccountCreated) throw new Error('Account has already been provisioned for this lead');
@@ -127,7 +140,45 @@ export async function provisionLeadAccountAction(
         select: { id: true },
       });
 
-      // ── Step 1d: Create ClientUser (inactive) + assignment ────
+      // ── Step 1d: Create ClientSubscriptions for RECURRING line items ──
+      const acceptedQuote = lead.quotes[0] ?? null;
+      const effectiveDate = new Date();
+      // nextBillingDate = 1st of next month — month 1 is already covered by the initial invoice
+      const nextBillingDate = new Date(effectiveDate.getFullYear(), effectiveDate.getMonth() + 1, 1);
+      if (acceptedQuote) {
+        const recurringItems = acceptedQuote.lineItems.filter(
+          (li) => li.service.billingType === 'RECURRING',
+        );
+        for (const li of recurringItems) {
+          const commitMonths = li.commitmentMonths ?? 6;
+          const inactiveDate = new Date(effectiveDate);
+          inactiveDate.setMonth(inactiveDate.getMonth() + commitMonths);
+          const sub = await tx.clientSubscription.create({
+            data: {
+              clientId: newClient.id,
+              serviceId: li.serviceId,
+              quoteLineItemId: li.id,
+              billingCycle: li.billingCycle ?? 'MONTHLY',
+              agreedRate: li.negotiatedRate,
+              effectiveDate,
+              nextBillingDate,
+              inactiveDate,
+              isActive: true,
+            },
+            select: { id: true },
+          });
+          await tx.subscriptionHistory.create({
+            data: {
+              subscriptionId: sub.id,
+              actorId: session.user.id,
+              changeType: 'SUBSCRIPTION_CREATED',
+              newValue: `Subscription created during account provisioning for lead #${leadId}`,
+            },
+          });
+        }
+      }
+
+      // ── Step 1e: Create ClientUser (inactive) + assignment ────
       await tx.clientUser.create({
         data: {
           name: fullName,
