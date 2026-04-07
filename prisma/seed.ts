@@ -730,7 +730,7 @@ const LEAVE_TYPE_SEEDS = [
 async function main(): Promise<void> {
   // ── 1. Seed Company (Agila — the internal company) ───────────────
   const atmsClient = await prisma.client.upsert({
-    where: { companyCode: "atms" },
+    where: { companyCode: "ATMS-001" },
     update: {
       active: true,
       businessName: "Agila Tax Management Services",

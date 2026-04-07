@@ -5,96 +5,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
-  Settings, LogOut, ChevronLeft, ChevronRight, X, Menu,
+  Settings, ChevronLeft, ChevronRight, X, Menu,
   ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
-  Sun, Moon, User
 } from 'lucide-react';
 import { Button } from '@/components/UI/button';
-import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
+import { AppHeader } from '@/components/UI/AppHeader';
 import { RoleProvider } from '@/lib/role-context';
 import { AuthProvider } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
-import { authClient } from '@/lib/auth-client';
 
-
-function ProfileDropdown() {
-  const { data: sessionData } = authClient.useSession();
-  const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const ref = React.useRef<HTMLDivElement>(null);
-  const name = sessionData?.user?.name ?? '';
-  const image = (sessionData?.user as { image?: string | null } | undefined)?.image ?? null;
-  const initials = name
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || '?';
-
-   
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-   
-
-  const navigate = (href: string) => {
-    setOpen(false);
-    router.push(href);
-  };
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        title="Profile"
-        onClick={() => setOpen((prev) => !prev)}
-        className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-blue-600 text-white text-sm font-semibold shrink-0 hover:ring-2 hover:ring-blue-400 transition focus:outline-none focus:ring-2 focus:ring-blue-400"
-      >
-        {image ? (
-          <Image
-            src={image}
-            alt={name || 'Profile'}
-            width={36}
-            height={36}
-            className="object-cover w-full h-full"
-          />
-        ) : (
-          initials
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-border bg-card shadow-lg py-1 z-50">
-          <button
-            onClick={() => navigate('/dashboard/profile')}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-          >
-            <User size={15} className="shrink-0 text-muted-foreground" />
-            Profile
-          </button>
-          <div className="my-1 border-t border-border" />
-          <button
-            onClick={async () => {
-              setOpen(false);
-              await authClient.signOut();
-              router.push('/sign-in');
-            }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
-          >
-            <LogOut size={15} className="shrink-0" />
-            Sign Out
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 const NAV_ITEMS = [
   { href: '/dashboard',                   label: 'Dashboard',   icon: LayoutDashboard },
@@ -118,7 +36,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme();
 
    
   useEffect(() => {
@@ -164,30 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top bar */}
-          <header className="bg-header border-b border-header-border px-6 py-4 flex items-center justify-between shrink-0 z-30 shadow-sm">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                className="lg:hidden"
-                onClick={() => setSidebarOpen(true)}
-              >
-                <Menu size={20} />
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                onClick={toggleTheme}
-                className="rounded-xl text-muted-foreground hover:text-foreground"
-                title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-              >
-                {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-              </Button>
-              <NotificationDropdown />
-              <ProfileDropdown />
-            </div>
-          </header>
+          <AppHeader onMenuOpen={() => setSidebarOpen(true)} />
 
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             {children}
