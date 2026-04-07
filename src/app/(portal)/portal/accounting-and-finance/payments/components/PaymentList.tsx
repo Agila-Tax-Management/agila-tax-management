@@ -31,7 +31,7 @@ const METHOD_BADGE: Record<string, 'neutral' | 'info' | 'success' | 'warning'> =
 };
 
 function fmt(n: number) {
-  return '?' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+  return 'â‚±' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 }
 
 function fmtDate(iso: string) {
@@ -197,7 +197,7 @@ export function PaymentList(): React.ReactNode {
                           <p className="text-[11px] text-muted-foreground">{p.client.clientNo ?? `#${p.client.id}`}</p>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">â€”</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-foreground">{fmt(p.amount)}</td>
@@ -205,7 +205,7 @@ export function PaymentList(): React.ReactNode {
                       {p.unusedAmount > 0 ? (
                         <span className="text-amber-600 font-medium">{fmt(p.unusedAmount)}</span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">â€”</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -214,7 +214,7 @@ export function PaymentList(): React.ReactNode {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs font-mono">
-                      {p.referenceNumber ?? '—'}
+                      {p.referenceNumber ?? 'â€”'}
                     </td>
                   </tr>
                 ))}

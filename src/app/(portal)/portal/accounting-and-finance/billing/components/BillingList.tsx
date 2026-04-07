@@ -23,7 +23,7 @@ function fmt(n: number) {
 }
 
 function fmtDate(iso: string | null) {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   return new Date(iso).toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'short',
@@ -236,7 +236,7 @@ export function BillingList(): React.ReactNode {
         {!isLoading && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
             <p className="text-xs text-muted-foreground">
-              Showing {(currentPage - 1) * PAGE_SIZE + 1}–
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}â€“
               {Math.min(currentPage * PAGE_SIZE, filtered.length)} of{' '}
               {filtered.length}
             </p>

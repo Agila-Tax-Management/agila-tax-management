@@ -73,8 +73,11 @@ model GlAccount {
     parent      GlAccount?  @relation("SubAccounts", fields: [parentId], references: [id], onDelete: Restrict)
     subAccounts GlAccount[] @relation("SubAccounts")
 
-    isActive      Boolean @default(true)
-    isBankAccount Boolean @default(false)
+    isActive        Boolean  @default(true)
+    isBankAccount   Boolean  @default(false)
+    openingBalance  Decimal? @db.Decimal(15, 2)
+
+    journalLines JournalLine[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

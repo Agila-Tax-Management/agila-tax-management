@@ -1,51 +1,43 @@
 // src/components/accounting/AccountingSettings.tsx
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  BookOpen, Plus, Search, ChevronDown, X,
+  BookOpen, Plus, Search, X,
   Settings, TrendingUp, Wallet, Scale, BarChart2, Trash2, Pencil,
   PenLine, FileText, CreditCard, Receipt, Download, Hash, ListFilter, SlidersHorizontal,
+  RefreshCw,
 } from 'lucide-react';
-import { SEED_ACCOUNTS } from './ChartofAccounts';
-import type { Account, AccountType } from './ChartofAccounts';
+import type { GlAccountRecord } from './ChartofAccounts';
+import { useToast } from '@/context/ToastContext';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── API types ─────────────────────────────────────────────────────────────────
 
-const ACCOUNT_TYPES: AccountType[] = [
-  'Current Assets',
-  'Non-Current Assets',
-  'Current Liabilities',
-  'Non-Current Liabilities',
-  'Equity',
-  'Revenue',
-];
+interface ApiDetailType { id: number; name: string }
+interface ApiAccountType {
+  id: number;
+  name: string;
+  group: string;
+  normalBalance: string;
+  detailTypes: ApiDetailType[];
+}
 
-const DETAIL_TYPE_MAP: Record<AccountType, string[]> = {
-  'Current Assets':          ['Cash and Cash Equivalents', 'Accounts Receivable', 'Prepaid Expenses', 'Inventory', 'Loans to Owner'],
-  'Non-Current Assets':      ['Vehicles', 'Properties', 'Equipment'],
-  'Current Liabilities':     ['Accounts Payable', 'Client Funds'],
-  'Non-Current Liabilities': ['Loans Payable', 'Mortgage Payable'],
-  Equity:                    ['Capital', 'Drawing', 'Adjustments'],
-  Revenue:                   ['Service Revenue', 'Sales - Retail', 'Sales - Wholesale', 'Other Income'],
+// ─── Badge / Icon maps per DB financial group ────────────────────────────────
+
+const GROUP_BADGE: Record<string, string> = {
+  ASSET:     'bg-blue-100 text-blue-700',
+  LIABILITY: 'bg-rose-100 text-rose-700',
+  EQUITY:    'bg-emerald-100 text-emerald-700',
+  REVENUE:   'bg-amber-100 text-amber-700',
+  EXPENSE:   'bg-violet-100 text-violet-700',
 };
 
-const TYPE_BADGE: Record<AccountType, string> = {
-  'Current Assets':          'bg-blue-100 text-blue-700',
-  'Non-Current Assets':      'bg-indigo-100 text-indigo-700',
-  'Current Liabilities':     'bg-rose-100 text-rose-700',
-  'Non-Current Liabilities': 'bg-orange-100 text-orange-700',
-  Equity:                    'bg-emerald-100 text-emerald-700',
-  Revenue:                   'bg-amber-100 text-amber-700',
-};
-
-const TYPE_ICON: Record<AccountType, React.ReactNode> = {
-  'Current Assets':          <Wallet size={12} />,
-  'Non-Current Assets':      <Wallet size={12} />,
-  'Current Liabilities':     <Scale size={12} />,
-  'Non-Current Liabilities': <Scale size={12} />,
-  Equity:                    <TrendingUp size={12} />,
-  Revenue:                   <BarChart2 size={12} />,
+const GROUP_ICON: Record<string, React.ReactNode> = {
+  ASSET:     <Wallet size={12} />,
+  LIABILITY: <Scale size={12} />,
+  EQUITY:    <TrendingUp size={12} />,
+  REVENUE:   <BarChart2 size={12} />,
+  EXPENSE:   <BookOpen size={12} />,
 };
 
 // ─── Journal Settings constants ───────────────────────────────────────────────
@@ -78,300 +70,34 @@ const TX_DESC: Record<TxType, string> = {
   'Receipt':       'Cash receipt acknowledgment entries',
 };
 
-// ─── Form types ────────────────────────────────────────────────────────────────
+// ─── GL Account form types ────────────────────────────────────────────────────
 
-interface FormState {
-  accountName: string;
-  accountType: AccountType | '';
-  detailType: string;
-  runningBalance: string;
+interface GlFormState {
+  accountCode: string;
+  name: string;
+  accountTypeId: number | '';
+  accountDetailTypeId: number | '';
+  openingBalance: string;
+  isBankAccount: boolean;
+  description: string;
 }
 
-interface FormErrors {
-  accountName?: string;
-  accountType?: string;
-  detailType?: string;
+interface GlFormErrors {
+  accountCode?: string;
+  name?: string;
+  accountTypeId?: string;
+  accountDetailTypeId?: string;
 }
 
-const EMPTY_FORM: FormState = { accountName: '', accountType: '', detailType: '', runningBalance: '' };
-
-// ─── Searchable Select ────────────────────────────────────────────────────────
-
-interface SearchableSelectProps {
-  options: string[];
-  value: string;
-  onChange: (val: string) => void;
-  placeholder: string;
-  disabled?: boolean;
-  error?: string;
-}
-
-function SearchableSelect({ options, value, onChange, placeholder, disabled, error }: SearchableSelectProps): React.ReactNode {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
-
-  const filtered = options.filter((o) => o.toLowerCase().includes(query.toLowerCase()));
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery('');
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((p) => !p)}
-        className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent
-          ${disabled ? 'cursor-not-allowed opacity-50 bg-slate-50 border-slate-200 text-slate-400' : 'bg-white border-slate-300 text-slate-900 hover:border-slate-400 cursor-pointer'}
-          ${error ? 'border-red-400 ring-1 ring-red-400' : ''}`}
-      >
-        <span className={value ? 'text-slate-900' : 'text-slate-400'}>{value || placeholder}</span>
-        <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
-          <div className="p-2 border-b border-slate-100">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-              <Search size={13} className="text-slate-400 shrink-0" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search..."
-                className="flex-1 bg-transparent text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none"
-              />
-            </div>
-          </div>
-          <div className="max-h-48 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-slate-400 text-center">No options found</p>
-            ) : (
-              filtered.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => { onChange(opt); setOpen(false); setQuery(''); }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-amber-50 hover:text-amber-800
-                    ${value === opt ? 'bg-amber-50 text-amber-700 font-semibold' : 'text-slate-700'}`}
-                >
-                  {opt}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Add / Edit Account Modal ─────────────────────────────────────────────────
-
-interface AccountModalProps {
-  initial?: Account;
-  onClose: () => void;
-  onSave: (data: Omit<Account, 'id' | 'createdAt'>) => void;
-}
-
-function AccountModal({ initial, onClose, onSave }: AccountModalProps): React.ReactNode {
-  const [form, setForm] = useState<FormState>(
-    initial
-      ? { accountName: initial.accountName, accountType: initial.accountType, detailType: initial.detailType, runningBalance: String(initial.runningBalance) }
-      : EMPTY_FORM,
-  );
-  const [errors, setErrors] = useState<FormErrors>({});
-
-  const detailOptions = form.accountType ? DETAIL_TYPE_MAP[form.accountType as AccountType] : [];
-  const isEdit = !!initial;
-
-  function handleAccountTypeChange(val: string) {
-    setForm((p) => ({ ...p, accountType: val as AccountType, detailType: '' }));
-    setErrors((p) => ({ ...p, accountType: undefined, detailType: undefined }));
-  }
-
-  function validate(): boolean {
-    const e: FormErrors = {};
-    if (!form.accountName.trim()) e.accountName = 'Account Name is required.';
-    if (!form.accountType) e.accountType = 'Account Type is required.';
-    if (!form.detailType) e.detailType = 'Detail Type is required.';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!validate()) return;
-    onSave({
-      accountName: form.accountName.trim(),
-      accountType: form.accountType as AccountType,
-      detailType: form.detailType,
-      runningBalance: parseFloat(form.runningBalance) || 0,
-    });
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
-              <BookOpen size={16} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                {isEdit ? 'Edit Account' : 'Add New Account'}
-              </h2>
-              <p className="text-xs text-slate-500">Chart of Accounts</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Account Name */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
-              Account Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.accountName}
-              onChange={(e) => { setForm((p) => ({ ...p, accountName: e.target.value })); setErrors((p) => ({ ...p, accountName: undefined })); }}
-              placeholder="e.g. Cash on Hand"
-              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors
-                ${errors.accountName ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
-            />
-            {errors.accountName && <p className="mt-1 text-xs text-red-500">{errors.accountName}</p>}
-          </div>
-
-          {/* Account Type */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
-              Account Type <span className="text-red-500">*</span>
-            </label>
-            <SearchableSelect
-              options={ACCOUNT_TYPES}
-              value={form.accountType}
-              onChange={handleAccountTypeChange}
-              placeholder="Select account type..."
-              error={errors.accountType}
-            />
-            {errors.accountType && <p className="mt-1 text-xs text-red-500">{errors.accountType}</p>}
-          </div>
-
-          {/* Detail Type */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
-              Detail Type <span className="text-red-500">*</span>
-            </label>
-            <SearchableSelect
-              options={detailOptions}
-              value={form.detailType}
-              onChange={(val) => { setForm((p) => ({ ...p, detailType: val })); setErrors((p) => ({ ...p, detailType: undefined })); }}
-              placeholder={form.accountType ? 'Select detail type...' : 'Select account type first'}
-              disabled={!form.accountType}
-              error={errors.detailType}
-            />
-            {errors.detailType && <p className="mt-1 text-xs text-red-500">{errors.detailType}</p>}
-          </div>
-
-          {/* Opening Balance */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
-              Opening Balance <span className="text-slate-400 font-normal normal-case">(optional)</span>
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-medium select-none">₱</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.runningBalance}
-                onChange={(e) => setForm((p) => ({ ...p, runningBalance: e.target.value }))}
-                placeholder="0.00"
-                className="w-full rounded-lg border border-slate-300 pl-7 pr-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 pt-1" />
-
-          <div className="flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
-            >
-              {isEdit ? 'Save Changes' : 'Add Account'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ─── Delete Confirmation Modal ─────────────────────────────────────────────────
-
-interface DeleteModalProps {
-  account: Account;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
-function DeleteModal({ account, onClose, onConfirm }: DeleteModalProps): React.ReactNode {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-        <div className="px-6 pt-6 pb-4">
-          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4">
-            <Trash2 size={18} className="text-red-600" />
-          </div>
-          <h2 className="text-sm font-bold text-slate-900 mb-1">Delete Account</h2>
-          <p className="text-xs text-slate-500">
-            Are you sure you want to remove <span className="font-semibold text-slate-700">{account.accountName}</span>? This action cannot be undone.
-          </p>
-        </div>
-        <div className="flex items-center justify-end gap-2.5 px-6 pb-5">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 active:scale-95 transition-all"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+const EMPTY_GL_FORM: GlFormState = {
+  accountCode: '',
+  name: '',
+  accountTypeId: '',
+  accountDetailTypeId: '',
+  openingBalance: '',
+  isBankAccount: false,
+  description: '',
+};
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
 
@@ -389,14 +115,312 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// ─── GL Account Modal (Add / Edit) ────────────────────────────────────────────
+
+interface GlAccountModalProps {
+  initial?: GlAccountRecord;
+  accountTypes: ApiAccountType[];
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function GlAccountModal({ initial, accountTypes, onClose, onSuccess }: GlAccountModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const isEdit = !!initial;
+
+  const [form, setForm] = useState<GlFormState>(() =>
+    initial
+      ? {
+          accountCode: initial.accountCode,
+          name: initial.name,
+          accountTypeId: initial.accountTypeId,
+          accountDetailTypeId: initial.accountDetailTypeId,
+          openingBalance: initial.openingBalance != null ? String(initial.openingBalance) : '',
+          isBankAccount: initial.isBankAccount,
+          description: initial.description ?? '',
+        }
+      : EMPTY_GL_FORM,
+  );
+  const [errors, setErrors] = useState<GlFormErrors>({});
+  const [saving, setSaving] = useState(false);
+
+  const detailOptions =
+    form.accountTypeId !== ''
+      ? (accountTypes.find((t) => t.id === form.accountTypeId)?.detailTypes ?? [])
+      : [];
+
+  function validate(): boolean {
+    const e: GlFormErrors = {};
+    if (!form.accountCode.trim()) e.accountCode = 'Account code is required.';
+    if (!form.name.trim()) e.name = 'Account name is required.';
+    if (form.accountTypeId === '') e.accountTypeId = 'Account type is required.';
+    if (form.accountDetailTypeId === '') e.accountDetailTypeId = 'Detail type is required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const body = {
+        accountCode: form.accountCode.trim(),
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        accountTypeId: Number(form.accountTypeId),
+        accountDetailTypeId: Number(form.accountDetailTypeId),
+        openingBalance: form.openingBalance !== '' ? parseFloat(form.openingBalance) : null,
+        isBankAccount: form.isBankAccount,
+        isActive: true,
+      };
+      const url = isEdit ? `/api/accounting/gl-accounts/${initial!.id}` : '/api/accounting/gl-accounts';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Failed to save', json.error ?? 'Something went wrong.');
+        return;
+      }
+      success(
+        isEdit ? 'Account updated' : 'Account added',
+        isEdit
+          ? `${form.name} has been updated.`
+          : `${form.name} (${form.accountCode}) has been added.`,
+      );
+      onSuccess();
+      onClose();
+    } catch {
+      toastError('Network error', 'Could not connect to the server.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
+              <BookOpen size={16} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit Account' : 'Add New Account'}</h2>
+              <p className="text-xs text-slate-500">Chart of Accounts</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+          {/* Code + Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                Account Code <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.accountCode}
+                onChange={(e) => { setForm((p) => ({ ...p, accountCode: e.target.value })); setErrors((p) => ({ ...p, accountCode: undefined })); }}
+                placeholder="e.g. 1001"
+                className={`w-full rounded-lg border px-3 py-2 text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.accountCode ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+              />
+              {errors.accountCode && <p className="mt-1 text-xs text-red-500">{errors.accountCode}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                Account Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => { setForm((p) => ({ ...p, name: e.target.value })); setErrors((p) => ({ ...p, name: undefined })); }}
+                placeholder="e.g. Cash on Hand"
+                className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.name ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+              />
+              {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+            </div>
+          </div>
+
+          {/* Account Type */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Account Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.accountTypeId}
+              onChange={(e) => {
+                const id = e.target.value === '' ? '' : Number(e.target.value);
+                setForm((p) => ({ ...p, accountTypeId: id, accountDetailTypeId: '' }));
+                setErrors((p) => ({ ...p, accountTypeId: undefined, accountDetailTypeId: undefined }));
+              }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.accountTypeId ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            >
+              <option value="">Select account type…</option>
+              {accountTypes.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            {errors.accountTypeId && <p className="mt-1 text-xs text-red-500">{errors.accountTypeId}</p>}
+          </div>
+
+          {/* Detail Type */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Detail Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.accountDetailTypeId}
+              disabled={form.accountTypeId === ''}
+              onChange={(e) => {
+                const id = e.target.value === '' ? '' : Number(e.target.value);
+                setForm((p) => ({ ...p, accountDetailTypeId: id }));
+                setErrors((p) => ({ ...p, accountDetailTypeId: undefined }));
+              }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50 ${errors.accountDetailTypeId ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            >
+              <option value="">{form.accountTypeId === '' ? 'Select account type first' : 'Select detail type…'}</option>
+              {detailOptions.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            {errors.accountDetailTypeId && <p className="mt-1 text-xs text-red-500">{errors.accountDetailTypeId}</p>}
+          </div>
+
+          {/* Opening Balance + Bank Account toggle */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                Opening Balance <span className="text-slate-400 font-normal normal-case">(optional)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-medium select-none">₱</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.openingBalance}
+                  onChange={(e) => setForm((p) => ({ ...p, openingBalance: e.target.value }))}
+                  placeholder="0.00"
+                  className="w-full rounded-lg border border-slate-300 pl-7 pr-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col justify-end pb-0.5">
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <span className="text-xs font-semibold text-slate-700">Bank Account</span>
+                <Toggle checked={form.isBankAccount} onChange={(v) => setForm((p) => ({ ...p, isBankAccount: v }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Description <span className="text-slate-400 font-normal normal-case">(optional)</span>
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Brief description of this account…"
+              rows={2}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors resize-none"
+            />
+          </div>
+
+          <div className="border-t border-slate-100 pt-1" />
+
+          <div className="flex items-center justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {isEdit ? 'Save Changes' : 'Add Account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Delete Confirmation Modal ─────────────────────────────────────────────────
+
+interface DeleteConfirmProps {
+  account: GlAccountRecord;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function DeleteConfirmModal({ account, onClose, onSuccess }: DeleteConfirmProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/accounting/gl-accounts/${account.id}`, { method: 'DELETE' });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Cannot delete', json.error ?? 'Something went wrong.');
+        onClose();
+        return;
+      }
+      success('Account deleted', `${account.name} has been removed.`);
+      onSuccess();
+      onClose();
+    } catch {
+      toastError('Network error', 'Could not connect to the server.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4">
+            <Trash2 size={18} className="text-red-600" />
+          </div>
+          <h2 className="text-sm font-bold text-slate-900 mb-1">Delete Account</h2>
+          <p className="text-xs text-slate-500">
+            Are you sure you want to remove{' '}
+            <span className="font-semibold text-slate-700">{account.name}</span> ({account.accountCode})?
+            This cannot be undone.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2.5 px-6 pb-5">
+          <button onClick={onClose} disabled={deleting} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => { void handleDelete(); }} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-60">
+            {deleting && <RefreshCw size={12} className="animate-spin" />}
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function AccountingSettings(): React.ReactNode {
-  const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
+  const [accounts, setAccounts] = useState<GlAccountRecord[]>([]);
+  const [accountTypes, setAccountTypes] = useState<ApiAccountType[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [editTarget, setEditTarget] = useState<Account | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+  const [editTarget, setEditTarget] = useState<GlAccountRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GlAccountRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'accounts' | 'journal'>('accounts');
   const [defaultStatus, setDefaultStatus] = useState<'Draft' | 'Posted'>('Draft');
   const [prefixes, setPrefixes] = useState<Record<TxType, string>>({ ...TX_DEFAULT_PREFIXES });
@@ -404,36 +428,43 @@ export function AccountingSettings(): React.ReactNode {
     'Journal Entry': true, Invoice: true, Payment: true, Expense: true, Receipt: true,
   });
 
+  const fetchAccounts = useCallback(async () => {
+    setLoadingAccounts(true);
+    try {
+      const res = await fetch('/api/accounting/gl-accounts?isActive=true');
+      if (res.ok) {
+        const json = await res.json() as { data: GlAccountRecord[] };
+        setAccounts(json.data);
+      }
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, []);
+
+  const fetchAccountTypes = useCallback(async () => {
+    const res = await fetch('/api/accounting/gl-accounts/account-types');
+    if (res.ok) {
+      const json = await res.json() as { data: ApiAccountType[] };
+      setAccountTypes(json.data);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchAccounts();
+    void fetchAccountTypes();
+  }, [fetchAccounts, fetchAccountTypes]);
+
   const filtered = useMemo(() => {
     if (!search.trim()) return accounts;
     const q = search.toLowerCase();
     return accounts.filter(
       (a) =>
-        a.accountName.toLowerCase().includes(q) ||
-        a.detailType.toLowerCase().includes(q) ||
-        a.accountType.toLowerCase().includes(q),
+        a.name.toLowerCase().includes(q) ||
+        a.accountCode.toLowerCase().includes(q) ||
+        a.accountType.name.toLowerCase().includes(q) ||
+        a.accountDetailType.name.toLowerCase().includes(q),
     );
   }, [accounts, search]);
-
-  function handleAdd(data: Omit<Account, 'id' | 'createdAt'>) {
-    setAccounts((prev) => [
-      ...prev,
-      { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString().split('T')[0] },
-    ]);
-  }
-
-  function handleEdit(data: Omit<Account, 'id' | 'createdAt'>) {
-    if (!editTarget) return;
-    setAccounts((prev) =>
-      prev.map((a) => (a.id === editTarget.id ? { ...a, ...data } : a)),
-    );
-  }
-
-  function handleDelete() {
-    if (!deleteTarget) return;
-    setAccounts((prev) => prev.filter((a) => a.id !== deleteTarget.id));
-    setDeleteTarget(null);
-  }
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -475,15 +506,27 @@ export function AccountingSettings(): React.ReactNode {
             <div className="flex items-center gap-2.5">
               <BookOpen size={16} className="text-amber-600" />
               <span className="text-sm font-bold text-slate-900">Chart of Accounts</span>
-              <span className="text-xs text-slate-400 font-medium">({accounts.length} accounts)</span>
+              {!loadingAccounts && (
+                <span className="text-xs text-slate-400 font-medium">({accounts.length} accounts)</span>
+              )}
             </div>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
-            >
-              <Plus size={13} />
-              Add Account
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { void fetchAccounts(); }}
+                disabled={loadingAccounts}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={loadingAccounts ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <button
+                onClick={() => setShowAdd(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+              >
+                <Plus size={13} />
+                Add Account
+              </button>
+            </div>
           </div>
 
           {/* Search */}
@@ -501,17 +544,25 @@ export function AccountingSettings(): React.ReactNode {
           </div>
 
           {/* Accounts table */}
-          {filtered.length === 0 ? (
+          {loadingAccounts ? (
+            <div className="flex flex-col items-center justify-center py-14 gap-2">
+              <RefreshCw size={22} className="text-slate-300 animate-spin" />
+              <p className="text-sm text-slate-400">Loading accounts…</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 gap-2">
               <BookOpen size={28} className="text-slate-300" />
-              <p className="text-sm text-slate-400">No accounts found.</p>
+              <p className="text-sm text-slate-400">
+                {search.trim() ? 'No accounts match your search.' : 'No accounts found. Add your first account.'}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Code</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Type</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type</th>
                     <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Opening Balance</th>
@@ -519,45 +570,55 @@ export function AccountingSettings(): React.ReactNode {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((account) => (
-                    <tr key={account.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <span className="font-semibold text-slate-800 text-sm">{account.accountName}</span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${TYPE_BADGE[account.accountType]}`}>
-                          {TYPE_ICON[account.accountType]}
-                          {account.accountType}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-600">{account.detailType}</td>
-                      <td className="px-4 py-3.5 text-right">
-                        <span className={`text-sm font-semibold tabular-nums ${account.runningBalance > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                          {account.runningBalance === 0
-                            ? '—'
-                            : `₱${account.runningBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setEditTarget(account)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(account)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((account) => {
+                    const badge = GROUP_BADGE[account.accountType.group] ?? 'bg-slate-100 text-slate-700';
+                    const icon  = GROUP_ICON[account.accountType.group];
+                    return (
+                      <tr key={account.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
+                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{account.accountCode}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-800 text-sm">{account.name}</span>
+                            {account.isBankAccount && (
+                              <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full">Bank</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                            {icon}
+                            {account.accountType.name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-slate-600">{account.accountDetailType.name}</td>
+                        <td className="px-4 py-3.5 text-right">
+                          <span className={`text-sm font-semibold tabular-nums ${account.openingBalance != null && account.openingBalance > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
+                            {account.openingBalance != null && account.openingBalance > 0
+                              ? `₱${account.openingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                              : '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setEditTarget(account)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(account)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -671,24 +732,29 @@ export function AccountingSettings(): React.ReactNode {
 
       {/* Add modal */}
       {showAdd && (
-        <AccountModal onClose={() => setShowAdd(false)} onSave={handleAdd} />
+        <GlAccountModal
+          accountTypes={accountTypes}
+          onClose={() => setShowAdd(false)}
+          onSuccess={() => { void fetchAccounts(); }}
+        />
       )}
 
       {/* Edit modal */}
       {editTarget && (
-        <AccountModal
+        <GlAccountModal
           initial={editTarget}
+          accountTypes={accountTypes}
           onClose={() => setEditTarget(null)}
-          onSave={handleEdit}
+          onSuccess={() => { void fetchAccounts(); }}
         />
       )}
 
       {/* Delete confirmation */}
       {deleteTarget && (
-        <DeleteModal
+        <DeleteConfirmModal
           account={deleteTarget}
           onClose={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
+          onSuccess={() => { void fetchAccounts(); }}
         />
       )}
     </div>

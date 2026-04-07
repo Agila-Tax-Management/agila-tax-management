@@ -1,11 +1,35 @@
 // src/components/accounting/ChartofAccounts.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, BookOpen, TrendingUp, Wallet, Scale, BarChart2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search, BookOpen, TrendingUp, Wallet, Scale, BarChart2, RefreshCw } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+// DB group → display group
+type FinancialGroup = 'Assets' | 'Liabilities' | 'Equity' | 'Revenue' | 'Expenses';
+
+// The shape returned by GET /api/accounting/gl-accounts
+export interface GlAccountRecord {
+  id: string;
+  accountCode: string;
+  name: string;
+  description: string | null;
+  accountTypeId: number;
+  accountType: { id: number; name: string; group: string; normalBalance: string };
+  accountDetailTypeId: number;
+  accountDetailType: { id: number; name: string };
+  parentId: string | null;
+  clientId: number;
+  isActive: boolean;
+  isBankAccount: boolean;
+  openingBalance: number | null;
+  runningBalance?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Legacy type kept for AccountingSettings compatibility
 export type AccountType =
   | 'Current Assets'
   | 'Non-Current Assets'
@@ -23,74 +47,103 @@ export interface Account {
   createdAt: string;
 }
 
+// Keep seed accounts for AccountingSettings local fallback (replaced by API)
+export const SEED_ACCOUNTS: Account[] = [];
+
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-type FinancialGroup = 'Assets' | 'Liabilities' | 'Equity' | 'Revenue';
-
-const GROUP_TYPES: Record<FinancialGroup, AccountType[]> = {
-  Assets:      ['Current Assets', 'Non-Current Assets'],
-  Liabilities: ['Current Liabilities', 'Non-Current Liabilities'],
-  Equity:      ['Equity'],
-  Revenue:     ['Revenue'],
+const DB_GROUP_TO_DISPLAY: Record<string, FinancialGroup> = {
+  ASSET:     'Assets',
+  LIABILITY: 'Liabilities',
+  EQUITY:    'Equity',
+  REVENUE:   'Revenue',
+  EXPENSE:   'Expenses',
 };
 
-const FINANCIAL_GROUPS: FinancialGroup[] = ['Assets', 'Liabilities', 'Equity', 'Revenue'];
+const FINANCIAL_GROUPS: FinancialGroup[] = ['Assets', 'Liabilities', 'Equity', 'Revenue', 'Expenses'];
 
 interface GroupMeta { icon: React.ReactNode; color: string; bg: string }
 const GROUP_META: Record<FinancialGroup, GroupMeta> = {
-  Assets:      { icon: <Wallet size={14} />,    color: 'text-blue-700',    bg: 'bg-blue-50 border-blue-100'    },
-  Liabilities: { icon: <Scale size={14} />,     color: 'text-rose-700',    bg: 'bg-rose-50 border-rose-100'    },
-  Equity:      { icon: <TrendingUp size={14} />, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-100' },
-  Revenue:     { icon: <BarChart2 size={14} />,  color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-100'  },
+  Assets:      { icon: <Wallet size={14} />,     color: 'text-blue-700',     bg: 'bg-blue-50 border-blue-100'       },
+  Liabilities: { icon: <Scale size={14} />,      color: 'text-rose-700',     bg: 'bg-rose-50 border-rose-100'       },
+  Equity:      { icon: <TrendingUp size={14} />, color: 'text-emerald-700',  bg: 'bg-emerald-50 border-emerald-100' },
+  Revenue:     { icon: <BarChart2 size={14} />,  color: 'text-amber-700',    bg: 'bg-amber-50 border-amber-100'     },
+  Expenses:    { icon: <BookOpen size={14} />,   color: 'text-violet-700',   bg: 'bg-violet-50 border-violet-100'   },
 };
-
-interface TypeMeta { badge: string }
-const TYPE_META: Record<AccountType, TypeMeta> = {
-  'Current Assets':          { badge: 'bg-blue-100 text-blue-700'    },
-  'Non-Current Assets':      { badge: 'bg-indigo-100 text-indigo-700' },
-  'Current Liabilities':     { badge: 'bg-rose-100 text-rose-700'    },
-  'Non-Current Liabilities': { badge: 'bg-orange-100 text-orange-700' },
-  Equity:                    { badge: 'bg-emerald-100 text-emerald-700' },
-  Revenue:                   { badge: 'bg-amber-100 text-amber-700'  },
-};
-
-export const SEED_ACCOUNTS: Account[] = [
-  { id: '1', accountName: 'Cash on Hand',       accountType: 'Current Assets',          detailType: 'Cash and Cash Equivalents', runningBalance: 0,      createdAt: '2026-01-01' },
-  { id: '2', accountName: 'Petty Cash Fund',     accountType: 'Current Assets',          detailType: 'Cash and Cash Equivalents', runningBalance: 5000,   createdAt: '2026-01-01' },
-  { id: '3', accountName: 'Accounts Receivable', accountType: 'Current Assets',          detailType: 'Accounts Receivable',       runningBalance: 0,      createdAt: '2026-01-01' },
-  { id: '4', accountName: 'Office Equipment',    accountType: 'Non-Current Assets',      detailType: 'Equipment',                 runningBalance: 120000, createdAt: '2026-01-01' },
-  { id: '5', accountName: 'Accounts Payable',    accountType: 'Current Liabilities',     detailType: 'Accounts Payable',          runningBalance: 0,      createdAt: '2026-01-01' },
-  { id: '6', accountName: "Owner's Capital",     accountType: 'Equity',                  detailType: 'Capital',                   runningBalance: 500000, createdAt: '2026-01-01' },
-  { id: '7', accountName: 'Service Revenue',     accountType: 'Revenue',                 detailType: 'Service Revenue',           runningBalance: 0,      createdAt: '2026-01-01' },
-];
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 export function ChartofAccounts(): React.ReactNode {
-  const [accounts] = useState<Account[]>(SEED_ACCOUNTS);
-  const [search, setSearch] = useState('');
+  const [accounts, setAccounts] = useState<GlAccountRecord[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [search, setSearch]     = useState('');
+
+  const fetchAccounts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/accounting/gl-accounts/balances');
+      if (!res.ok) {
+        const body = await res.json() as { error?: string };
+        throw new Error(body.error ?? 'Failed to load accounts');
+      }
+      const json = await res.json() as { data: GlAccountRecord[] };
+      setAccounts(json.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load accounts');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void fetchAccounts(); }, [fetchAccounts]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return accounts;
     const q = search.toLowerCase();
     return accounts.filter(
       (a) =>
-        a.accountName.toLowerCase().includes(q) ||
-        a.detailType.toLowerCase().includes(q) ||
-        a.accountType.toLowerCase().includes(q),
+        a.name.toLowerCase().includes(q) ||
+        a.accountCode.toLowerCase().includes(q) ||
+        a.accountDetailType.name.toLowerCase().includes(q) ||
+        a.accountType.name.toLowerCase().includes(q),
     );
   }, [accounts, search]);
 
-  const grandTotal = filtered.reduce((s, a) => s + a.runningBalance, 0);
+  // Group accounts by their financial group
+  const groupedAccounts = useMemo(() => {
+    const groups: Record<FinancialGroup, Map<string, GlAccountRecord[]>> = {
+      Assets: new Map(), Liabilities: new Map(), Equity: new Map(),
+      Revenue: new Map(), Expenses: new Map(),
+    };
+    for (const account of filtered) {
+      const group = DB_GROUP_TO_DISPLAY[account.accountType.group] ?? 'Assets';
+      const typeName = account.accountType.name;
+      if (!groups[group].has(typeName)) groups[group].set(typeName, []);
+      groups[group].get(typeName)!.push(account);
+    }
+    return groups;
+  }, [filtered]);
 
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-xl font-black text-slate-900 tracking-tight">Chart of Accounts</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          View your account structure for accurate financial reporting.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">Chart of Accounts</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            View your account structure for accurate financial reporting.
+          </p>
+        </div>
+        <button
+          onClick={() => void fetchAccounts()}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
 
       {/* Search */}
@@ -105,9 +158,21 @@ export function ChartofAccounts(): React.ReactNode {
         />
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
       {/* Accounts Table */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <RefreshCw size={24} className="text-slate-300 animate-spin" />
+            <p className="text-sm text-slate-400">Loading accounts…</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <BookOpen size={32} className="text-slate-300" />
             <p className="text-sm text-slate-400">No accounts found.</p>
@@ -117,24 +182,24 @@ export function ChartofAccounts(): React.ReactNode {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Code</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type</th>
-                  <th className="text-right px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Balance</th>
+                  <th className="text-right px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Running Balance</th>
                 </tr>
               </thead>
               <tbody>
                 {FINANCIAL_GROUPS.map((group) => {
                   const gMeta = GROUP_META[group];
-                  const groupAccounts = GROUP_TYPES[group].flatMap((t) =>
-                    filtered.filter((a) => a.accountType === t),
-                  );
-                  if (groupAccounts.length === 0) return null;
+                  const typeMap = groupedAccounts[group];
+                  if (typeMap.size === 0) return null;
+                  const typeEntries = Array.from(typeMap.entries());
 
                   return (
                     <React.Fragment key={group}>
                       {/* ─── Financial group header ─── */}
-                      <tr className={`border-y border-slate-200`}>
-                        <td colSpan={3} className={`px-5 py-2.5 ${gMeta.bg}`}>
+                      <tr className="border-y border-slate-200">
+                        <td colSpan={4} className={`px-5 py-2.5 ${gMeta.bg}`}>
                           <div className={`flex items-center gap-2 ${gMeta.color}`}>
                             {gMeta.icon}
                             <span className="text-xs font-black uppercase tracking-widest">{group}</span>
@@ -143,64 +208,51 @@ export function ChartofAccounts(): React.ReactNode {
                       </tr>
 
                       {/* ─── Account type sub-sections ─── */}
-                      {GROUP_TYPES[group].map((type) => {
-                        const typeAccounts = filtered.filter((a) => a.accountType === type);
-                        if (typeAccounts.length === 0) return null;
-                        const tMeta = TYPE_META[type];
+                      {typeEntries.map(([typeName, typeAccounts]) => (
+                        <React.Fragment key={typeName}>
+                          {/* Type sub-header */}
+                          {typeEntries.length > 1 && (
+                            <tr className="bg-slate-50/50">
+                              <td colSpan={4} className="pl-10 pr-5 py-1.5">
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600">
+                                  {typeName}
+                                </span>
+                              </td>
+                            </tr>
+                          )}
 
-                        return (
-                          <React.Fragment key={type}>
-                            {/* Type sub-header (only when group has multiple types) */}
-                            {GROUP_TYPES[group].length > 1 && (
-                              <tr className="bg-slate-50/50">
-                                <td colSpan={3} className="pl-10 pr-5 py-1.5">
-                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${tMeta.badge}`}>
-                                    {type}
-                                  </span>
-                                </td>
-                              </tr>
-                            )}
-
-                            {/* Account rows */}
-                            {typeAccounts.map((account) => (
-                              <tr
-                                key={account.id}
-                                className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors"
-                              >
-                                <td className="pl-12 pr-4 py-3">
-                                  <span className="font-medium text-slate-800 text-sm">{account.accountName}</span>
-                                </td>
-                                <td className="px-4 py-3 text-xs text-slate-500">{account.detailType}</td>
-                                <td className="px-5 py-3 text-right">
-                                  <span className={`font-semibold tabular-nums text-sm ${account.runningBalance > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                                    {account.runningBalance === 0
-                                      ? '—'
-                                      : `₱${account.runningBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </React.Fragment>
-                        );
-                      })}
+                          {/* Account rows */}
+                          {typeAccounts.map((account) => (
+                            <tr
+                              key={account.id}
+                              className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors"
+                            >
+                              <td className="pl-12 pr-4 py-3 font-mono text-xs text-slate-500">{account.accountCode}</td>
+                              <td className="px-4 py-3">
+                                <span className="font-medium text-slate-800 text-sm">{account.name}</span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-slate-500">{account.accountDetailType.name}</td>
+                              <td className="px-5 py-3 text-right">
+                                {(() => {
+                                  const bal = account.runningBalance ?? account.openingBalance ?? 0;
+                                  if (bal === 0) return <span className="font-semibold tabular-nums text-sm text-slate-400">—</span>;
+                                  const isNeg = bal < 0;
+                                  const fmt = `₱${Math.abs(bal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                                  return (
+                                    <span className={`font-semibold tabular-nums text-sm ${isNeg ? 'text-rose-600' : 'text-slate-800'}`}>
+                                      {isNeg ? `(${fmt})` : fmt}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      ))}
                     </React.Fragment>
                   );
                 })}
               </tbody>
-
-              {/* Single grand total row */}
-              <tfoot>
-                <tr className="bg-amber-600 text-white">
-                  <td colSpan={2} className="px-5 py-3.5">
-                    <span className="text-xs font-black uppercase tracking-widest">Total</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <span className="text-sm font-black tabular-nums">
-                      ₱{grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         )}
@@ -208,5 +260,3 @@ export function ChartofAccounts(): React.ReactNode {
     </div>
   );
 }
-
-
