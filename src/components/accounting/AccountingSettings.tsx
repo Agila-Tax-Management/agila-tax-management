@@ -6,23 +6,31 @@ import {
   BookOpen, Plus, Search, X,
   Settings, TrendingUp, Wallet, Scale, BarChart2, Trash2, Pencil,
   PenLine, FileText, CreditCard, Receipt, Download, Hash, ListFilter, SlidersHorizontal,
-  RefreshCw,
+  RefreshCw, AlertTriangle, Tag,
 } from 'lucide-react';
 import type { GlAccountRecord } from './ChartofAccounts';
 import { useToast } from '@/context/ToastContext';
 
 // ─── API types ─────────────────────────────────────────────────────────────────
 
-interface ApiDetailType { id: number; name: string }
+interface ApiDetailType {
+  id: number;
+  name: string;
+  accountTypeId: number;
+  accountType: { id: number; name: string; group: string };
+  _count: { accounts: number };
+}
+
 interface ApiAccountType {
   id: number;
   name: string;
   group: string;
   normalBalance: string;
-  detailTypes: ApiDetailType[];
+  detailTypes?: { id: number; name: string }[];
+  _count?: { detailTypes: number; accounts: number };
 }
 
-// ─── Badge / Icon maps per DB financial group ────────────────────────────────
+// ─── Badge / Icon maps per DB financial group ─────────────────────────────────
 
 const GROUP_BADGE: Record<string, string> = {
   ASSET:     'bg-blue-100 text-blue-700',
@@ -39,6 +47,17 @@ const GROUP_ICON: Record<string, React.ReactNode> = {
   REVENUE:   <BarChart2 size={12} />,
   EXPENSE:   <BookOpen size={12} />,
 };
+
+const GROUP_LABELS: Record<string, string> = {
+  ASSET:     'Asset',
+  LIABILITY: 'Liability',
+  EQUITY:    'Equity',
+  REVENUE:   'Revenue',
+  EXPENSE:   'Expense',
+};
+
+const FINANCIAL_GROUPS = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as const;
+const NORMAL_BALANCES = ['DEBIT', 'CREDIT'] as const;
 
 // ─── Journal Settings constants ───────────────────────────────────────────────
 
@@ -112,6 +131,385 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-4' : 'translate-x-0'}`}
       />
     </button>
+  );
+}
+
+// ─── Account Type Modal (Add / Edit) ─────────────────────────────────────────
+
+interface AccountTypeModalProps {
+  initial?: ApiAccountType;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function AccountTypeModal({ initial, onClose, onSuccess }: AccountTypeModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const isEdit = !!initial;
+  const [name, setName] = useState(initial?.name ?? '');
+  const [group, setGroup] = useState<string>(initial?.group ?? '');
+  const [normalBalance, setNormalBalance] = useState<string>(initial?.normalBalance ?? '');
+  const [errors, setErrors] = useState<{ name?: string; group?: string; normalBalance?: string }>({});
+  const [saving, setSaving] = useState(false);
+
+  function validate(): boolean {
+    const e: typeof errors = {};
+    if (!name.trim()) e.name = 'Name is required.';
+    if (!group) e.group = 'Financial group is required.';
+    if (!normalBalance) e.normalBalance = 'Normal balance is required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const url = isEdit ? `/api/accounting/account-types/${initial!.id}` : '/api/accounting/account-types';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), group, normalBalance }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Failed to save', json.error ?? 'Something went wrong.');
+        return;
+      }
+      success(isEdit ? 'Type updated' : 'Type added', `"${name.trim()}" has been ${isEdit ? 'updated' : 'added'}.`);
+      onSuccess();
+      onClose();
+    } catch {
+      toastError('Network error', 'Could not connect to the server.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
+              <Tag size={15} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit Account Type' : 'Add Account Type'}</h2>
+              <p className="text-xs text-slate-500">Account Settings</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Type Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: undefined })); }}
+              placeholder="e.g. Current Assets"
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.name ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            />
+            {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Financial Group <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={group}
+              onChange={(e) => { setGroup(e.target.value); setErrors((p) => ({ ...p, group: undefined })); }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.group ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            >
+              <option value="">Select group…</option>
+              {FINANCIAL_GROUPS.map((g) => (
+                <option key={g} value={g}>{GROUP_LABELS[g]}</option>
+              ))}
+            </select>
+            {errors.group && <p className="mt-1 text-xs text-red-500">{errors.group}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Normal Balance <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={normalBalance}
+              onChange={(e) => { setNormalBalance(e.target.value); setErrors((p) => ({ ...p, normalBalance: undefined })); }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.normalBalance ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            >
+              <option value="">Select normal balance…</option>
+              {NORMAL_BALANCES.map((nb) => (
+                <option key={nb} value={nb}>{nb.charAt(0) + nb.slice(1).toLowerCase()}</option>
+              ))}
+            </select>
+            {errors.normalBalance && <p className="mt-1 text-xs text-red-500">{errors.normalBalance}</p>}
+          </div>
+          <div className="border-t border-slate-100 pt-1" />
+          <div className="flex items-center justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {isEdit ? 'Save Changes' : 'Add Type'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Delete Account Type Modal ────────────────────────────────────────────────
+
+interface DeleteAccountTypeProps {
+  accountType: ApiAccountType;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function DeleteAccountTypeModal({ accountType, onClose, onSuccess }: DeleteAccountTypeProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const [deleting, setDeleting] = useState(false);
+  const accountCount = accountType._count?.accounts ?? 0;
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/accounting/account-types/${accountType.id}`, { method: 'DELETE' });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Cannot delete', json.error ?? 'Something went wrong.');
+        onClose();
+        return;
+      }
+      success('Type deleted', `"${accountType.name}" has been removed.`);
+      onSuccess();
+      onClose();
+    } catch {
+      toastError('Network error', 'Could not connect to the server.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4">
+            <AlertTriangle size={18} className="text-red-600" />
+          </div>
+          <h2 className="text-sm font-bold text-slate-900 mb-2">Delete Account Type</h2>
+          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 mb-3">
+            <p className="text-xs font-semibold text-red-700 mb-1">⚠ This may destroy ledger integrity</p>
+            <p className="text-xs text-red-600">
+              All detail types and GL accounts linked to <span className="font-semibold">{accountType.name}</span> will be affected.
+              {accountCount > 0 && (
+                <span> This type currently has <span className="font-bold">{accountCount} GL account{accountCount !== 1 ? 's' : ''}</span> linked — deletion is blocked until they are removed.</span>
+              )}
+            </p>
+          </div>
+          <p className="text-xs text-slate-500">
+            Are you sure you want to delete{' '}
+            <span className="font-semibold text-slate-700">{accountType.name}</span>? This cannot be undone.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2.5 px-6 pb-5">
+          <button onClick={onClose} disabled={deleting} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          <button
+            onClick={() => { void handleDelete(); }}
+            disabled={deleting || accountCount > 0}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deleting && <RefreshCw size={12} className="animate-spin" />}
+            Delete Type
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Detail Type Modal (Add / Edit) ──────────────────────────────────────────
+
+interface DetailTypeModalProps {
+  initial?: ApiDetailType;
+  accountTypes: ApiAccountType[];
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function DetailTypeModal({ initial, accountTypes, onClose, onSuccess }: DetailTypeModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const isEdit = !!initial;
+  const [name, setName] = useState(initial?.name ?? '');
+  const [accountTypeId, setAccountTypeId] = useState<number | ''>(initial?.accountTypeId ?? '');
+  const [errors, setErrors] = useState<{ name?: string; accountTypeId?: string }>({});
+  const [saving, setSaving] = useState(false);
+
+  function validate(): boolean {
+    const e: typeof errors = {};
+    if (!name.trim()) e.name = 'Name is required.';
+    if (accountTypeId === '') e.accountTypeId = 'Account type is required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const url = isEdit ? `/api/accounting/account-detail-types/${initial!.id}` : '/api/accounting/account-detail-types';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), accountTypeId: Number(accountTypeId) }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Failed to save', json.error ?? 'Something went wrong.');
+        return;
+      }
+      success(isEdit ? 'Detail type updated' : 'Detail type added', `"${name.trim()}" has been ${isEdit ? 'updated' : 'added'}.`);
+      onSuccess();
+      onClose();
+    } catch {
+      toastError('Network error', 'Could not connect to the server.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
+              <Tag size={15} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit Detail Type' : 'Add Detail Type'}</h2>
+              <p className="text-xs text-slate-500">Account Settings</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Account Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={accountTypeId}
+              onChange={(e) => { setAccountTypeId(e.target.value === '' ? '' : Number(e.target.value)); setErrors((p) => ({ ...p, accountTypeId: undefined })); }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.accountTypeId ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            >
+              <option value="">Select account type…</option>
+              {accountTypes.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            {errors.accountTypeId && <p className="mt-1 text-xs text-red-500">{errors.accountTypeId}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+              Detail Type Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: undefined })); }}
+              placeholder="e.g. Cash and Cash Equivalents"
+              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.name ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+            />
+            {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+          </div>
+          <div className="border-t border-slate-100 pt-1" />
+          <div className="flex items-center justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {isEdit ? 'Save Changes' : 'Add Detail Type'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Delete Detail Type Modal ─────────────────────────────────────────────────
+
+interface DeleteDetailTypeProps {
+  detailType: ApiDetailType;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function DeleteDetailTypeModal({ detailType, onClose, onSuccess }: DeleteDetailTypeProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/accounting/account-detail-types/${detailType.id}`, { method: 'DELETE' });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Cannot delete', json.error ?? 'Something went wrong.');
+        onClose();
+        return;
+      }
+      success('Detail type deleted', `"${detailType.name}" has been removed.`);
+      onSuccess();
+      onClose();
+    } catch {
+      toastError('Network error', 'Could not connect to the server.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4">
+            <Trash2 size={18} className="text-red-600" />
+          </div>
+          <h2 className="text-sm font-bold text-slate-900 mb-1">Delete Detail Type</h2>
+          <p className="text-xs text-slate-500">
+            Are you sure you want to delete{' '}
+            <span className="font-semibold text-slate-700">{detailType.name}</span>? This cannot be undone.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2.5 px-6 pb-5">
+          <button onClick={onClose} disabled={deleting} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => { void handleDelete(); }} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-60">
+            {deleting && <RefreshCw size={12} className="animate-spin" />}
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -211,7 +609,7 @@ function GlAccountModal({ initial, accountTypes, onClose, onSuccess }: GlAccount
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit Account' : 'Add New Account'}</h2>
-              <p className="text-xs text-slate-500">Chart of Accounts</p>
+              <p className="text-xs text-slate-500">Account Settings</p>
             </div>
           </div>
           <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors">
@@ -272,28 +670,29 @@ function GlAccountModal({ initial, accountTypes, onClose, onSuccess }: GlAccount
             {errors.accountTypeId && <p className="mt-1 text-xs text-red-500">{errors.accountTypeId}</p>}
           </div>
 
-          {/* Detail Type */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
-              Detail Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={form.accountDetailTypeId}
-              disabled={form.accountTypeId === ''}
-              onChange={(e) => {
-                const id = e.target.value === '' ? '' : Number(e.target.value);
-                setForm((p) => ({ ...p, accountDetailTypeId: id }));
-                setErrors((p) => ({ ...p, accountDetailTypeId: undefined }));
-              }}
-              className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50 ${errors.accountDetailTypeId ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
-            >
-              <option value="">{form.accountTypeId === '' ? 'Select account type first' : 'Select detail type…'}</option>
-              {detailOptions.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-            {errors.accountDetailTypeId && <p className="mt-1 text-xs text-red-500">{errors.accountDetailTypeId}</p>}
-          </div>
+          {/* Detail Type — only shown after account type is selected */}
+          {form.accountTypeId !== '' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                Detail Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.accountDetailTypeId}
+                onChange={(e) => {
+                  const id = e.target.value === '' ? '' : Number(e.target.value);
+                  setForm((p) => ({ ...p, accountDetailTypeId: id }));
+                  setErrors((p) => ({ ...p, accountDetailTypeId: undefined }));
+                }}
+                className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${errors.accountDetailTypeId ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300 hover:border-slate-400'}`}
+              >
+                <option value="">Select detail type…</option>
+                {detailOptions.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              {errors.accountDetailTypeId && <p className="mt-1 text-xs text-red-500">{errors.accountDetailTypeId}</p>}
+            </div>
+          )}
 
           {/* Opening Balance + Bank Account toggle */}
           <div className="grid grid-cols-2 gap-4">
@@ -353,15 +752,15 @@ function GlAccountModal({ initial, accountTypes, onClose, onSuccess }: GlAccount
   );
 }
 
-// ─── Delete Confirmation Modal ─────────────────────────────────────────────────
+// ─── Delete GL Account Modal ─────────────────────────────────────────────────
 
-interface DeleteConfirmProps {
+interface DeleteGlAccountProps {
   account: GlAccountRecord;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function DeleteConfirmModal({ account, onClose, onSuccess }: DeleteConfirmProps): React.ReactNode {
+function DeleteGlAccountModal({ account, onClose, onSuccess }: DeleteGlAccountProps): React.ReactNode {
   const { success, error: toastError } = useToast();
   const [deleting, setDeleting] = useState(false);
 
@@ -414,19 +813,45 @@ function DeleteConfirmModal({ account, onClose, onSuccess }: DeleteConfirmProps)
 }
 
 export function AccountingSettings(): React.ReactNode {
-  const [accounts, setAccounts] = useState<GlAccountRecord[]>([]);
-  const [accountTypes, setAccountTypes] = useState<ApiAccountType[]>([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [search, setSearch] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-  const [editTarget, setEditTarget] = useState<GlAccountRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<GlAccountRecord | null>(null);
+  // ── Main tabs
   const [activeTab, setActiveTab] = useState<'accounts' | 'journal'>('accounts');
+  // ── Account Settings sub-tabs
+  type AccountSubTab = 'account-name' | 'account-type' | 'detail-type';
+  const [accountSubTab, setAccountSubTab] = useState<AccountSubTab>('account-name');
+
+  // ── GL Accounts state
+  const [accounts, setAccounts] = useState<GlAccountRecord[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [accountSearch, setAccountSearch] = useState('');
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [editAccount, setEditAccount] = useState<GlAccountRecord | null>(null);
+  const [deleteAccount, setDeleteAccount] = useState<GlAccountRecord | null>(null);
+
+  // ── Account Types state
+  const [accountTypes, setAccountTypes] = useState<ApiAccountType[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState(true);
+  const [typeSearch, setTypeSearch] = useState('');
+  const [showAddType, setShowAddType] = useState(false);
+  const [editType, setEditType] = useState<ApiAccountType | null>(null);
+  const [deleteType, setDeleteType] = useState<ApiAccountType | null>(null);
+
+  // ── Detail Types state
+  const [detailTypes, setDetailTypes] = useState<ApiDetailType[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(true);
+  const [detailSearch, setDetailSearch] = useState('');
+  const [showAddDetail, setShowAddDetail] = useState(false);
+  const [editDetail, setEditDetail] = useState<ApiDetailType | null>(null);
+  const [deleteDetail, setDeleteDetail] = useState<ApiDetailType | null>(null);
+
+  // ── Journal settings
   const [defaultStatus, setDefaultStatus] = useState<'Draft' | 'Posted'>('Draft');
   const [prefixes, setPrefixes] = useState<Record<TxType, string>>({ ...TX_DEFAULT_PREFIXES });
   const [enabledTypes, setEnabledTypes] = useState<Record<TxType, boolean>>({
     'Journal Entry': true, Invoice: true, Payment: true, Expense: true, Receipt: true,
   });
+
+  // ── Account types with nested detail types (for GL account modal)
+  const [accountTypesWithDetails, setAccountTypesWithDetails] = useState<ApiAccountType[]>([]);
 
   const fetchAccounts = useCallback(async () => {
     setLoadingAccounts(true);
@@ -442,21 +867,49 @@ export function AccountingSettings(): React.ReactNode {
   }, []);
 
   const fetchAccountTypes = useCallback(async () => {
+    setLoadingTypes(true);
+    try {
+      const res = await fetch('/api/accounting/account-types');
+      if (res.ok) {
+        const json = await res.json() as { data: ApiAccountType[] };
+        setAccountTypes(json.data);
+      }
+    } finally {
+      setLoadingTypes(false);
+    }
+  }, []);
+
+  const fetchDetailTypes = useCallback(async () => {
+    setLoadingDetails(true);
+    try {
+      const res = await fetch('/api/accounting/account-detail-types');
+      if (res.ok) {
+        const json = await res.json() as { data: ApiDetailType[] };
+        setDetailTypes(json.data);
+      }
+    } finally {
+      setLoadingDetails(false);
+    }
+  }, []);
+
+  const fetchAccountTypesWithDetails = useCallback(async () => {
     const res = await fetch('/api/accounting/gl-accounts/account-types');
     if (res.ok) {
       const json = await res.json() as { data: ApiAccountType[] };
-      setAccountTypes(json.data);
+      setAccountTypesWithDetails(json.data);
     }
   }, []);
 
   useEffect(() => {
     void fetchAccounts();
     void fetchAccountTypes();
-  }, [fetchAccounts, fetchAccountTypes]);
+    void fetchDetailTypes();
+    void fetchAccountTypesWithDetails();
+  }, [fetchAccounts, fetchAccountTypes, fetchDetailTypes, fetchAccountTypesWithDetails]);
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return accounts;
-    const q = search.toLowerCase();
+  const filteredAccounts = useMemo(() => {
+    if (!accountSearch.trim()) return accounts;
+    const q = accountSearch.toLowerCase();
     return accounts.filter(
       (a) =>
         a.name.toLowerCase().includes(q) ||
@@ -464,7 +917,23 @@ export function AccountingSettings(): React.ReactNode {
         a.accountType.name.toLowerCase().includes(q) ||
         a.accountDetailType.name.toLowerCase().includes(q),
     );
-  }, [accounts, search]);
+  }, [accounts, accountSearch]);
+
+  const filteredTypes = useMemo(() => {
+    if (!typeSearch.trim()) return accountTypes;
+    const q = typeSearch.toLowerCase();
+    return accountTypes.filter(
+      (t) => t.name.toLowerCase().includes(q) || (GROUP_LABELS[t.group] ?? '').toLowerCase().includes(q),
+    );
+  }, [accountTypes, typeSearch]);
+
+  const filteredDetails = useMemo(() => {
+    if (!detailSearch.trim()) return detailTypes;
+    const q = detailSearch.toLowerCase();
+    return detailTypes.filter(
+      (d) => d.name.toLowerCase().includes(q) || d.accountType.name.toLowerCase().includes(q),
+    );
+  }, [detailTypes, detailSearch]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -480,14 +949,14 @@ export function AccountingSettings(): React.ReactNode {
         </div>
       </div>
 
-      {/* Tab navigation */}
+      {/* Main tab navigation */}
       <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
         <button
           onClick={() => setActiveTab('accounts')}
           className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${activeTab === 'accounts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           <BookOpen size={15} />
-          Chart of Accounts
+          Account Settings
         </button>
         <button
           onClick={() => setActiveTab('journal')}
@@ -498,129 +967,392 @@ export function AccountingSettings(): React.ReactNode {
         </button>
       </div>
 
-      {/* ─── Chart of Accounts tab ─── */}
+      {/* ─── Account Settings tab ─── */}
       {activeTab === 'accounts' && (
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          {/* Section header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center gap-2.5">
-              <BookOpen size={16} className="text-amber-600" />
-              <span className="text-sm font-bold text-slate-900">Chart of Accounts</span>
-              {!loadingAccounts && (
-                <span className="text-xs text-slate-400 font-medium">({accounts.length} accounts)</span>
+        <div className="space-y-4">
+          {/* Sub-tabs */}
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
+            <button
+              onClick={() => setAccountSubTab('account-name')}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${accountSubTab === 'account-name' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <BookOpen size={14} />
+              Account Name
+            </button>
+            <button
+              onClick={() => setAccountSubTab('account-type')}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${accountSubTab === 'account-type' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Tag size={14} />
+              Account Type
+            </button>
+            <button
+              onClick={() => setAccountSubTab('detail-type')}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${accountSubTab === 'detail-type' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Tag size={14} />
+              Detail Type
+            </button>
+          </div>
+
+          {/* ── Account Name ── */}
+          {accountSubTab === 'account-name' && (
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <div className="flex items-center gap-2.5">
+                  <BookOpen size={16} className="text-amber-600" />
+                  <span className="text-sm font-bold text-slate-900">Account Name</span>
+                  {!loadingAccounts && (
+                    <span className="text-xs text-slate-400 font-medium">({accounts.length} accounts)</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { void fetchAccounts(); }}
+                    disabled={loadingAccounts}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={loadingAccounts ? 'animate-spin' : ''} />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setShowAddAccount(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+                  >
+                    <Plus size={13} />
+                    Add Account
+                  </button>
+                </div>
+              </div>
+              <div className="px-6 py-3 border-b border-slate-100">
+                <div className="relative max-w-xs">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={accountSearch}
+                    onChange={(e) => setAccountSearch(e.target.value)}
+                    placeholder="Search accounts..."
+                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                  />
+                </div>
+              </div>
+              {loadingAccounts ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <RefreshCw size={22} className="text-slate-300 animate-spin" />
+                  <p className="text-sm text-slate-400">Loading accounts…</p>
+                </div>
+              ) : filteredAccounts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <BookOpen size={28} className="text-slate-300" />
+                  <p className="text-sm text-slate-400">
+                    {accountSearch.trim() ? 'No accounts match your search.' : 'No accounts found. Add your first account.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Code</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Type</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type</th>
+                        <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Opening Balance</th>
+                        <th className="w-20 px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAccounts.map((account) => {
+                        const badge = GROUP_BADGE[account.accountType.group] ?? 'bg-slate-100 text-slate-700';
+                        const icon  = GROUP_ICON[account.accountType.group];
+                        return (
+                          <tr key={account.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
+                            <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{account.accountCode}</td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-800 text-sm">{account.name}</span>
+                                {account.isBankAccount && (
+                                  <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full">Bank</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                                {icon}
+                                {account.accountType.name}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-xs text-slate-600">{account.accountDetailType.name}</td>
+                            <td className="px-4 py-3.5 text-right">
+                              <span className={`text-sm font-semibold tabular-nums ${account.openingBalance != null && account.openingBalance > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {account.openingBalance != null && account.openingBalance > 0
+                                  ? `₱${account.openingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                  : '—'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setEditAccount(account)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteAccount(account)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { void fetchAccounts(); }}
-                disabled={loadingAccounts}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={12} className={loadingAccounts ? 'animate-spin' : ''} />
-                Refresh
-              </button>
-              <button
-                onClick={() => setShowAdd(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
-              >
-                <Plus size={13} />
-                Add Account
-              </button>
-            </div>
-          </div>
+          )}
 
-          {/* Search */}
-          <div className="px-6 py-3 border-b border-slate-100">
-            <div className="relative max-w-xs">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search accounts..."
-                className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Accounts table */}
-          {loadingAccounts ? (
-            <div className="flex flex-col items-center justify-center py-14 gap-2">
-              <RefreshCw size={22} className="text-slate-300 animate-spin" />
-              <p className="text-sm text-slate-400">Loading accounts…</p>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 gap-2">
-              <BookOpen size={28} className="text-slate-300" />
-              <p className="text-sm text-slate-400">
-                {search.trim() ? 'No accounts match your search.' : 'No accounts found. Add your first account.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Code</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Type</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type</th>
-                    <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Opening Balance</th>
-                    <th className="w-20 px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((account) => {
-                    const badge = GROUP_BADGE[account.accountType.group] ?? 'bg-slate-100 text-slate-700';
-                    const icon  = GROUP_ICON[account.accountType.group];
-                    return (
-                      <tr key={account.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{account.accountCode}</td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-800 text-sm">{account.name}</span>
-                            {account.isBankAccount && (
-                              <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full">Bank</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
-                            {icon}
-                            {account.accountType.name}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-xs text-slate-600">{account.accountDetailType.name}</td>
-                        <td className="px-4 py-3.5 text-right">
-                          <span className={`text-sm font-semibold tabular-nums ${account.openingBalance != null && account.openingBalance > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                            {account.openingBalance != null && account.openingBalance > 0
-                              ? `₱${account.openingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                              : '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => setEditTarget(account)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(account)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
+          {/* ── Account Type ── */}
+          {accountSubTab === 'account-type' && (
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <div className="flex items-center gap-2.5">
+                  <Tag size={16} className="text-amber-600" />
+                  <span className="text-sm font-bold text-slate-900">Account Type</span>
+                  {!loadingTypes && (
+                    <span className="text-xs text-slate-400 font-medium">({accountTypes.length} types)</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { void fetchAccountTypes(); }}
+                    disabled={loadingTypes}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={loadingTypes ? 'animate-spin' : ''} />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setShowAddType(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+                  >
+                    <Plus size={13} />
+                    Add Type
+                  </button>
+                </div>
+              </div>
+              <div className="px-6 py-3 border-b border-slate-100">
+                <div className="relative max-w-xs">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={typeSearch}
+                    onChange={(e) => setTypeSearch(e.target.value)}
+                    placeholder="Search types..."
+                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                  />
+                </div>
+              </div>
+              {loadingTypes ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <RefreshCw size={22} className="text-slate-300 animate-spin" />
+                  <p className="text-sm text-slate-400">Loading types…</p>
+                </div>
+              ) : filteredTypes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <Tag size={28} className="text-slate-300" />
+                  <p className="text-sm text-slate-400">
+                    {typeSearch.trim() ? 'No types match your search.' : 'No account types found. Add your first type.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Type Name</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Financial Group</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Normal Balance</th>
+                        <th className="text-center px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Types</th>
+                        <th className="text-center px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">GL Accounts</th>
+                        <th className="w-20 px-4 py-3"></th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {filteredTypes.map((type) => {
+                        const badge = GROUP_BADGE[type.group] ?? 'bg-slate-100 text-slate-700';
+                        const icon  = GROUP_ICON[type.group];
+                        return (
+                          <tr key={type.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
+                            <td className="px-5 py-3.5">
+                              <span className="font-semibold text-slate-800 text-sm">{type.name}</span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                                {icon}
+                                {GROUP_LABELS[type.group] ?? type.group}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${type.normalBalance === 'DEBIT' ? 'bg-sky-100 text-sky-700' : 'bg-purple-100 text-purple-700'}`}>
+                                {type.normalBalance.charAt(0) + type.normalBalance.slice(1).toLowerCase()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className="text-xs font-semibold text-slate-600 tabular-nums">
+                                {type._count?.detailTypes ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className={`text-xs font-semibold tabular-nums ${(type._count?.accounts ?? 0) > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+                                {type._count?.accounts ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setEditType(type)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteType(type)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Detail Type ── */}
+          {accountSubTab === 'detail-type' && (
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <div className="flex items-center gap-2.5">
+                  <Tag size={16} className="text-amber-600" />
+                  <span className="text-sm font-bold text-slate-900">Detail Type</span>
+                  {!loadingDetails && (
+                    <span className="text-xs text-slate-400 font-medium">({detailTypes.length} detail types)</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { void fetchDetailTypes(); }}
+                    disabled={loadingDetails}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={loadingDetails ? 'animate-spin' : ''} />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => setShowAddDetail(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+                  >
+                    <Plus size={13} />
+                    Add Detail Type
+                  </button>
+                </div>
+              </div>
+              <div className="px-6 py-3 border-b border-slate-100">
+                <div className="relative max-w-xs">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={detailSearch}
+                    onChange={(e) => setDetailSearch(e.target.value)}
+                    placeholder="Search detail types..."
+                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                  />
+                </div>
+              </div>
+              {loadingDetails ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <RefreshCw size={22} className="text-slate-300 animate-spin" />
+                  <p className="text-sm text-slate-400">Loading detail types…</p>
+                </div>
+              ) : filteredDetails.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <Tag size={28} className="text-slate-300" />
+                  <p className="text-sm text-slate-400">
+                    {detailSearch.trim() ? 'No detail types match your search.' : 'No detail types found. Add your first detail type.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type Name</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Type</th>
+                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</th>
+                        <th className="text-center px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">GL Accounts</th>
+                        <th className="w-20 px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDetails.map((detail) => {
+                        const badge = GROUP_BADGE[detail.accountType.group] ?? 'bg-slate-100 text-slate-700';
+                        const icon  = GROUP_ICON[detail.accountType.group];
+                        return (
+                          <tr key={detail.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
+                            <td className="px-5 py-3.5">
+                              <span className="font-semibold text-slate-800 text-sm">{detail.name}</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-xs text-slate-600">{detail.accountType.name}</td>
+                            <td className="px-4 py-3.5">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                                {icon}
+                                {GROUP_LABELS[detail.accountType.group] ?? detail.accountType.group}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className={`text-xs font-semibold tabular-nums ${detail._count.accounts > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+                                {detail._count.accounts}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setEditDetail(detail)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteDetail(detail)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -730,31 +1462,73 @@ export function AccountingSettings(): React.ReactNode {
         </div>
       )}
 
-      {/* Add modal */}
-      {showAdd && (
+      {/* ── GL Account modals ── */}
+      {showAddAccount && (
         <GlAccountModal
-          accountTypes={accountTypes}
-          onClose={() => setShowAdd(false)}
+          accountTypes={accountTypesWithDetails}
+          onClose={() => setShowAddAccount(false)}
+          onSuccess={() => { void fetchAccounts(); void fetchAccountTypesWithDetails(); }}
+        />
+      )}
+      {editAccount && (
+        <GlAccountModal
+          initial={editAccount}
+          accountTypes={accountTypesWithDetails}
+          onClose={() => setEditAccount(null)}
+          onSuccess={() => { void fetchAccounts(); void fetchAccountTypesWithDetails(); }}
+        />
+      )}
+      {deleteAccount && (
+        <DeleteGlAccountModal
+          account={deleteAccount}
+          onClose={() => setDeleteAccount(null)}
           onSuccess={() => { void fetchAccounts(); }}
         />
       )}
 
-      {/* Edit modal */}
-      {editTarget && (
-        <GlAccountModal
-          initial={editTarget}
-          accountTypes={accountTypes}
-          onClose={() => setEditTarget(null)}
-          onSuccess={() => { void fetchAccounts(); }}
+      {/* ── Account Type modals ── */}
+      {showAddType && (
+        <AccountTypeModal
+          onClose={() => setShowAddType(false)}
+          onSuccess={() => { void fetchAccountTypes(); void fetchAccountTypesWithDetails(); void fetchDetailTypes(); }}
+        />
+      )}
+      {editType && (
+        <AccountTypeModal
+          initial={editType}
+          onClose={() => setEditType(null)}
+          onSuccess={() => { void fetchAccountTypes(); void fetchAccountTypesWithDetails(); void fetchDetailTypes(); }}
+        />
+      )}
+      {deleteType && (
+        <DeleteAccountTypeModal
+          accountType={deleteType}
+          onClose={() => setDeleteType(null)}
+          onSuccess={() => { void fetchAccountTypes(); void fetchAccountTypesWithDetails(); }}
         />
       )}
 
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <DeleteConfirmModal
-          account={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onSuccess={() => { void fetchAccounts(); }}
+      {/* ── Detail Type modals ── */}
+      {showAddDetail && (
+        <DetailTypeModal
+          accountTypes={accountTypes}
+          onClose={() => setShowAddDetail(false)}
+          onSuccess={() => { void fetchDetailTypes(); void fetchAccountTypesWithDetails(); }}
+        />
+      )}
+      {editDetail && (
+        <DetailTypeModal
+          initial={editDetail}
+          accountTypes={accountTypes}
+          onClose={() => setEditDetail(null)}
+          onSuccess={() => { void fetchDetailTypes(); void fetchAccountTypesWithDetails(); }}
+        />
+      )}
+      {deleteDetail && (
+        <DeleteDetailTypeModal
+          detailType={deleteDetail}
+          onClose={() => setDeleteDetail(null)}
+          onSuccess={() => { void fetchDetailTypes(); void fetchAccountTypesWithDetails(); }}
         />
       )}
     </div>
