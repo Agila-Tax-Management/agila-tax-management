@@ -739,7 +739,7 @@ async function main(): Promise<void> {
       branchType: "MAIN",
     },
     create: {
-      companyCode: "atms",
+      companyCode: "ATMS-001",
       clientNo: "2023-1001",
       active: true,
       businessEntity: "SOLE_PROPRIETORSHIP",
