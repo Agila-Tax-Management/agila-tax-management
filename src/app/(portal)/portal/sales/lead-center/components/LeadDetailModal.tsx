@@ -17,6 +17,8 @@ import { CreateJobOrderModal } from './CreateJobOrderModal';
 import { QuotationModal } from './QuotationModal';
 import { TsaModal } from './TsaModal';
 import type { Lead, LeadStatus, LeadQuote, LeadTsaInfo } from './lead-types';
+import { JobOrderViewModal } from '../../job-orders/components/JobOrderViewModal';
+import type { JobOrderRecord } from '../../job-orders/components/JobOrders';
 
 export type { Lead } from './lead-types';
 
@@ -66,6 +68,8 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const [isQuotationOpen, setIsQuotationOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<LeadQuote | null>(null);
   const [isTsaOpen, setIsTsaOpen] = useState(false);
+  const [viewingJobOrder, setViewingJobOrder] = useState<JobOrderRecord | null>(null);
+  const [isJobOrderViewOpen, setIsJobOrderViewOpen] = useState(false);
   const [agents, setAgents] = useState<{ id: string; name: string | null; email: string; image: string | null }[]>([]);
   const [agentOpen, setAgentOpen] = useState(false);
 
@@ -627,17 +631,19 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
           </div>
 
           {/* Footer actions */}
-          <div className="flex justify-between items-center pt-3 border-t border-border">
-            <Button
-              variant="outline"
-              onClick={() => { void handleDelete(); }}
-              disabled={deleting || saving}
-              className="text-red-600 hover:bg-red-50 border-red-200"
-            >
-              {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : <Trash2 size={14} className="mr-2" />}
-              Delete Lead
-            </Button>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-3 border-t border-border">
+            {!(activeTsa?.status === 'SIGNED' && invoicePaid) && (
+              <Button
+                variant="outline"
+                onClick={() => { void handleDelete(); }}
+                disabled={deleting || saving}
+                className="text-red-600 hover:bg-red-50 border-red-200"
+              >
+                {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : <Trash2 size={14} className="mr-2" />}
+                Delete Lead
+              </Button>
+            )}
+            <div className="flex items-center gap-2 ml-auto">
               {/* Create Account — available once a quote is accepted */}
               {acceptedQuote && !lead.isAccountCreated && (
                 <Button
@@ -656,13 +662,22 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
                     <CheckCircle2 size={13} /> Job Order Created
                     {(fullLead ?? lead).jobOrders?.[0] && (
-                      <a
-                        href="/portal/sales/job-orders"
+                      <button
+                        type="button"
                         className="ml-1.5 underline underline-offset-2 hover:text-violet-900 dark:hover:text-violet-200 transition-colors"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={() => {
+                          const joId = (fullLead ?? lead).jobOrders?.[0]?.id;
+                          if (!joId) return;
+                          void fetch(`/api/sales/job-orders/${joId}`)
+                            .then((r) => r.json() as Promise<{ data: JobOrderRecord }>)
+                            .then(({ data }) => {
+                              setViewingJobOrder(data);
+                              setIsJobOrderViewOpen(true);
+                            });
+                        }}
                       >
                         View &rarr;
-                      </a>
+                      </button>
                     )}
                   </span>
                 ) : invoicePaid ? (
@@ -783,7 +798,27 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
           onCreated={(updatedLead: Lead) => {
             onUpdated(updatedLead);
             setIsJobOrderOpen(false);
+            const joId = updatedLead.jobOrders?.[0]?.id;
+            if (joId) {
+              void fetch(`/api/sales/job-orders/${joId}`)
+                .then((r) => r.json() as Promise<{ data: JobOrderRecord }>)
+                .then(({ data }) => {
+                  setViewingJobOrder(data);
+                  setIsJobOrderViewOpen(true);
+                });
+            }
           }}
+        />
+      )}
+
+      {/* Job Order View Modal */}
+      {isJobOrderViewOpen && viewingJobOrder && (
+        <JobOrderViewModal
+          isOpen={isJobOrderViewOpen}
+          onClose={() => { setIsJobOrderViewOpen(false); setViewingJobOrder(null); }}
+          jobOrder={viewingJobOrder}
+          onUpdate={(updated) => setViewingJobOrder(updated)}
+          onEdit={() => { /* editing not needed from lead modal */ }}
         />
       )}
     </Modal>
