@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -9,14 +10,13 @@ import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 import type {
   ClientListRecord,
-  ClientDetailRecord,
   ServicePlanOption,
   OneTimeServiceOption,
 } from '@/types/sales-client-list.types';
 import {
   Search, ChevronLeft, ChevronRight, Eye,
-  User, FileText, CheckCircle, Package, Plus,
-  Loader2, Briefcase,
+  FileText, Package, Plus,
+  Loader2,
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -27,17 +27,10 @@ const formatPHP = (amount: number): string =>
     maximumFractionDigits: 2,
   }).format(amount);
 
-const JO_STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
-  DRAFT: 'neutral',
-  SUBMITTED: 'info',
-  ACKNOWLEDGED: 'warning',
-  COMPLETED: 'success',
-  CANCELLED: 'danger',
-};
-
 // ─── Component ────────────────────────────────────────────────────
 
 export function ClientList(): React.ReactNode {
+  const router = useRouter();
   const { success, error: toastError } = useToast();
 
   // ─── Core data ─────────────────────────────────────────────────
@@ -65,11 +58,8 @@ export function ClientList(): React.ReactNode {
     setCurrentPage(1);
   }
 
-  // ─── Detail modal ──────────────────────────────────────────────
+  // ─── Add services modal ────────────────────────────────────────
   const [selectedClient, setSelectedClient] = useState<ClientListRecord | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [clientDetail, setClientDetail] = useState<ClientDetailRecord | null>(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   // ─── Add services modal ────────────────────────────────────────
   const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
@@ -127,23 +117,6 @@ export function ClientList(): React.ReactNode {
   const handleEntriesPerPageChange = (value: string) => {
     setEntriesPerPage(value);
     setClientsPerPage(value === 'All' ? 1000 : parseInt(value, 10));
-  };
-
-  const handleViewClient = async (client: ClientListRecord) => {
-    setSelectedClient(client);
-    setClientDetail(null);
-    setIsDetailModalOpen(true);
-    setIsDetailLoading(true);
-    try {
-      const res = await fetch(`/api/sales/clients/${client.id}`);
-      const json = await res.json() as { data?: ClientDetailRecord; error?: string };
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load client');
-      setClientDetail(json.data ?? null);
-    } catch {
-      toastError('Failed to load client details', 'Please try again.');
-    } finally {
-      setIsDetailLoading(false);
-    }
   };
 
   const handleOpenAddServices = (client: ClientListRecord) => {
@@ -311,7 +284,7 @@ export function ClientList(): React.ReactNode {
                         <Button
                           variant="ghost"
                           className="h-9 w-9 p-0"
-                          onClick={() => void handleViewClient(client)}
+                          onClick={() => router.push(`/portal/sales/clients/${client.id}`)}
                         >
                           <Eye size={16} />
                         </Button>
@@ -387,157 +360,6 @@ export function ClientList(): React.ReactNode {
           </Button>
         </div>
       </div>
-
-      {/* Client Detail Modal */}
-      <Modal
-        isOpen={isDetailModalOpen}
-        onClose={() => { setIsDetailModalOpen(false); setClientDetail(null); }}
-        title={selectedClient ? selectedClient.businessName : ''}
-        size="xl"
-      >
-        {selectedClient && (
-          <div className="space-y-6 p-6">
-            {/* Basic Information */}
-            <Card className="p-6 border-slate-200">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center">
-                  <User size={20} />
-                </div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Basic Information</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Client Number</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.clientNo ?? `#${selectedClient.id}`}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Company Code</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.companyCode ?? 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Authorized Representative</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.authorizedRep ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Email</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.contactEmail ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Phone</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{selectedClient.contactPhone ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</p>
-                  <Badge variant={selectedClient.active ? 'success' : 'warning'} className="mt-1">
-                    {selectedClient.active ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-              </div>
-            </Card>
-
-            {/* Subscription + Job Orders (loaded from detail endpoint) */}
-            {isDetailLoading ? (
-              <div className="flex items-center justify-center p-8">
-                <Loader2 size={24} className="animate-spin text-slate-400" />
-              </div>
-            ) : clientDetail ? (
-              <>
-                <Card className="p-6 border-slate-200">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center">
-                      <CheckCircle size={20} />
-                    </div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Active Subscription</h3>
-                  </div>
-                  {clientDetail.activeSubscription ? (
-                    <div className="p-4 bg-purple-50 rounded-xl border-2 border-purple-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className="text-xs font-black text-purple-900 uppercase tracking-wider">Monthly Service Plan</p>
-                          <h4 className="text-lg font-black text-purple-700 mt-1">
-                            {clientDetail.activeSubscription.servicePlanName}
-                          </h4>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-purple-600">
-                            ₱{formatPHP(clientDetail.activeSubscription.agreedRate)}
-                          </p>
-                          <p className="text-xs text-purple-600 font-bold">/{clientDetail.activeSubscription.billingCycle.toLowerCase()}</p>
-                        </div>
-                      </div>
-                      {clientDetail.activeSubscription.inclusions.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-purple-200">
-                          <p className="text-xs font-black text-purple-900 uppercase tracking-wider mb-3">
-                            Plan Inclusions ({clientDetail.activeSubscription.inclusions.length}):
-                          </p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {clientDetail.activeSubscription.inclusions.map(inc => (
-                              <div key={inc.id} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-purple-100">
-                                <CheckCircle size={14} className="text-emerald-600 shrink-0 mt-0.5" />
-                                <span className="text-slate-700 leading-relaxed">{inc.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                      <Package size={48} className="mx-auto mb-3 text-slate-300" />
-                      <p className="text-sm font-bold text-slate-600">No Active Subscription</p>
-                      <p className="text-xs text-slate-500 mt-1">Click &ldquo;+&rdquo; to assign a monthly plan</p>
-                    </div>
-                  )}
-                </Card>
-
-                <Card className="p-6 border-slate-200">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center">
-                      <Briefcase size={20} />
-                    </div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Recent Job Orders</h3>
-                  </div>
-                  {clientDetail.recentJobOrders.length > 0 ? (
-                    <div className="space-y-3">
-                      {clientDetail.recentJobOrders.map(jo => (
-                        <div key={jo.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-black text-slate-800">{jo.jobOrderNumber}</span>
-                            <Badge variant={JO_STATUS_VARIANT[jo.status] ?? 'neutral'} className="text-xs">
-                              {jo.status}
-                            </Badge>
-                          </div>
-                          <div className="space-y-1">
-                            {jo.items.map(item => (
-                              <div key={item.id} className="flex items-center gap-2 text-xs text-slate-600">
-                                <FileText size={12} className="text-blue-500 shrink-0" />
-                                <span>{item.serviceName}</span>
-                                <span className="ml-auto font-bold">₱{formatPHP(item.total)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500 italic">No job orders yet</p>
-                  )}
-                </Card>
-              </>
-            ) : null}
-
-            <div className="flex gap-3 pt-4 border-t border-slate-200">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => { setIsDetailModalOpen(false); setClientDetail(null); }}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       {/* Add / Change Services Modal */}
       <Modal
