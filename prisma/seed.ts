@@ -1150,7 +1150,7 @@ async function main(): Promise<void> {
       description: "Complete compliance setup for new businesses: BIR Registration + 1st Month EWT/VAT Filing.",
       packageRate: 4500,
       isVatable: true,
-      isActive: true,
+      status: "ACTIVE",
       items: {
         create: [
           { serviceId: birRegService.id, quantity: 1, overrideRate: 1500 },
