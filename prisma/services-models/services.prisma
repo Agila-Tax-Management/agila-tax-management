@@ -136,15 +136,21 @@ model ServiceTaskTemplate {
 // 📦 PACKAGES & BUNDLES (The Menu)
 // ==========================================
 
+enum PackageStatus {
+    ACTIVE
+    INACTIVE
+    ARCHIVED
+}
+
 model ServicePackage {
     id          Int     @id @default(autoincrement())
     code        String? @unique
     name        String
     description String? @db.Text
 
-    packageRate Decimal @db.Decimal(10, 2)
-    isVatable   Boolean @default(true)
-    isActive    Boolean @default(true)
+    packageRate Decimal       @db.Decimal(10, 2)
+    isVatable   Boolean       @default(true)
+    status      PackageStatus @default(ACTIVE)
 
     items          ServicePackageItem[]
     quotedAsSource QuoteLineItem[] // Links to Quotes that used this bundle
