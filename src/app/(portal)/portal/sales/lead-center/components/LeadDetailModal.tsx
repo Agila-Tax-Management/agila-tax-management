@@ -235,7 +235,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   };
 
   const handleDeleteQuote = async (quoteId: string) => {
-    if (!confirm('Delete this draft quotation? This cannot be undone.')) return;
+    if (!confirm('Delete this quotation? This action cannot be undone.')) return;
     try {
       const res = await fetch(`/api/sales/quotes/${quoteId}`, { method: 'DELETE' });
       const d = (await res.json()) as { error?: string };
@@ -244,7 +244,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
       const updatedAfterDelete = { ...fullLead, quotes: fullLead.quotes.filter((q) => q.id !== quoteId) };
       setFullLead(updatedAfterDelete);
       onUpdated(updatedAfterDelete);
-      success('Quotation deleted', 'The draft quotation has been removed.');
+      success('Quotation deleted', 'The quotation has been removed.');
     } catch {
       error('Network error', 'Could not connect to the server.');
     }
@@ -540,16 +540,14 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                       >
                         View
                       </button>
-                      {q.status === 'DRAFT' && (
-                        <button
-                          type="button"
-                          onClick={() => { void handleDeleteQuote(q.id); }}
-                          className="text-rose-400 hover:text-rose-600 shrink-0"
-                          title="Delete quotation"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => { void handleDeleteQuote(q.id); }}
+                        className="text-rose-400 hover:text-rose-600 shrink-0"
+                        title="Delete quotation"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   );
                 })}

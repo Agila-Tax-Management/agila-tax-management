@@ -1,7 +1,7 @@
 // prisma/seed.ts
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
-import type { AppPortal } from "../src/generated/prisma/client";
+import type { AppPortal, PortalRole } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 
@@ -121,7 +121,7 @@ interface InternalUserSeed {
   employeeLevel: string;
   hireDate: Date;
   /** Portal access granted only for EMPLOYEE role (SUPER_ADMIN/ADMIN get access by role). */
-  appAccess?: Partial<Record<AppPortal, { canRead: boolean; canWrite: boolean; canEdit: boolean; canDelete: boolean }>>;
+  appAccess?: Partial<Record<AppPortal, PortalRole>>;
 }
 
 const INTERNAL_USERS: InternalUserSeed[] = [
@@ -182,9 +182,9 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     employeeLevel: "Junior",
     hireDate: new Date("2024-01-15"),
     appAccess: {
-      COMPLIANCE: { canRead: true, canWrite: true, canEdit: true, canDelete: false },
-      ACCOUNTING: { canRead: true, canWrite: true, canEdit: false, canDelete: false },
-      OPERATIONS_MANAGEMENT: { canRead: true, canWrite: false, canEdit: false, canDelete: false },
+      COMPLIANCE: "ADMIN",
+      ACCOUNTING: "USER",
+      OPERATIONS_MANAGEMENT: "VIEWER",
     },
   },
   {
@@ -206,7 +206,7 @@ const INTERNAL_USERS: InternalUserSeed[] = [
     employeeLevel: "Mid",
     hireDate: new Date("2024-06-01"),
     appAccess: {
-      LIAISON: { canRead: true, canWrite: true, canEdit: true, canDelete: false },
+      LIAISON: "ADMIN",
     },
   },
 ];
@@ -544,13 +544,13 @@ async function seedInternalUser(
   // 6. Seed EmployeeAppAccess for EMPLOYEE role users
   if (seed.role === "EMPLOYEE" && seed.appAccess) {
     const apps = await prisma.app.findMany();
-    for (const [portalName, perms] of Object.entries(seed.appAccess)) {
+    for (const [portalName, role] of Object.entries(seed.appAccess)) {
       const app = apps.find((a) => a.name === portalName);
       if (!app) continue;
       await prisma.employeeAppAccess.upsert({
         where: { employeeId_appId: { employeeId, appId: app.id } },
-        update: perms,
-        create: { employeeId, appId: app.id, ...perms },
+        update: { role },
+        create: { employeeId, appId: app.id, role },
       });
     }
   }
