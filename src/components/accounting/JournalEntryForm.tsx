@@ -69,21 +69,23 @@ export function generateRefNo(entries: JournalEntry[]): string {
 export interface JournalEntryFormProps {
   entries: JournalEntry[];
   glAccounts: GlAccountOption[];
-  onSave: (entry: JournalEntry) => void;
+  onSave: (entry: JournalEntry) => Promise<void>;
   onClose: () => void;
-  onSaveNew: (entry: JournalEntry) => void;
+  onSaveNew: (entry: JournalEntry) => Promise<void>;
   initialEntry?: JournalEntry;
-  onUpdate?: (entry: JournalEntry) => void;
+  onUpdate?: (entry: JournalEntry) => Promise<void>;
 }
 
 export function JournalEntryForm({ entries, glAccounts, onSave, onClose, onSaveNew, initialEntry, onUpdate }: JournalEntryFormProps): React.ReactNode {
   const isEditing = !!initialEntry;
   const today = new Date().toISOString().split('T')[0];
   const [transactionDate, setTransactionDate] = useState(() => initialEntry?.transactionDate ?? today);
-  const [status, setStatus] = useState<JournalStatus>(() => initialEntry?.status ?? 'Draft');
+  const status: JournalStatus = 'Posted';
   const [lines, setLines] = useState<JournalLine[]>(() => initialEntry?.lines.length ? initialEntry.lines : defaultLines());
   const [notes, setNotes] = useState(() => initialEntry?.notes ?? '');
   const [attachments, setAttachments] = useState<string[]>(() => initialEntry?.attachments ?? []);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refNo = isEditing ? initialEntry.referenceNo : generateRefNo(entries);
@@ -126,26 +128,49 @@ export function JournalEntryForm({ entries, glAccounts, onSave, onClose, onSaveN
 
   function resetForm() {
     setTransactionDate(today);
-    setStatus('Draft');
     setLines(defaultLines());
     setNotes('');
     setAttachments([]);
   }
 
-  function handleSave() {
-    if (isEditing) { onUpdate?.(buildEntry()); }
-    else { onSave(buildEntry()); }
+  async function handleSave() {
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (isEditing) { await onUpdate?.(buildEntry()); }
+      else { await onSave(buildEntry()); }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveClose() {
-    if (isEditing) { onUpdate?.(buildEntry()); }
-    else { onSave(buildEntry()); }
-    onClose();
+  async function handleSaveClose() {
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (isEditing) { await onUpdate?.(buildEntry()); }
+      else { await onSave(buildEntry()); }
+      onClose();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveNew() {
-    onSaveNew(buildEntry());
-    resetForm();
+  async function handleSaveNew() {
+    setSaving(true);
+    setFormError(null);
+    try {
+      await onSaveNew(buildEntry());
+      resetForm();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const INPUT_CLS =
@@ -166,14 +191,9 @@ export function JournalEntryForm({ entries, glAccounts, onSave, onClose, onSaveN
           <span className="text-xs font-mono bg-slate-100 border border-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg select-all">
             {refNo}
           </span>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as JournalStatus)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
-          >
-            <option value="Draft">Draft</option>
-            <option value="Posted">Posted</option>
-          </select>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide">
+            Posted
+          </span>
         </div>
       </div>
 
@@ -402,6 +422,13 @@ export function JournalEntryForm({ entries, glAccounts, onSave, onClose, onSaveN
         </div>
       </div>
 
+      {/* Inline save error */}
+      {formError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {formError}
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
         <button
@@ -415,51 +442,42 @@ export function JournalEntryForm({ entries, glAccounts, onSave, onClose, onSaveN
           <>
             <button
               type="button"
-              onClick={handleSave}
-              disabled={hasBalance && !isBalanced}
+              onClick={() => { void handleSave(); }}
+              disabled={saving || (hasBalance && !isBalanced)}
               title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
               className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Update
+              {saving ? 'Saving…' : 'Update'}
             </button>
             <button
               type="button"
-              onClick={handleSaveClose}
-              disabled={hasBalance && !isBalanced}
+              onClick={() => { void handleSaveClose(); }}
+              disabled={saving || (hasBalance && !isBalanced)}
               title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
               className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              Update &amp; Close
+              {saving ? 'Saving…' : 'Update & Close'}
             </button>
           </>
         ) : (
           <>
             <button
               type="button"
-              onClick={handleSave}
-              disabled={hasBalance && !isBalanced}
-              title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
-              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveClose}
-              disabled={hasBalance && !isBalanced}
+              onClick={() => { void handleSaveClose(); }}
+              disabled={saving || (hasBalance && !isBalanced)}
               title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
               className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              Save &amp; Close
+              {saving ? 'Saving…' : 'Save & Close'}
             </button>
             <button
               type="button"
-              onClick={handleSaveNew}
-              disabled={hasBalance && !isBalanced}
+              onClick={() => { void handleSaveNew(); }}
+              disabled={saving || (hasBalance && !isBalanced)}
               title={hasBalance && !isBalanced ? 'Debits must equal credits before saving' : undefined}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              Save &amp; New
+              {saving ? 'Saving…' : 'Save & New'}
             </button>
           </>
         )}

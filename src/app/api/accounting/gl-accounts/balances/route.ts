@@ -4,10 +4,6 @@ import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 
-// Debit-normal account groups: debit increases balance, credit decreases it.
-// Credit-normal groups (LIABILITY, EQUITY, REVENUE): credit increases balance.
-const DEBIT_NORMAL = ['ASSET', 'EXPENSE'];
-
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -43,7 +39,9 @@ export async function GET() {
     const sumCredit = account.journalLines.reduce((s, l) => s + Number(l.credit ?? 0), 0);
     const opening   = Number(account.openingBalance ?? 0);
 
-    const runningBalance = DEBIT_NORMAL.includes(account.accountType.group)
+    // T-account rule: use normalBalance stored on the account type in the DB
+    const isDebitNormal = account.accountType.normalBalance === 'DEBIT';
+    const runningBalance = isDebitNormal
       ? opening + sumDebit - sumCredit
       : opening + sumCredit - sumDebit;
 

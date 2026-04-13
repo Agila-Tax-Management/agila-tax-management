@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BookOpen, Plus, Search, X,
   Settings, TrendingUp, Wallet, Scale, BarChart2, Trash2, Pencil,
-  PenLine, FileText, CreditCard, Receipt, Download, Hash, ListFilter, SlidersHorizontal,
+  PenLine, FileText, CreditCard, Receipt, Download, Hash, ListFilter,
   RefreshCw, AlertTriangle, Tag,
 } from 'lucide-react';
 import type { GlAccountRecord } from './ChartofAccounts';
@@ -813,11 +813,9 @@ function DeleteGlAccountModal({ account, onClose, onSuccess }: DeleteGlAccountPr
 }
 
 export function AccountingSettings(): React.ReactNode {
-  // ── Main tabs
-  const [activeTab, setActiveTab] = useState<'accounts' | 'journal'>('accounts');
-  // ── Account Settings sub-tabs
-  type AccountSubTab = 'account-name' | 'account-type' | 'detail-type';
-  const [accountSubTab, setAccountSubTab] = useState<AccountSubTab>('account-name');
+  // ── Flat top-level tabs (matches Sales portal pattern)
+  type ActiveTab = 'account-names' | 'account-types' | 'detail-types' | 'journal';
+  const [activeTab, setActiveTab] = useState<ActiveTab>('account-names');
 
   // ── GL Accounts state
   const [accounts, setAccounts] = useState<GlAccountRecord[]>([]);
@@ -844,7 +842,6 @@ export function AccountingSettings(): React.ReactNode {
   const [deleteDetail, setDeleteDetail] = useState<ApiDetailType | null>(null);
 
   // ── Journal settings
-  const [defaultStatus, setDefaultStatus] = useState<'Draft' | 'Posted'>('Draft');
   const [prefixes, setPrefixes] = useState<Record<TxType, string>>({ ...TX_DEFAULT_PREFIXES });
   const [enabledTypes, setEnabledTypes] = useState<Record<TxType, boolean>>({
     'Journal Entry': true, Invoice: true, Payment: true, Expense: true, Receipt: true,
@@ -935,479 +932,419 @@ export function AccountingSettings(): React.ReactNode {
     );
   }, [detailTypes, detailSearch]);
 
+  // ── Shared table styles (match Sales portal)
+  const thClass = 'px-6 py-3.5 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider';
+  const tdClass = 'px-6 py-3.5';
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center shrink-0">
-          <Settings size={20} className="text-white" />
-        </div>
-        <div>
-          <h1 className="text-xl font-black text-slate-900 tracking-tight">ACF Settings</h1>
-          <p className="text-sm text-slate-500">Accounting &amp; Finance configuration</p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-background">
 
-      {/* Main tab navigation */}
-      <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('accounts')}
-          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${activeTab === 'accounts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <BookOpen size={15} />
-          Account Settings
-        </button>
-        <button
-          onClick={() => setActiveTab('journal')}
-          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${activeTab === 'journal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <PenLine size={15} />
-          Journal
-        </button>
-      </div>
-
-      {/* ─── Account Settings tab ─── */}
-      {activeTab === 'accounts' && (
-        <div className="space-y-4">
-          {/* Sub-tabs */}
-          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
-            <button
-              onClick={() => setAccountSubTab('account-name')}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${accountSubTab === 'account-name' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <BookOpen size={14} />
-              Account Name
-            </button>
-            <button
-              onClick={() => setAccountSubTab('account-type')}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${accountSubTab === 'account-type' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <Tag size={14} />
-              Account Type
-            </button>
-            <button
-              onClick={() => setAccountSubTab('detail-type')}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${accountSubTab === 'detail-type' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <Tag size={14} />
-              Detail Type
-            </button>
+      {/* ── Header ── */}
+      <div className="max-w-6xl mx-auto px-6 pt-8 pb-0">
+        <div className="mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-600/10 text-amber-600">
+              <Settings size={24} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">ACF Settings</h1>
+              <p className="text-sm text-muted-foreground">Accounting &amp; Finance configuration</p>
+            </div>
           </div>
+        </div>
 
-          {/* ── Account Name ── */}
-          {accountSubTab === 'account-name' && (
-            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-                <div className="flex items-center gap-2.5">
-                  <BookOpen size={16} className="text-amber-600" />
-                  <span className="text-sm font-bold text-slate-900">Account Name</span>
-                  {!loadingAccounts && (
-                    <span className="text-xs text-slate-400 font-medium">({accounts.length} accounts)</span>
-                  )}
+        {/* Flat tab navigation */}
+        <div className="border-b border-border">
+          <nav className="flex gap-1">
+            {([
+              { id: 'account-names' as const, label: 'Account Names', icon: <BookOpen size={18} /> },
+              { id: 'account-types' as const, label: 'Account Types', icon: <Tag size={18} /> },
+              { id: 'detail-types' as const, label: 'Detail Types', icon: <ListFilter size={18} /> },
+              { id: 'journal' as const, label: 'Journal', icon: <PenLine size={18} /> },
+            ]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-amber-600 text-amber-600'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* ── Content ── */}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+
+      {/* ─── Account Names tab ─── */}
+      {activeTab === 'account-names' && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Account Names</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {loadingAccounts ? 'Loading…' : `${accounts.length} account${accounts.length !== 1 ? 's' : ''} registered`}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { void fetchAccounts(); }}
-                    disabled={loadingAccounts}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={loadingAccounts ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={accountSearch}
+                      onChange={(e) => setAccountSearch(e.target.value)}
+                      placeholder="Search accounts…"
+                      className="rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                    />
+                  </div>
                   <button
                     onClick={() => setShowAddAccount(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all text-sm font-medium shadow-sm"
                   >
-                    <Plus size={13} />
+                    <Plus size={16} />
                     Add Account
                   </button>
                 </div>
               </div>
-              <div className="px-6 py-3 border-b border-slate-100">
-                <div className="relative max-w-xs">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={accountSearch}
-                    onChange={(e) => setAccountSearch(e.target.value)}
-                    placeholder="Search accounts..."
-                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
-                  />
-                </div>
+              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+                {loadingAccounts ? (
+                  <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading accounts…</div>
+                ) : filteredAccounts.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <BookOpen size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      {accountSearch.trim() ? 'No accounts match your search.' : 'No accounts yet. Add the first one.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted border-b border-border">
+                        <tr>
+                          <th className={thClass}>Code</th>
+                          <th className={thClass}>Account Name</th>
+                          <th className={thClass}>Account Type</th>
+                          <th className={thClass}>Detail Type</th>
+                          <th className={`${thClass} text-right`}>Opening Balance</th>
+                          <th className={`${thClass} text-right`}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {filteredAccounts.map((account) => {
+                          const badge = GROUP_BADGE[account.accountType.group] ?? 'bg-slate-100 text-slate-700';
+                          const icon  = GROUP_ICON[account.accountType.group];
+                          return (
+                            <tr key={account.id} className="hover:bg-accent transition-colors">
+                              <td className={tdClass}>
+                                <span className="font-mono text-xs text-muted-foreground">{account.accountCode}</span>
+                              </td>
+                              <td className={tdClass}>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-foreground text-sm">{account.name}</span>
+                                  {account.isBankAccount && (
+                                    <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full">Bank</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className={tdClass}>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                                  {icon}
+                                  {account.accountType.name}
+                                </span>
+                              </td>
+                              <td className={tdClass}>
+                                <span className="text-sm text-muted-foreground">{account.accountDetailType.name}</span>
+                              </td>
+                              <td className={`${tdClass} text-right`}>
+                                <span className={`text-sm font-semibold tabular-nums ${account.openingBalance != null && account.openingBalance > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                  {account.openingBalance != null && account.openingBalance > 0
+                                    ? `₱${account.openingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                    : '—'}
+                                </span>
+                              </td>
+                              <td className={`${tdClass} text-right`}>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditAccount(account)}
+                                    className="p-1.5 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                    title="Edit"
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteAccount(account)}
+                                    className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {loadingAccounts ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2">
-                  <RefreshCw size={22} className="text-slate-300 animate-spin" />
-                  <p className="text-sm text-slate-400">Loading accounts…</p>
-                </div>
-              ) : filteredAccounts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2">
-                  <BookOpen size={28} className="text-slate-300" />
-                  <p className="text-sm text-slate-400">
-                    {accountSearch.trim() ? 'No accounts match your search.' : 'No accounts found. Add your first account.'}
+            </div>
+      )}
+
+      {/* ─── Account Types tab ─── */}
+      {activeTab === 'account-types' && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Account Types</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {loadingTypes ? 'Loading…' : `${accountTypes.length} type${accountTypes.length !== 1 ? 's' : ''} registered`}
                   </p>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Code</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Name</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Type</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type</th>
-                        <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Opening Balance</th>
-                        <th className="w-20 px-4 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAccounts.map((account) => {
-                        const badge = GROUP_BADGE[account.accountType.group] ?? 'bg-slate-100 text-slate-700';
-                        const icon  = GROUP_ICON[account.accountType.group];
-                        return (
-                          <tr key={account.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
-                            <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{account.accountCode}</td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-slate-800 text-sm">{account.name}</span>
-                                {account.isBankAccount && (
-                                  <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full">Bank</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
-                                {icon}
-                                {account.accountType.name}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-xs text-slate-600">{account.accountDetailType.name}</td>
-                            <td className="px-4 py-3.5 text-right">
-                              <span className={`text-sm font-semibold tabular-nums ${account.openingBalance != null && account.openingBalance > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                                {account.openingBalance != null && account.openingBalance > 0
-                                  ? `₱${account.openingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                                  : '—'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  onClick={() => setEditAccount(account)}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                  title="Edit"
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                                <button
-                                  onClick={() => setDeleteAccount(account)}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Account Type ── */}
-          {accountSubTab === 'account-type' && (
-            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-                <div className="flex items-center gap-2.5">
-                  <Tag size={16} className="text-amber-600" />
-                  <span className="text-sm font-bold text-slate-900">Account Type</span>
-                  {!loadingTypes && (
-                    <span className="text-xs text-slate-400 font-medium">({accountTypes.length} types)</span>
-                  )}
-                </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { void fetchAccountTypes(); }}
-                    disabled={loadingTypes}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={loadingTypes ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={typeSearch}
+                      onChange={(e) => setTypeSearch(e.target.value)}
+                      placeholder="Search types…"
+                      className="rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                    />
+                  </div>
                   <button
                     onClick={() => setShowAddType(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all text-sm font-medium shadow-sm"
                   >
-                    <Plus size={13} />
+                    <Plus size={16} />
                     Add Type
                   </button>
                 </div>
               </div>
-              <div className="px-6 py-3 border-b border-slate-100">
-                <div className="relative max-w-xs">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={typeSearch}
-                    onChange={(e) => setTypeSearch(e.target.value)}
-                    placeholder="Search types..."
-                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
-                  />
-                </div>
+              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+                {loadingTypes ? (
+                  <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading types…</div>
+                ) : filteredTypes.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <Tag size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      {typeSearch.trim() ? 'No types match your search.' : 'No account types yet. Add the first one.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted border-b border-border">
+                        <tr>
+                          <th className={thClass}>Type Name</th>
+                          <th className={thClass}>Financial Group</th>
+                          <th className={thClass}>Normal Balance</th>
+                          <th className={`${thClass} text-center`}>Detail Types</th>
+                          <th className={`${thClass} text-center`}>GL Accounts</th>
+                          <th className={`${thClass} text-right`}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {filteredTypes.map((type) => {
+                          const badge = GROUP_BADGE[type.group] ?? 'bg-slate-100 text-slate-700';
+                          const icon  = GROUP_ICON[type.group];
+                          return (
+                            <tr key={type.id} className="hover:bg-accent transition-colors">
+                              <td className={tdClass}>
+                                <span className="font-medium text-foreground text-sm">{type.name}</span>
+                              </td>
+                              <td className={tdClass}>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                                  {icon}
+                                  {GROUP_LABELS[type.group] ?? type.group}
+                                </span>
+                              </td>
+                              <td className={tdClass}>
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${type.normalBalance === 'DEBIT' ? 'bg-sky-100 text-sky-700' : 'bg-purple-100 text-purple-700'}`}>
+                                  {type.normalBalance.charAt(0) + type.normalBalance.slice(1).toLowerCase()}
+                                </span>
+                              </td>
+                              <td className={`${tdClass} text-center`}>
+                                <span className="text-sm font-medium text-foreground">{type._count?.detailTypes ?? 0}</span>
+                              </td>
+                              <td className={`${tdClass} text-center`}>
+                                <span className={`text-sm font-medium ${(type._count?.accounts ?? 0) > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                  {type._count?.accounts ?? 0}
+                                </span>
+                              </td>
+                              <td className={`${tdClass} text-right`}>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditType(type)}
+                                    className="p-1.5 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                    title="Edit"
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteType(type)}
+                                    className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {loadingTypes ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2">
-                  <RefreshCw size={22} className="text-slate-300 animate-spin" />
-                  <p className="text-sm text-slate-400">Loading types…</p>
-                </div>
-              ) : filteredTypes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2">
-                  <Tag size={28} className="text-slate-300" />
-                  <p className="text-sm text-slate-400">
-                    {typeSearch.trim() ? 'No types match your search.' : 'No account types found. Add your first type.'}
+            </div>
+      )}
+
+      {/* ─── Detail Types tab ─── */}
+      {activeTab === 'detail-types' && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Detail Types</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {loadingDetails ? 'Loading…' : `${detailTypes.length} detail type${detailTypes.length !== 1 ? 's' : ''} registered`}
                   </p>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Type Name</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Financial Group</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Normal Balance</th>
-                        <th className="text-center px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Types</th>
-                        <th className="text-center px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">GL Accounts</th>
-                        <th className="w-20 px-4 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTypes.map((type) => {
-                        const badge = GROUP_BADGE[type.group] ?? 'bg-slate-100 text-slate-700';
-                        const icon  = GROUP_ICON[type.group];
-                        return (
-                          <tr key={type.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
-                            <td className="px-5 py-3.5">
-                              <span className="font-semibold text-slate-800 text-sm">{type.name}</span>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
-                                {icon}
-                                {GROUP_LABELS[type.group] ?? type.group}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${type.normalBalance === 'DEBIT' ? 'bg-sky-100 text-sky-700' : 'bg-purple-100 text-purple-700'}`}>
-                                {type.normalBalance.charAt(0) + type.normalBalance.slice(1).toLowerCase()}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-center">
-                              <span className="text-xs font-semibold text-slate-600 tabular-nums">
-                                {type._count?.detailTypes ?? 0}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-center">
-                              <span className={`text-xs font-semibold tabular-nums ${(type._count?.accounts ?? 0) > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
-                                {type._count?.accounts ?? 0}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  onClick={() => setEditType(type)}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                  title="Edit"
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                                <button
-                                  onClick={() => setDeleteType(type)}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Detail Type ── */}
-          {accountSubTab === 'detail-type' && (
-            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-                <div className="flex items-center gap-2.5">
-                  <Tag size={16} className="text-amber-600" />
-                  <span className="text-sm font-bold text-slate-900">Detail Type</span>
-                  {!loadingDetails && (
-                    <span className="text-xs text-slate-400 font-medium">({detailTypes.length} detail types)</span>
-                  )}
-                </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { void fetchDetailTypes(); }}
-                    disabled={loadingDetails}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={loadingDetails ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={detailSearch}
+                      onChange={(e) => setDetailSearch(e.target.value)}
+                      placeholder="Search detail types…"
+                      className="rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+                    />
+                  </div>
                   <button
                     onClick={() => setShowAddDetail(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all text-sm font-medium shadow-sm"
                   >
-                    <Plus size={13} />
+                    <Plus size={16} />
                     Add Detail Type
                   </button>
                 </div>
               </div>
-              <div className="px-6 py-3 border-b border-slate-100">
-                <div className="relative max-w-xs">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={detailSearch}
-                    onChange={(e) => setDetailSearch(e.target.value)}
-                    placeholder="Search detail types..."
-                    className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
-                  />
-                </div>
+              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+                {loadingDetails ? (
+                  <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading detail types…</div>
+                ) : filteredDetails.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <ListFilter size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      {detailSearch.trim() ? 'No detail types match your search.' : 'No detail types yet. Add the first one.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted border-b border-border">
+                        <tr>
+                          <th className={thClass}>Detail Type Name</th>
+                          <th className={thClass}>Account Type</th>
+                          <th className={thClass}>Group</th>
+                          <th className={`${thClass} text-center`}>GL Accounts</th>
+                          <th className={`${thClass} text-right`}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {filteredDetails.map((detail) => {
+                          const badge = GROUP_BADGE[detail.accountType.group] ?? 'bg-slate-100 text-slate-700';
+                          const icon  = GROUP_ICON[detail.accountType.group];
+                          return (
+                            <tr key={detail.id} className="hover:bg-accent transition-colors">
+                              <td className={tdClass}>
+                                <span className="font-medium text-foreground text-sm">{detail.name}</span>
+                              </td>
+                              <td className={tdClass}>
+                                <span className="text-sm text-muted-foreground">{detail.accountType.name}</span>
+                              </td>
+                              <td className={tdClass}>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
+                                  {icon}
+                                  {GROUP_LABELS[detail.accountType.group] ?? detail.accountType.group}
+                                </span>
+                              </td>
+                              <td className={`${tdClass} text-center`}>
+                                <span className={`text-sm font-medium ${detail._count.accounts > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                  {detail._count.accounts}
+                                </span>
+                              </td>
+                              <td className={`${tdClass} text-right`}>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditDetail(detail)}
+                                    className="p-1.5 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                    title="Edit"
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteDetail(detail)}
+                                    className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {loadingDetails ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2">
-                  <RefreshCw size={22} className="text-slate-300 animate-spin" />
-                  <p className="text-sm text-slate-400">Loading detail types…</p>
-                </div>
-              ) : filteredDetails.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-14 gap-2">
-                  <Tag size={28} className="text-slate-300" />
-                  <p className="text-sm text-slate-400">
-                    {detailSearch.trim() ? 'No detail types match your search.' : 'No detail types found. Add your first detail type.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Detail Type Name</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Type</th>
-                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</th>
-                        <th className="text-center px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">GL Accounts</th>
-                        <th className="w-20 px-4 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDetails.map((detail) => {
-                        const badge = GROUP_BADGE[detail.accountType.group] ?? 'bg-slate-100 text-slate-700';
-                        const icon  = GROUP_ICON[detail.accountType.group];
-                        return (
-                          <tr key={detail.id} className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors">
-                            <td className="px-5 py-3.5">
-                              <span className="font-semibold text-slate-800 text-sm">{detail.name}</span>
-                            </td>
-                            <td className="px-4 py-3.5 text-xs text-slate-600">{detail.accountType.name}</td>
-                            <td className="px-4 py-3.5">
-                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge}`}>
-                                {icon}
-                                {GROUP_LABELS[detail.accountType.group] ?? detail.accountType.group}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-center">
-                              <span className={`text-xs font-semibold tabular-nums ${detail._count.accounts > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
-                                {detail._count.accounts}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  onClick={() => setEditDetail(detail)}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                  title="Edit"
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                                <button
-                                  onClick={() => setDeleteDetail(detail)}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
           )}
-        </div>
-      )}
 
       {/* ─── Journal Settings tab ─── */}
       {activeTab === 'journal' && (
         <div className="space-y-5">
 
-          {/* Default Entry Status */}
-          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-200 bg-slate-50">
-              <SlidersHorizontal size={16} className="text-amber-600" />
-              <div>
-                <p className="text-sm font-bold text-slate-900">Default Entry Status</p>
-                <p className="text-xs text-slate-400 mt-0.5">Status applied when creating a new journal entry.</p>
-              </div>
+          {/* Entry Status — informational */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+              <PenLine size={15} className="text-white" />
             </div>
-            <div className="px-6 py-5 flex flex-wrap items-start gap-8">
-              {(['Draft', 'Posted'] as const).map((s) => (
-                <label key={s} className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="defaultStatus"
-                    value={s}
-                    checked={defaultStatus === s}
-                    onChange={() => setDefaultStatus(s)}
-                    className="mt-0.5 w-4 h-4 accent-amber-600 cursor-pointer"
-                  />
-                  <div>
-                    <p className={`text-sm font-semibold ${defaultStatus === s ? 'text-amber-700' : 'text-slate-700'}`}>{s}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {s === 'Draft' ? 'Saved but not posted to the ledger' : 'Immediately recorded in the ledger'}
-                    </p>
-                  </div>
-                </label>
-              ))}
+            <div>
+              <p className="text-sm font-bold text-emerald-800">All journal entries are immediately posted</p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                Every entry saved in this system is permanently recorded in the general ledger.
+                There is no draft stage — entries are final upon save.
+              </p>
             </div>
           </div>
 
           {/* Reference Number Prefixes */}
-          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-200 bg-slate-50">
-              <Hash size={16} className="text-amber-600" />
+          <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted">
+              <Hash size={18} className="text-amber-600" />
               <div>
-                <p className="text-sm font-bold text-slate-900">Reference Number Prefixes</p>
-                <p className="text-xs text-slate-400 mt-0.5">Prefix used when auto-generating reference numbers per transaction type.</p>
+                <p className="text-sm font-bold text-foreground">Reference Number Prefixes</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Prefix used when auto-generating reference numbers per transaction type.</p>
               </div>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-border">
               {TRANSACTION_TYPE_KEYS.map((type) => (
-                <div key={type} className="flex items-center justify-between px-6 py-4 gap-4">
+                <div key={type} className="flex items-center justify-between px-6 py-4 gap-4 hover:bg-accent transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
                     {TX_ICON[type]}
-                    <span className="text-sm font-medium text-slate-800">{type}</span>
+                    <span className="text-sm font-medium text-foreground">{type}</span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <input
@@ -1420,9 +1357,9 @@ export function AccountingSettings(): React.ReactNode {
                         }))
                       }
                       maxLength={6}
-                      className="w-24 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900 text-center uppercase focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors hover:border-slate-300"
+                      className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-mono text-foreground text-center uppercase focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
                     />
-                    <span className="text-xs font-mono text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg whitespace-nowrap">
+                    <span className="text-xs font-mono text-muted-foreground bg-muted border border-border px-2.5 py-1.5 rounded-lg whitespace-nowrap">
                       {prefixes[type] || '??'}-{new Date().getFullYear()}-0001
                     </span>
                   </div>
@@ -1432,22 +1369,22 @@ export function AccountingSettings(): React.ReactNode {
           </div>
 
           {/* Allowed Transaction Types */}
-          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-200 bg-slate-50">
-              <ListFilter size={16} className="text-amber-600" />
+          <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted">
+              <ListFilter size={18} className="text-amber-600" />
               <div>
-                <p className="text-sm font-bold text-slate-900">Allowed Transaction Types</p>
-                <p className="text-xs text-slate-400 mt-0.5">Control which transaction types appear when creating journal entries.</p>
+                <p className="text-sm font-bold text-foreground">Allowed Transaction Types</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Control which transaction types appear when creating journal entries.</p>
               </div>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-border">
               {TRANSACTION_TYPE_KEYS.map((type) => (
-                <div key={type} className="flex items-center justify-between px-6 py-4">
+                <div key={type} className="flex items-center justify-between px-6 py-4 hover:bg-accent transition-colors">
                   <div className="flex items-center gap-3">
                     {TX_ICON[type]}
                     <div>
-                      <p className="text-sm font-medium text-slate-800">{type}</p>
-                      <p className="text-xs text-slate-400">{TX_DESC[type]}</p>
+                      <p className="text-sm font-medium text-foreground">{type}</p>
+                      <p className="text-xs text-muted-foreground">{TX_DESC[type]}</p>
                     </div>
                   </div>
                   <Toggle
@@ -1461,6 +1398,8 @@ export function AccountingSettings(): React.ReactNode {
 
         </div>
       )}
+
+      </div>
 
       {/* ── GL Account modals ── */}
       {showAddAccount && (

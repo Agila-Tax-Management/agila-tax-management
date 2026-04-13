@@ -4,10 +4,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Plus, ChevronLeft, ChevronRight, BookOpen, RefreshCw,
-  CheckCircle2, Clock, PenLine, FileText, CreditCard, Receipt, Download, Pencil,
+  PenLine, FileText, CreditCard, Receipt, Download, Pencil,
 } from 'lucide-react';
 import { JournalEntryForm, parseNum, formatPHP } from './JournalEntryForm';
-import type { JournalEntry, TransactionType, JournalStatus, GlAccountOption } from './JournalEntryForm';
+import type { JournalEntry, TransactionType, GlAccountOption } from './JournalEntryForm';
+import { useToast } from '@/context/ToastContext';
 
 // Suppress "unused variable" — MOCK_ENTRIES removed, this marker avoids accidental re-introduction
 
@@ -24,20 +25,6 @@ function formatDate(iso: string): string {
   const dd = String(d.getDate()).padStart(2, '0');
   const yy = String(d.getFullYear()).slice(-2);
   return `${mm}/${dd}/${yy}`;
-}
-
-// ─── Status badge ──────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: JournalStatus }): React.ReactElement {
-  return status === 'Posted' ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-      <CheckCircle2 size={10} /> Posted
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-      <Clock size={10} /> Draft
-    </span>
-  );
 }
 
 // ─── Transaction type badge ───────────────────────────────────────────────────
@@ -62,6 +49,7 @@ function TransactionTypeBadge({ type }: { type: TransactionType }): React.ReactE
 
 export function Journaling(): React.ReactNode {
   const now = new Date();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [entries, setEntries]       = useState<JournalEntry[]>([]);
   const [glAccounts, setGlAccounts] = useState<GlAccountOption[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -108,7 +96,7 @@ export function Journaling(): React.ReactNode {
   useEffect(() => { void fetchGlAccounts(); }, [fetchGlAccounts]);
 
   // ─── Save new entry via API ─────────────────────────────────────────────────
-  async function handleSave(entry: JournalEntry) {
+  async function handleSave(entry: JournalEntry): Promise<void> {
     const body = {
       transactionDate: entry.transactionDate,
       transactionType: entry.transactionType,
@@ -126,28 +114,26 @@ export function Journaling(): React.ReactNode {
           sortOrder:   i,
         })),
     };
-    try {
-      const res = await fetch('/api/accounting/journal-entries', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json() as { error?: string };
-        setError(err.error ?? 'Failed to save journal entry');
-        return;
-      }
-      void fetchEntries();
-    } catch {
-      setError('Network error — could not save the journal entry');
+    const res = await fetch('/api/accounting/journal-entries', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json() as { error?: string };
+      const msg = err.error ?? 'Failed to save journal entry';
+      toastError('Save failed', msg);
+      throw new Error(msg);
     }
+    await fetchEntries();
+    toastSuccess('Entry saved', 'Journal entry has been posted successfully.');
   }
 
-  async function handleSaveNew(entry: JournalEntry) {
+  async function handleSaveNew(entry: JournalEntry): Promise<void> {
     await handleSave(entry);
   }
 
-  async function handleUpdate(entry: JournalEntry) {
+  async function handleUpdate(entry: JournalEntry): Promise<void> {
     const body = {
       transactionDate: entry.transactionDate,
       transactionType: entry.transactionType,
@@ -165,23 +151,21 @@ export function Journaling(): React.ReactNode {
           sortOrder:   i,
         })),
     };
-    try {
-      const res = await fetch(`/api/accounting/journal-entries/${entry.id}`, {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json() as { error?: string };
-        setError(err.error ?? 'Failed to update journal entry');
-        return;
-      }
-      setEditEntry(null);
-      setView('list');
-      void fetchEntries();
-    } catch {
-      setError('Network error — could not update the journal entry');
+    const res = await fetch(`/api/accounting/journal-entries/${entry.id}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json() as { error?: string };
+      const msg = err.error ?? 'Failed to update journal entry';
+      toastError('Update failed', msg);
+      throw new Error(msg);
     }
+    setEditEntry(null);
+    setView('list');
+    await fetchEntries();
+    toastSuccess('Entry updated', 'Journal entry has been updated successfully.');
   }
 
   function prevMonth() {
@@ -244,7 +228,7 @@ export function Journaling(): React.ReactNode {
         onSave={handleSave}
         onClose={() => { setEditEntry(null); setView('list'); }}
         onSaveNew={handleSaveNew}
-        onUpdate={(entry) => { void handleUpdate(entry); }}
+        onUpdate={handleUpdate}
       />
     );
   }
@@ -339,7 +323,6 @@ export function Journaling(): React.ReactNode {
                   <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">Date</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Type</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">Ref No.</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Name</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Description</th>
                   <th className="text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Account</th>
@@ -352,19 +335,16 @@ export function Journaling(): React.ReactNode {
                 {ledgerRows.map((row, idx) => (
                   <tr
                     key={`${row.entryId}-${idx}`}
-                    className="border-b border-slate-100 hover:bg-amber-50/30 transition-colors"
+                    className={`border-b border-slate-100 hover:bg-amber-50/30 transition-colors${row.isFirstLine && idx > 0 ? ' border-t border-slate-300' : ''}`}
                   >
                     <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">
-                      {formatDate(row.transactionDate)}
+                      {row.isFirstLine ? formatDate(row.transactionDate) : ''}
                     </td>
                     <td className="px-3 py-2.5">
-                      <TransactionTypeBadge type={row.transactionType} />
+                      {row.isFirstLine ? <TransactionTypeBadge type={row.transactionType} /> : null}
                     </td>
                     <td className="px-3 py-2.5 text-xs font-mono text-slate-700 whitespace-nowrap">
-                      {row.referenceNo}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <StatusBadge status={row.status} />
+                      {row.isFirstLine ? row.referenceNo : ''}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-slate-700 max-w-24 truncate" title={row.name}>
                       {row.name || '—'}
@@ -382,7 +362,7 @@ export function Journaling(): React.ReactNode {
                       {row.credit > 0 ? formatPHP(row.credit) : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      {row.isFirstLine && row.status === 'Draft' && (
+                      {row.isFirstLine && (
                         <button
                           onClick={() => { setEditEntry(row.entry); setView('edit'); }}
                           className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50 transition-colors"
