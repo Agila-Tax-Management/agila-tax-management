@@ -447,11 +447,10 @@ function PayrollComputationBoxes({ rows }: { rows: PayrollRow[] }): React.ReactE
 export interface CWTMonthDetailProps {
   client: MockClientWithCompliance;
   coverageMonth: string;   // e.g. "April 2026"
-  onBack: () => void;
   onEmployeeChange?: (employees: EmployeeRecord[]) => void;
 }
 
-export function CWTMonthDetail({ client, coverageMonth, onBack }: CWTMonthDetailProps): React.ReactNode {
+export function CWTMonthDetail({ client, coverageMonth, onEmployeeChange }: CWTMonthDetailProps): React.ReactNode {
   const today = new Date();
   const [monthName, yearStr] = coverageMonth.split(' ');
   const monthIdx = ['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(monthName);
@@ -559,14 +558,6 @@ export function CWTMonthDetail({ client, coverageMonth, onBack }: CWTMonthDetail
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-      >
-        <ArrowLeft size={16} /> Back to Monthly Records
-      </button>
 
       {/* Header */}
       <Card className="p-6 border-slate-200 shadow-sm">

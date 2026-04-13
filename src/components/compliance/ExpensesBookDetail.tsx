@@ -649,11 +649,10 @@ interface ExpensesBookDetailProps {
   client: MockClientWithCompliance;
   year: number;
   onYearChange: (y: number) => void;
-  onBack: () => void;
   isSuperAdmin?: boolean;
 }
 
-export function ExpensesBookDetail({ client, year, onYearChange, onBack, isSuperAdmin = false }: ExpensesBookDetailProps): React.ReactNode {
+export function ExpensesBookDetail({ client, year, onYearChange, isSuperAdmin = false }: ExpensesBookDetailProps): React.ReactNode {
   const isVat = isVatClient(client);
 
   const [navView, setNavView]     = useState<NavView>({ type: 'journal' });
@@ -741,29 +740,8 @@ export function ExpensesBookDetail({ client, year, onYearChange, onBack, isSuper
     });
   }
 
-  // Breadcrumb
-  const breadcrumbItems: BreadcrumbItem[] = [
-    { label: 'Working Paper', onClick: onBack },
-    { label: 'Expenses Journal', onClick: navView.type !== 'journal' ? () => setNavView({ type: 'journal' }) : undefined },
-  ];
-  if (navView.type !== 'journal' && selectedMonth) {
-    breadcrumbItems.push({
-      label: selectedMonth.coverageMonth,
-      onClick: navView.type === 'record-form'
-        ? () => setNavView({ type: 'encode', monthId: selectedMonth.id })
-        : undefined,
-    });
-  }
-  if (navView.type === 'record-form') {
-    breadcrumbItems.push({ label: navView.recordId ? 'Edit Expense Record' : 'Add Expense Record' });
-  }
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-
-      {/* Breadcrumb */}
-      <Breadcrumb items={breadcrumbItems} />
-
       {/* ── Journal overview ── */}
       {navView.type === 'journal' && (
         <>
