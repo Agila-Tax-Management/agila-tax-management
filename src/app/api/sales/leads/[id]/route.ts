@@ -35,6 +35,11 @@ const LEAD_INCLUDE = {
       quoteId: true,
       pdfUrl: true,
       clientSignedAt: true,
+      assignedApproverId: true,
+      assignedApprover: { select: { id: true, name: true, email: true, image: true } },
+      actualApproverId: true,
+      actualApprover: { select: { id: true, name: true, email: true, image: true } },
+      approvedAt: true,
     },
   },
   comments: {

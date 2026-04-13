@@ -854,7 +854,7 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
               <Text style={styles.sigLabel}>AGILA TAX MANAGEMENT SERVICES</Text>
               <Text style={styles.sigLabel}>Authorized Representative:</Text>
               <View style={styles.sigLine}>
-                <Text style={styles.sigName}>MR. JADE CHRISTIAN Y. QUITORIO</Text>
+                <Text style={styles.sigName}>MR. JOHN CARLO MALIKSI EMOCLING</Text>
               </View>
               <Text style={styles.sigDate}>Date: {data.tosDate}</Text>
             </View>

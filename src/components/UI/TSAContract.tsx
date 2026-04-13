@@ -1001,7 +1001,7 @@ function _generateTOSHTML(clientData: ClientData, allServices: ServiceItem[]): s
             <div class="signature-label">AGILA TAX MANAGEMENT SERVICES</div>
             <div class="signature-label" style="margin-top: 10px;">Authorized Representative:</div>
             <div class="signature-line">
-              MR. JADE CHRISTIAN Y. QUITORIO
+              MR. JOHN CARLO MALIKSI EMOCLING
             </div>
             <div style="margin-top: 10px; font-size: 10pt;">Date: ${tosDate}</div>
           </div>

@@ -1,0 +1,64 @@
+// Temp file - General Settings Tab content to be inserted
+{/* ── General Settings ──────────────────────────────────────────── */}
+{activeTab === 'general' && (
+  <div>
+    <div className="mb-6">
+      <h2 className="text-lg font-bold text-foreground">General Settings</h2>
+      <p className="text-sm text-muted-foreground mt-0.5">Configure default approvers for job orders and TSA contracts</p>
+    </div>
+
+    {generalLoading ? (
+      <div className="bg-card rounded-xl border border-border p-12 text-center">
+        <Loader2 size={32} className="mx-auto mb-3 text-muted-foreground animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading settings...</p>
+      </div>
+    ) : (
+      <div className="space-y-6">
+        {/* Job Order Approvers Card */}
+        <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+          <h3 className="text-base font-bold text-foreground mb-1 flex items-center gap-2">
+            <GitBranch size={16} className="text-blue-600" />
+            Job Order Approvers
+          </h3>
+          <p className="text-xs text-muted-foreground mb-5">3-level approval workflow for job orders</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Operations Manager */}
+            {/* ... user search inputs ... */}
+          </div>
+        </div>
+
+        {/* TSA Approver Card */}
+        <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+          <h3 className="text-base font-bold text-foreground mb-1 flex items-center gap-2">
+            <UserCheck size={16} className="text-green-600" />
+            TSA Contract Approver
+          </h3>
+          <p className="text-xs text-muted-foreground mb-5">Single approver for Tax Service Agreement contracts</p>
+          {/* ... */}
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => { void handleSaveGeneralSettings(); }}
+            disabled={generalSaving}
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {generalSaving ? (
+              <>
+                < Loader2 size={16} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                Save Changes
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+)}

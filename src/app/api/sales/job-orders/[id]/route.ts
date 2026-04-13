@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { notify } from "@/lib/notification";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -18,12 +19,20 @@ const JO_INCLUDE = {
       businessType: true,
     },
   },
-  client: { select: { id: true, businessName: true } },
-  preparedBy: { select: { id: true, name: true } },
-  accountManager: { select: { id: true, name: true } },
-  operationsManager: { select: { id: true, name: true } },
-  executive: { select: { id: true, name: true } },
-  items: { orderBy: { createdAt: "asc" as const } },
+  client: { select: { id: true, businessName: true, companyName: true } },
+  preparedBy: { select: { id: true, name: true, email: true, image: true } },
+  // Assigned approvers (default from sales settings)
+  assignedOperationsManager: { select: { id: true, name: true, email: true, image: true } },
+  assignedAccountManager: { select: { id: true, name: true, email: true, image: true } },
+  assignedExecutive: { select: { id: true, name: true, email: true, image: true } },
+  // Actual approvers (who clicked the button)
+  actualOperationsManager: { select: { id: true, name: true, email: true, image: true } },
+  actualAccountManager: { select: { id: true, name: true, email: true, image: true } },
+  actualExecutive: { select: { id: true, name: true, email: true, image: true } },
+  items: {
+    orderBy: { createdAt: "asc" as const },
+    include: { service: { select: { id: true, name: true, billingType: true } } },
+  },
 } as const;
 
 const jobOrderItemSchema = z.object({
@@ -44,15 +53,15 @@ const patchJobOrderSchema = z.discriminatedUnion("action", [
     notes: z.string().optional().nullable(),
     items: z.array(jobOrderItemSchema).optional(),
   }),
-  // Submit for review — DRAFT → SUBMITTED
+  // Submit for approval — DRAFT → notifies Operations Manager
   z.object({ action: z.literal("submit") }),
-  // Account Manager acknowledges — must be SUBMITTED + accountManagerId null
-  z.object({ action: z.literal("ack_account_manager") }),
-  // Operations Manager acknowledges — must be SUBMITTED + AM acked + ops null → ACKNOWLEDGED
-  z.object({ action: z.literal("ack_operations") }),
-  // Executive approves — must be ACKNOWLEDGED → COMPLETED
-  z.object({ action: z.literal("ack_executive") }),
-  // Cancel at any stage before COMPLETED
+  // Operations Manager approves (first level)
+  z.object({ action: z.literal("approve_operations") }),
+  // Account Manager approves (second level)
+  z.object({ action: z.literal("approve_account") }),
+  // Executive approves (third level) → generates tasks
+  z.object({ action: z.literal("approve_executive") }),
+  // Cancel at any stage
   z.object({ action: z.literal("cancel") }),
 ]);
 
@@ -96,11 +105,19 @@ export async function PATCH(
       id: true,
       status: true,
       jobOrderNumber: true,
-      accountManagerId: true,
-      operationsManagerId: true,
-      executiveId: true,
       leadId: true,
       clientId: true,
+      preparedById: true,
+      assignedOperationsManagerId: true,
+      assignedAccountManagerId: true,
+      assignedExecutiveId: true,
+      actualOperationsManagerId: true,
+      actualAccountManagerId: true,
+      actualExecutiveId: true,
+      dateOperationsManagerAck: true,
+      dateAccountManagerAck: true,
+      dateExecutiveAck: true,
+      lead: { select: { id: true, firstName: true, lastName: true, businessName: true, convertedClientId: true } },
     },
   });
   if (!existing) return NextResponse.json({ error: "Job order not found" }, { status: 404 });
@@ -119,6 +136,10 @@ export async function PATCH(
       { status: 400 },
     );
   }
+
+  // Check portal access for admin override
+  const hasAdminOverride =
+    session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
 
   const { action } = parsed.data;
   const now = new Date();
@@ -182,57 +203,228 @@ export async function PATCH(
         { status: 409 },
       );
     }
+
+    // Check if approvers are assigned
+    if (!existing.assignedOperationsManagerId) {
+      return NextResponse.json(
+        { error: "Operations Manager must be assigned before submission. Please configure default approvers in Sales Settings." },
+        { status: 400 },
+      );
+    }
+
     const jobOrder = await prisma.jobOrder.update({
       where: { id },
-      data: { status: "SUBMITTED" },
+      data: { status: "PENDING_OPERATIONS_ACK" },
       include: JO_INCLUDE,
     });
+
+    // Notify operations manager
+    if (existing.assignedOperationsManagerId) {
+      void notify({
+        userId: existing.assignedOperationsManagerId,
+        type: "TASK",
+        priority: "NORMAL",
+        title: "New Job Order Ready for Approval",
+        message: `Job Order ${existing.jobOrderNumber} for ${
+          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
+        } is ready for your approval.`,
+        linkUrl: `/portal/sales/job-orders/${id}`,
+      });
+    }
+
     void logActivity({
       userId: session.user.id,
       action: "STATUS_CHANGE",
       entity: "JobOrder",
       entityId: id,
-      description: `Submitted job order ${existing.jobOrderNumber} for acknowledgment`,
+      description: `Submitted job order ${existing.jobOrderNumber} for approval`,
       ...getRequestMeta(request),
     });
+
     return NextResponse.json({ data: jobOrder });
   }
 
-  if (action === "ack_account_manager") {
-    if (existing.status !== "SUBMITTED") {
+  if (action === "approve_operations") {
+    // Permission check: must be assigned operations manager OR admin override
+    if (
+      !hasAdminOverride &&
+      (!existing.assignedOperationsManagerId ||
+        existing.assignedOperationsManagerId !== session.user.id)
+    ) {
       return NextResponse.json(
-        { error: "Job order must be SUBMITTED for Account Officer acknowledgment" },
+        { error: "Only the assigned Operations Manager can approve this step" },
+        { status: 403 },
+      );
+    }
+
+    if (existing.status !== "PENDING_OPERATIONS_ACK") {
+      return NextResponse.json(
+        { error: "Job order is not awaiting Operations Manager approval" },
         { status: 409 },
       );
     }
-    if (!existing.operationsManagerId) {
+
+    if (existing.actualOperationsManagerId) {
       return NextResponse.json(
-        { error: "Operations Manager must acknowledge first" },
+        { error: "Operations Manager has already approved this job order" },
         { status: 409 },
       );
     }
-    if (existing.accountManagerId) {
+
+    const jobOrder = await prisma.jobOrder.update({
+      where: { id },
+      data: {
+        actualOperationsManagerId: session.user.id,
+        dateOperationsManagerAck: now,
+        status: "PENDING_ACCOUNT_ACK",
+      },
+      include: JO_INCLUDE,
+    });
+
+    // Notify account manager (next approver)
+    if (existing.assignedAccountManagerId) {
+      void notify({
+        userId: existing.assignedAccountManagerId,
+        type: "TASK",
+        priority: "NORMAL",
+        title: "Job Order Ready for Account Manager Approval",
+        message: `Job Order ${existing.jobOrderNumber} for ${
+          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
+        } is ready for your approval.`,
+        linkUrl: `/portal/sales/job-orders/${id}`,
+      });
+    }
+
+    void logActivity({
+      userId: session.user.id,
+      action: "APPROVED",
+      entity: "JobOrder",
+      entityId: id,
+      description: `Operations Manager approved job order ${existing.jobOrderNumber}`,
+      ...getRequestMeta(request),
+    });
+
+    return NextResponse.json({ data: jobOrder });
+  }
+
+  if (action === "approve_account") {
+    // Permission check: must be assigned account manager OR admin override
+    if (
+      !hasAdminOverride &&
+      (!existing.assignedAccountManagerId ||
+        existing.assignedAccountManagerId !== session.user.id)
+    ) {
       return NextResponse.json(
-        { error: "Account Officer has already acknowledged this job order" },
+        { error: "Only the assigned Account Manager can approve this step" },
+        { status: 403 },
+      );
+    }
+
+    if (existing.status !== "PENDING_ACCOUNT_ACK") {
+      return NextResponse.json(
+        { error: "Job order is not awaiting Account Manager approval" },
+        { status: 409 },
+      );
+    }
+
+    if (!existing.actualOperationsManagerId) {
+      return NextResponse.json(
+        { error: "Operations Manager must approve first" },
+        { status: 400 },
+      );
+    }
+
+    if (existing.actualAccountManagerId) {
+      return NextResponse.json(
+        { error: "Account Manager has already approved this job order" },
+        { status: 409 },
+      );
+    }
+
+    const jobOrder = await prisma.jobOrder.update({
+      where: { id },
+      data: {
+        actualAccountManagerId: session.user.id,
+        dateAccountManagerAck: now,
+        status: "PENDING_EXECUTIVE_ACK",
+      },
+      include: JO_INCLUDE,
+    });
+
+    // Notify executive (final approver)
+    if (existing.assignedExecutiveId) {
+      void notify({
+        userId: existing.assignedExecutiveId,
+        type: "TASK",
+        priority: "NORMAL",
+        title: "Job Order Ready for Executive Approval",
+        message: `Job Order ${existing.jobOrderNumber} for ${
+          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
+        } is ready for your final approval.`,
+        linkUrl: `/portal/sales/job-orders/${id}`,
+      });
+    }
+
+    void logActivity({
+      userId: session.user.id,
+      action: "APPROVED",
+      entity: "JobOrder",
+      entityId: id,
+      description: `Account Manager approved job order ${existing.jobOrderNumber}`,
+      ...getRequestMeta(request),
+    });
+
+    return NextResponse.json({ data: jobOrder });
+  }
+
+  if (action === "approve_executive") {
+    // Permission check: must be assigned executive OR admin override
+    if (
+      !hasAdminOverride &&
+      (!existing.assignedExecutiveId ||
+        existing.assignedExecutiveId !== session.user.id)
+    ) {
+      return NextResponse.json(
+        { error: "Only the assigned Executive can approve this step" },
+        { status: 403 },
+      );
+    }
+
+    if (existing.status !== "PENDING_EXECUTIVE_ACK") {
+      return NextResponse.json(
+        { error: "Job order is not awaiting Executive approval" },
+        { status: 409 },
+      );
+    }
+
+    if (!existing.actualAccountManagerId) {
+      return NextResponse.json(
+        { error: "Account Manager must approve first" },
+        { status: 400 },
+      );
+    }
+
+    if (existing.actualExecutiveId) {
+      return NextResponse.json(
+        { error: "Executive has already approved this job order" },
         { status: 409 },
       );
     }
 
     const jobOrder = await prisma.$transaction(async (tx) => {
-      // ── Mark job order as ACKNOWLEDGED ──────────────────────────
+      // Mark job order as APPROVED (fully approved)
       const updatedJO = await tx.jobOrder.update({
         where: { id },
         data: {
-          accountManagerId: session.user.id,
-          dateAccountManagerAck: now,
-          status: "ACKNOWLEDGED",
+          actualExecutiveId: session.user.id,
+          dateExecutiveAck: now,
+          status: "APPROVED",
         },
         include: JO_INCLUDE,
       });
 
-      // ── Spawn tasks from linked task templates ─────────────────────
-      // Fetch the lead with its service plans + one-time services +
-      // their task templates (including department routes + subtasks).
+      // ─── Spawn tasks from linked task templates ───────────────────
+      // Fetch the lead with service task templates
       const lead = await tx.lead.findUnique({
         where: { id: existing.leadId },
         include: {
@@ -335,7 +527,7 @@ export async function PATCH(
               taskId: newTask.id,
               actorId: session.user.id,
               changeType: "CREATED",
-              newValue: `Auto-created from job order ${updatedJO.jobOrderNumber} on acknowledgment (template: "${template.name}")`,
+              newValue: `Auto-created from job order ${updatedJO.jobOrderNumber} after full approval (template: "${template.name}")`,
             },
           });
         }
@@ -344,79 +536,27 @@ export async function PATCH(
       return updatedJO;
     });
 
-    void logActivity({
-      userId: session.user.id,
-      action: "APPROVED",
-      entity: "JobOrder",
-      entityId: id,
-      description: `Account Officer acknowledged job order ${existing.jobOrderNumber}`,
-      ...getRequestMeta(request),
-    });
-    return NextResponse.json({ data: jobOrder });
-  }
+    // Notify preparer that job order is fully approved
+    if (existing.preparedById) {
+      void notify({
+        userId: existing.preparedById,
+        type: "SUCCESS",
+        priority: "NORMAL",
+        title: "Job Order Fully Approved",
+        message: `Job Order ${existing.jobOrderNumber} has been fully approved and tasks have been generated.`,
+        linkUrl: `/portal/sales/job-orders/${id}`,
+      });
+    }
 
-  if (action === "ack_operations") {
-    if (existing.status !== "SUBMITTED") {
-      return NextResponse.json(
-        { error: "Job order must be SUBMITTED for Operations Manager acknowledgment" },
-        { status: 409 },
-      );
-    }
-    if (existing.operationsManagerId) {
-      return NextResponse.json(
-        { error: "Operations Manager has already acknowledged this job order" },
-        { status: 409 },
-      );
-    }
-    const jobOrder = await prisma.jobOrder.update({
-      where: { id },
-      data: {
-        operationsManagerId: session.user.id,
-        dateOperationsManagerAck: now,
-      },
-      include: JO_INCLUDE,
-    });
     void logActivity({
       userId: session.user.id,
       action: "APPROVED",
       entity: "JobOrder",
       entityId: id,
-      description: `Operations Manager acknowledged job order ${existing.jobOrderNumber}`,
+      description: `Executive approved job order ${existing.jobOrderNumber} — fully approved, tasks generated`,
       ...getRequestMeta(request),
     });
-    return NextResponse.json({ data: jobOrder });
-  }
 
-  if (action === "ack_executive") {
-    if (existing.status !== "ACKNOWLEDGED") {
-      return NextResponse.json(
-        { error: "Job order must be ACKNOWLEDGED for Executive approval" },
-        { status: 409 },
-      );
-    }
-    if (existing.executiveId) {
-      return NextResponse.json(
-        { error: "Executive has already approved this job order" },
-        { status: 409 },
-      );
-    }
-    const jobOrder = await prisma.jobOrder.update({
-      where: { id },
-      data: {
-        executiveId: session.user.id,
-        dateExecutiveAck: now,
-        status: "COMPLETED",
-      },
-      include: JO_INCLUDE,
-    });
-    void logActivity({
-      userId: session.user.id,
-      action: "APPROVED",
-      entity: "JobOrder",
-      entityId: id,
-      description: `Executive approved job order ${existing.jobOrderNumber}`,
-      ...getRequestMeta(request),
-    });
     return NextResponse.json({ data: jobOrder });
   }
 
