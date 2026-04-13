@@ -233,10 +233,9 @@ interface EWTDetailProps {
   client: MockClientWithCompliance;
   year: number;
   onYearChange: (y: number) => void;
-  onBack: () => void;
 }
 
-export function EWTDetail({ client, year, onYearChange, onBack }: EWTDetailProps): React.ReactNode {
+export function EWTDetail({ client, year, onYearChange}: EWTDetailProps): React.ReactNode {
 
   // ── Rental state ────────────────────────────────────────────────────────────
   const [rentals, setRentals] = useState<RentalRow[]>(buildInitialRentals);
@@ -440,14 +439,6 @@ export function EWTDetail({ client, year, onYearChange, onBack }: EWTDetailProps
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-      >
-        <ArrowLeft size={16} /> Back to Working Paper
-      </button>
 
       {/* Header card */}
       <Card className="p-6 border-slate-200 shadow-sm">

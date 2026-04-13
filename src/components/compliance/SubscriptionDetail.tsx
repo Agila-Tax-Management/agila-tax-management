@@ -147,12 +147,11 @@ interface SubscriptionDetailProps {
   client: MockClientWithCompliance;
   year: number;
   onYearChange: (y: number) => void;
-  onBack: () => void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-export function SubscriptionDetail({ client, year, onYearChange, onBack }: SubscriptionDetailProps): React.ReactNode {
+export function SubscriptionDetail({ client, year, onYearChange}: SubscriptionDetailProps): React.ReactNode {
   const [subRows, setSubRows] = useState<SubRow[]>(() => buildSubRows(client));
   const [isOpenCaseOpen, setIsOpenCaseOpen] = useState(false);
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
@@ -196,14 +195,6 @@ export function SubscriptionDetail({ client, year, onYearChange, onBack }: Subsc
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-      >
-        <ArrowLeft size={16} /> Back to Working Paper
-      </button>
 
       {/* Header */}
       <Card className="p-6 border-slate-200 shadow-sm">

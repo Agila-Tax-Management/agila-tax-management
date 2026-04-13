@@ -1,377 +1,526 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Card } from '@/components/UI/Card';
-import { Badge } from '@/components/UI/Badge';
+import React, { useState, useMemo } from 'react';
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
-  LineChart, Line, CartesianGrid,
-} from 'recharts';
-import {
-  Activity, AlertCircle, CheckCircle2, Clock,
-  TrendingUp, ShieldCheck, Calendar, ArrowUpRight,
+  ArrowLeft, ChevronRight, Building2, CheckCircle2,
+  Clock, AlertCircle, Calendar, Users,
 } from 'lucide-react';
-import { Client } from '@/lib/types';
+import { Card } from '@/components/UI/Card';
 import { MOCK_COMPLIANCE_CLIENTS } from '@/lib/mock-compliance-data';
-import type { ClientPlanDetails } from '@/lib/types';
+import type { MockClientWithCompliance } from '@/lib/mock-compliance-data';
+import { SubscriptionDetail } from './SubscriptionDetail';
+import { EWTDetail } from './EWTDetail';
+import { CWTDetail } from './CWTDetail';
+import { SalesBookDetail } from './SalesBookDetail';
+import { ExpensesBookDetail } from './ExpensesBookDetail';
 
-const formatDate = (date: Date): string => {
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${month}/${day}/${year}`;
-};
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DAY_NAMES   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+type DashboardView  = 'overview' | 'compliance-clients' | 'detail';
+type FilingStatus   = 'Filed' | 'In Progress' | 'Not Filed';
+type ProcessStatus  = 'Preparing' | 'For Verification' | 'For Payment' | 'For Approval' | 'Completed';
+type DeadlineUrgency = 'overdue' | 'critical' | 'soon' | 'upcoming';
 
-const getOverallCompliance = (planDetails: ClientPlanDetails | null | undefined): 'COMPLIANT' | 'PENDING' | 'OVERDUE' => {
-  const cs = planDetails?._compliance;
-  if (!cs) return 'PENDING';
-  const vals = [cs.bir, cs.sec, cs.mayorsPermit, cs.dti];
-  if (vals.some(v => v === 'OVERDUE')) return 'OVERDUE';
-  if (vals.some(v => v === 'PENDING')) return 'PENDING';
-  return 'COMPLIANT';
-};
+interface ComplianceDef {
+  id:           string;
+  name:         string;
+  department:   string;
+  vatOnly:      boolean;
+  nonVatOnly:   boolean;
+  secRequired:  boolean;
+  minLevel:     number;
+  period:       string;
+  deadline:     string;  // ISO "YYYY-MM-DD"
+  periodType:   'monthly' | 'quarterly' | 'annual';
+}
 
-const AGENCY_KEYS = [
-  { key: 'bir',          label: 'BIR' },
-  { key: 'sec',          label: 'SEC' },
-  { key: 'mayorsPermit', label: "Mayor's Permit" },
-  { key: 'dti',          label: 'DTI' },
-] as const;
+// ─── Compliance schedule (Philippine regulatory calendar) ─────────────────────
 
-const getDeadlineUrgency = (deadline?: string) => {
-  if (!deadline) return null;
-  const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return 'overdue';
-  if (days <= 30) return 'soon';
-  return null;
-};
+const COMPLIANCE_DEFS: ComplianceDef[] = [
+  { id: 'ewt',            name: 'Expanded Withholding Tax',                 department: 'BIR',           vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-10', periodType: 'monthly'   },
+  { id: 'hdmf',           name: 'Pag-IBIG Fund',                           department: 'Gov. Benefits', vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-10', periodType: 'monthly'   },
+  { id: 'cwt',            name: 'Compensation Withholding Tax',             department: 'BIR',           vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-15', periodType: 'monthly'   },
+  { id: 'income-tax',     name: 'Income Tax',                               department: 'BIR',           vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 3, period: 'Year 2025',   deadline: '2026-04-15', periodType: 'annual'    },
+  { id: 'sales-book',     name: 'Sales Book',                               department: 'BIR',           vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-20', periodType: 'monthly'   },
+  { id: 'expense-book',   name: 'Expenses Book',                            department: 'BIR',           vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-20', periodType: 'monthly'   },
+  { id: 'percentage-tax', name: 'Percentage Tax',                           department: 'BIR',           vatOnly: false, nonVatOnly: true,  secRequired: false, minLevel: 2, period: 'Q1 2026',     deadline: '2026-04-25', periodType: 'quarterly' },
+  { id: 'vat',            name: 'Value-Added Tax',                          department: 'BIR',           vatOnly: true,  nonVatOnly: false, secRequired: false, minLevel: 2, period: 'Q1 2026',     deadline: '2026-04-25', periodType: 'quarterly' },
+  { id: 'sss',            name: 'Social Security System',                   department: 'Gov. Benefits', vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-30', periodType: 'monthly'   },
+  { id: 'phic',           name: 'PhilHealth',                               department: 'Gov. Benefits', vatOnly: false, nonVatOnly: false, secRequired: false, minLevel: 2, period: 'March 2026',  deadline: '2026-04-30', periodType: 'monthly'   },
+  { id: 'sec-afs',        name: 'SEC AFS Submission',                       department: 'SEC',           vatOnly: false, nonVatOnly: false, secRequired: true,  minLevel: 3, period: 'Year 2025',   deadline: '2026-05-15', periodType: 'annual'    },
+  { id: 'gis',            name: 'General Information Sheet',                department: 'SEC',           vatOnly: false, nonVatOnly: false, secRequired: true,  minLevel: 3, period: 'Year 2026',   deadline: '2026-05-30', periodType: 'annual'    },
+];
 
-// Returns the Monday of the ISO week from "YYYY-Www"
-const parseWeekToMonday = (weekStr: string): Date => {
-  const [yearPart, weekPart] = weekStr.split('-W');
-  const year = parseInt(yearPart);
-  const week = parseInt(weekPart);
-  const simple = new Date(year, 0, 1 + (week - 1) * 7);
-  const dow = simple.getDay() === 0 ? 7 : simple.getDay();
-  const monday = new Date(simple);
-  monday.setDate(simple.getDate() - dow + 1);
-  return monday;
-};
+// ─── Plan helpers ──────────────────────────────────────────────────────────────
 
-// Returns current ISO week string "YYYY-Www"
-const getCurrentWeek = (): string => {
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-};
+function isVatPlan(basePlan: string): boolean {
+  if (basePlan === 'vip') return true;
+  return basePlan.includes('vat') && !basePlan.includes('non-vat');
+}
 
-const healthPoint = (clients: Client[], filter: (c: Client, d: Date) => boolean) => {
-  const group = clients.filter(c => filter(c, new Date(c.createdAt)));
-  const compliant = group.filter(c => getOverallCompliance(c.planDetails) === 'COMPLIANT').length;
-  return { health: Math.round((compliant / (group.length || 1)) * 100), filings: group.length };
-};
+function getPlanLevel(basePlan: string): number {
+  if (basePlan === 'vip') return 4;
+  if (basePlan.includes('agila360')) return 3;
+  if (basePlan.includes('essentials')) return 2;
+  return 1;
+}
 
-type FilterType = 'daily' | 'weekly' | 'monthly' | 'yearly';
+function isComplianceActive(def: ComplianceDef, client: MockClientWithCompliance): boolean {
+  const basePlan = client.planDetails?.basePlan ?? 'starter';
+  const level    = getPlanLevel(basePlan);
+  const isVat    = isVatPlan(basePlan);
+  if (level < def.minLevel)           return false;
+  if (def.vatOnly    && !isVat)       return false;
+  if (def.nonVatOnly &&  isVat)       return false;
+  if (def.secRequired && !client.isBusinessRegistered) return false;
+  return true;
+}
 
-export const ComplianceDashboard: React.FC = () => {
-  // Build Client[] from mock compliance data so _compliance is present
-  const initialClients: Client[] = MOCK_COMPLIANCE_CLIENTS.map(c => ({
-    ...c,
-    planDetails: { ...c.planDetails, _compliance: c.complianceStatus },
-  } as unknown as Client));
-  const [clients] = useState<Client[]>(initialClients);
+// ─── Mock filing / process statuses (deterministic seed) ─────────────────────
 
-  const now = new Date();
-  const currentYear  = now.getFullYear();
-  const currentMonth = now.getMonth();
+function charSum(s: string): number {
+  return s.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+}
 
-  const [filterType,   setFilterType]   = useState<FilterType>('monthly');
-  const [dailyValue,   setDailyValue]   = useState(now.toISOString().slice(0, 10));
-  const [weeklyValue,  setWeeklyValue]  = useState(getCurrentWeek);
-  const [monthlyValue, setMonthlyValue] = useState(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`);
-  const [yearlyValue,  setYearlyValue]  = useState(currentYear);
+const FILING_POOL: FilingStatus[]  = ['Filed', 'Filed', 'Filed', 'Filed', 'In Progress', 'In Progress', 'In Progress', 'Not Filed', 'Not Filed', 'Not Filed'];
+const PROCESS_POOL: ProcessStatus[] = ['Preparing', 'For Verification', 'For Payment', 'For Approval', 'Completed'];
 
-  // --- Stats ---
-  const activeClients  = clients.filter(c => c.status?.toUpperCase() === 'ACTIVE').length;
-  const pendingCount   = clients.filter(c => getOverallCompliance(c.planDetails) === 'PENDING').length;
-  const overdueCount   = clients.filter(c => getOverallCompliance(c.planDetails) === 'OVERDUE').length;
-  const monthlyRevenue = clients
-    .filter(c => { const d = new Date(c.createdAt); return d.getMonth() === currentMonth && d.getFullYear() === currentYear; })
-    .reduce((sum, c) => sum + (c.finalAmount || 0), 0);
+function getMockFilingStatus(clientId: string, complianceId: string): FilingStatus {
+  return FILING_POOL[(charSum(clientId) + charSum(complianceId)) % 10];
+}
 
-  // --- Health chart data ---
-  const computeHealthData = () => {
-    if (filterType === 'yearly') {
-      return Array.from({ length: 12 }, (_, i) => ({
-        name: MONTH_NAMES[i],
-        ...healthPoint(clients, (_, d) => d.getMonth() === i && d.getFullYear() === yearlyValue),
-      }));
-    }
+function getMockProcessStatus(clientId: string, complianceId: string): ProcessStatus {
+  return PROCESS_POOL[(charSum(clientId) * 3 + charSum(complianceId) * 7) % 5];
+}
 
-    if (filterType === 'monthly') {
-      const [yr, mo] = monthlyValue.split('-').map(Number);
-      const daysInMonth = new Date(yr, mo, 0).getDate();
-      const weeks: { name: string; health: number; filings: number }[] = [];
-      for (let start = 1; start <= daysInMonth; start += 7) {
-        const end = Math.min(start + 6, daysInMonth);
-        const wk  = Math.ceil(start / 7);
-        weeks.push({
-          name: `Wk ${wk}`,
-          ...healthPoint(clients, (_, d) =>
-            d.getFullYear() === yr && d.getMonth() === mo - 1 && d.getDate() >= start && d.getDate() <= end
-          ),
-        });
-      }
-      return weeks;
-    }
+// ─── Deadline utilities ────────────────────────────────────────────────────────
 
-    if (filterType === 'weekly') {
-      if (!weeklyValue) return [];
-      const monday = parseWeekToMonday(weeklyValue);
-      return DAY_NAMES.map((name, i) => {
-        const day = new Date(monday);
-        day.setDate(monday.getDate() + i);
-        return {
-          name,
-          ...healthPoint(clients, (_, d) =>
-            d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate()
-          ),
-        };
-      });
-    }
+// Stable reference date — computed once per module load, not on every render
+const REF_DATE = new Date();
 
-    if (filterType === 'daily') {
-      // Show the whole week containing the selected date, with that day highlighted
-      const selected = new Date(dailyValue);
-      const dow = selected.getDay() === 0 ? 7 : selected.getDay();
-      const monday = new Date(selected);
-      monday.setDate(selected.getDate() - dow + 1);
-      return DAY_NAMES.map((name, i) => {
-        const day = new Date(monday);
-        day.setDate(monday.getDate() + i);
-        return {
-          name,
-          ...healthPoint(clients, (_, d) =>
-            d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate()
-          ),
-          isSelected: day.toISOString().slice(0, 10) === dailyValue,
-        };
-      });
-    }
+function getUrgency(deadlineIso: string): DeadlineUrgency {
+  const days = (new Date(deadlineIso).getTime() - REF_DATE.getTime()) / (1000 * 60 * 60 * 24);
+  if (days < 0)   return 'overdue';
+  if (days <= 3)  return 'critical';
+  if (days <= 10) return 'soon';
+  return 'upcoming';
+}
 
-    return [];
-  };
+function daysUntil(deadlineIso: string): number {
+  return Math.ceil((new Date(deadlineIso).getTime() - REF_DATE.getTime()) / (1000 * 60 * 60 * 24));
+}
 
-  const healthData = computeHealthData();
-
-  // --- Filing distribution ---
-  const filingData = AGENCY_KEYS.map(({ key, label }) => ({
-    name: label,
-    completed: clients.filter(c => c.planDetails?._compliance?.[key] === 'COMPLIANT').length,
-    pending:   clients.filter(c => { const v = c.planDetails?._compliance?.[key]; return !v || v !== 'COMPLIANT'; }).length,
-  }));
-
-  // --- Upcoming deadlines ---
-  const upcomingDeadlines: { title: string; date: string; urgency: string }[] = [];
-  clients.forEach(c => {
-    const cs = c.planDetails?._compliance;
-    if (!cs) return;
-    AGENCY_KEYS.forEach(({ key, label }) => {
-      const deadline = cs[`${key}Deadline`];
-      const urgency  = getDeadlineUrgency(deadline);
-      if (urgency && deadline) {
-        upcomingDeadlines.push({
-          title: `${label} — ${c.businessName}`,
-          date: new Date(deadline!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          urgency,
-        });
-      }
-    }); 
+function fmtDeadline(isoDate: string): string {
+  return new Date(isoDate + 'T00:00:00').toLocaleDateString('en-PH', {
+    month: 'long', day: 'numeric', year: 'numeric',
   });
-  upcomingDeadlines.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
 
-  const recentClients = [...clients]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 4);
+// ─── Urgency styling map ───────────────────────────────────────────────────────
 
-  const yearOptions = Array.from({ length: 8 }, (_, i) => currentYear - 3 + i);
+const URGENCY_STYLE: Record<DeadlineUrgency, { iconBg: string; iconText: string; text: string }> = {
+  overdue:  { iconBg: 'bg-red-100',    iconText: 'text-red-600',    text: 'text-red-600'    },
+  critical: { iconBg: 'bg-orange-100', iconText: 'text-orange-600', text: 'text-orange-600' },
+  soon:     { iconBg: 'bg-amber-100',  iconText: 'text-amber-600',  text: 'text-amber-600'  },
+  upcoming: { iconBg: 'bg-emerald-50', iconText: 'text-emerald-600',text: 'text-slate-700'  },
+};
 
-  const inputCls = 'h-8 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500';
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function UrgencyPill({ urgency, days, compact = false }: {
+  urgency: DeadlineUrgency;
+  days:    number;
+  compact?: boolean;
+}): React.ReactElement {
+  const map: Record<DeadlineUrgency, { cls: string; label: string }> = {
+    overdue:  { cls: 'bg-red-100 text-red-700',        label: compact ? 'Overdue'   : `${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''} overdue`   },
+    critical: { cls: 'bg-orange-100 text-orange-700',  label: compact ? 'Critical'  : `Due in ${days} day${days !== 1 ? 's' : ''}`                         },
+    soon:     { cls: 'bg-amber-100 text-amber-700',    label: compact ? 'Due Soon'  : `Due in ${days} days`                                                 },
+    upcoming: { cls: 'bg-slate-100 text-slate-600',    label: compact ? 'Upcoming'  : `${days} days away`                                                   },
+  };
+  const { cls, label } = map[urgency];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wide whitespace-nowrap ${cls}`}>
+      {urgency === 'overdue'  && <AlertCircle size={9} />}
+      {urgency === 'critical' && <AlertCircle size={9} />}
+      {urgency === 'soon'     && <Clock size={9} />}
+      {urgency === 'upcoming' && <Calendar size={9} />}
+      {label}
+    </span>
+  );
+}
+
+function FilingBadge({ status }: { status: FilingStatus }): React.ReactElement {
+  if (status === 'Filed') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+        <CheckCircle2 size={9} /> Filed
+      </span>
+    );
+  }
+  if (status === 'In Progress') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+        <Clock size={9} /> In Progress
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+      <AlertCircle size={9} /> Not Filed
+    </span>
+  );
+}
+
+const PROCESS_STEP: Record<ProcessStatus, number> = {
+  'Preparing':        1,
+  'For Verification': 2,
+  'For Payment':      3,
+  'For Approval':     4,
+  'Completed':        5,
+};
+const PROCESS_CLS: Record<ProcessStatus, string> = {
+  'Preparing':        'bg-slate-100 text-slate-600',
+  'For Verification': 'bg-blue-100 text-blue-700',
+  'For Payment':      'bg-violet-100 text-violet-700',
+  'For Approval':     'bg-amber-100 text-amber-700',
+  'Completed':        'bg-emerald-100 text-emerald-700',
+};
+
+function ProcessBadge({ status }: { status: ProcessStatus }): React.ReactElement {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PROCESS_CLS[status]}`}>
+      {PROCESS_STEP[status]}/5 · {status}
+    </span>
+  );
+}
+
+// ─── Progress bar ──────────────────────────────────────────────────────────────
+
+function ProgressBar({ pct, size = 'md' }: { pct: number; size?: 'sm' | 'md' }): React.ReactElement {
+  const barColor = pct === 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-rose-500';
+  return (
+    <div className={`rounded-full bg-slate-100 overflow-hidden ${size === 'sm' ? 'h-1.5' : 'h-2.5'}`}>
+      <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+// ─── Main component ────────────────────────────────────────────────────────────
+
+export function ComplianceDashboard(): React.ReactNode {
+  const clients = MOCK_COMPLIANCE_CLIENTS;
+
+  const [view,           setView]           = useState<DashboardView>('overview');
+  const [selectedDef,    setSelectedDef]    = useState<ComplianceDef | null>(null);
+  const [selectedClient, setSelectedClient] = useState<MockClientWithCompliance | null>(null);
+  const [selectedYear,   setSelectedYear]   = useState(2026);
+
+  // Pre-compute per-compliance metrics
+  const complianceData = useMemo(() =>
+    COMPLIANCE_DEFS.map((def) => {
+      const active    = clients.filter((c) => isComplianceActive(def, c));
+      const filed     = active.filter((c) => getMockFilingStatus(c.id, def.id) === 'Filed').length;
+      const pct       = active.length > 0 ? Math.round((filed / active.length) * 100) : 0;
+      const urgency   = getUrgency(def.deadline);
+      const days      = daysUntil(def.deadline);
+      return { def, active, filed, pct, urgency, days };
+    }),
+  [clients]);
+
+  // Summary counts
+  const totalOverdue  = complianceData.filter((d) => d.urgency === 'overdue').length;
+  const totalCritical = complianceData.filter((d) => d.urgency === 'critical' || d.urgency === 'soon').length;
+  const avgPct        = Math.round(complianceData.reduce((s, d) => s + d.pct, 0) / complianceData.length);
+
+  // ─── Detail view (a specific client's specific compliance) ──────────────────
+
+  if (view === 'detail' && selectedDef && selectedClient) {
+    const goBack = () => setView('compliance-clients');
+
+    if (selectedDef.id === 'subscription') return <SubscriptionDetail client={selectedClient} year={selectedYear} onYearChange={setSelectedYear}/>;
+    if (selectedDef.id === 'ewt')          return <EWTDetail          client={selectedClient} year={selectedYear} onYearChange={setSelectedYear}/>;
+    if (selectedDef.id === 'cwt')          return <CWTDetail          client={selectedClient} year={selectedYear} onYearChange={setSelectedYear}/>;
+    if (selectedDef.id === 'sales-book')   return <SalesBookDetail    client={selectedClient} year={selectedYear} onYearChange={setSelectedYear}/>;
+    if (selectedDef.id === 'expense-book') return <ExpensesBookDetail client={selectedClient} year={selectedYear} onYearChange={setSelectedYear}/>;
+
+    // Placeholder for compliance types without a detail component yet
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <button onClick={goBack} className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={16} /> Back to Client List
+        </button>
+        <Card className="p-6 border-slate-200 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center shrink-0">
+              <Building2 size={22} className="text-white" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 font-medium mb-0.5">{selectedClient.businessName} · {selectedDef.name}</p>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">{selectedDef.period}</h1>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-16 text-center border-dashed border-slate-200">
+          <p className="text-sm text-slate-400">Detail view for <strong>{selectedDef.name}</strong> is coming soon.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── Compliance clients view ─────────────────────────────────────────────────
+
+  if (view === 'compliance-clients' && selectedDef) {
+    const data   = complianceData.find((d) => d.def.id === selectedDef.id)!;
+    const rows   = data.active.map((c) => ({
+      client:  c,
+      filing:  getMockFilingStatus(c.id, selectedDef.id),
+      process: getMockProcessStatus(c.id, selectedDef.id),
+    }));
+    const filed      = rows.filter((r) => r.filing === 'Filed').length;
+    const inProgress = rows.filter((r) => r.filing === 'In Progress').length;
+    const notFiled   = rows.filter((r) => r.filing === 'Not Filed').length;
+    const style      = URGENCY_STYLE[data.urgency];
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <button onClick={() => setView('overview')} className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+
+        {/* Compliance header card */}
+        <Card className="p-6 border-slate-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${style.iconBg}`}>
+                <Calendar size={22} className={style.iconText} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{selectedDef.department}</p>
+                <h1 className="text-xl font-black text-slate-900 tracking-tight">{selectedDef.name}</h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Period: <span className="font-semibold text-slate-700">{selectedDef.period}</span>
+                  <span className="mx-2 text-slate-300">·</span>
+                  Deadline: <span className={`font-semibold ${style.text}`}>{fmtDeadline(selectedDef.deadline)}</span>
+                </p>
+              </div>
+            </div>
+            <UrgencyPill urgency={data.urgency} days={data.days} />
+          </div>
+
+          {/* Progress bar */}
+          <div className="mt-5 pt-5 border-t border-slate-100 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Filing Progress</span>
+              <span className="text-sm font-black text-slate-800">{data.filed} / {data.active.length} clients  ·  {data.pct}%</span>
+            </div>
+            <ProgressBar pct={data.pct} />
+            <div className="flex items-center gap-5 text-[10px] font-semibold uppercase tracking-wide pt-0.5">
+              <span className="text-emerald-600">{filed} Filed</span>
+              <span className="text-amber-600">{inProgress} In Progress</span>
+              <span className="text-rose-600">{notFiled} Not Filed</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Client table */}
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              Clients — {data.active.length} enrolled
+            </p>
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center py-16 gap-3">
+              <Users size={28} className="text-slate-300" />
+              <p className="text-sm text-slate-400">No clients enrolled for this compliance.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse" style={{ minWidth: '560px' }}>
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Client</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Plan</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Filing Status</th>
+                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Process Status</th>
+                    <th className="text-right px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(({ client, filing, process }) => (
+                    <tr
+                      key={client.id}
+                      className="border-b border-slate-100 hover:bg-emerald-50/40 transition-colors cursor-pointer group"
+                      onClick={() => { setSelectedClient(client); setView('detail'); }}
+                    >
+                      <td className="px-5 py-3.5">
+                        <p className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">{client.businessName}</p>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">{client.clientNo}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-slate-500">{client.planDetails?.displayName ?? '—'}</td>
+                      <td className="px-5 py-3.5"><FilingBadge status={filing} /></td>
+                      <td className="px-5 py-3.5"><ProcessBadge status={process} /></td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedClient(client); setView('detail'); }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        >
+                          Working Paper <ChevronRight size={11} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── Overview: compliance deadline cards ─────────────────────────────────────
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+
+      {/* Header */}
       <div>
         <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Dashboard</h2>
-        <p className="text-sm text-slate-500 mt-1">Overview of all compliance activities and statuses.</p>
+        <p className="text-sm text-slate-500 mt-1">Upcoming compliance deadlines and filing progress across all clients.</p>
       </div>
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Active Compliances', value: activeClients.toString(),   trend: activeClients === clients.length ? 'All Active' : `${clients.length - activeClients} inactive`, color: 'text-blue-600',   icon: <ShieldCheck size={20} />, variant: 'info'    as const },
-          { label: 'Overdue Agencies',          value: overdueCount.toString(),    trend: overdueCount > 0 ? 'Critical' : 'Clear',                                                        color: 'text-red-600',    icon: <AlertCircle size={20} />, variant: overdueCount > 0 ? 'danger' as const : 'success' as const },
-          { label: 'Pending Compliance',        value: pendingCount.toString(),    trend: pendingCount > 0 ? 'Action Req.' : 'All Updated',                                               color: 'text-amber-600',  icon: <Clock size={20} />,       variant: 'warning' as const },
-          { label: 'Monthly Revenue',           value: `₱${(monthlyRevenue/1000).toFixed(1)}k`, trend: MONTH_NAMES[currentMonth] + ' ' + currentYear,                                   color: 'text-emerald-600', icon: <TrendingUp size={20} />, variant: 'success' as const },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 transition-all hover:shadow-md group">
-            <div className="flex justify-between items-start mb-4">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{stat.label}</p>
-              <div className={`${stat.color} opacity-20 group-hover:opacity-100 transition-opacity`}>{stat.icon}</div>
+          { label: 'Total Compliances',   value: COMPLIANCE_DEFS.length,      color: 'text-slate-800',    iconBg: 'bg-slate-100',    icon: <Calendar size={18} />     },
+          { label: 'Overdue',             value: totalOverdue,                 color: 'text-red-700',      iconBg: 'bg-red-50',       icon: <AlertCircle size={18} />  },
+          { label: 'Due Within 10 Days',  value: totalCritical,                color: 'text-amber-700',    iconBg: 'bg-amber-50',     icon: <Clock size={18} />        },
+          { label: 'Avg. Completion',     value: `${avgPct}%`,                 color: 'text-emerald-700',  iconBg: 'bg-emerald-50',   icon: <CheckCircle2 size={18} /> },
+        ].map((s, i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4 shadow-sm">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${s.iconBg} ${s.color}`}>
+              {s.icon}
             </div>
-            <h3 className={`text-2xl font-black ${stat.color}`}>{stat.value}</h3>
-            <Badge variant={stat.variant} className="mt-3 text-[10px] uppercase font-black">{stat.trend}</Badge>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none">{s.label}</p>
+              <p className={`text-xl font-black mt-1 ${s.color}`}>{s.value}</p>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Line Chart */}
-        <Card className="p-8 lg:col-span-2 border-slate-200 shadow-sm">
-          <div className="flex flex-wrap justify-between items-center gap-3 mb-8">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-              <Activity size={16} className="text-emerald-600" /> Compliance Health Monitoring
-            </h3>
-            {/* Filter Controls */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={filterType}
-                onChange={e => setFilterType(e.target.value as FilterType)}
-                className={inputCls}
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </select>
+      {/* ── Compliance cards: split into urgent (≤30 days / overdue) and later ── */}
+      {(() => {
+        const urgent  = complianceData.filter(({ days }) => days <= 30);
+        const later   = complianceData.filter(({ days }) => days >  30);
 
-              {filterType === 'daily' && (
-                <input type="date" value={dailyValue} onChange={e => setDailyValue(e.target.value)} className={inputCls} />
-              )}
-              {filterType === 'weekly' && (
-                <input type="week" value={weeklyValue} onChange={e => setWeeklyValue(e.target.value)} className={inputCls} />
-              )}
-              {filterType === 'monthly' && (
-                <input type="month" value={monthlyValue} onChange={e => setMonthlyValue(e.target.value)} className={inputCls} />
-              )}
-              {filterType === 'yearly' && (
-                <select value={yearlyValue} onChange={e => setYearlyValue(parseInt(e.target.value))} className={inputCls}>
-                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              )}
-            </div>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={healthData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} domain={[0, 100]} unit="%" />
-                <Tooltip
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
-                  formatter={(val) => [typeof val === 'number' ? `${val}%` : '—', 'Health']}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="health"
-                  stroke="#10b981"
-                  strokeWidth={4}
-                  dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Bar Chart */}
-        <Card className="p-8 border-slate-200 shadow-sm flex flex-col">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Filing Distribution</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={filingData} layout="vertical">
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#64748b', fontWeight: 700 }} width={80} />
-                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="completed" stackId="a" fill="#10b981" barSize={12} />
-                <Bar dataKey="pending" stackId="a" fill="#f1f5f9" radius={[0, 4, 4, 0]} barSize={12} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 flex justify-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Compliant</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-slate-200 rounded-full" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Pending</span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Deadlines + Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="p-8 border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Upcoming Deadlines</h3>
-          <div className="space-y-2">
-            {upcomingDeadlines.length === 0 ? (
-              <div className="flex flex-col items-center py-10 text-slate-400">
-                <CheckCircle2 size={32} className="mb-2 text-emerald-300" />
-                <p className="text-sm font-medium">No upcoming deadlines</p>
-              </div>
-            ) : upcomingDeadlines.slice(0, 4).map((d, i) => (
-              <div key={i} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-all cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${d.urgency === 'overdue' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                    <Calendar size={18} />
+        const ComplianceCard = ({ def, active, filed, pct, urgency, days }: typeof complianceData[number]) => {
+          const style = URGENCY_STYLE[urgency];
+          return (
+            <button
+              key={def.id}
+              onClick={() => { setSelectedDef(def); setView('compliance-clients'); }}
+              className="text-left bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all group"
+            >
+              {/* Card header */}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${style.iconBg}`}>
+                    <Calendar size={16} className={style.iconText} />
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">{d.title}</p>
-                    <p className="text-xs text-slate-500">{d.date}</p>
+                  <div className="min-w-0">
+                    <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">{def.department}</span>
+                    <span className="block text-sm font-black text-slate-900 leading-snug group-hover:text-emerald-700 transition-colors">{def.name}</span>
                   </div>
                 </div>
-                <Badge variant={d.urgency === 'overdue' ? 'danger' : 'warning'}>
-                  {d.urgency === 'overdue' ? 'Overdue' : 'Due Soon'}
-                </Badge>
+                <UrgencyPill urgency={urgency} days={days} compact />
               </div>
-            ))}
-          </div>
-        </Card>
 
-        <Card className="p-8 border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Recent Enrollments</h3>
-            <Badge variant="info" className="text-xs">Live</Badge>
-          </div>
-          <div className="space-y-2">
-            {recentClients.length === 0 ? (
-              <p className="text-sm text-slate-400 italic text-center py-8">No recent activity.</p>
-            ) : recentClients.map((client) => (
-              <div key={client.id} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-all group cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                    <CheckCircle2 size={18} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">{client.businessName}</p>
-                    <p className="text-xs text-slate-400">{client.clientNo} · {formatDate(new Date(client.createdAt))}</p>
-                  </div>
+              {/* Period + deadline */}
+              <div className="space-y-1 mb-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Period</span>
+                  <span className="font-semibold text-slate-700">{def.period}</span>
                 </div>
-                <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                  <ArrowUpRight size={14} />
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Deadline</span>
+                  <span className={`font-semibold ${style.text}`}>{fmtDeadline(def.deadline)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Enrolled Clients</span>
+                  <span className="font-semibold text-slate-700">{active.length}</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+
+              {/* Progress */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-black uppercase tracking-widest text-slate-400">Filing Progress</span>
+                  <span className="font-black text-slate-700">{filed}/{active.length} · {pct}%</span>
+                </div>
+                <ProgressBar pct={pct} size="sm" />
+              </div>
+
+              {/* Footer */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">
+                  {active.length > 0 ? `${active.length - filed} pending` : 'No clients'}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 group-hover:gap-1.5 transition-all">
+                  View Clients <ChevronRight size={11} />
+                </span>
+              </div>
+            </button>
+          );
+        };
+
+        return (
+          <>
+            {urgent.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={15} className="text-red-500 shrink-0" />
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-red-600">
+                      Urgent
+                    </h3>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-black">
+                    {urgent.length}
+                  </span>
+                  <div className="flex-1 h-px bg-red-100" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {urgent.map((d) => <ComplianceCard key={d.def.id} {...d} />)}
+                </div>
+              </div>
+            )}
+
+            {later.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={15} className="text-slate-400 shrink-0" />
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                      Upcoming — More Than 1 Month Away
+                    </h3>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px] font-black">
+                    {later.length}
+                  </span>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {later.map((d) => <ComplianceCard key={d.def.id} {...d} />)}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
-};
+}
