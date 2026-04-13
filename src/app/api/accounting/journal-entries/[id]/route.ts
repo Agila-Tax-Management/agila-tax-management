@@ -112,11 +112,6 @@ export async function PUT(
   const existing = await prisma.journalEntry.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 });
 
-  // Posted entries cannot be edited
-  if (existing.status === 'POSTED') {
-    return NextResponse.json({ error: 'Posted journal entries cannot be edited.' }, { status: 409 });
-  }
-
   const body: unknown = await request.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
