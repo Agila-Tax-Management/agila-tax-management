@@ -25,7 +25,8 @@ const LIST_SELECT = {
   createdAt: true,
   lead: { select: { id: true, firstName: true, lastName: true, businessName: true } },
   preparedBy: { select: { id: true, name: true } },
-  approvedBy: { select: { id: true, name: true } },
+  assignedApprover: { select: { id: true, name: true } },
+  actualApprover: { select: { id: true, name: true } },
   quote: {
     select: {
       id: true,
@@ -63,7 +64,8 @@ export type TsaListItem = {
   createdAt: string;
   lead: { id: number; firstName: string; lastName: string; businessName: string | null } | null;
   preparedBy: { id: string; name: string | null } | null;
-  approvedBy: { id: string; name: string | null } | null;
+  assignedApprover: { id: string; name: string | null } | null;
+  actualApprover: { id: string; name: string | null } | null;
   serviceNames: string[];
   totalMonthlyRecurring: number;
   quoteNumber: string | null;
@@ -153,7 +155,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ? { id: tsa.lead.id, firstName: tsa.lead.firstName, lastName: tsa.lead.lastName, businessName: tsa.lead.businessName }
         : null,
       preparedBy: tsa.preparedBy ? { id: tsa.preparedBy.id, name: tsa.preparedBy.name } : null,
-      approvedBy: tsa.approvedBy ? { id: tsa.approvedBy.id, name: tsa.approvedBy.name } : null,
+      assignedApprover: tsa.assignedApprover ? { id: tsa.assignedApprover.id, name: tsa.assignedApprover.name } : null,
+      actualApprover: tsa.actualApprover ? { id: tsa.actualApprover.id, name: tsa.actualApprover.name } : null,
       serviceNames,
       totalMonthlyRecurring,
       quoteNumber: tsa.quote?.quoteNumber ?? null,

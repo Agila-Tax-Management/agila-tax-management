@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { logLeadHistory } from "@/lib/lead-history";
+import { notify } from "@/lib/notification";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,14 +31,16 @@ const TSA_SELECT = {
   quoteId: true,
   preparedById: true,
   preparedAt: true,
-  approvedById: true,
+  assignedApproverId: true,
+  assignedApprover: { select: { id: true, name: true, email: true, image: true } },
+  actualApproverId: true,
+  actualApprover: { select: { id: true, name: true, email: true, image: true } },
   approvedAt: true,
   clientSignedAt: true,
   clientSignerName: true,
   createdAt: true,
   updatedAt: true,
   preparedBy: { select: { id: true, name: true } },
-  approvedBy: { select: { id: true, name: true } },
   quote: {
     include: {
       lineItems: {
@@ -151,14 +154,83 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     if (existing.status !== "DRAFT") {
       return NextResponse.json({ error: "Only DRAFT TSAs can be submitted" }, { status: 409 });
     }
-    updateData = { status: "PENDING_APPROVAL" };
+
+    // Fetch default TSA approver from sales settings
+    const firmClient = await prisma.client.findFirst({
+      where: { active: true },
+      select: { id: true },
+    });
+
+    let assignedApproverId: string | null = null;
+
+    if (firmClient) {
+      const settings = await prisma.salesSetting.findUnique({
+        where: { clientId: firmClient.id },
+        select: { defaultTsaApproverId: true, defaultTsaApprover: { select: { id: true, name: true } } },
+      });
+      assignedApproverId = settings?.defaultTsaApproverId ?? null;
+    }
+
+    updateData = { status: "PENDING_APPROVAL", assignedApproverId };
     historyValue = `TSA ${existing.referenceNumber} submitted for approval`;
+
+    // Notify assigned approver if configured
+    if (assignedApproverId) {
+      void notify({
+        userId: assignedApproverId,
+        type: "TASK",
+        priority: "HIGH",
+        title: "TSA contract awaits your approval",
+        message: `${existing.referenceNumber} has been submitted for your review.`,
+        linkUrl: `/portal/sales/lead-center`,
+      });
+    }
   } else if (action === "approve") {
     if (existing.status !== "PENDING_APPROVAL") {
       return NextResponse.json({ error: "TSA must be PENDING_APPROVAL to approve" }, { status: 409 });
     }
-    updateData = { status: "APPROVED", approvedById: session.user.id, approvedAt: new Date() };
+
+    // Fetch full TSA to check assigned approver
+    const tsaForPermCheck = await prisma.tsaContract.findUnique({
+      where: { id },
+      select: {
+        assignedApproverId: true,
+        preparedById: true,
+        preparedBy: { select: { id: true, name: true } },
+      },
+    });
+    if (!tsaForPermCheck) {
+      return NextResponse.json({ error: "TSA not found" }, { status: 404 });
+    }
+
+    // Permission check: User role ADMIN/SUPER_ADMIN or assigned approver
+    const hasAdminOverride =
+      session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+
+    const isAssignedApprover =
+      tsaForPermCheck.assignedApproverId && tsaForPermCheck.assignedApproverId === session.user.id;
+
+    if (!hasAdminOverride && !isAssignedApprover) {
+      return NextResponse.json(
+        { error: "Only the assigned approver or admin can approve this TSA" },
+        { status: 403 },
+      );
+    }
+
+    updateData = { status: "APPROVED", actualApproverId: session.user.id, approvedAt: new Date() };
     historyValue = `TSA ${existing.referenceNumber} approved`;
+
+    // Notify preparer if different from approver
+    if (tsaForPermCheck.preparedById && tsaForPermCheck.preparedById !== session.user.id) {
+      void notify({
+        userId: tsaForPermCheck.preparedById,
+        type: "DOCUMENT",
+        priority: "NORMAL",
+        title: "TSA contract approved",
+        message: `${existing.referenceNumber} has been approved and is ready to send to client.`,
+        linkUrl: `/portal/sales/lead-center`,
+      });
+    }
   } else if (action === "send_to_client") {
     if (existing.status !== "APPROVED") {
       return NextResponse.json({ error: "TSA must be APPROVED before sending to client" }, { status: 409 });

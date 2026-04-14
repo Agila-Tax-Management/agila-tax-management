@@ -49,10 +49,17 @@ model User {
   payslipsApproved     Payslip[] @relation("PayslipApprover")
   acknowledgedPayslips Payslip[] @relation("PayslipAcknowledger")
 
-  preparedJobOrders          JobOrder[] @relation("JobOrderPreparer")
-  accountManagerJobOrders    JobOrder[] @relation("JobOrderAccountManager")
-  operationsManagerJobOrders JobOrder[] @relation("JobOrderOperationsManager")
-  executiveJobOrders         JobOrder[] @relation("JobOrderExecutive")
+  // ─── Job Order Workflows ───
+  preparedJobOrders           JobOrder[]    @relation("JobOrderPreparer")
+  
+  assignedJoAccountManagers   JobOrder[]    @relation("JoAssignedAccountManager")
+  actualJoAccountManagers     JobOrder[]    @relation("JoActualAccountManager")
+  
+  assignedJoOperationsManagers JobOrder[]   @relation("JoAssignedOperationsManager")
+  actualJoOperationsManagers   JobOrder[]   @relation("JoActualOperationsManager")
+  
+  assignedJoExecutives        JobOrder[]    @relation("JoAssignedExecutive")
+  actualJoExecutives          JobOrder[]    @relation("JoActualExecutive")
 
   // ─── Compliance Defaults (From ClientCompliance) ───
   defaultProcessorFor        ClientCompliance[] @relation("DefaultProcessor")
@@ -70,9 +77,17 @@ model User {
   finalApprovedRecords       ComplianceRecord[] @relation("RecordFinalApprover")
   salesObservedRecords       ComplianceRecord[] @relation("RecordSalesOfficer")
 
-  // ─── TSA Workflows ───
-  preparedTsas        TsaContract[] @relation("TsaPreparer")
-  approvedTsas        TsaContract[] @relation("TsaApprover")
+ // ─── TSA Workflows ───
+  preparedTsas                TsaContract[] @relation("TsaPreparer")
+  assignedTsaApprovals        TsaContract[] @relation("TsaAssignedApprover")
+  actuallyApprovedTsas        TsaContract[] @relation("TsaActualApprover")
+
+  // ─── Sales Portal Defaults (From SalesSetting) ───
+  defaultJoProcessApprovals    SalesSetting[] @relation("DefaultJoProcessApprover")
+  defaultJoOperationsApprovals SalesSetting[] @relation("DefaultJoOperationsApprover")
+  defaultJoAccountApprovals    SalesSetting[] @relation("DefaultJoAccountApprover")
+  defaultJoGeneralApprovals    SalesSetting[] @relation("DefaultJoGeneralApprover")
+  defaultTsaApprovals          SalesSetting[] @relation("DefaultTsaApprover")
 
   // ─── Communication ───
   complianceNotes            ComplianceNote[]

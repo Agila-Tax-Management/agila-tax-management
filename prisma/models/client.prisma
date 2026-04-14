@@ -93,6 +93,7 @@ model Client {
   cashAdvances  CashAdvance[]
 
   hrSetting         HrSetting?
+  salesSetting      SalesSetting?
 
   payrollSchedules  PayrollSchedule[]
 

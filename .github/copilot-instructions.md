@@ -34,14 +34,21 @@
    - The problem or feature being addressed
    - Which files will be created, edited, or deleted
    - The implementation approach and any trade-offs
-  - Any UI/theme decisions (including whether dark mode is involved)
+   - Any UI/theme decisions (including whether dark mode is involved)
 2. **Wait for approval** — Do **not** proceed with code changes until the user explicitly confirms the plan.
 3. **Iterate** — If the user requests adjustments to the plan, revise and re-present before implementing.
 4. **Execute** — Only after approval, carry out the changes and report what was done.
+5. **Validate** — **IMMEDIATELY** after completing code changes:
+   - **ALWAYS** run `get_errors` to check for TypeScript/build/syntax errors
+   - If errors are found, fix them **immediately** before considering the task complete
+   - Re-run `get_errors` after fixes until zero errors remain
+   - **CRITICAL**: When using `replace_string_in_file`, ensure `oldString` matches **exactly** with proper context (3-5 lines before/after). File corruption occurs when oldString doesn't match precisely.
+   - For large multi-section replacements, prefer multiple smaller targeted replacements over one large replacement
+   - After any file edit, verify the change succeeded by checking for errors
 
 This applies to all feature work, refactors, bug fixes, and schema changes. Trivial questions, file reads, or research tasks do not require a plan.
 
-**Default behavior:** For implementation tasks, always present the plan in chat first and wait for explicit user confirmation before making edits.
+**Default behavior:** For implementation tasks, always present the plan in chat first and wait for explicit user confirmation before making edits. After executing changes, **always validate with `get_errors`** before reporting completion.
 
 ---
 

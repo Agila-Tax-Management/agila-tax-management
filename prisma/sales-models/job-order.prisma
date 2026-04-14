@@ -1,0 +1,95 @@
+enum JobOrderStatus {
+    DRAFT 
+    PENDING_ACCOUNT_ACK       // Waiting for Account Manager
+    PENDING_OPERATIONS_ACK    // Waiting for Operations Manager
+    PENDING_EXECUTIVE_ACK     // Waiting for Executive
+    APPROVED                  // Ready for execution
+    IN_PROGRESS               // Tasks are being worked on
+    COMPLETED                 // All tasks finished
+    CANCELLED
+}
+
+enum JobOrderItemType {
+    SUBSCRIPTION
+    ONE_TIME
+}
+
+// ─── Job Order (Operations Handover Document) ─────────────────────
+model JobOrder {
+    id                  String         @id @default(cuid())
+    jobOrderNumber      String         @unique
+
+    leadId              Int
+    lead                Lead           @relation(fields: [leadId], references: [id])
+
+    clientId            Int?
+    client              Client?        @relation(fields: [clientId], references: [id])
+
+    date                DateTime       @default(now()) @db.Date
+    status              JobOrderStatus @default(DRAFT)
+    notes               String?        @db.Text
+
+    // ─── 1. Prepared By (e.g., Sales Admin) ───
+    preparedById        String?
+    preparedBy          User?          @relation("JobOrderPreparer", fields: [preparedById], references: [id])
+    datePrepared        DateTime?
+
+    // ─── 2. Account Manager (OVERRIDE ENABLED) ───
+    assignedAccountManagerId String?
+    assignedAccountManager   User?     @relation("JoAssignedAccountManager", fields: [assignedAccountManagerId], references: [id])
+    actualAccountManagerId   String?
+    actualAccountManager     User?     @relation("JoActualAccountManager", fields: [actualAccountManagerId], references: [id])
+    dateAccountManagerAck    DateTime?
+
+    // ─── 3. Operations Manager (OVERRIDE ENABLED) ───
+    assignedOperationsManagerId String?
+    assignedOperationsManager   User?  @relation("JoAssignedOperationsManager", fields: [assignedOperationsManagerId], references: [id])
+    actualOperationsManagerId   String?
+    actualOperationsManager     User?  @relation("JoActualOperationsManager", fields: [actualOperationsManagerId], references: [id])
+    dateOperationsManagerAck    DateTime?
+
+    // ─── 4. Executive (OVERRIDE ENABLED) ───
+    assignedExecutiveId String?
+    assignedExecutive   User?          @relation("JoAssignedExecutive", fields: [assignedExecutiveId], references: [id])
+    actualExecutiveId   String?
+    actualExecutive     User?          @relation("JoActualExecutive", fields: [actualExecutiveId], references: [id])
+    dateExecutiveAck    DateTime?
+
+    items               JobOrderItem[]
+    tasks               Task[]
+
+    createdAt           DateTime       @default(now())
+    updatedAt           DateTime       @updatedAt
+
+    @@index([leadId])
+    @@index([clientId])
+    @@map("job_order")
+}
+
+// ─── Job Order Line Items (The Services Table) ────────────────────
+model JobOrderItem {
+    id          String           @id @default(cuid())
+
+    jobOrderId  String
+    jobOrder    JobOrder         @relation(fields: [jobOrderId], references: [id], onDelete: Cascade)
+
+    itemType    JobOrderItemType
+
+    // ─── CRITICAL LINK ───
+    // Links to the unified service so we can automatically pull TaskTemplates!
+    serviceId   Int?
+    service     Service?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+    // Snapshot details
+    serviceName String
+    rate        Decimal          @db.Decimal(10, 2) 
+    discount    Decimal          @default(0.00) @db.Decimal(10, 2) 
+    total       Decimal          @db.Decimal(10, 2) 
+    remarks     String?          @db.Text 
+
+    createdAt   DateTime         @default(now())
+    updatedAt   DateTime         @updatedAt
+
+    @@index([jobOrderId])
+    @@map("job_order_item")
+}

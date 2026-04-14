@@ -67,6 +67,11 @@ export interface LeadTsaInfo {
   quoteId: string | null;
   pdfUrl: string | null;
   clientSignedAt: string | null;
+  assignedApproverId: string | null;
+  assignedApprover: { id: string; name: string; email: string; image: string | null } | null;
+  actualApproverId: string | null;
+  actualApprover: { id: string; name: string; email: string; image: string | null } | null;
+  approvedAt: string | null;
 }
 
 export interface Lead {

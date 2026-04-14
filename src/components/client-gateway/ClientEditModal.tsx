@@ -261,6 +261,18 @@ export function ClientEditModal({ client, isOpen, onClose, onSave }: ClientEditM
                   onChange={(e) => set('birRegistrationDate', e.target.value)}
                 />
               </Field>
+              <Field label="Certificate of Registration (URL)">
+                <input
+                  type="url"
+                  className={inputCls}
+                  placeholder="https://example.com/cor.pdf"
+                  value={form.corUrl ?? ''}
+                  onChange={(e) => set('corUrl', e.target.value || undefined)}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Provide a cloud storage link to the BIR Certificate of Registration (e.g., Cloudinary, Google Drive)
+                </p>
+              </Field>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Tax Type" required>
                   <select className={selectCls} value={form.taxType} onChange={(e) => set('taxType', e.target.value)}>

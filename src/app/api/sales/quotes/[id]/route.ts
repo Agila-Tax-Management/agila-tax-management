@@ -172,7 +172,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
 
 /**
  * DELETE /api/sales/quotes/[id]
- * Deletes a DRAFT quote only.
+ * Deletes a quote (any status).
  */
 export async function DELETE(request: NextRequest, { params }: Params): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -186,13 +186,6 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
   });
   if (!existing) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
 
-  if (existing.status !== "DRAFT") {
-    return NextResponse.json(
-      { error: "Only DRAFT quotes can be deleted" },
-      { status: 409 },
-    );
-  }
-
   await prisma.quote.delete({ where: { id } });
 
   void logActivity({
@@ -200,7 +193,7 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
     action: "DELETED",
     entity: "Quote",
     entityId: id,
-    description: `Deleted quote ${existing.quoteNumber}`,
+    description: `Deleted quote ${existing.quoteNumber} (${existing.status})`,
     ...getRequestMeta(request),
   });
 

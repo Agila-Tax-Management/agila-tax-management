@@ -20,11 +20,14 @@ interface Props {
 // ─── Status Badge ─────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<JobOrderStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  DRAFT:       { label: 'Draft',        color: 'text-slate-600',  bg: 'bg-slate-100',  icon: <Clock size={12} /> },
-  SUBMITTED:   { label: 'Submitted',    color: 'text-blue-700',   bg: 'bg-blue-50',    icon: <AlertCircle size={12} /> },
-  ACKNOWLEDGED:{ label: 'Acknowledged', color: 'text-amber-700',  bg: 'bg-amber-50',   icon: <FileCheck size={12} /> },
-  COMPLETED:   { label: 'Completed',    color: 'text-emerald-700',bg: 'bg-emerald-50', icon: <CheckCircle2 size={12} /> },
-  CANCELLED:   { label: 'Cancelled',    color: 'text-rose-700',   bg: 'bg-rose-50',    icon: <XCircle size={12} /> },
+  DRAFT:                   { label: 'Draft',                      color: 'text-slate-600',  bg: 'bg-slate-100',  icon: <Clock size={12} /> },
+  PENDING_OPERATIONS_ACK:  { label: 'Pending Ops Approval',      color: 'text-blue-700',   bg: 'bg-blue-50',    icon: <AlertCircle size={12} /> },
+  PENDING_ACCOUNT_ACK:     { label: 'Pending Account Approval',  color: 'text-indigo-700', bg: 'bg-indigo-50',  icon: <AlertCircle size={12} /> },
+  PENDING_EXECUTIVE_ACK:   { label: 'Pending Executive Approval',color: 'text-purple-700', bg: 'bg-purple-50',  icon: <AlertCircle size={12} /> },
+  APPROVED:                { label: 'Approved',                  color: 'text-emerald-700',bg: 'bg-emerald-50', icon: <CheckCircle2 size={12} /> },
+  IN_PROGRESS:             { label: 'In Progress',               color: 'text-amber-700',  bg: 'bg-amber-50',   icon: <FileCheck size={12} /> },
+  COMPLETED:               { label: 'Completed',                 color: 'text-teal-700',   bg: 'bg-teal-50',    icon: <CheckCircle2 size={12} /> },
+  CANCELLED:               { label: 'Cancelled',                 color: 'text-rose-700',   bg: 'bg-rose-50',    icon: <XCircle size={12} /> },
 };
 
 function fmt(val: string | number): string {
@@ -70,10 +73,10 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
 
   // ── Workflow state helpers ───────────────────────────────────────
   const canSubmit           = jo.status === 'DRAFT';
-  const canAckOps           = jo.status === 'SUBMITTED' && !jo.operationsManagerId;
-  const canAckAM            = jo.status === 'SUBMITTED' && !!jo.operationsManagerId && !jo.accountManagerId;
-  const canAckExec          = jo.status === 'ACKNOWLEDGED' && !jo.executiveId;
-  const canCancel           = jo.status !== 'COMPLETED' && jo.status !== 'CANCELLED';
+  const canApproveOps       = jo.status === 'PENDING_OPERATIONS_ACK' && !jo.actualOperationsManagerId;
+  const canApproveAccount   = jo.status === 'PENDING_ACCOUNT_ACK' && !jo.actualAccountManagerId;
+  const canApproveExec      = jo.status === 'PENDING_EXECUTIVE_ACK' && !jo.actualExecutiveId;
+  const canCancel           = !['COMPLETED', 'CANCELLED', 'APPROVED'].includes(jo.status);
 
   // ── Action handler ───────────────────────────────────────────────
   const doAction = async (action: string, label: string) => {
@@ -128,6 +131,7 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
     actionKey,
     actionLabel,
     canAck,
+    isOverride = false,
   }: {
     role: string;
     name?: string | null;
@@ -136,12 +140,18 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
     actionKey: string;
     actionLabel: string;
     canAck: boolean;
+    isOverride?: boolean;
   }) => (
     <div className="flex flex-col items-center text-center min-w-0 flex-1">
       {/* Signature line */}
       <div className="w-full border-b-2 border-slate-300 mb-2 min-w-25 h-10 flex items-end justify-center pb-1 px-2">
         {name ? (
-          <span className="text-xs font-semibold text-slate-800 leading-tight wrap-break-word">{name}</span>
+          <div className="flex flex-col items-center">
+            <span className="text-xs font-semibold text-slate-800 leading-tight wrap-break-word">{name}</span>
+            {isOverride && (
+              <span className="text-[9px] text-orange-600 font-semibold italic mt-0.5">Override</span>
+            )}
+          </div>
         ) : (
           <span className="text-xs text-slate-300 italic">
             {pending ? 'Awaiting' : '—'}
@@ -254,6 +264,16 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
             </div>
           </div>
 
+          {/* Warning if approvers not configured */}
+          {(!jo.assignedOperationsManagerId || !jo.assignedAccountManagerId || !jo.assignedExecutiveId) && jo.status === 'DRAFT' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+              <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800">
+                <span className="font-semibold">Approvers not fully configured.</span> Please assign default approvers in Sales Settings before submitting this job order.
+              </div>
+            </div>
+          )}
+
           {/* Client Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 rounded-xl p-4 border border-slate-200">
             <div className="space-y-2">
@@ -351,36 +371,40 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
                 actionKey="__none__"
                 actionLabel=""
                 canAck={false}
+                isOverride={false}
               />
               {/* Operations Manager (acks first) */}
               <SignatureBlock
                 role="Operations Manager"
-                name={jo.operationsManager?.name}
+                name={jo.actualOperationsManager?.name ?? jo.assignedOperationsManager?.name}
                 date={jo.dateOperationsManagerAck}
-                pending={!jo.operationsManagerId}
-                actionKey="ack_operations"
-                actionLabel="Acknowledge as OM"
-                canAck={canAckOps}
+                pending={!jo.actualOperationsManagerId}
+                actionKey="approve_operations"
+                actionLabel="Approve (Ops)"
+                canAck={canApproveOps}
+                isOverride={!!jo.actualOperationsManagerId && jo.actualOperationsManagerId !== jo.assignedOperationsManagerId}
               />
-              {/* Account Officer (acks second) */}
+              {/* Account Manager (approves second) */}
               <SignatureBlock
-                role="Account Officer"
-                name={jo.accountManager?.name}
+                role="Account Manager"
+                name={jo.actualAccountManager?.name ?? jo.assignedAccountManager?.name}
                 date={jo.dateAccountManagerAck}
-                pending={!jo.accountManagerId}
-                actionKey="ack_account_manager"
-                actionLabel="Acknowledge as AO"
-                canAck={canAckAM}
+                pending={!jo.actualAccountManagerId}
+                actionKey="approve_account"
+                actionLabel="Approve (Account)"
+                canAck={canApproveAccount}
+                isOverride={!!jo.actualAccountManagerId && jo.actualAccountManagerId !== jo.assignedAccountManagerId}
               />
               {/* Executive */}
               <SignatureBlock
-                role="Approved by (Executive)"
-                name={jo.executive?.name}
+                role="Executive"
+                name={jo.actualExecutive?.name ?? jo.assignedExecutive?.name}
                 date={jo.dateExecutiveAck}
-                pending={!jo.executiveId}
-                actionKey="ack_executive"
-                actionLabel="Approve"
-                canAck={canAckExec}
+                pending={!jo.actualExecutiveId}
+                actionKey="approve_executive"
+                actionLabel="Approve (Exec)"
+                canAck={canApproveExec}
+                isOverride={!!jo.actualExecutiveId && jo.actualExecutiveId !== jo.assignedExecutiveId}
               />
             </div>
           </div>
@@ -471,9 +495,9 @@ function WorkflowProgress({ jo }: { jo: JobOrderRecord }): React.ReactNode {
   const steps = [
     { label: 'Created', done: true, name: jo.preparedBy?.name, date: jo.datePrepared },
     { label: 'Submitted', done: jo.status !== 'DRAFT', name: null, date: null },
-    { label: 'Ops Acknowledged', done: !!jo.operationsManagerId, name: jo.operationsManager?.name, date: jo.dateOperationsManagerAck },
-    { label: 'AO Acknowledged', done: !!jo.accountManagerId, name: jo.accountManager?.name, date: jo.dateAccountManagerAck },
-    { label: 'Executive Approved', done: !!jo.executiveId, name: jo.executive?.name, date: jo.dateExecutiveAck },
+    { label: 'Ops Approved', done: !!jo.actualOperationsManagerId, name: jo.actualOperationsManager?.name, date: jo.dateOperationsManagerAck },
+    { label: 'Account Approved', done: !!jo.actualAccountManagerId, name: jo.actualAccountManager?.name, date: jo.dateAccountManagerAck },
+    { label: 'Executive Approved', done: !!jo.actualExecutiveId, name: jo.actualExecutive?.name, date: jo.dateExecutiveAck },
   ];
 
   const cancelledIdx = jo.status === 'CANCELLED'

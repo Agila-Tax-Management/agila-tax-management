@@ -13,7 +13,7 @@ import { JobOrderDeleteModal } from './JobOrderDeleteModal';
 
 // ─── Types ────────────────────────────────────────────────────────
 
-export type JobOrderStatus = 'DRAFT' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'COMPLETED' | 'CANCELLED';
+export type JobOrderStatus = 'DRAFT' | 'PENDING_OPERATIONS_ACK' | 'PENDING_ACCOUNT_ACK' | 'PENDING_EXECUTIVE_ACK' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
 export interface JobOrderItem {
   id: string;
@@ -43,16 +43,25 @@ export interface JobOrderRecord {
   clientId: number | null;
   client: { id: number; businessName: string } | null;
   preparedById: string | null;
-  preparedBy: { id: string; name: string } | null;
+  preparedBy: { id: string; name: string; email: string; image: string | null } | null;
   datePrepared: string | null;
-  accountManagerId: string | null;
-  accountManager: { id: string; name: string } | null;
-  dateAccountManagerAck: string | null;
-  operationsManagerId: string | null;
-  operationsManager: { id: string; name: string } | null;
+  // Operations Manager (first approver)
+  assignedOperationsManagerId: string | null;
+  assignedOperationsManager: { id: string; name: string; email: string; image: string | null } | null;
+  actualOperationsManagerId: string | null;
+  actualOperationsManager: { id: string; name: string; email: string; image: string | null } | null;
   dateOperationsManagerAck: string | null;
-  executiveId: string | null;
-  executive: { id: string; name: string } | null;
+  // Account Manager (second approver)
+  assignedAccountManagerId: string | null;
+  assignedAccountManager: { id: string; name: string; email: string; image: string | null } | null;
+  actualAccountManagerId: string | null;
+  actualAccountManager: { id: string; name: string; email: string; image: string | null } | null;
+  dateAccountManagerAck: string | null;
+  // Executive (third approver)
+  assignedExecutiveId: string | null;
+  assignedExecutive: { id: string; name: string; email: string; image: string | null } | null;
+  actualExecutiveId: string | null;
+  actualExecutive: { id: string; name: string; email: string; image: string | null } | null;
   dateExecutiveAck: string | null;
   items: JobOrderItem[];
   createdAt: string;
@@ -75,15 +84,36 @@ const STATUS_CONFIG: Record<JobOrderStatus, {
     border: 'border-slate-200',
     icon: <Clock size={12} />,
   },
-  SUBMITTED: {
-    label: 'Submitted',
+  PENDING_OPERATIONS_ACK: {
+    label: 'Pending Ops Approval',
     color: 'text-blue-700',
     bg: 'bg-blue-50',
     border: 'border-blue-200',
     icon: <AlertCircle size={12} />,
   },
-  ACKNOWLEDGED: {
-    label: 'Acknowledged',
+  PENDING_ACCOUNT_ACK: {
+    label: 'Pending Account Approval',
+    color: 'text-indigo-700',
+    bg: 'bg-indigo-50',
+    border: 'border-indigo-200',
+    icon: <AlertCircle size={12} />,
+  },
+  PENDING_EXECUTIVE_ACK: {
+    label: 'Pending Executive Approval',
+    color: 'text-purple-700',
+    bg: 'bg-purple-50',
+    border: 'border-purple-200',
+    icon: <AlertCircle size={12} />,
+  },
+  APPROVED: {
+    label: 'Approved',
+    color: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+    icon: <CheckCircle2 size={12} />,
+  },
+  IN_PROGRESS: {
+    label: 'In Progress',
     color: 'text-amber-700',
     bg: 'bg-amber-50',
     border: 'border-amber-200',
@@ -91,9 +121,9 @@ const STATUS_CONFIG: Record<JobOrderStatus, {
   },
   COMPLETED: {
     label: 'Completed',
-    color: 'text-emerald-700',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
+    color: 'text-teal-700',
+    bg: 'bg-teal-50',
+    border: 'border-teal-200',
     icon: <CheckCircle2 size={12} />,
   },
   CANCELLED: {
@@ -108,8 +138,11 @@ const STATUS_CONFIG: Record<JobOrderStatus, {
 const STATUS_FILTERS: { value: JobOrderStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All' },
   { value: 'DRAFT', label: 'Draft' },
-  { value: 'SUBMITTED', label: 'Submitted' },
-  { value: 'ACKNOWLEDGED', label: 'Acknowledged' },
+  { value: 'PENDING_OPERATIONS_ACK', label: 'Pending Ops Approval' },
+  { value: 'PENDING_ACCOUNT_ACK', label: 'Pending Account Approval' },
+  { value: 'PENDING_EXECUTIVE_ACK', label: 'Pending Executive Approval' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
   { value: 'COMPLETED', label: 'Completed' },
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
@@ -526,9 +559,9 @@ export function JobOrders(): React.ReactNode {
 
 function AckProgress({ jo }: { jo: JobOrderRecord }): React.ReactNode {
   const steps = [
-    { label: 'OM', done: !!jo.operationsManagerId, name: jo.operationsManager?.name },
-    { label: 'AO', done: !!jo.accountManagerId, name: jo.accountManager?.name },
-    { label: 'Exec', done: !!jo.executiveId, name: jo.executive?.name },
+    { label: 'Ops', done: !!jo.actualOperationsManagerId, name: jo.actualOperationsManager?.name },
+    { label: 'Acct', done: !!jo.actualAccountManagerId, name: jo.actualAccountManager?.name },
+    { label: 'Exec', done: !!jo.actualExecutiveId, name: jo.actualExecutive?.name },
   ];
 
   return (

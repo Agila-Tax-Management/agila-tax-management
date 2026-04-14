@@ -1,9 +1,11 @@
 // src/components/sales/ASPSettings.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Globe, MapPin, Plus, Trash2, Edit2, Settings, GitBranch, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Globe, MapPin, Plus, Trash2, Edit2, Settings, GitBranch, ChevronUp, ChevronDown, UserCheck, Search, Loader2, Save } from 'lucide-react';
+import Image from 'next/image';
 import { Badge } from '@/components/UI/Badge';
+import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import {
   GovernmentOfficeModal,
@@ -18,9 +20,146 @@ import {
   type LeadStatusRecord,
 } from '@/app/(portal)/portal/sales/settings/components/LeadStatusModal';
 
+interface UserOption {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+}
+
+interface SalesSettings {
+  id: string;
+  defaultJoOperationsApproverId: string | null;
+  defaultJoAccountApproverId: string | null;
+  defaultJoGeneralApproverId: string | null;
+  defaultTsaApproverId: string | null;
+  defaultJoOperationsApprover: UserOption | null;
+  defaultJoAccountApprover: UserOption | null;
+  defaultJoGeneralApprover: UserOption | null;
+  defaultTsaApprover: UserOption | null;
+}
+
+function getInitials(name: string | null, email: string): string {
+  const src = name?.trim() ?? '';
+  if (src) {
+    const parts = src.split(/\s+/);
+    return parts.length >= 2
+      ? `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase()
+      : src.slice(0, 2).toUpperCase();
+  }
+  return email.slice(0, 2).toUpperCase();
+}
+
 export function ASPSettings(): React.ReactNode {
   const { success, error } = useToast();
-  const [activeTab, setActiveTab] = useState<'offices' | 'cities' | 'pipeline'>('offices');
+  const [activeTab, setActiveTab] = useState<'general' | 'offices' | 'cities' | 'pipeline'>('general');
+
+  /* ── General Settings ──────────────────────────────────────────── */
+  const [salesSettings, setSalesSettings] = useState<SalesSettings | null>(null);
+  const [generalLoading, setGeneralLoading] = useState(true);
+  const [generalSaving, setGeneralSaving] = useState(false);
+
+  // Local state for approver selection
+  const [selectedJoOpsManager, setSelectedJoOpsManager] = useState<UserOption | null>(null);
+  const [selectedJoAccountManager, setSelectedJoAccountManager] = useState<UserOption | null>(null);
+  const [selectedJoGenManager, setSelectedJoGenManager] = useState<UserOption | null>(null);
+  const [selectedTsaApprover, setSelectedTsaApprover] = useState<UserOption | null>(null);
+
+  // User search states
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<UserOption[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [activeSearchField, setActiveSearchField] = useState<'jo_ops' | 'jo_account' | 'jo_gen' | 'tsa' | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchSalesSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/settings/sales');
+      if (!res.ok) { error('Load failed', 'Could not load sales settings.'); return; }
+      const json = (await res.json()) as { data: SalesSettings };
+      setSalesSettings(json.data);
+      setSelectedJoOpsManager(json.data.defaultJoOperationsApprover);
+      setSelectedJoAccountManager(json.data.defaultJoAccountApprover);
+      setSelectedJoGenManager(json.data.defaultJoGeneralApprover);
+      setSelectedTsaApprover(json.data.defaultTsaApprover);
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setGeneralLoading(false);
+    }
+  }, [error]);
+
+  const searchUsers = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setUserSearchResults([]);
+      return;
+    }
+    setUserSearchLoading(true);
+    try {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&limit=10`);
+      if (!res.ok) { setUserSearchResults([]); return; }
+      const json = (await res.json()) as { data: UserOption[] };
+      setUserSearchResults(json.data ?? []);
+    } catch {
+      setUserSearchResults([]);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  }, []);
+
+  const handleUserSearchChange = (value: string, field: 'jo_ops' | 'jo_account' | 'jo_gen' | 'tsa') => {
+    setUserSearchQuery(value);
+    setActiveSearchField(field);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      void searchUsers(value);
+    }, 300);
+  };
+
+  const selectUser = (user: UserOption, field: 'jo_ops' | 'jo_account' | 'jo_gen' | 'tsa') => {
+    switch (field) {
+      case 'jo_ops': setSelectedJoOpsManager(user); break;
+      case 'jo_account': setSelectedJoAccountManager(user); break;
+      case 'jo_gen': setSelectedJoGenManager(user); break;
+      case 'tsa': setSelectedTsaApprover(user); break;
+    }
+    setUserSearchQuery('');
+    setUserSearchResults([]);
+    setActiveSearchField(null);
+  };
+
+  const clearUser = (field: 'jo_ops' | 'jo_account' | 'jo_gen' | 'tsa') => {
+    switch (field) {
+      case 'jo_ops': setSelectedJoOpsManager(null); break;
+      case 'jo_account': setSelectedJoAccountManager(null); break;
+      case 'jo_gen': setSelectedJoGenManager(null); break;
+      case 'tsa': setSelectedTsaApprover(null); break;
+    }
+  };
+
+  const handleSaveGeneralSettings = async () => {
+    setGeneralSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings/sales', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          defaultJoOperationsApproverId: selectedJoOpsManager?.id ?? null,
+          defaultJoAccountApproverId: selectedJoAccountManager?.id ?? null,
+          defaultJoGeneralApproverId: selectedJoGenManager?.id ?? null,
+          defaultTsaApproverId: selectedTsaApprover?.id ?? null,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) { error('Save failed', data.error ?? 'An error occurred.'); return; }
+      success('Settings saved', 'Default approvers have been updated.');
+      void fetchSalesSettings();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setGeneralSaving(false);
+    }
+  };
 
   /* â”€â”€ Government Offices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   const [offices, setOffices] = useState<GovernmentOfficeRecord[]>([]);
@@ -141,10 +280,11 @@ export function ASPSettings(): React.ReactNode {
   };
 
   useEffect(() => {
+    void fetchSalesSettings();
     void fetchOffices();
     void fetchCities();
     void fetchLeadStatuses();
-  }, [fetchOffices, fetchCities, fetchLeadStatuses]);
+  }, [fetchSalesSettings, fetchOffices, fetchCities, fetchLeadStatuses]);
 
   /* â”€â”€ Shared styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   const thClass = 'px-6 py-3.5 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider';
@@ -161,7 +301,7 @@ export function ASPSettings(): React.ReactNode {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-              <p className="text-sm text-muted-foreground">Manage government offices, cities and the leads pipeline</p>
+              <p className="text-sm text-muted-foreground">Manage general settings, government offices, cities and the leads pipeline</p>
             </div>
           </div>
         </div>
@@ -170,6 +310,7 @@ export function ASPSettings(): React.ReactNode {
         <div className="border-b border-border">
           <nav className="flex gap-1">
             {([
+              { id: 'general', label: 'General Settings', icon: <UserCheck size={18} /> },
               { id: 'offices', label: 'Government Offices', icon: <Globe size={18} /> },
               { id: 'cities', label: 'Cities', icon: <MapPin size={18} /> },
               { id: 'pipeline', label: 'Leads Pipeline', icon: <GitBranch size={18} /> },
@@ -193,6 +334,195 @@ export function ASPSettings(): React.ReactNode {
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-6 py-8">
+
+        {/* ── General Settings ──────────────────────────────────────────── */}
+        {activeTab === 'general' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-foreground">General Settings</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Configure default approvers for job orders and TSA contracts</p>
+            </div>
+
+            {generalLoading ? (
+              <div className="bg-card rounded-xl border border-border p-12 text-center">
+                <Loader2 size={32} className="mx-auto mb-3 text-muted-foreground animate-spin" />
+                <p className="text-sm text-muted-foreground">Loading settings...</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Job Order Approvers Card */}
+                <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+                  <h3 className="text-base font-bold text-foreground mb-1 flex items-center gap-2">
+                    <GitBranch size={16} className="text-blue-600" />
+                    Job Order Approvers
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-5">3-level approval workflow for job orders</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { field: 'jo_ops' as const, label: '1. Operations Manager', selected: selectedJoOpsManager },
+                      { field: 'jo_account' as const, label: '2. Account Manager', selected: selectedJoAccountManager },
+                      { field: 'jo_gen' as const, label: '3. General Manager', selected: selectedJoGenManager },
+                    ].map(({ field, label, selected }) => (
+                      <div key={field}>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+                        {selected ? (
+                          <div className="flex items-center gap-2 p-2 rounded-lg border border-border bg-accent">
+                            {selected.image ? (
+                              <Image src={selected.image} alt="" width={32} height={32} className="rounded-full" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                                {getInitials(selected.name, selected.email)}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-foreground truncate">{selected.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{selected.email}</div>
+                            </div>
+                            <button onClick={() => clearUser(field)} className="p-1 hover:bg-red-50 rounded" title="Remove">
+                              <Trash2 size={14} className="text-red-600" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Search users..."
+                              value={activeSearchField === field ? userSearchQuery : ''}
+                              onChange={(e) => handleUserSearchChange(e.target.value, field)}
+                              onFocus={() => setActiveSearchField(field)}
+                              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            {activeSearchField === field && userSearchQuery && (
+                              <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
+                                {userSearchLoading ? (
+                                  <div className="p-3 text-sm text-muted-foreground text-center">Searching...</div>
+                                ) : userSearchResults.length === 0 ? (
+                                  <div className="p-3 text-sm text-muted-foreground text-center">No users found</div>
+                                ) : (
+                                  userSearchResults.map((u) => (
+                                    <button
+                                      key={u.id}
+                                      onClick={() => selectUser(u, field)}
+                                      className="w-full flex items-center gap-2 p-2 hover:bg-accent transition-colors text-left"
+                                    >
+                                      {u.image ? (
+                                        <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
+                                      ) : (
+                                        <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                                          {getInitials(u.name, u.email)}
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-foreground truncate">{u.name}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                                      </div>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* TSA Approver Card */}
+                <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+                  <h3 className="text-base font-bold text-foreground mb-1 flex items-center gap-2">
+                    <UserCheck size={16} className="text-green-600" />
+                    TSA Contract Approver
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-5">Single approver for Tax Service Agreement contracts</p>
+
+                  <div className="max-w-md">
+                    {selectedTsaApprover ? (
+                      <div className="flex items-center gap-2 p-2 rounded-lg border border-border bg-accent">
+                        {selectedTsaApprover.image ? (
+                          <Image src={selectedTsaApprover.image} alt="" width={32} height={32} className="rounded-full" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">
+                            {getInitials(selectedTsaApprover.name, selectedTsaApprover.email)}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-foreground truncate">{selectedTsaApprover.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">{selectedTsaApprover.email}</div>
+                        </div>
+                        <button onClick={() => clearUser('tsa')} className="p-1 hover:bg-red-50 rounded" title="Remove">
+                          <Trash2 size={14} className="text-red-600" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search users..."
+                          value={activeSearchField === 'tsa' ? userSearchQuery : ''}
+                          onChange={(e) => handleUserSearchChange(e.target.value, 'tsa')}
+                          onFocus={() => setActiveSearchField('tsa')}
+                          className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        {activeSearchField === 'tsa' && userSearchQuery && (
+                          <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
+                            {userSearchLoading ? (
+                              <div className="p-3 text-sm text-muted-foreground text-center">Searching...</div>
+                            ) : userSearchResults.length === 0 ? (
+                              <div className="p-3 text-sm text-muted-foreground text-center">No users found</div>
+                            ) : (
+                              userSearchResults.map((u) => (
+                                <button
+                                  key={u.id}
+                                  onClick={() => selectUser(u, 'tsa')}
+                                  className="w-full flex items-center gap-2 p-2 hover:bg-accent transition-colors text-left"
+                                >
+                                  {u.image ? (
+                                    <Image src={u.image} alt="" width={28} height={28} className="rounded-full" />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">
+                                      {getInitials(u.name, u.email)}
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-foreground truncate">{u.name}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                                  </div>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => { void handleSaveGeneralSettings(); }}
+                    disabled={generalSaving}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {generalSaving ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* â”€â”€ Government Offices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeTab === 'offices' && (

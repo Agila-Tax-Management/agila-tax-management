@@ -169,6 +169,9 @@ export function TsaModal({
   const [pdfUrl, setPdfUrl] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<'view' | 'download' | null>(null);
+  
+  // Local TSA state to show immediate updates after actions
+  const [currentTsa, setCurrentTsa] = useState<LeadTsaInfo | null>(tsa);
 
   // Populate defaults from lead when opening (create mode)
   useEffect(() => {
@@ -187,6 +190,7 @@ export function TsaModal({
     setBillingCycleStart(1);
     setClientSignerName('');
     setPdfUrl(tsa?.pdfUrl ?? '');
+    setCurrentTsa(tsa); // Reset local TSA state when modal opens
   }, [isOpen, lead, tsa]);
 
   // ─── Refetch the lead and propagate ─────────────────────────────────────────
@@ -203,7 +207,7 @@ export function TsaModal({
   // ─── Create TSA ───────────────────────────────────────────────────────────────
   const handleCreate = async () => {
     if (!acceptedQuote) {
-      error('No accepted quote', 'An accepted quotation is required before creating a TSA.');
+      error('No accepted quote', 'An accepted quotation is required before creating a currentTsa.');
       return;
     }
     if (!businessName.trim() || !authorizedRep.trim()) {
@@ -247,16 +251,16 @@ export function TsaModal({
 
   // ─── Generic action for workflow steps ───────────────────────────────────────
   const handleAction = async (action: string, extra?: Record<string, unknown>) => {
-    if (!tsa) return;
+    if (!currentTsa) return;
     setActionLoading(action);
     try {
-      const res = await fetch(`/api/sales/tsa/${tsa.id}`, {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...extra }),
       });
-      const data = (await res.json()) as { data?: unknown; error?: string };
-      if (!res.ok) { error('Action failed', data.error ?? 'Please try again.'); return; }
+      const json = (await res.json()) as { data?: LeadTsaInfo; error?: string };
+      if (!res.ok) { error('Action failed', json.error ?? 'Please try again.'); return; }
 
       const actionLabels: Record<string, string> = {
         submit_for_approval: 'TSA submitted for approval.',
@@ -266,6 +270,12 @@ export function TsaModal({
         void: 'TSA has been voided.',
       };
       success('TSA updated', actionLabels[action] ?? 'TSA has been updated.');
+      
+      // Update local TSA state immediately for instant UI feedback
+      if (json.data) {
+        setCurrentTsa(json.data as LeadTsaInfo);
+      }
+      
       const updated = await refreshLead();
       if (updated) onUpdated(updated);
       if (action === 'mark_signed') onClose();
@@ -280,11 +290,11 @@ export function TsaModal({
 
   // ─── Generate PDF (preview or download) ──────────────────────────────────────
   const handleGeneratePdf = async (mode: 'view' | 'download') => {
-    if (!tsa) return;
+    if (!currentTsa) return;
     setGeneratingPdf(mode);
     try {
       // 1. Fetch full TSA details
-      const res = await fetch(`/api/sales/tsa/${tsa.id}`);
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`);
       const json = (await res.json()) as { data?: FullTsaDetail; error?: string };
       if (!res.ok || !json.data) {
         error('Failed to load TSA', json.error ?? 'Could not fetch contract details.');
@@ -298,6 +308,20 @@ export function TsaModal({
       const recurringTotal = lineItems
         .filter((li) => li.service.billingType === 'RECURRING')
         .reduce((sum, li) => sum + Number(li.negotiatedRate), 0);
+
+      // Split services: recurring + free one-time go in planServices, paid one-time go in additionalServices
+      const recurringServices = lineItems
+        .filter((li) => li.service.billingType === 'RECURRING')
+        .map((li) => li.service.name);
+      const freeOneTime = lineItems
+        .filter((li) => li.service.billingType === 'ONE_TIME' && Number(li.negotiatedRate) === 0)
+        .map((li) => li.service.name);
+      const paidOneTime = lineItems
+        .filter((li) => li.service.billingType === 'ONE_TIME' && Number(li.negotiatedRate) > 0)
+        .map((li) => {
+          const rate = Number(li.negotiatedRate);
+          return `${li.service.name} - P${rate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+        });
 
       const contractData: ContractData = {
         clientNo: fullTsa.referenceNumber,
@@ -314,12 +338,8 @@ export function TsaModal({
         planName: lineItems.find((li) => li.sourcePackage)?.sourcePackage?.name ?? '',
         planPrice: '',
         actualMonthlySubscription: recurringTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
-        planServices: lineItems
-          .filter((li) => li.service.billingType === 'RECURRING')
-          .map((li) => li.service.name),
-        additionalServices: lineItems
-          .filter((li) => li.service.billingType === 'ONE_TIME')
-          .map((li) => li.service.name),
+        planServices: [...recurringServices, ...freeOneTime],
+        additionalServices: paidOneTime,
         headerSrc: '',
         ...buildFlagsFromNames(serviceNames),
       };
@@ -366,12 +386,12 @@ export function TsaModal({
       } else {
         const a = document.createElement('a');
         a.href = url;
-        a.download = `TSA-${tsa.referenceNumber}.pdf`;
+        a.download = `TSA-${currentTsa.referenceNumber}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        success('Contract downloaded', `Saved as "TSA-${tsa.referenceNumber}.pdf".`);
+        success('Contract downloaded', `Saved as "TSA-${currentTsa.referenceNumber}.pdf".`);
       }
     } catch {
       error('PDF Error', 'Failed to generate contract PDF. Please try again.');
@@ -385,7 +405,7 @@ export function TsaModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={tsa ? `TSA Contract — ${tsa.referenceNumber}` : 'Create TSA Contract'}
+      title={currentTsa ? `TSA Contract — ${currentTsa.referenceNumber}` : 'Create TSA Contract'}
       size="3xl"
     >
       <div className="overflow-y-auto max-h-[80vh] px-6 py-5 space-y-5">
@@ -403,14 +423,14 @@ export function TsaModal({
         </div>
 
         {/* ── Status & Workflow (existing TSA) ── */}
-        {tsa ? (
+        {currentTsa ? (
           <div className="space-y-4">
             {/* Status badge + PDF actions */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${STATUS_COLOR[tsa.status]}`}>
-                {tsa.status === 'SIGNED' && <CheckCircle2 size={14} />}
-                {tsa.status === 'PENDING_APPROVAL' && <Clock size={14} />}
-                {STATUS_LABEL[tsa.status]}
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${STATUS_COLOR[currentTsa.status]}`}>
+                {currentTsa.status === 'SIGNED' && <CheckCircle2 size={14} />}
+                {currentTsa.status === 'PENDING_APPROVAL' && <Clock size={14} />}
+                {STATUS_LABEL[currentTsa.status]}
               </span>
               <div className="flex items-center gap-2">
                 <Button
@@ -444,7 +464,82 @@ export function TsaModal({
                 Workflow Actions
               </p>
 
-              {tsa.status === 'DRAFT' && (
+              {/* Warning if no default approver configured */}
+              {currentTsa.status === 'PENDING_APPROVAL' && !currentTsa.assignedApproverId && (
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    ⚠️ No default TSA approver configured. Any admin can approve.
+                  </p>
+                </div>
+              )}
+
+              {/* Show assigned approver when pending */}
+              {currentTsa.status === 'PENDING_APPROVAL' && currentTsa.assignedApprover && (
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Assigned Approver
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {currentTsa.assignedApprover.image ? (
+                      <img
+                        src={currentTsa.assignedApprover.image}
+                        alt={currentTsa.assignedApprover.name}
+                        className="w-6 h-6 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-blue-300 dark:bg-blue-700 flex items-center justify-center text-xs font-bold text-blue-900 dark:text-blue-100">
+                        {currentTsa.assignedApprover.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm text-blue-900 dark:text-blue-200 font-medium">
+                      {currentTsa.assignedApprover.name}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Show actual approver when approved (with override badge if needed) */}
+              {currentTsa.status !== 'DRAFT' && currentTsa.actualApprover && (
+                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
+                  <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300 mb-1">
+                    Approved By
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {currentTsa.actualApprover.image ? (
+                      <img
+                        src={currentTsa.actualApprover.image}
+                        alt={currentTsa.actualApprover.name}
+                        className="w-6 h-6 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-emerald-300 dark:bg-emerald-700 flex items-center justify-center text-xs font-bold text-emerald-900 dark:text-emerald-100">
+                        {currentTsa.actualApprover.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm text-emerald-900 dark:text-emerald-200 font-medium">
+                      {currentTsa.actualApprover.name}
+                    </span>
+                    {currentTsa.assignedApproverId && currentTsa.actualApproverId !== currentTsa.assignedApproverId && (
+                      <span className="text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">
+                        Override
+                      </span>
+                    )}
+                  </div>
+                  {currentTsa.approvedAt && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                      {new Date(currentTsa.approvedAt).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {currentTsa.status === 'DRAFT' && (
                 <Button
                   className="w-full bg-amber-500 hover:bg-amber-600 text-white"
                   disabled={isLoading}
@@ -457,7 +552,7 @@ export function TsaModal({
                 </Button>
               )}
 
-              {tsa.status === 'PENDING_APPROVAL' && (
+              {currentTsa.status === 'PENDING_APPROVAL' && (
                 <Button
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={isLoading}
@@ -470,7 +565,7 @@ export function TsaModal({
                 </Button>
               )}
 
-              {tsa.status === 'APPROVED' && (
+              {currentTsa.status === 'APPROVED' && (
                 <Button
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
                   disabled={isLoading}
@@ -483,7 +578,7 @@ export function TsaModal({
                 </Button>
               )}
 
-              {tsa.status === 'SENT_TO_CLIENT' && (
+              {currentTsa.status === 'SENT_TO_CLIENT' && (
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
@@ -527,17 +622,17 @@ export function TsaModal({
                 </div>
               )}
 
-              {tsa.status === 'SIGNED' && (
+              {currentTsa.status === 'SIGNED' && (
                 <div className="flex items-center gap-2 text-sm text-emerald-700">
                   <CheckCircle2 size={16} />
                   <span>
-                    Signed by <strong>{tsa.clientSignedAt ? new Date(tsa.clientSignedAt).toLocaleDateString('en-PH') : '—'}</strong>
+                    Signed by <strong>{currentTsa.clientSignedAt ? new Date(currentTsa.clientSignedAt).toLocaleDateString('en-PH') : '—'}</strong>
                   </span>
                 </div>
               )}
 
               {/* Void — available unless already signed or void */}
-              {tsa.status !== 'SIGNED' && tsa.status !== 'VOID' && (
+              {currentTsa.status !== 'SIGNED' && currentTsa.status !== 'VOID' && (
                 <Button
                   variant="outline"
                   className="w-full text-red-600 border-red-200 hover:bg-red-50"
@@ -563,22 +658,22 @@ export function TsaModal({
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 <div>
                   <span className="text-xs text-muted-foreground">Business Name</span>
-                  <p className="font-medium text-foreground">{tsa.businessName}</p>
+                  <p className="font-medium text-foreground">{currentTsa.businessName}</p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Document Date</span>
                   <p className="font-medium text-foreground">
-                    {new Date(tsa.documentDate).toLocaleDateString('en-PH')}
+                    {new Date(currentTsa.documentDate).toLocaleDateString('en-PH')}
                   </p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Reference No.</span>
-                  <p className="font-medium text-foreground">{tsa.referenceNumber}</p>
+                  <p className="font-medium text-foreground">{currentTsa.referenceNumber}</p>
                 </div>
-                {tsa.quoteId && (
+                {currentTsa.quoteId && (
                   <div>
                     <span className="text-xs text-muted-foreground">Linked Quote</span>
-                    <p className="font-medium text-foreground">{tsa.quoteId}</p>
+                    <p className="font-medium text-foreground">{currentTsa.quoteId}</p>
                   </div>
                 )}
               </div>
@@ -589,7 +684,7 @@ export function TsaModal({
           <div className="space-y-4">
             {!acceptedQuote && (
               <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700">
-                <strong>No accepted quotation found.</strong> Please create and accept a quotation before issuing the TSA.
+                <strong>No accepted quotation found.</strong> Please create and accept a quotation before issuing the currentTsa.
               </div>
             )}
 
@@ -683,3 +778,4 @@ export function TsaModal({
     </Modal>
   );
 }
+
