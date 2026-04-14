@@ -349,18 +349,34 @@ export function LeadCenter(): React.ReactNode {
                                 <span className="font-medium truncate">{lead.assignedAgent.name}</span>
                               </span>
                             )}
-                            {lead.isAccountCreated && !lead.isCreatedJobOrder && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                lead.invoices?.[0]?.status === 'PAID'
-                                  ? 'bg-blue-100 text-blue-700 dark:text-blue-400'
-                                  : lead.quotes.some((q) => q.status === 'ACCEPTED')
-                                  ? 'bg-purple-100 text-purple-700 dark:text-purple-400'
-                                  : 'bg-amber-100 text-amber-700 dark:text-amber-400'
-                              }`}>
-                                <Clock size={9} className="shrink-0" />
-                                {lead.invoices?.[0]?.status === 'PAID' ? 'Ready for Turn Over' : lead.quotes.some((q) => q.status === 'ACCEPTED') ? 'Contract Signing' : 'Waiting for Payment'}
-                              </span>
-                            )}
+                            {lead.isAccountCreated && !lead.isCreatedJobOrder && (() => {
+                              const isPaid = lead.invoices?.[0]?.status === 'PAID';
+                              const hasAcceptedQuote = lead.quotes.some((q) => q.status === 'ACCEPTED');
+                              const tsaSigned = lead.tsaContracts?.some((tsa) => tsa.status === 'SIGNED') ?? false;
+                              const hasInvoice = (lead.invoices?.length ?? 0) > 0;
+                              
+                              // Priority: Paid > Signed+Invoice > Contract Signing > Waiting
+                              let label = 'Waiting for Payment';
+                              let colorClass = 'bg-amber-100 text-amber-700 dark:text-amber-400';
+                              
+                              if (isPaid) {
+                                label = 'Ready for Turn Over';
+                                colorClass = 'bg-blue-100 text-blue-700 dark:text-blue-400';
+                              } else if (tsaSigned && hasInvoice) {
+                                label = 'Waiting for Payment';
+                                colorClass = 'bg-amber-100 text-amber-700 dark:text-amber-400';
+                              } else if (hasAcceptedQuote && !tsaSigned) {
+                                label = 'Contract Signing';
+                                colorClass = 'bg-purple-100 text-purple-700 dark:text-purple-400';
+                              }
+                              
+                              return (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${colorClass}`}>
+                                  <Clock size={9} className="shrink-0" />
+                                  {label}
+                                </span>
+                              );
+                            })()}
                             {lead.isCreatedJobOrder && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
                                 <CheckCircle2 size={9} className="shrink-0" /> Converted
