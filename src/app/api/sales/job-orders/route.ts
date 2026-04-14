@@ -18,9 +18,12 @@ const JO_INCLUDE = {
   },
   client: { select: { id: true, businessName: true } },
   preparedBy: { select: { id: true, name: true } },
-  accountManager: { select: { id: true, name: true } },
-  operationsManager: { select: { id: true, name: true } },
-  executive: { select: { id: true, name: true } },
+  assignedAccountManager: { select: { id: true, name: true } },
+  actualAccountManager: { select: { id: true, name: true } },
+  assignedOperationsManager: { select: { id: true, name: true } },
+  actualOperationsManager: { select: { id: true, name: true } },
+  assignedExecutive: { select: { id: true, name: true } },
+  actualExecutive: { select: { id: true, name: true } },
   items: { orderBy: { createdAt: "asc" as const } },
 } as const;
 

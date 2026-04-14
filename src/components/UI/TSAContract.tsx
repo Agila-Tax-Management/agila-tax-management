@@ -927,7 +927,7 @@ function _generateTOSHTML(clientData: ClientData, allServices: ServiceItem[]): s
         <p><strong>Phone Contacts:</strong></p>
         <div style="margin-left: 20px;">
           <p>Account Officers: 0962-433-6811 (Primary point of contact and follow-ups)</p>
-          <p>Acting Operations Manager: 0962-248-5706 (Escalations)</p>
+          <p>Acting Operations Manager: 0912-803-9908 (Escalations)</p>
           <p>Sales Officer: 0962-433-6808 (Additional services or additional accounts)</p>
           <p>Executive Manager: By appointment only (Major or strategic concerns)</p>
         </div>
@@ -936,7 +936,7 @@ function _generateTOSHTML(clientData: ClientData, allServices: ServiceItem[]): s
       <div class="section">
         <div class="section-title">VI. OFFICE HOURS AND AVAILABILITY</div>
         <p>The Service Provider's official office hours are:</p>
-        <p style="margin-left: 20px;"><strong>Monday to Friday, 8:00 AM to 5:00 PM</strong></p>
+        <p style="margin-left: 20px;"><strong>Monday to Thursday, 8:00 AM to 5:00 PM & Firdays, 8:00 AM to 12:00 PM</strong></p>
         <p>The office is closed on weekends, official holidays, office trainings, and special events.</p>
       </div>
 

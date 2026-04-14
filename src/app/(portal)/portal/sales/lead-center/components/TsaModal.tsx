@@ -309,6 +309,20 @@ export function TsaModal({
         .filter((li) => li.service.billingType === 'RECURRING')
         .reduce((sum, li) => sum + Number(li.negotiatedRate), 0);
 
+      // Split services: recurring + free one-time go in planServices, paid one-time go in additionalServices
+      const recurringServices = lineItems
+        .filter((li) => li.service.billingType === 'RECURRING')
+        .map((li) => li.service.name);
+      const freeOneTime = lineItems
+        .filter((li) => li.service.billingType === 'ONE_TIME' && Number(li.negotiatedRate) === 0)
+        .map((li) => li.service.name);
+      const paidOneTime = lineItems
+        .filter((li) => li.service.billingType === 'ONE_TIME' && Number(li.negotiatedRate) > 0)
+        .map((li) => {
+          const rate = Number(li.negotiatedRate);
+          return `${li.service.name} - P${rate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+        });
+
       const contractData: ContractData = {
         clientNo: fullTsa.referenceNumber,
         businessName: fullTsa.businessName,
@@ -324,12 +338,8 @@ export function TsaModal({
         planName: lineItems.find((li) => li.sourcePackage)?.sourcePackage?.name ?? '',
         planPrice: '',
         actualMonthlySubscription: recurringTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
-        planServices: lineItems
-          .filter((li) => li.service.billingType === 'RECURRING')
-          .map((li) => li.service.name),
-        additionalServices: lineItems
-          .filter((li) => li.service.billingType === 'ONE_TIME')
-          .map((li) => li.service.name),
+        planServices: [...recurringServices, ...freeOneTime],
+        additionalServices: paidOneTime,
         headerSrc: '',
         ...buildFlagsFromNames(serviceNames),
       };

@@ -353,10 +353,12 @@ export function LeadCenter(): React.ReactNode {
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                                 lead.invoices?.[0]?.status === 'PAID'
                                   ? 'bg-blue-100 text-blue-700 dark:text-blue-400'
+                                  : lead.quotes.some((q) => q.status === 'ACCEPTED')
+                                  ? 'bg-purple-100 text-purple-700 dark:text-purple-400'
                                   : 'bg-amber-100 text-amber-700 dark:text-amber-400'
                               }`}>
                                 <Clock size={9} className="shrink-0" />
-                                {lead.invoices?.[0]?.status === 'PAID' ? 'Ready for Turn Over' : 'Waiting for Payment'}
+                                {lead.invoices?.[0]?.status === 'PAID' ? 'Ready for Turn Over' : lead.quotes.some((q) => q.status === 'ACCEPTED') ? 'Contract Signing' : 'Waiting for Payment'}
                               </span>
                             )}
                             {lead.isCreatedJobOrder && (

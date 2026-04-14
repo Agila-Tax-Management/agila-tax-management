@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   headerImage: {
     width: '100%',
     objectFit: 'contain',
-    marginBottom: 0,
+    marginBottom: 12,
   },
   titleBar: {
     borderBottomWidth: 2,
@@ -681,23 +681,20 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
         <SectionTitle number="I" title="SERVICE RATES AND FEES" />
         <Text style={styles.body}>The Client agrees to pay Agila Tax Management Services the following:</Text>
 
-        {/* Subscription line — shown only when a plan is present */}
-        {data.planName ? (
+        {/* Subscription line — show recurring + free one-time services */}
+        {data.planName && (data.planServices ?? []).length > 0 ? (
           <View style={{ marginBottom: 6 }}>
             <Text style={[styles.indent, styles.bold]}>
               {'• Subscription Fee for '}{data.planName}
-              {data.planPrice ? (': Php '  + data.planPrice + ' per month') : ''}
             </Text>
-            {/* Per-plan service list */}
-            {(data.planServices ?? []).length > 0 ? (
-              <View style={{ marginLeft: 36, marginTop: 2 }}>
-                {(data.planServices ?? []).map((svc, i) => (
-                  <Text key={i} style={[styles.serviceItem, { marginLeft: 0 }]}>
-                    {'- '}{svc}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
+            {/* List recurring + free one-time services */}
+            <View style={{ marginLeft: 36, marginTop: 2 }}>
+              {(data.planServices ?? []).map((svc, i) => (
+                <Text key={i} style={[styles.serviceItem, { marginLeft: 0 }]}>
+                  {'- '}{svc}
+                </Text>
+              ))}
+            </View>
             {data.actualMonthlySubscription ? (
               <Text style={[styles.indent, { marginTop: 4, fontSize: 9 }]}>
                 {'Actual Monthly Subscription: Php '}{data.actualMonthlySubscription}{' per month'}
@@ -706,7 +703,7 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
           </View>
         ) : null}
 
-        {/* Additional / one-time services */}
+        {/* Additional / one-time paid services */}
         <View style={{ marginBottom: 6 }}>
           <Text style={[styles.indent, styles.bold]}>{'• Additional Services / One-Time Fees:'}</Text>
           {(data.additionalServices ?? []).length > 0 ? (
@@ -729,9 +726,22 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
         <Text style={styles.body}>
           Agila Tax Management Services agrees to provide the services selected and agreed upon by the Client, which may include:
         </Text>
-        {(data.planServices ?? []).length > 0 || (data.additionalServices ?? []).length > 0
-          ? <ServiceSectionsDynamic d={data} />
-          : <ServiceSections d={data} />}
+        {/* Flat bullet list of all services */}
+        {(data.planServices ?? []).length > 0 || (data.additionalServices ?? []).length > 0 ? (
+          <View style={{ marginTop: 4 }}>
+            {[...(data.planServices ?? []), ...(data.additionalServices ?? [])].map((svc, i) => {
+              // Strip price suffix if present (e.g., "Service - P500.00" -> "Service")
+              const cleanName = svc.replace(/\s*-\s*P[\d,]+\.\d{2}$/i, '');
+              return (
+                <Text key={i} style={styles.bullet}>
+                  {'• '}{cleanName}
+                </Text>
+              );
+            })}
+          </View>
+        ) : (
+          <ServiceSections d={data} />
+        )}
 
         {/* III. Billing and Payment Terms */}
         <SectionTitle number="III" title="BILLING AND PAYMENT TERMS" />
@@ -769,14 +779,14 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
         <Text style={styles.bullet}>• Facebook Messenger: ATMS Client Care</Text>
         <Text style={[styles.body, styles.bold]}>Phone Contacts:</Text>
         <Text style={styles.bullet}>• Account Officers: 0962-433-6811 (Primary point of contact and follow-ups)</Text>
-        <Text style={styles.bullet}>• Acting Operations Manager: 0962-248-5706 (Escalations)</Text>
+        <Text style={styles.bullet}>• Acting Operations Manager: 0912-803-9908 (Escalations)</Text>
         <Text style={styles.bullet}>• Sales Officer: 0962-433-6808 (Additional services or additional accounts)</Text>
         <Text style={styles.bullet}>• Executive Manager: By appointment only (Major or strategic concerns)</Text>
 
         {/* VI. Office Hours */}
         <SectionTitle number="VI" title="OFFICE HOURS AND AVAILABILITY" />
         <Text style={styles.body}>The Service Provider&apos;s official office hours are:</Text>
-        <Text style={[styles.indent, styles.bold]}>Monday to Friday, 8:00 AM to 5:00 PM</Text>
+        <Text style={[styles.indent, styles.bold]}>Monday to Thursday, 8:00 AM to 5:00 PM & Firdays, 8:00 AM to 12:00 PM</Text>
         <Text style={styles.body}>
           The office is closed on weekends, official holidays, office trainings, and special events.
         </Text>
