@@ -37,6 +37,7 @@ export interface GatewayClient {
   // BIR Details
   birRegistrationDate: string;
   birRegistrationNumber: string;
+  corUrl?: string;           // Certificate of Registration URL
   taxType: string;           // VAT / Non-VAT
   rdo: string;               // Revenue District Office
   birFormsSeries: string[];  // Forms filed e.g. ['2550M', '1701Q']

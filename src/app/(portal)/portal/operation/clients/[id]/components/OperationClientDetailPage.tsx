@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Building2, FileText, Users, UserCircle2,
   Loader2, Download, ExternalLink, Mail, ShieldCheck, ShieldOff,
-  ChevronDown, Search, ClipboardList, MapPin,
+  ChevronDown, Search, ClipboardList, MapPin, Edit3, Save, X,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import type { ClientDetail } from '@/types/client-gateway.types';
@@ -62,6 +62,45 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
           ? value
           : <span className="text-muted-foreground italic">—</span>}
       </span>
+    </div>
+  );
+}
+
+function EditableInfoRow({
+  label,
+  value,
+  isEditing,
+  name,
+  formData,
+  onChange,
+  type = 'text',
+  required = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  isEditing: boolean;
+  name: string;
+  formData: Record<string, unknown>;
+  onChange: (name: string, value: string) => void;
+  type?: 'text' | 'url' | 'date' | 'number' | 'email';
+  required?: boolean;
+}) {
+  if (!isEditing) {
+    return <InfoRow label={label} value={value} />;
+  }
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 py-2.5 border-b border-border last:border-0">
+      <span className={`${labelCls} sm:w-52 shrink-0`}>{label}</span>
+      <div className="flex-1">
+        <input
+          type={type}
+          value={(formData[name] as string) ?? ''}
+          onChange={(e) => onChange(name, e.target.value)}
+          required={required}
+          className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#25238e] focus:border-transparent"
+        />
+      </div>
     </div>
   );
 }
@@ -294,6 +333,27 @@ export function OperationClientDetailPage({ clientId }: { clientId: number }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>('core');
   const [togglingStatus, setTogglingStatus] = useState(false);
+  
+  // Edit mode states
+  const [editingCore, setEditingCore] = useState(false);
+  const [editingBir, setEditingBir] = useState(false);
+  const [editingBusiness, setEditingBusiness] = useState(false);
+  const [editingCorporate, setEditingCorporate] = useState(false);
+  const [editingIndividual, setEditingIndividual] = useState(false);
+  
+  // Form data states
+  const [coreForm, setCoreForm] = useState<Record<string, unknown>>({});
+  const [birForm, setBirForm] = useState<Record<string, unknown>>({});
+  const [businessForm, setBusinessForm] = useState<Record<string, unknown>>({});
+  const [corporateForm, setCorporateForm] = useState<Record<string, unknown>>({});
+  const [individualForm, setIndividualForm] = useState<Record<string, unknown>>({});
+  
+  // Saving states
+  const [savingCore, setSavingCore] = useState(false);
+  const [savingBir, setSavingBir] = useState(false);
+  const [savingBusiness, setSavingBusiness] = useState(false);
+  const [savingCorporate, setSavingCorporate] = useState(false);
+  const [savingIndividual, setSavingIndividual] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -353,6 +413,247 @@ export function OperationClientDetailPage({ clientId }: { clientId: number }) {
       toastError('Status update failed', 'An unexpected error occurred.');
     } finally {
       setTogglingStatus(false);
+    }
+  }
+
+  // ─── Form Handlers ────────────────────────────────────────────────────────
+
+  function startEditCore() {
+    setCoreForm({
+      businessName: detail?.businessName ?? '',
+      companyCode: detail?.companyCode ?? '',
+      portalName: detail?.portalName ?? '',
+      branchType: detail?.branchType ?? 'MAIN',
+      timezone: detail?.timezone ?? 'Asia/Manila',
+      dayResetTime: detail?.dayResetTime ?? '00:00:00',
+      workingDayStarts: detail?.workingDayStarts ?? '09:00:00',
+    });
+    setEditingCore(true);
+  }
+
+  function startEditBir() {
+    setBirForm({
+      tin: detail?.birInfo?.tin ?? '',
+      branchCode: detail?.birInfo?.branchCode ?? '0000',
+      rdoCode: detail?.birInfo?.rdoCode ?? '',
+      registeredAddress: detail?.birInfo?.registeredAddress ?? '',
+      zipCode: detail?.birInfo?.zipCode ?? '',
+      contactNumber: detail?.birInfo?.contactNumber ?? '',
+      isWithholdingAgent: detail?.birInfo?.isWithholdingAgent ?? false,
+      withholdingCategory: detail?.birInfo?.withholdingCategory ?? '',
+      corUrl: detail?.birInfo?.corUrl ?? '',
+    });
+    setEditingBir(true);
+  }
+
+  function startEditBusiness() {
+    setBusinessForm({
+      tradeName: detail?.businessDetails?.tradeName ?? '',
+      industry: detail?.businessDetails?.industry ?? '',
+      lineOfBusiness: detail?.businessDetails?.lineOfBusiness ?? '',
+      psicCode: detail?.businessDetails?.psicCode ?? '',
+      businessAreaSqm: detail?.businessDetails?.businessAreaSqm ?? '',
+      noOfManagers: detail?.businessDetails?.noOfManagers ?? 0,
+      noOfSupervisors: detail?.businessDetails?.noOfSupervisors ?? 0,
+      noOfRankAndFile: detail?.businessDetails?.noOfRankAndFile ?? 0,
+      landlineNumber: detail?.businessDetails?.landlineNumber ?? '',
+      faxNumber: detail?.businessDetails?.faxNumber ?? '',
+      placeType: detail?.businessDetails?.placeType ?? 'RENTED',
+      lessorName: detail?.businessDetails?.lessorName ?? '',
+      lessorAddress: detail?.businessDetails?.lessorAddress ?? '',
+      monthlyRent: detail?.businessDetails?.monthlyRent ?? '',
+      isNotarized: detail?.businessDetails?.isNotarized ?? false,
+      hasDocStamp: detail?.businessDetails?.hasDocStamp ?? false,
+    });
+    setEditingBusiness(true);
+  }
+
+  function startEditCorporate() {
+    setCorporateForm({
+      secRegistrationNo: detail?.corporateDetails?.secRegistrationNo ?? '',
+      acronym: detail?.corporateDetails?.acronym ?? '',
+      suffix: detail?.corporateDetails?.suffix ?? '',
+      companyClassification: detail?.corporateDetails?.companyClassification ?? '',
+      companySubclass: detail?.corporateDetails?.companySubclass ?? '',
+      dateOfIncorporation: detail?.corporateDetails?.dateOfIncorporation ?? '',
+      termOfExistence: detail?.corporateDetails?.termOfExistence ?? '',
+      primaryPurpose: detail?.corporateDetails?.primaryPurpose ?? '',
+      annualMeetingDate: detail?.corporateDetails?.annualMeetingDate ?? '',
+      numberOfIncorporators: detail?.corporateDetails?.numberOfIncorporators ?? 0,
+      authorizedCapital: detail?.corporateDetails?.authorizedCapital ?? '',
+      subscribedCapital: detail?.corporateDetails?.subscribedCapital ?? '',
+      paidUpCapital: detail?.corporateDetails?.paidUpCapital ?? '',
+      presidentFirstName: detail?.corporateDetails?.presidentFirstName ?? '',
+      presidentMiddleName: detail?.corporateDetails?.presidentMiddleName ?? '',
+      presidentLastName: detail?.corporateDetails?.presidentLastName ?? '',
+      presidentTin: detail?.corporateDetails?.presidentTin ?? '',
+      presidentEmail: detail?.corporateDetails?.presidentEmail ?? '',
+      treasurerFirstName: detail?.corporateDetails?.treasurerFirstName ?? '',
+      treasurerMiddleName: detail?.corporateDetails?.treasurerMiddleName ?? '',
+      treasurerLastName: detail?.corporateDetails?.treasurerLastName ?? '',
+      treasurerTin: detail?.corporateDetails?.treasurerTin ?? '',
+      treasurerEmail: detail?.corporateDetails?.treasurerEmail ?? '',
+      secretaryFirstName: detail?.corporateDetails?.secretaryFirstName ?? '',
+      secretaryMiddleName: detail?.corporateDetails?.secretaryMiddleName ?? '',
+      secretaryLastName: detail?.corporateDetails?.secretaryLastName ?? '',
+      secretaryTin: detail?.corporateDetails?.secretaryTin ?? '',
+      secretaryEmail: detail?.corporateDetails?.secretaryEmail ?? '',
+    });
+    setEditingCorporate(true);
+  }
+
+  function startEditIndividual() {
+    setIndividualForm({
+      firstName: detail?.individualDetails?.firstName ?? '',
+      middleName: detail?.individualDetails?.middleName ?? '',
+      lastName: detail?.individualDetails?.lastName ?? '',
+      dob: detail?.individualDetails?.dob ?? '',
+      civilStatus: detail?.individualDetails?.civilStatus ?? '',
+      gender: detail?.individualDetails?.gender ?? '',
+      citizenship: detail?.individualDetails?.citizenship ?? 'Filipino',
+      placeOfBirth: detail?.individualDetails?.placeOfBirth ?? '',
+      residentialAddress: detail?.individualDetails?.residentialAddress ?? '',
+      prcLicenseNo: detail?.individualDetails?.prcLicenseNo ?? '',
+      primaryIdType: detail?.individualDetails?.primaryIdType ?? '',
+      primaryIdNumber: detail?.individualDetails?.primaryIdNumber ?? '',
+      personalEmail: detail?.individualDetails?.personalEmail ?? '',
+      mobileNumber: detail?.individualDetails?.mobileNumber ?? '',
+      telephoneNumber: detail?.individualDetails?.telephoneNumber ?? '',
+      motherFirstName: detail?.individualDetails?.motherFirstName ?? '',
+      motherMiddleName: detail?.individualDetails?.motherMiddleName ?? '',
+      motherLastName: detail?.individualDetails?.motherLastName ?? '',
+      fatherFirstName: detail?.individualDetails?.fatherFirstName ?? '',
+      fatherMiddleName: detail?.individualDetails?.fatherMiddleName ?? '',
+      fatherLastName: detail?.individualDetails?.fatherLastName ?? '',
+      spouseFirstName: detail?.individualDetails?.spouseFirstName ?? '',
+      spouseMiddleName: detail?.individualDetails?.spouseMiddleName ?? '',
+      spouseLastName: detail?.individualDetails?.spouseLastName ?? '',
+      spouseEmploymentStatus: detail?.individualDetails?.spouseEmploymentStatus ?? '',
+      spouseTin: detail?.individualDetails?.spouseTin ?? '',
+    });
+    setEditingIndividual(true);
+  }
+
+  function handleFormChange(
+    setter: React.Dispatch<React.SetStateAction<Record<string, unknown>>>,
+    name: string,
+    value: string
+  ) {
+    setter((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function saveCore() {
+    setSavingCore(true);
+    try {
+      const res = await fetch(`/api/operation/clients/${clientId}/core`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(coreForm),
+      });
+      if (!res.ok) {
+        const json = await res.json() as { error?: string };
+        toastError('Save failed', json.error ?? 'Could not update core information.');
+        return;
+      }
+      await fetchAll();
+      setEditingCore(false);
+      success('Core info updated', 'Client core information has been saved.');
+    } catch {
+      toastError('Save failed', 'An unexpected error occurred.');
+    } finally {
+      setSavingCore(false);
+    }
+  }
+
+  async function saveBir() {
+    setSavingBir(true);
+    try {
+      const res = await fetch(`/api/operation/clients/${clientId}/bir`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(birForm),
+      });
+      if (!res.ok) {
+        const json = await res.json() as { error?: string };
+        toastError('Save failed', json.error ?? 'Could not update BIR information.');
+        return;
+      }
+      await fetchAll();
+      setEditingBir(false);
+      success('BIR info updated', 'BIR information has been saved.');
+    } catch {
+      toastError('Save failed', 'An unexpected error occurred.');
+    } finally {
+      setSavingBir(false);
+    }
+  }
+
+  async function saveBusiness() {
+    setSavingBusiness(true);
+    try {
+      const res = await fetch(`/api/operation/clients/${clientId}/business`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(businessForm),
+      });
+      if (!res.ok) {
+        const json = await res.json() as { error?: string };
+        toastError('Save failed', json.error ?? 'Could not update business operations.');
+        return;
+      }
+      await fetchAll();
+      setEditingBusiness(false);
+      success('Business info updated', 'Business operations have been saved.');
+    } catch {
+      toastError('Save failed', 'An unexpected error occurred.');
+    } finally {
+      setSavingBusiness(false);
+    }
+  }
+
+  async function saveCorporate() {
+    setSavingCorporate(true);
+    try {
+      const res = await fetch(`/api/operation/clients/${clientId}/corporate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corporateForm),
+      });
+      if (!res.ok) {
+        const json = await res.json() as { error?: string };
+        toastError('Save failed', json.error ?? 'Could not update corporate details.');
+        return;
+      }
+      await fetchAll();
+      setEditingCorporate(false);
+      success('Corporate info updated', 'Corporate details have been saved.');
+    } catch {
+      toastError('Save failed', 'An unexpected error occurred.');
+    } finally {
+      setSavingCorporate(false);
+    }
+  }
+
+  async function saveIndividual() {
+    setSavingIndividual(true);
+    try {
+      const res = await fetch(`/api/operation/clients/${clientId}/individual`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(individualForm),
+      });
+      if (!res.ok) {
+        const json = await res.json() as { error?: string };
+        toastError('Save failed', json.error ?? 'Could not update individual details.');
+        return;
+      }
+      await fetchAll();
+      setEditingIndividual(false);
+      success('Individual info updated', 'Individual details have been saved.');
+    } catch {
+      toastError('Save failed', 'An unexpected error occurred.');
+    } finally {
+      setSavingIndividual(false);
     }
   }
 
@@ -438,11 +739,64 @@ export function OperationClientDetailPage({ clientId }: { clientId: number }) {
         {/* CORE INFO ───────────────────────────────────────────── */}
         {activeTab === 'core' && (
           <div className="max-w-2xl">
-            <h3 className="font-black text-foreground text-base mb-4">Core Information</h3>
-            <InfoRow label="Business Name" value={displayName} />
-            <InfoRow label="Company Code" value={detail?.companyCode} />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-foreground text-base">Core Information</h3>
+              <div className="flex items-center gap-2">
+                {editingCore ? (
+                  <>
+                    <button
+                      onClick={() => setEditingCore(false)}
+                      disabled={savingCore}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-xl transition disabled:opacity-50"
+                    >
+                      <X size={13} /> Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveCore()}
+                      disabled={savingCore}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#25238e] hover:bg-[#1e1b6f] rounded-xl transition disabled:opacity-50"
+                    >
+                      {savingCore ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                      {savingCore ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditCore}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#25238e] bg-[#25238e]/5 hover:bg-[#25238e]/10 rounded-xl transition"
+                  >
+                    <Edit3 size={13} /> Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            <EditableInfoRow
+              label="Business Name"
+              value={displayName}
+              isEditing={editingCore}
+              name="businessName"
+              formData={coreForm}
+              onChange={(name, value) => handleFormChange(setCoreForm, name, value)}
+              required
+            />
+            <EditableInfoRow
+              label="Company Code"
+              value={detail?.companyCode}
+              isEditing={editingCore}
+              name="companyCode"
+              formData={coreForm}
+              onChange={(name, value) => handleFormChange(setCoreForm, name, value)}
+            />
             <InfoRow label="Client Number" value={overlay.clientNo} />
-            <InfoRow label="Portal Name" value={detail?.portalName} />
+            <EditableInfoRow
+              label="Portal Name"
+              value={detail?.portalName}
+              isEditing={editingCore}
+              name="portalName"
+              formData={coreForm}
+              onChange={(name, value) => handleFormChange(setCoreForm, name, value)}
+              required
+            />
             <InfoRow label="Business Entity" value={fmtEntity(overlay.businessEntity)} />
             <InfoRow label="Branch Type" value={detail?.branchType} />
             <InfoRow
@@ -453,9 +807,30 @@ export function OperationClientDetailPage({ clientId }: { clientId: number }) {
                 </span>
               }
             />
-            <InfoRow label="Timezone" value={detail?.timezone} />
-            <InfoRow label="Day Reset Time" value={detail?.dayResetTime} />
-            <InfoRow label="Working Day Starts" value={detail?.workingDayStarts} />
+            <EditableInfoRow
+              label="Timezone"
+              value={detail?.timezone}
+              isEditing={editingCore}
+              name="timezone"
+              formData={coreForm}
+              onChange={(name, value) => handleFormChange(setCoreForm, name, value)}
+            />
+            <EditableInfoRow
+              label="Day Reset Time"
+              value={detail?.dayResetTime}
+              isEditing={editingCore}
+              name="dayResetTime"
+              formData={coreForm}
+              onChange={(name, value) => handleFormChange(setCoreForm, name, value)}
+            />
+            <EditableInfoRow
+              label="Working Day Starts"
+              value={detail?.workingDayStarts}
+              isEditing={editingCore}
+              name="workingDayStarts"
+              formData={coreForm}
+              onChange={(name, value) => handleFormChange(setCoreForm, name, value)}
+            />
             <InfoRow label="Date Onboarded" value={fmtDate(overlay.onboardedDate)} />
 
             <SectionDivider title="Operations Assignment" />
@@ -497,84 +872,268 @@ export function OperationClientDetailPage({ clientId }: { clientId: number }) {
         {/* BIR INFO ────────────────────────────────────────────── */}
         {activeTab === 'bir' && (
           <div className="max-w-2xl">
-            <h3 className="font-black text-foreground text-base mb-4">BIR Information</h3>
-            <InfoRow label="TIN" value={detail?.birInfo?.tin ? <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs">{detail.birInfo.tin}</span> : null} />
-            <InfoRow label="Branch Code" value={detail?.birInfo?.branchCode} />
-            <InfoRow label="RDO Code" value={detail?.birInfo?.rdoCode} />
-            <InfoRow label="Registered Address" value={detail?.birInfo?.registeredAddress} />
-            <InfoRow label="Zip Code" value={detail?.birInfo?.zipCode} />
-            <InfoRow label="Contact Number" value={detail?.birInfo?.contactNumber} />
-            <InfoRow label="Withholding Agent" value={detail?.birInfo?.isWithholdingAgent != null ? (detail.birInfo.isWithholdingAgent ? 'Yes' : 'No') : null} />
-            <InfoRow label="Withholding Category" value={detail?.birInfo?.withholdingCategory} />
-            <InfoRow
-              label="COR Document"
-              value={
-                detail?.birInfo?.corUrl
-                  ? <a href={detail.birInfo.corUrl} target="_blank" rel="noopener noreferrer" className="text-[#25238e] underline text-xs">View Document</a>
-                  : null
-              }
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-foreground text-base">BIR Information</h3>
+              <div className="flex items-center gap-2">
+                {editingBir ? (
+                  <>
+                    <button
+                      onClick={() => setEditingBir(false)}
+                      disabled={savingBir}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-xl transition disabled:opacity-50"
+                    >
+                      <X size={13} /> Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveBir()}
+                      disabled={savingBir}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#25238e] hover:bg-[#1e1b6f] rounded-xl transition disabled:opacity-50"
+                    >
+                      {savingBir ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                      {savingBir ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditBir}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#25238e] bg-[#25238e]/5 hover:bg-[#25238e]/10 rounded-xl transition"
+                  >
+                    <Edit3 size={13} /> Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            <EditableInfoRow
+              label="TIN"
+              value={detail?.birInfo?.tin ? <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs">{detail.birInfo.tin}</span> : null}
+              isEditing={editingBir}
+              name="tin"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+              required
             />
+            <EditableInfoRow
+              label="Branch Code"
+              value={detail?.birInfo?.branchCode}
+              isEditing={editingBir}
+              name="branchCode"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+            />
+            <EditableInfoRow
+              label="RDO Code"
+              value={detail?.birInfo?.rdoCode}
+              isEditing={editingBir}
+              name="rdoCode"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+            />
+            <EditableInfoRow
+              label="Registered Address"
+              value={detail?.birInfo?.registeredAddress}
+              isEditing={editingBir}
+              name="registeredAddress"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+            />
+            <EditableInfoRow
+              label="Zip Code"
+              value={detail?.birInfo?.zipCode}
+              isEditing={editingBir}
+              name="zipCode"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+            />
+            <EditableInfoRow
+              label="Contact Number"
+              value={detail?.birInfo?.contactNumber}
+              isEditing={editingBir}
+              name="contactNumber"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+            />
+            <InfoRow label="Withholding Agent" value={detail?.birInfo?.isWithholdingAgent != null ? (detail.birInfo.isWithholdingAgent ? 'Yes' : 'No') : null} />
+            <EditableInfoRow
+              label="Withholding Category"
+              value={detail?.birInfo?.withholdingCategory}
+              isEditing={editingBir}
+              name="withholdingCategory"
+              formData={birForm}
+              onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+            />
+            {editingBir ? (
+              <EditableInfoRow
+                label="COR Document URL"
+                value={detail?.birInfo?.corUrl}
+                isEditing={true}
+                name="corUrl"
+                formData={birForm}
+                onChange={(name, value) => handleFormChange(setBirForm, name, value)}
+                type="url"
+              />
+            ) : (
+              <InfoRow
+                label="COR Document"
+                value={
+                  detail?.birInfo?.corUrl
+                    ? <a href={detail.birInfo.corUrl} target="_blank" rel="noopener noreferrer" className="text-[#25238e] underline text-xs flex items-center gap-1"><ExternalLink size={12} /> View Document</a>
+                    : null
+                }
+              />
+            )}
           </div>
         )}
 
         {/* OWNER / INDIVIDUAL ──────────────────────────────────── */}
         {activeTab === 'individual' && (
           <div className="max-w-2xl">
-            <h3 className="font-black text-foreground text-base mb-4">Owner / Individual Details</h3>
-            <InfoRow
-              label="Full Name"
-              value={[
-                detail?.individualDetails?.firstName,
-                detail?.individualDetails?.middleName,
-                detail?.individualDetails?.lastName,
-              ].filter(Boolean).join(' ') || null}
-            />
-            <InfoRow label="Date of Birth" value={detail?.individualDetails?.dob} />
-            <InfoRow label="Civil Status" value={detail?.individualDetails?.civilStatus} />
-            <InfoRow label="Gender" value={detail?.individualDetails?.gender} />
-            <InfoRow label="Citizenship" value={detail?.individualDetails?.citizenship} />
-            <InfoRow label="Place of Birth" value={detail?.individualDetails?.placeOfBirth} />
-            <InfoRow label="Residential Address" value={detail?.individualDetails?.residentialAddress} />
-            <InfoRow label="PRC License No." value={detail?.individualDetails?.prcLicenseNo} />
-            <InfoRow label="Primary ID Type" value={detail?.individualDetails?.primaryIdType} />
-            <InfoRow label="Primary ID Number" value={detail?.individualDetails?.primaryIdNumber} />
-            <InfoRow label="Personal Email" value={detail?.individualDetails?.personalEmail} />
-            <InfoRow label="Mobile Number" value={detail?.individualDetails?.mobileNumber} />
-            <InfoRow label="Telephone Number" value={detail?.individualDetails?.telephoneNumber} />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-foreground text-base">Owner / Individual Details</h3>
+              <div className="flex items-center gap-2">
+                {editingIndividual ? (
+                  <>
+                    <button
+                      onClick={() => setEditingIndividual(false)}
+                      disabled={savingIndividual}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-xl transition disabled:opacity-50"
+                    >
+                      <X size={13} /> Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveIndividual()}
+                      disabled={savingIndividual}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#25238e] hover:bg-[#1e1b6f] rounded-xl transition disabled:opacity-50"
+                    >
+                      {savingIndividual ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                      {savingIndividual ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditIndividual}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#25238e] bg-[#25238e]/5 hover:bg-[#25238e]/10 rounded-xl transition"
+                  >
+                    <Edit3 size={13} /> Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            {editingIndividual ? (
+              <>
+                <EditableInfoRow label="First Name" value={detail?.individualDetails?.firstName} isEditing={true} name="firstName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} required />
+                <EditableInfoRow label="Middle Name" value={detail?.individualDetails?.middleName} isEditing={true} name="middleName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Last Name" value={detail?.individualDetails?.lastName} isEditing={true} name="lastName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} required />
+              </>
+            ) : (
+              <InfoRow
+                label="Full Name"
+                value={[
+                  detail?.individualDetails?.firstName,
+                  detail?.individualDetails?.middleName,
+                  detail?.individualDetails?.lastName,
+                ].filter(Boolean).join(' ') || null}
+              />
+            )}
+            <EditableInfoRow label="Date of Birth" value={detail?.individualDetails?.dob} isEditing={editingIndividual} name="dob" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} type="date" />
+            <EditableInfoRow label="Civil Status" value={detail?.individualDetails?.civilStatus} isEditing={editingIndividual} name="civilStatus" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Gender" value={detail?.individualDetails?.gender} isEditing={editingIndividual} name="gender" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Citizenship" value={detail?.individualDetails?.citizenship} isEditing={editingIndividual} name="citizenship" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Place of Birth" value={detail?.individualDetails?.placeOfBirth} isEditing={editingIndividual} name="placeOfBirth" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Residential Address" value={detail?.individualDetails?.residentialAddress} isEditing={editingIndividual} name="residentialAddress" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="PRC License No." value={detail?.individualDetails?.prcLicenseNo} isEditing={editingIndividual} name="prcLicenseNo" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Primary ID Type" value={detail?.individualDetails?.primaryIdType} isEditing={editingIndividual} name="primaryIdType" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Primary ID Number" value={detail?.individualDetails?.primaryIdNumber} isEditing={editingIndividual} name="primaryIdNumber" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Personal Email" value={detail?.individualDetails?.personalEmail} isEditing={editingIndividual} name="personalEmail" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} type="email" />
+            <EditableInfoRow label="Mobile Number" value={detail?.individualDetails?.mobileNumber} isEditing={editingIndividual} name="mobileNumber" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Telephone Number" value={detail?.individualDetails?.telephoneNumber} isEditing={editingIndividual} name="telephoneNumber" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
 
             <SectionDivider title="Family Background" />
-            <InfoRow label="Mother's Name" value={[detail?.individualDetails?.motherFirstName, detail?.individualDetails?.motherMiddleName, detail?.individualDetails?.motherLastName].filter(Boolean).join(' ') || null} />
-            <InfoRow label="Father's Name" value={[detail?.individualDetails?.fatherFirstName, detail?.individualDetails?.fatherMiddleName, detail?.individualDetails?.fatherLastName].filter(Boolean).join(' ') || null} />
-            <InfoRow label="Spouse Name" value={[detail?.individualDetails?.spouseFirstName, detail?.individualDetails?.spouseMiddleName, detail?.individualDetails?.spouseLastName].filter(Boolean).join(' ') || null} />
-            <InfoRow label="Spouse Employment" value={detail?.individualDetails?.spouseEmploymentStatus} />
-            <InfoRow label="Spouse TIN" value={detail?.individualDetails?.spouseTin} />
+            {editingIndividual ? (
+              <>
+                <EditableInfoRow label="Mother's First Name" value={detail?.individualDetails?.motherFirstName} isEditing={true} name="motherFirstName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Mother's Middle Name" value={detail?.individualDetails?.motherMiddleName} isEditing={true} name="motherMiddleName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Mother's Last Name" value={detail?.individualDetails?.motherLastName} isEditing={true} name="motherLastName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+              </>
+            ) : (
+              <InfoRow label="Mother's Name" value={[detail?.individualDetails?.motherFirstName, detail?.individualDetails?.motherMiddleName, detail?.individualDetails?.motherLastName].filter(Boolean).join(' ') || null} />
+            )}
+            {editingIndividual ? (
+              <>
+                <EditableInfoRow label="Father's First Name" value={detail?.individualDetails?.fatherFirstName} isEditing={true} name="fatherFirstName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Father's Middle Name" value={detail?.individualDetails?.fatherMiddleName} isEditing={true} name="fatherMiddleName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Father's Last Name" value={detail?.individualDetails?.fatherLastName} isEditing={true} name="fatherLastName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+              </>
+            ) : (
+              <InfoRow label="Father's Name" value={[detail?.individualDetails?.fatherFirstName, detail?.individualDetails?.fatherMiddleName, detail?.individualDetails?.fatherLastName].filter(Boolean).join(' ') || null} />
+            )}
+            {editingIndividual ? (
+              <>
+                <EditableInfoRow label="Spouse First Name" value={detail?.individualDetails?.spouseFirstName} isEditing={true} name="spouseFirstName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Spouse Middle Name" value={detail?.individualDetails?.spouseMiddleName} isEditing={true} name="spouseMiddleName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+                <EditableInfoRow label="Spouse Last Name" value={detail?.individualDetails?.spouseLastName} isEditing={true} name="spouseLastName" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+              </>
+            ) : (
+              <InfoRow label="Spouse Name" value={[detail?.individualDetails?.spouseFirstName, detail?.individualDetails?.spouseMiddleName, detail?.individualDetails?.spouseLastName].filter(Boolean).join(' ') || null} />
+            )}
+            <EditableInfoRow label="Spouse Employment" value={detail?.individualDetails?.spouseEmploymentStatus} isEditing={editingIndividual} name="spouseEmploymentStatus" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
+            <EditableInfoRow label="Spouse TIN" value={detail?.individualDetails?.spouseTin} isEditing={editingIndividual} name="spouseTin" formData={individualForm} onChange={(name, value) => handleFormChange(setIndividualForm, name, value)} />
           </div>
         )}
 
         {/* BUSINESS OPERATIONS ─────────────────────────────────── */}
         {activeTab === 'business' && (
           <div className="max-w-2xl">
-            <h3 className="font-black text-foreground text-base mb-4">Business Operations</h3>
-            <InfoRow label="Trade Name" value={detail?.businessDetails?.tradeName} />
-            <InfoRow label="Industry" value={detail?.businessDetails?.industry} />
-            <InfoRow label="Line of Business" value={detail?.businessDetails?.lineOfBusiness} />
-            <InfoRow label="PSIC Code" value={detail?.businessDetails?.psicCode} />
-            <InfoRow label="Business Area (sqm)" value={detail?.businessDetails?.businessAreaSqm} />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-foreground text-base">Business Operations</h3>
+              <div className="flex items-center gap-2">
+                {editingBusiness ? (
+                  <>
+                    <button
+                      onClick={() => setEditingBusiness(false)}
+                      disabled={savingBusiness}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-xl transition disabled:opacity-50"
+                    >
+                      <X size={13} /> Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveBusiness()}
+                      disabled={savingBusiness}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#25238e] hover:bg-[#1e1b6f] rounded-xl transition disabled:opacity-50"
+                    >
+                      {savingBusiness ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                      {savingBusiness ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditBusiness}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#25238e] bg-[#25238e]/5 hover:bg-[#25238e]/10 rounded-xl transition"
+                  >
+                    <Edit3 size={13} /> Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            <EditableInfoRow label="Trade Name" value={detail?.businessDetails?.tradeName} isEditing={editingBusiness} name="tradeName" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+            <EditableInfoRow label="Industry" value={detail?.businessDetails?.industry} isEditing={editingBusiness} name="industry" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+            <EditableInfoRow label="Line of Business" value={detail?.businessDetails?.lineOfBusiness} isEditing={editingBusiness} name="lineOfBusiness" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+            <EditableInfoRow label="PSIC Code" value={detail?.businessDetails?.psicCode} isEditing={editingBusiness} name="psicCode" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+            <EditableInfoRow label="Business Area (sqm)" value={detail?.businessDetails?.businessAreaSqm} isEditing={editingBusiness} name="businessAreaSqm" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
             <InfoRow label="Place Type" value={detail?.businessDetails?.placeType} />
-            <InfoRow label="Landline" value={detail?.businessDetails?.landlineNumber} />
-            <InfoRow label="Fax" value={detail?.businessDetails?.faxNumber} />
+            <EditableInfoRow label="Landline" value={detail?.businessDetails?.landlineNumber} isEditing={editingBusiness} name="landlineNumber" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+            <EditableInfoRow label="Fax" value={detail?.businessDetails?.faxNumber} isEditing={editingBusiness} name="faxNumber" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
 
             <SectionDivider title="Headcount" />
-            <InfoRow label="Managers" value={detail?.businessDetails?.noOfManagers?.toString()} />
-            <InfoRow label="Supervisors" value={detail?.businessDetails?.noOfSupervisors?.toString()} />
-            <InfoRow label="Rank & File" value={detail?.businessDetails?.noOfRankAndFile?.toString()} />
+            <EditableInfoRow label="Managers" value={detail?.businessDetails?.noOfManagers?.toString()} isEditing={editingBusiness} name="noOfManagers" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} type="number" />
+            <EditableInfoRow label="Supervisors" value={detail?.businessDetails?.noOfSupervisors?.toString()} isEditing={editingBusiness} name="noOfSupervisors" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} type="number" />
+            <EditableInfoRow label="Rank & File" value={detail?.businessDetails?.noOfRankAndFile?.toString()} isEditing={editingBusiness} name="noOfRankAndFile" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} type="number" />
 
             {detail?.businessDetails?.placeType === 'RENTED' && (
               <>
                 <SectionDivider title="Lease Details" />
-                <InfoRow label="Lessor Name" value={detail.businessDetails.lessorName} />
-                <InfoRow label="Lessor Address" value={detail.businessDetails.lessorAddress} />
-                <InfoRow label="Monthly Rent" value={detail.businessDetails.monthlyRent ? `₱${parseFloat(detail.businessDetails.monthlyRent).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} />
+                <EditableInfoRow label="Lessor Name" value={detail.businessDetails.lessorName} isEditing={editingBusiness} name="lessorName" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+                <EditableInfoRow label="Lessor Address" value={detail.businessDetails.lessorAddress} isEditing={editingBusiness} name="lessorAddress" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} />
+                <EditableInfoRow label="Monthly Rent" value={detail.businessDetails.monthlyRent ? `₱${parseFloat(detail.businessDetails.monthlyRent).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} isEditing={editingBusiness} name="monthlyRent" formData={businessForm} onChange={(name, value) => handleFormChange(setBusinessForm, name, value)} type="number" />
                 <InfoRow label="Notarized" value={detail.businessDetails.isNotarized ? 'Yes' : 'No'} />
                 <InfoRow label="Documentary Stamp" value={detail.businessDetails.hasDocStamp ? 'Yes' : 'No'} />
               </>
@@ -585,35 +1144,89 @@ export function OperationClientDetailPage({ clientId }: { clientId: number }) {
         {/* CORPORATE DETAILS ───────────────────────────────────── */}
         {activeTab === 'corporate' && (
           <div className="max-w-2xl">
-            <h3 className="font-black text-foreground text-base mb-4">Corporate Details</h3>
-            <InfoRow label="SEC Reg. No." value={detail?.corporateDetails?.secRegistrationNo} />
-            <InfoRow label="Acronym" value={detail?.corporateDetails?.acronym} />
-            <InfoRow label="Suffix" value={detail?.corporateDetails?.suffix} />
-            <InfoRow label="Classification" value={detail?.corporateDetails?.companyClassification} />
-            <InfoRow label="Sub-class" value={detail?.corporateDetails?.companySubclass} />
-            <InfoRow label="Date of Incorporation" value={detail?.corporateDetails?.dateOfIncorporation} />
-            <InfoRow label="Term of Existence" value={detail?.corporateDetails?.termOfExistence} />
-            <InfoRow label="Primary Purpose" value={detail?.corporateDetails?.primaryPurpose} />
-            <InfoRow label="Annual Meeting Date" value={detail?.corporateDetails?.annualMeetingDate} />
-            <InfoRow label="No. of Incorporators" value={detail?.corporateDetails?.numberOfIncorporators?.toString()} />
-            <InfoRow label="Authorized Capital" value={detail?.corporateDetails?.authorizedCapital ? `₱${parseFloat(detail.corporateDetails.authorizedCapital).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} />
-            <InfoRow label="Subscribed Capital" value={detail?.corporateDetails?.subscribedCapital ? `₱${parseFloat(detail.corporateDetails.subscribedCapital).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} />
-            <InfoRow label="Paid-Up Capital" value={detail?.corporateDetails?.paidUpCapital ? `₱${parseFloat(detail.corporateDetails.paidUpCapital).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-foreground text-base">Corporate Details</h3>
+              <div className="flex items-center gap-2">
+                {editingCorporate ? (
+                  <>
+                    <button
+                      onClick={() => setEditingCorporate(false)}
+                      disabled={savingCorporate}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-xl transition disabled:opacity-50"
+                    >
+                      <X size={13} /> Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveCorporate()}
+                      disabled={savingCorporate}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#25238e] hover:bg-[#1e1b6f] rounded-xl transition disabled:opacity-50"
+                    >
+                      {savingCorporate ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                      {savingCorporate ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={startEditCorporate}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#25238e] bg-[#25238e]/5 hover:bg-[#25238e]/10 rounded-xl transition"
+                  >
+                    <Edit3 size={13} /> Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            <EditableInfoRow label="SEC Reg. No." value={detail?.corporateDetails?.secRegistrationNo} isEditing={editingCorporate} name="secRegistrationNo" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Acronym" value={detail?.corporateDetails?.acronym} isEditing={editingCorporate} name="acronym" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Suffix" value={detail?.corporateDetails?.suffix} isEditing={editingCorporate} name="suffix" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Classification" value={detail?.corporateDetails?.companyClassification} isEditing={editingCorporate} name="companyClassification" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Sub-class" value={detail?.corporateDetails?.companySubclass} isEditing={editingCorporate} name="companySubclass" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Date of Incorporation" value={detail?.corporateDetails?.dateOfIncorporation} isEditing={editingCorporate} name="dateOfIncorporation" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="date" />
+            <EditableInfoRow label="Term of Existence" value={detail?.corporateDetails?.termOfExistence} isEditing={editingCorporate} name="termOfExistence" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Primary Purpose" value={detail?.corporateDetails?.primaryPurpose} isEditing={editingCorporate} name="primaryPurpose" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Annual Meeting Date" value={detail?.corporateDetails?.annualMeetingDate} isEditing={editingCorporate} name="annualMeetingDate" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="date" />
+            <EditableInfoRow label="No. of Incorporators" value={detail?.corporateDetails?.numberOfIncorporators?.toString()} isEditing={editingCorporate} name="numberOfIncorporators" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="number" />
+            <EditableInfoRow label="Authorized Capital" value={detail?.corporateDetails?.authorizedCapital ? `₱${parseFloat(detail.corporateDetails.authorizedCapital).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} isEditing={editingCorporate} name="authorizedCapital" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="number" />
+            <EditableInfoRow label="Subscribed Capital" value={detail?.corporateDetails?.subscribedCapital ? `₱${parseFloat(detail.corporateDetails.subscribedCapital).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} isEditing={editingCorporate} name="subscribedCapital" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="number" />
+            <EditableInfoRow label="Paid-Up Capital" value={detail?.corporateDetails?.paidUpCapital ? `₱${parseFloat(detail.corporateDetails.paidUpCapital).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null} isEditing={editingCorporate} name="paidUpCapital" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="number" />
 
             <SectionDivider title="President" />
-            <InfoRow label="Name" value={[detail?.corporateDetails?.presidentFirstName, detail?.corporateDetails?.presidentMiddleName, detail?.corporateDetails?.presidentLastName].filter(Boolean).join(' ') || null} />
-            <InfoRow label="TIN" value={detail?.corporateDetails?.presidentTin} />
-            <InfoRow label="Email" value={detail?.corporateDetails?.presidentEmail} />
+            {editingCorporate ? (
+              <>
+                <EditableInfoRow label="First Name" value={detail?.corporateDetails?.presidentFirstName} isEditing={true} name="presidentFirstName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+                <EditableInfoRow label="Middle Name" value={detail?.corporateDetails?.presidentMiddleName} isEditing={true} name="presidentMiddleName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+                <EditableInfoRow label="Last Name" value={detail?.corporateDetails?.presidentLastName} isEditing={true} name="presidentLastName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+              </>
+            ) : (
+              <InfoRow label="Name" value={[detail?.corporateDetails?.presidentFirstName, detail?.corporateDetails?.presidentMiddleName, detail?.corporateDetails?.presidentLastName].filter(Boolean).join(' ') || null} />
+            )}
+            <EditableInfoRow label="TIN" value={detail?.corporateDetails?.presidentTin} isEditing={editingCorporate} name="presidentTin" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Email" value={detail?.corporateDetails?.presidentEmail} isEditing={editingCorporate} name="presidentEmail" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="email" />
 
             <SectionDivider title="Treasurer" />
-            <InfoRow label="Name" value={[detail?.corporateDetails?.treasurerFirstName, detail?.corporateDetails?.treasurerMiddleName, detail?.corporateDetails?.treasurerLastName].filter(Boolean).join(' ') || null} />
-            <InfoRow label="TIN" value={detail?.corporateDetails?.treasurerTin} />
-            <InfoRow label="Email" value={detail?.corporateDetails?.treasurerEmail} />
+            {editingCorporate ? (
+              <>
+                <EditableInfoRow label="First Name" value={detail?.corporateDetails?.treasurerFirstName} isEditing={true} name="treasurerFirstName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+                <EditableInfoRow label="Middle Name" value={detail?.corporateDetails?.treasurerMiddleName} isEditing={true} name="treasurerMiddleName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+                <EditableInfoRow label="Last Name" value={detail?.corporateDetails?.treasurerLastName} isEditing={true} name="treasurerLastName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+              </>
+            ) : (
+              <InfoRow label="Name" value={[detail?.corporateDetails?.treasurerFirstName, detail?.corporateDetails?.treasurerMiddleName, detail?.corporateDetails?.treasurerLastName].filter(Boolean).join(' ') || null} />
+            )}
+            <EditableInfoRow label="TIN" value={detail?.corporateDetails?.treasurerTin} isEditing={editingCorporate} name="treasurerTin" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Email" value={detail?.corporateDetails?.treasurerEmail} isEditing={editingCorporate} name="treasurerEmail" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="email" />
 
             <SectionDivider title="Secretary" />
-            <InfoRow label="Name" value={[detail?.corporateDetails?.secretaryFirstName, detail?.corporateDetails?.secretaryMiddleName, detail?.corporateDetails?.secretaryLastName].filter(Boolean).join(' ') || null} />
-            <InfoRow label="TIN" value={detail?.corporateDetails?.secretaryTin} />
-            <InfoRow label="Email" value={detail?.corporateDetails?.secretaryEmail} />
+            {editingCorporate ? (
+              <>
+                <EditableInfoRow label="First Name" value={detail?.corporateDetails?.secretaryFirstName} isEditing={true} name="secretaryFirstName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+                <EditableInfoRow label="Middle Name" value={detail?.corporateDetails?.secretaryMiddleName} isEditing={true} name="secretaryMiddleName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+                <EditableInfoRow label="Last Name" value={detail?.corporateDetails?.secretaryLastName} isEditing={true} name="secretaryLastName" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+              </>
+            ) : (
+              <InfoRow label="Name" value={[detail?.corporateDetails?.secretaryFirstName, detail?.corporateDetails?.secretaryMiddleName, detail?.corporateDetails?.secretaryLastName].filter(Boolean).join(' ') || null} />
+            )}
+            <EditableInfoRow label="TIN" value={detail?.corporateDetails?.secretaryTin} isEditing={editingCorporate} name="secretaryTin" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} />
+            <EditableInfoRow label="Email" value={detail?.corporateDetails?.secretaryEmail} isEditing={editingCorporate} name="secretaryEmail" formData={corporateForm} onChange={(name, value) => handleFormChange(setCorporateForm, name, value)} type="email" />
           </div>
         )}
 

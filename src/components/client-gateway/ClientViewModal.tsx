@@ -212,6 +212,20 @@ export function ClientViewModal({ client, isOpen, onClose, onEdit }: ClientViewM
                 <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs">{client.birRegistrationNumber}</span>
               } />
               <InfoRow label="BIR Reg. Date"    value={new Date(client.birRegistrationDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })} />
+              <InfoRow label="Certificate of Registration" value={
+                client.corUrl ? (
+                  <a
+                    href={client.corUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline flex items-center gap-1.5 text-sm font-medium"
+                  >
+                    <ExternalLink size={13} /> View Certificate
+                  </a>
+                ) : (
+                  <span className="text-slate-400 text-xs italic">Not uploaded</span>
+                )
+              } />
               <InfoRow label="Tax Type"          value={
                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${client.taxType === 'VAT' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                   {client.taxType}
