@@ -87,7 +87,6 @@ export function CreateTaskTemplateModal({ onCreated, onClose }: {
       .then((r) => r.json())
       .then((d) => { if (d.data) setAllDepartments(d.data as { id: number; name: string }[]); })
       .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [step, setStep] = useState<1 | 2>(1);

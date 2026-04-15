@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-   images: {
+  images: {
     remotePatterns: [
       {
         protocol: 'https',
@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  
+  // Enable instrumentation
+  experimental: {
+    instrumentationHook: true,
+  },
 };
 
 export default nextConfig;
+

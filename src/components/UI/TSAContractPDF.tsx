@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 // Agency grouping for dynamic Section II
-const AGENCY_GROUPS: { title: string; keywords: string[] }[] = [
+const _AGENCY_GROUPS: { title: string; keywords: string[] }[] = [
   { title: 'Department of Trade and Industry (DTI)', keywords: ['dti', 'business name registration', 'business name closure', 'bmbe'] },
   { title: 'Securities and Exchange Commission (SEC)', keywords: ['sec', 'general information sheet', 'gis', 'audited financial', 'afs', 'efast', 'stock transfer', 'articles of incorporation', 'certificate of incorporation', 'by-laws', 'one-person corporation', 'opc', 'corporate registration', 'incorporation'] },
   { title: "Local Government Unit (LGU) / Mayor's Permit", keywords: ["mayor's", 'mayor permit', 'business permit', 'sanitary permit', 'fire safety', 'fsic', 'ccenro', 'occupational tax', 'professional tax', 'cedula', 'barangay clearance', 'zoning', 'bfp'] },
@@ -417,44 +417,6 @@ const AGENCY_GROUPS: { title: string; keywords: string[] }[] = [
   { title: 'Accounting and Bookkeeping', keywords: ['bookkeeping', 'financial statement', 'trial balance', 'bank reconciliation', 'payroll', 'accounts receivable', 'accounts payable', 'chart of accounts'] },
   { title: 'Special Registrations and Consulting', keywords: ['peza', 'boi', 'import', 'export', 'audit assistance', 'compliance calendar', 'consultation', 'change of business'] },
 ];
-
-function ServiceSectionsDynamic({ d }: { d: ContractData }) {
-  const allServices = [...(d.planServices ?? []), ...(d.additionalServices ?? [])];
-  if (allServices.length === 0) return null;
-
-  const grouped = new Set<string>();
-  const result: { title: string; services: string[] }[] = [];
-
-  for (const group of AGENCY_GROUPS) {
-    const matched = allServices.filter(
-      (svc) =>
-        !grouped.has(svc) &&
-        group.keywords.some((kw) => svc.toLowerCase().includes(kw)),
-    );
-    if (matched.length > 0) {
-      matched.forEach((svc) => grouped.add(svc));
-      result.push({ title: group.title, services: matched });
-    }
-  }
-
-  const ungrouped = allServices.filter((svc) => !grouped.has(svc));
-  if (ungrouped.length > 0) {
-    result.push({ title: 'Other Services', services: ungrouped });
-  }
-
-  return (
-    <View>
-      {result.map((group, i) => (
-        <View key={i}>
-          <Text style={styles.serviceGroupTitle}>{group.title}</Text>
-          {group.services.map((svc, j) => (
-            <Text key={j} style={styles.serviceItem}>{'\u2611 '}{svc}</Text>
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
 
 function SectionTitle({ number, title }: { number: string; title: string }) {
   return (

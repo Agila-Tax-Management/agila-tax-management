@@ -46,6 +46,9 @@ model ActivityLog {
     ipAddress       String?  // Security tracking
     userAgent       String?  // Browser/Device tracking
 
+    // ─── Data Retention ───
+    archivedAt      DateTime? // For 7-year retention policy (Philippine BIR requirement)
+
     createdAt       DateTime @default(now())
 
     // ─── Optimized Indexes ───

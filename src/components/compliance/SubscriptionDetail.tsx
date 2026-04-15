@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, FilePlus2, Building2, Plus } from 'lucide-react';
+import { FilePlus2, Building2, Plus } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';

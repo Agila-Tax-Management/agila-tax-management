@@ -3,8 +3,8 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  ArrowLeft, FilePlus2, Building2, Plus, Copy, Check,
-  ExternalLink, ChevronRight, Lock,
+  FilePlus2, Building2, Plus,
+  ChevronRight, Lock,
 } from 'lucide-react';
 import { CWTMonthDetail } from './CWTMonthDetail';
 import { Card } from '@/components/UI/Card';
@@ -157,61 +157,6 @@ function ProgressBar({ pct, color = 'emerald' }: { pct: number; color?: 'emerald
   );
 }
 
-function CopyField({ label, value, copyable = true }: { label: string; value: string; copyable?: boolean }): React.ReactElement {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    void navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-  return (
-    <div className="flex items-start justify-between gap-2 py-2.5 px-4 border-b border-slate-100 last:border-0">
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-        <p className="text-sm font-semibold text-slate-800 mt-0.5 break-all">{value || '—'}</p>
-      </div>
-      {copyable && value && (
-        <button
-          onClick={handleCopy}
-          className="shrink-0 mt-1 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          aria-label="Copy"
-        >
-          {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
-        </button>
-      )}
-    </div>
-  );
-}
-
-interface DocUrlInputProps {
-  docId: string;
-  recordId: string;
-  onSave: (recordId: string, docId: string, url: string) => void;
-}
-
-function DocUrlInput({ docId, recordId, onSave }: DocUrlInputProps): React.ReactElement {
-  const [value, setValue] = useState('');
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        type="url"
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        placeholder="Paste file URL..."
-        className="flex-1 h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-0"
-      />
-      <button
-        disabled={!value.trim()}
-        onClick={() => onSave(recordId, docId, value.trim())}
-        className="shrink-0 h-8 px-3 rounded-lg bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-      >
-        Save
-      </button>
-    </div>
-  );
-}
-
 // ─── Main export ───────────────────────────────────────────────────────────────
 
 interface CWTDetailProps {
@@ -247,7 +192,7 @@ export function CWTDetail({ client, year, onYearChange}: CWTDetailProps): React.
   const [isOpenCaseOpen, setIsOpenCaseOpen] = useState(false);
 
   // ── Tax info ───────────────────────────────────────────────────────────────
-  const [taxInfo] = useState<TaxInfo>(() => buildDefaultTaxInfo(client));
+  const [_taxInfo] = useState<TaxInfo>(() => buildDefaultTaxInfo(client));
 
   // ── Progress helpers ───────────────────────────────────────────────────────
   function getFilingPct(record: MonthRecord): number {

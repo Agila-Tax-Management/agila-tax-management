@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
   Loader2,
   CheckCircle2,
@@ -350,7 +351,7 @@ export function TsaModal({
         const imgBlob = await fetch('/images/header.webp').then((r) => r.blob());
         const bitmapUrl = URL.createObjectURL(imgBlob);
         headerSrc = await new Promise<string>((resolve, reject) => {
-          const img = new Image();
+          const img = new window.Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth;
@@ -481,10 +482,12 @@ export function TsaModal({
                   </p>
                   <div className="flex items-center gap-2">
                     {currentTsa.assignedApprover.image ? (
-                      <img
+                      <Image
                         src={currentTsa.assignedApprover.image}
                         alt={currentTsa.assignedApprover.name}
-                        className="w-6 h-6 rounded-full object-cover"
+                        width={24}
+                        height={24}
+                        className="rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-blue-300 dark:bg-blue-700 flex items-center justify-center text-xs font-bold text-blue-900 dark:text-blue-100">
@@ -506,10 +509,12 @@ export function TsaModal({
                   </p>
                   <div className="flex items-center gap-2">
                     {currentTsa.actualApprover.image ? (
-                      <img
+                      <Image
                         src={currentTsa.actualApprover.image}
                         alt={currentTsa.actualApprover.name}
-                        className="w-6 h-6 rounded-full object-cover"
+                        width={24}
+                        height={24}
+                        className="rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-emerald-300 dark:bg-emerald-700 flex items-center justify-center text-xs font-bold text-emerald-900 dark:text-emerald-100">
