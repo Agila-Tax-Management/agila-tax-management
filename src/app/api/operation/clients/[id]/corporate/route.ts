@@ -1,7 +1,7 @@
 // src/app/api/operation/clients/[id]/corporate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/db';
+import prisma from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
@@ -85,7 +85,7 @@ export async function PATCH(
       userId: session.user.id,
       action: 'UPDATED',
       entity: 'Client',
-      entityId: clientId,
+      entityId: String(clientId),
       description: `Updated corporate details for ${existing.businessName}`,
       ...getRequestMeta(request),
     });
@@ -94,7 +94,7 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: error.issues },
         { status: 400 }
       );
     }

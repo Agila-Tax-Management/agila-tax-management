@@ -18,15 +18,7 @@ export async function GET() {
       detailTypes: {
         where: { isActive: true },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true },
       },
-    },
-    select: {
-      id: true,
-      name: true,
-      group: true,
-      normalBalance: true,
-      detailTypes: true,
     },
   });
 

@@ -1,7 +1,7 @@
 // src/app/api/operation/clients/[id]/individual/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/db';
+import prisma from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
@@ -68,22 +68,48 @@ export async function PATCH(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    // Upsert individual details
-    const updated = await prisma.individualDetails.upsert({
-      where: { clientId },
-      create: {
-        clientId,
-        ...validatedData,
-      },
-      update: validatedData,
-    });
+    // Update or create individual details
+    const updated = existing.individualDetails
+      ? await prisma.individualDetails.update({
+          where: { clientId },
+          data: validatedData,
+        })
+      : await prisma.individualDetails.create({
+          data: {
+            clientId,
+            firstName: validatedData.firstName ?? '',
+            lastName: validatedData.lastName ?? '',
+            dob: validatedData.dob ?? '',
+            civilStatus: validatedData.civilStatus ?? '',
+            gender: validatedData.gender ?? '',
+            citizenship: validatedData.citizenship ?? '',
+            middleName: validatedData.middleName ?? null,
+            placeOfBirth: validatedData.placeOfBirth ?? null,
+            residentialAddress: validatedData.residentialAddress ?? null,
+            prcLicenseNo: validatedData.prcLicenseNo ?? null,
+            primaryIdType: validatedData.primaryIdType ?? null,
+            primaryIdNumber: validatedData.primaryIdNumber ?? null,
+            personalEmail: validatedData.personalEmail ?? null,
+            mobileNumber: validatedData.mobileNumber ?? null,
+            telephoneNumber: validatedData.telephoneNumber ?? null,
+            motherFirstName: validatedData.motherFirstName ?? null,
+            motherMiddleName: validatedData.motherMiddleName ?? null,
+            motherLastName: validatedData.motherLastName ?? null,
+            fatherFirstName: validatedData.fatherFirstName ?? null,
+            fatherMiddleName: validatedData.fatherMiddleName ?? null,
+            fatherLastName: validatedData.fatherLastName ?? null,
+            spouseFirstName: validatedData.spouseFirstName ?? null,
+            spouseMiddleName: validatedData.spouseMiddleName ?? null,
+            spouseLastName: validatedData.spouseLastName ?? null,
+          },
+        });
 
     // Log activity
     void logActivity({
       userId: session.user.id,
       action: 'UPDATED',
       entity: 'Client',
-      entityId: clientId,
+      entityId: String(clientId),
       description: `Updated individual details for ${existing.businessName}`,
       ...getRequestMeta(request),
     });
@@ -92,7 +118,7 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: error.issues },
         { status: 400 }
       );
     }

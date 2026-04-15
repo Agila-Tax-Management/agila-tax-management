@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+*.lcov
+.nyc_output
 
 # next.js
 /.next/
@@ -34,6 +36,10 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+
+# Sentry
+.sentryclirc
+sentry.properties
 
 # vercel
 .vercel

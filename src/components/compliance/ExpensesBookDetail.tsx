@@ -10,7 +10,6 @@ import {
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
-import { Breadcrumb, type BreadcrumbItem } from '@/components/UI/Breadcrumb';
 import type { MockClientWithCompliance } from '@/lib/mock-compliance-data';
 
 // ─── VAT detection ─────────────────────────────────────────────────────────────

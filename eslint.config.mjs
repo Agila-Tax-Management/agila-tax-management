@@ -45,6 +45,7 @@ const eslintConfig = defineConfig([
 
     // Generated files — never lint
     "src/generated/**",
+    "coverage/**",
   ]),
 ]);
 

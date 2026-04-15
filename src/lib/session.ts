@@ -137,10 +137,7 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
         employeeNo: true,
         appAccess: {
           select: {
-            canRead: true,
-            canWrite: true,
-            canEdit: true,
-            canDelete: true,
+            role: true,
             app: { select: { name: true } },
           },
         },
@@ -156,11 +153,13 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
       };
 
       for (const access of employee.appAccess) {
+        // Map role to permissions
+        const role = access.role;
         portalAccess[access.app.name] = {
-          canRead: access.canRead,
-          canWrite: access.canWrite,
-          canEdit: access.canEdit,
-          canDelete: access.canDelete,
+          canRead: role === 'VIEWER' || role === 'USER' || role === 'ADMIN' || role === 'SETTINGS',
+          canWrite: role === 'USER' || role === 'ADMIN' || role === 'SETTINGS',
+          canEdit: role === 'ADMIN' || role === 'SETTINGS',
+          canDelete: role === 'ADMIN' || role === 'SETTINGS',
         };
       }
     }

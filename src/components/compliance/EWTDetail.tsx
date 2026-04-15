@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  ArrowLeft, FilePlus2, Building2, Plus, Copy, Check,
+  FilePlus2, Building2, Plus, Copy, Check,
   ExternalLink, ChevronRight, Lock, ClipboardList,
   FileText, Clock,
 } from 'lucide-react';

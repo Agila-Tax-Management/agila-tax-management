@@ -29,17 +29,6 @@ interface TaskTemplateOption {
   description: string | null;
 }
 
-const FREQUENCY_OPTIONS = [
-  { value: 'MONTHLY', label: 'Monthly' },
-  { value: 'QUARTERLY', label: 'Quarterly' },
-  { value: 'SEMI_ANNUALLY', label: 'Semi-Annually' },
-  { value: 'ANNUALLY', label: 'Annually' },
-  { value: 'WEEKLY', label: 'Weekly' },
-  { value: 'DAILY', label: 'Daily' },
-] as const;
-
-
-
 function TaskTemplateTagInput({
   templates,
   selectedIds,

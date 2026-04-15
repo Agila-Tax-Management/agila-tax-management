@@ -5,11 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal,
-  Settings, ChevronLeft, ChevronRight, X, Menu,
+  Settings, ChevronLeft, ChevronRight, X,
   ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
-  Sun, Moon, User, HelpCircle, BookOpen, Heart, FileWarning
+  HelpCircle, BookOpen, Heart, FileWarning
 } from 'lucide-react';
-import { Button } from '@/components/UI/button';
 import { AppHeader } from '@/components/UI/AppHeader';
 import { RoleProvider } from '@/lib/role-context';
 import { AuthProvider } from '@/context/AuthContext';

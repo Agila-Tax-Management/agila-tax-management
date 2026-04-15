@@ -34,7 +34,7 @@ function calcTotal(qty: number, price: number) {
 }
 
 function fmt(n: number) {
-  return '?' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+  return 'â‚±' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 }
 
 /* -- Component ---------------------------------------------------- */
@@ -100,7 +100,7 @@ export function CreateInvoiceForm() {
   }, []);
    
 
-  // Client search fetch (debounced, called from event handler — not useEffect)
+  // Client search fetch (debounced, called from event handler ï¿½ not useEffect)
   const fetchClients = useCallback(async (query: string) => {
     setIsSearchingClients(true);
     try {

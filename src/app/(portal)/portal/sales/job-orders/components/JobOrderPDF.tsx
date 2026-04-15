@@ -264,10 +264,10 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
   const showSubtotals = subscriptionItems.length > 0 && oneTimeItems.length > 0;
 
   const sigs = [
-    { role: 'Prepared By',              name: jo.preparedBy?.name,        date: jo.datePrepared },
-    { role: 'Operations Manager',       name: jo.operationsManager?.name, date: jo.dateOperationsManagerAck },
-    { role: 'Account Officer',          name: jo.accountManager?.name,    date: jo.dateAccountManagerAck },
-    { role: 'Approved by (Executive)',  name: jo.executive?.name,         date: jo.dateExecutiveAck },
+    { role: 'Prepared By',              name: jo.preparedBy?.name,                  date: jo.datePrepared },
+    { role: 'Operations Manager',       name: jo.actualOperationsManager?.name,     date: jo.dateOperationsManagerAck },
+    { role: 'Account Officer',          name: jo.actualAccountManager?.name,        date: jo.dateAccountManagerAck },
+    { role: 'Approved by (Executive)',  name: jo.actualExecutive?.name,             date: jo.dateExecutiveAck },
   ];
 
   return (

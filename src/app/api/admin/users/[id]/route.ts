@@ -23,10 +23,7 @@ const USER_INCLUDE = {
       gender: true,
       appAccess: {
         select: {
-          canRead: true,
-          canWrite: true,
-          canEdit: true,
-          canDelete: true,
+          role: true,
           app: { select: { name: true } },
         },
       },
@@ -67,10 +64,7 @@ function toUserRecord(u: {
     birthDate: Date;
     gender: string;
     appAccess: {
-      canRead: boolean;
-      canWrite: boolean;
-      canEdit: boolean;
-      canDelete: boolean;
+      role: string;
       app: { name: string };
     }[];
     employments: {
@@ -121,10 +115,7 @@ function toUserRecord(u: {
     portalAccess: emp
       ? emp.appAccess.map((a) => ({
           portal: a.app.name,
-          canRead: a.canRead,
-          canWrite: a.canWrite,
-          canEdit: a.canEdit,
-          canDelete: a.canDelete,
+          role: a.role as "VIEWER" | "USER" | "ADMIN" | "SETTINGS",
         }))
       : [],
   };
@@ -283,10 +274,7 @@ export async function PUT(
               .map((p) => ({
                 employeeId: employee.id,
                 appId: appMap.get(p.portal)!,
-                canRead: p.canRead,
-                canWrite: p.canWrite,
-                canEdit: p.canEdit,
-                canDelete: p.canDelete,
+                role: p.role,
               }));
 
             if (accessData.length > 0) {

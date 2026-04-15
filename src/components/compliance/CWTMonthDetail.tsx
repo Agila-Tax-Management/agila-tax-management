@@ -3,8 +3,8 @@
 
 import React, { useState, useRef } from 'react';
 import {
-  ArrowLeft, FilePlus2, Building2, Upload, Copy, Check,
-  ExternalLink, Lock, ClipboardList, ChevronDown,
+  FilePlus2, Building2, Upload, Copy, Check, ExternalLink,
+  Lock, ClipboardList, ChevronDown,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
@@ -372,10 +372,7 @@ function PayrollComputationBoxes({ rows }: { rows: PayrollRow[] }): React.ReactE
   const totalSss       = rows.reduce((s, r) => s + r.sss, 0);
   const totalPhic      = rows.reduce((s, r) => s + r.phic, 0);
   const totalHdmf      = rows.reduce((s, r) => s + Math.min(r.hdmf, 100), 0); // max 200/mo split
-  const totalOT        = rows.reduce((s, r) => s + r.overtime, 0);
-  const totalLate      = rows.reduce((s, r) => s + r.late, 0);
   const totalGross     = rows.reduce((s, r) => s + r.grossPay, 0);
-  const totalNetPay    = rows.reduce((s, r) => s + r.netPay, 0);
 
   // Box 2 — taxable income
   const pagibigCapped  = Math.min(totalHdmf * 2, 200); // ensure monthly max 200
@@ -450,7 +447,7 @@ export interface CWTMonthDetailProps {
   onEmployeeChange?: (employees: EmployeeRecord[]) => void;
 }
 
-export function CWTMonthDetail({ client, coverageMonth, onEmployeeChange }: CWTMonthDetailProps): React.ReactNode {
+export function CWTMonthDetail({ client, coverageMonth }: CWTMonthDetailProps): React.ReactNode {
   const today = new Date();
   const [monthName, yearStr] = coverageMonth.split(' ');
   const monthIdx = ['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(monthName);
@@ -782,13 +779,12 @@ export function CWTMonthDetail({ client, coverageMonth, onEmployeeChange }: CWTM
 
           // Compensation breakdown from payroll rows
           const rows = emp.payrollRows;
-          const totalBasicPay   = rows.reduce((s, r) => s + r.basicPay, 0);
           const totalSss        = rows.reduce((s, r) => s + r.sss, 0);
           const totalPhic       = rows.reduce((s, r) => s + r.phic, 0);
           const totalHdmf       = Math.min(rows.reduce((s, r) => s + r.hdmf, 0), 200);
-          const totalGrossR     = rows.reduce((s, r) => s + r.grossPay, 0);
+          const _totalGrossR    = rows.reduce((s, r) => s + r.grossPay, 0);
           const nonTaxableTotal = totalSss + totalPhic + totalHdmf;
-          const totalWhtR       = rows.reduce((s, r) => s + r.wht, 0);
+          const _totalWhtR      = rows.reduce((s, r) => s + r.wht, 0);
 
           return (
             <div className="overflow-y-auto max-h-[85vh]">
@@ -863,7 +859,7 @@ export function CWTMonthDetail({ client, coverageMonth, onEmployeeChange }: CWTM
                       <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden text-sm">
                         <div className="flex justify-between px-4 py-2.5">
                           <span className="font-semibold text-slate-700">Total Amount of Compensation</span>
-                          <span className="font-black font-mono text-slate-900">{fmtPHP(totalGrossR || emp.grossPay)}</span>
+                          <span className="font-black font-mono text-slate-900">{fmtPHP(_totalGrossR || emp.grossPay)}</span>
                         </div>
                         <div className="px-4 py-1.5 bg-slate-50">
                           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Less:</p>
@@ -887,7 +883,7 @@ export function CWTMonthDetail({ client, coverageMonth, onEmployeeChange }: CWTM
                         </div>
                         <div className="flex justify-between px-4 py-3 bg-red-50">
                           <span className="font-black text-slate-900 uppercase text-[11px] tracking-wide">Total Taxes Withheld</span>
-                          <span className="font-black font-mono text-red-700">{fmtPHP(totalWhtR || emp.withholding)}</span>
+                          <span className="font-black font-mono text-red-700">{fmtPHP(_totalWhtR || emp.withholding)}</span>
                         </div>
                       </div>
                     </div>

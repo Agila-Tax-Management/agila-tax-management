@@ -12,7 +12,7 @@ export async function GET(): Promise<NextResponse> {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const packages = await prisma.servicePackage.findMany({
-    where: { isActive: true },
+    where: { status: "ACTIVE" },
     orderBy: { name: "asc" },
     include: {
       items: {

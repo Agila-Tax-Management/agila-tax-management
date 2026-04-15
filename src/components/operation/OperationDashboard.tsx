@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
-import { Users, ClipboardList, AlertCircle, UserPlus, Clock, Loader2 } from 'lucide-react';
+import { Users, AlertCircle, UserPlus, Clock, Loader2 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────
 interface DashboardStats {

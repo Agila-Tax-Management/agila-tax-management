@@ -2,10 +2,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Globe, MapPin, Plus, Trash2, Edit2, Settings, GitBranch, ChevronUp, ChevronDown, UserCheck, Search, Loader2, Save } from 'lucide-react';
+import { Globe, MapPin, Plus, Trash2, Edit2, Settings, GitBranch, ChevronUp, ChevronDown, UserCheck, Loader2, Save } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '@/components/UI/Badge';
-import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import {
   GovernmentOfficeModal,
@@ -55,7 +54,7 @@ export function ASPSettings(): React.ReactNode {
   const [activeTab, setActiveTab] = useState<'general' | 'offices' | 'cities' | 'pipeline'>('general');
 
   /* ── General Settings ──────────────────────────────────────────── */
-  const [salesSettings, setSalesSettings] = useState<SalesSettings | null>(null);
+  const [_salesSettings, setSalesSettings] = useState<SalesSettings | null>(null);
   const [generalLoading, setGeneralLoading] = useState(true);
   const [generalSaving, setGeneralSaving] = useState(false);
 
