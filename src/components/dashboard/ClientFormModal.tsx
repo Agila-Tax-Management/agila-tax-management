@@ -30,7 +30,7 @@ function getInitialForm(editingClient?: ClientRecord | null): ClientFormValues {
     businessName: editingClient?.businessName ?? '',
     portalName: editingClient?.portalName ?? '',
     businessEntity: (editingClient?.businessEntity as ClientFormValues['businessEntity']) ?? 'SOLE_PROPRIETORSHIP',
-    branchType: editingClient?.branchType ?? 'MAIN',
+    branchType: (editingClient?.branchType as ClientFormValues['branchType']) ?? 'MAIN',
     timezone: editingClient?.timezone ?? 'Asia/Manila',
   };
 }

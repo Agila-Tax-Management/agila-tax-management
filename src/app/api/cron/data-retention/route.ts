@@ -1,7 +1,6 @@
 // src/app/api/cron/data-retention/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import * as Sentry from "@sentry/nextjs";
 
 /**
  * Vercel Cron Job: Data Retention Policy
@@ -53,18 +52,12 @@ export async function GET(request: Request) {
 
       results.activityLogsArchived = archivedLogs.count;
 
-      // Track in Sentry (for monitoring)
-      Sentry.addBreadcrumb({
-        category: 'cron',
-        message: `Archived ${archivedLogs.count} activity logs`,
-        level: 'info',
-      });
+      // Successfully archived activity logs
+      console.log(`Archived ${archivedLogs.count} activity logs`);
     } catch (error) {
       const errorMsg = `Failed to archive activity logs: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
-      Sentry.captureException(error, {
-        tags: { cron: 'data-retention', task: 'archive-activity-logs' },
-      });
+      console.error('Archive activity logs error:', error);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -83,17 +76,12 @@ export async function GET(request: Request) {
 
       results.notificationsDeletedRead = deletedRead.count;
 
-      Sentry.addBreadcrumb({
-        category: 'cron',
-        message: `Deleted ${deletedRead.count} read notifications`,
-        level: 'info',
-      });
+      // Successfully deleted read notifications
+      console.log(`Deleted ${deletedRead.count} read notifications`);
     } catch (error) {
       const errorMsg = `Failed to delete read notifications: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
-      Sentry.captureException(error, {
-        tags: { cron: 'data-retention', task: 'delete-read-notifications' },
-      });
+      console.error('Delete read notifications error:', error);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -112,17 +100,12 @@ export async function GET(request: Request) {
 
       results.notificationsDeletedUnread = deletedUnread.count;
 
-      Sentry.addBreadcrumb({
-        category: 'cron',
-        message: `Deleted ${deletedUnread.count} unread notifications`,
-        level: 'info',
-      });
+      // Successfully deleted unread notifications
+      console.log(`Deleted ${deletedUnread.count} unread notifications`);
     } catch (error) {
       const errorMsg = `Failed to delete unread notifications: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
-      Sentry.captureException(error, {
-        tags: { cron: 'data-retention', task: 'delete-unread-notifications' },
-      });
+      console.error('Delete unread notifications error:', error);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -144,10 +127,6 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error('[Data Retention Cron] Fatal error:', error);
-    
-    Sentry.captureException(error, {
-      tags: { cron: 'data-retention', severity: 'fatal' },
-    });
 
     return NextResponse.json({
       status: 'error',

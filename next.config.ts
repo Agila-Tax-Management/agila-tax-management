@@ -10,11 +10,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  
-  // Enable instrumentation
-  experimental: {
-    instrumentationHook: true,
-  },
 };
 
 export default nextConfig;

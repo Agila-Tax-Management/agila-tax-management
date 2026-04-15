@@ -239,7 +239,7 @@ export async function GET(): Promise<NextResponse> {
     .filter((log): log is {
       id: string;
       actorName: string;
-      action: string;
+      action: "CREATED" | "UPDATED" | "DELETED" | "STATUS_CHANGE" | "ASSIGNED" | "UNASSIGNED";
       entity: string;
       description: string;
       createdAt: string;

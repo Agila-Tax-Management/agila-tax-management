@@ -14,10 +14,7 @@ const portalAccessEntrySchema = z.object({
     "TASK_MANAGEMENT",
     "CLIENT_RELATIONS",
   ]),
-  canRead: z.boolean().default(false),
-  canWrite: z.boolean().default(false),
-  canEdit: z.boolean().default(false),
-  canDelete: z.boolean().default(false),
+  role: z.enum(["VIEWER", "USER", "ADMIN", "SETTINGS"]),
 });
 
 /* ─── Create user (also creates Employee + Employment for ATMS) ──── */
@@ -78,10 +75,7 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export interface PortalAccessEntry {
   portal: string;
-  canRead: boolean;
-  canWrite: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  role: "VIEWER" | "USER" | "ADMIN" | "SETTINGS";
 }
 
 export interface UserRecord {

@@ -447,7 +447,7 @@ export interface CWTMonthDetailProps {
   onEmployeeChange?: (employees: EmployeeRecord[]) => void;
 }
 
-export function CWTMonthDetail({ client, coverageMonth, _onEmployeeChange }: CWTMonthDetailProps): React.ReactNode {
+export function CWTMonthDetail({ client, coverageMonth }: CWTMonthDetailProps): React.ReactNode {
   const today = new Date();
   const [monthName, yearStr] = coverageMonth.split(' ');
   const monthIdx = ['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(monthName);
@@ -859,7 +859,7 @@ export function CWTMonthDetail({ client, coverageMonth, _onEmployeeChange }: CWT
                       <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden text-sm">
                         <div className="flex justify-between px-4 py-2.5">
                           <span className="font-semibold text-slate-700">Total Amount of Compensation</span>
-                          <span className="font-black font-mono text-slate-900">{fmtPHP(totalGrossR || emp.grossPay)}</span>
+                          <span className="font-black font-mono text-slate-900">{fmtPHP(_totalGrossR || emp.grossPay)}</span>
                         </div>
                         <div className="px-4 py-1.5 bg-slate-50">
                           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Less:</p>
@@ -883,7 +883,7 @@ export function CWTMonthDetail({ client, coverageMonth, _onEmployeeChange }: CWT
                         </div>
                         <div className="flex justify-between px-4 py-3 bg-red-50">
                           <span className="font-black text-slate-900 uppercase text-[11px] tracking-wide">Total Taxes Withheld</span>
-                          <span className="font-black font-mono text-red-700">{fmtPHP(totalWhtR || emp.withholding)}</span>
+                          <span className="font-black font-mono text-red-700">{fmtPHP(_totalWhtR || emp.withholding)}</span>
                         </div>
                       </div>
                     </div>

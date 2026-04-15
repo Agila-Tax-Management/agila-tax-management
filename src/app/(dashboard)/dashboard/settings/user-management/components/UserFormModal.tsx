@@ -38,14 +38,14 @@ const PORTALS = [
   { key: 'CLIENT_RELATIONS', label: 'Client Relations Portal' },
 ] as const;
 
-const PERMISSIONS = ['canRead', 'canWrite', 'canEdit', 'canDelete'] as const;
+const PORTAL_ROLES = [
+  { value: 'VIEWER', label: 'Viewer', description: 'Read-only access' },
+  { value: 'USER', label: 'User', description: 'Standard operations (Maker)' },
+  { value: 'ADMIN', label: 'Admin', description: 'Approvals & deletions (Checker)' },
+  { value: 'SETTINGS', label: 'Settings', description: 'Full portal configuration' },
+] as const;
 
-const PERM_LABELS: Record<string, string> = {
-  canRead: 'Read',
-  canWrite: 'Write',
-  canEdit: 'Edit',
-  canDelete: 'Delete',
-};
+type PortalRole = 'VIEWER' | 'USER' | 'ADMIN' | 'SETTINGS';
 
 const GENDERS = ['Male', 'Female', 'Other'] as const;
 
@@ -53,10 +53,7 @@ const GENDERS = ['Male', 'Female', 'Other'] as const;
 
 interface FormPortalAccess {
   enabled: boolean;
-  canRead: boolean;
-  canWrite: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  role: PortalRole;
 }
 
 interface UserFormModalProps {
@@ -77,17 +74,11 @@ function buildInitialPortals(
     map[p.key] = found
       ? {
           enabled: true,
-          canRead: found.canRead,
-          canWrite: found.canWrite,
-          canEdit: found.canEdit,
-          canDelete: found.canDelete,
+          role: found.role as PortalRole,
         }
       : {
           enabled: false,
-          canRead: false,
-          canWrite: false,
-          canEdit: false,
-          canDelete: false,
+          role: 'VIEWER',
         };
   }
   return map;
@@ -219,10 +210,7 @@ export default function UserFormModal({
       .filter(([, flags]) => flags.enabled)
       .map(([portal, flags]) => ({
         portal,
-        canRead: flags.canRead,
-        canWrite: flags.canWrite,
-        canEdit: flags.canEdit,
-        canDelete: flags.canDelete,
+        role: flags.role,
       }));
 
     const payload = {
@@ -284,24 +272,17 @@ export default function UserFormModal({
       [key]: {
         ...prev[key],
         enabled: !prev[key].enabled,
-        ...(!prev[key].enabled
-          ? {}
-          : {
-              canRead: false,
-              canWrite: false,
-              canEdit: false,
-              canDelete: false,
-            }),
+        role: prev[key].enabled ? 'VIEWER' : prev[key].role,
       },
     }));
   }
 
-  function togglePermission(portal: string, perm: string): void {
+  function setPortalRole(portal: string, role: PortalRole): void {
     setPortalAccess((prev) => ({
       ...prev,
       [portal]: {
         ...prev[portal],
-        [perm]: !prev[portal][perm as keyof FormPortalAccess],
+        role,
       },
     }));
   }
@@ -509,35 +490,38 @@ export default function UserFormModal({
                   key={p.key}
                   className={`rounded-xl border p-4 transition ${
                     flags.enabled
-                      ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40'
+                      ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40 dark:bg-blue-950/20'
                       : 'border-border hover:bg-muted/50'
                   }`}
                 >
-                  <label className="flex items-center gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={flags.enabled}
-                      onChange={() => togglePortalEnabled(p.key)}
-                      className="w-4 h-4 rounded border-border text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-foreground">{p.label}</span>
-                  </label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                      <input
+                        type="checkbox"
+                        checked={flags.enabled}
+                        onChange={() => togglePortalEnabled(p.key)}
+                        className="w-4 h-4 rounded border-border text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-foreground">{p.label}</span>
+                    </label>
+                    {flags.enabled && (
+                      <select
+                        value={flags.role}
+                        onChange={(e) => setPortalRole(p.key, e.target.value as PortalRole)}
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {PORTAL_ROLES.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   {flags.enabled && (
-                    <div className="flex flex-wrap gap-4 mt-3 pl-6">
-                      {PERMISSIONS.map((perm) => (
-                        <label key={perm} className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={flags[perm]}
-                            onChange={() => togglePermission(p.key, perm)}
-                            className="w-3.5 h-3.5 rounded border-border text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            {PERM_LABELS[perm]}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 pl-6">
+                      {PORTAL_ROLES.find((r) => r.value === flags.role)?.description}
+                    </p>
                   )}
                 </div>
               );

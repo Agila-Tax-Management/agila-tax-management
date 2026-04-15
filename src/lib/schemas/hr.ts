@@ -196,10 +196,7 @@ export const upsertAccessSchema = z.object({
         "TASK_MANAGEMENT",
         "CLIENT_RELATIONS",
       ]),
-      canRead: z.boolean().default(false),
-      canWrite: z.boolean().default(false),
-      canEdit: z.boolean().default(false),
-      canDelete: z.boolean().default(false),
+      role: z.enum(["VIEWER", "USER", "ADMIN", "SETTINGS"]),
     }),
   ),
 });

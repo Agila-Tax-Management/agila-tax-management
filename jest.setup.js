@@ -1,5 +1,5 @@
 // Add custom jest matchers from jest-dom
-import '@testing-library/jest-dom';
+require('@testing-library/jest-dom');
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -23,7 +23,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Mock Next.js Image component
-import React from 'react';
+const React = require('react');
 
 jest.mock('next/image', () => ({
   __esModule: true,

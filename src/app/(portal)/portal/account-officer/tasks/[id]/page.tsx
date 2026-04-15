@@ -102,7 +102,7 @@ function TaskDetailContent({ taskId }: { taskId: number }) {
         author: { id: c.author.id, name: c.author.name, image: c.author.image },
       })));
       setHistoryLogs(t.historyLogs.map(h => ({
-        id: h.id,
+        id: String(h.id),
         changeType: h.changeType,
         oldValue: h.oldValue,
         newValue: h.newValue,

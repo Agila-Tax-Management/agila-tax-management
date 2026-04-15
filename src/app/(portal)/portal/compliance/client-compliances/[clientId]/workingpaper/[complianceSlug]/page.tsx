@@ -105,7 +105,6 @@ export default function ComplianceDetailPage({ params, searchParams }: Props) {
         client={client}
         year={selectedYear}
         onYearChange={handleYearChange}
-        onBack={handleBack}
       />
     );
   }
@@ -116,7 +115,6 @@ export default function ComplianceDetailPage({ params, searchParams }: Props) {
         client={client}
         year={selectedYear}
         onYearChange={handleYearChange}
-        onBack={handleBack}
       />
     );
   }
@@ -127,7 +125,6 @@ export default function ComplianceDetailPage({ params, searchParams }: Props) {
         client={client}
         year={selectedYear}
         onYearChange={handleYearChange}
-        onBack={handleBack}
       />
     );
   }
@@ -138,7 +135,6 @@ export default function ComplianceDetailPage({ params, searchParams }: Props) {
         client={client}
         year={selectedYear}
         onYearChange={handleYearChange}
-        onBack={handleBack}
       />
     );
   }
@@ -149,7 +145,6 @@ export default function ComplianceDetailPage({ params, searchParams }: Props) {
         client={client}
         year={selectedYear}
         onYearChange={handleYearChange}
-        onBack={handleBack}
       />
     );
   }

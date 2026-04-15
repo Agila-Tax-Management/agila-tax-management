@@ -1368,7 +1368,7 @@ async function main(): Promise<void> {
             authorizedRep: "Danilo P. Cruz",
             isBusinessRegistered: false,
             preparedById: sAdmin?.id,
-            approvedById: sAdmin?.id,
+            actualApproverId: sAdmin?.id,
             clientSignedAt: new Date("2026-04-03"),
           },
         });
@@ -1450,7 +1450,7 @@ async function main(): Promise<void> {
             authorizedRep: "Elena M. Fernandez",
             isBusinessRegistered: true,
             preparedById: sAdmin?.id,
-            approvedById: sAdmin?.id,
+            actualApproverId: sAdmin?.id,
             clientSignedAt: new Date("2026-04-04"),
           },
         });

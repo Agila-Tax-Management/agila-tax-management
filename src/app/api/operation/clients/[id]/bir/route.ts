@@ -63,15 +63,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
         corUrl: body.corUrl,
       },
       update: {
-        tin: body.tin,
-        branchCode: body.branchCode,
-        rdoCode: body.rdoCode,
-        registeredAddress: body.registeredAddress,
-        zipCode: body.zipCode,
-        contactNumber: body.contactNumber,
-        isWithholdingAgent: body.isWithholdingAgent,
-        withholdingCategory: body.withholdingCategory,
-        corUrl: body.corUrl,
+        tin: body.tin ?? undefined,
+        branchCode: body.branchCode ?? undefined,
+        rdoCode: body.rdoCode ?? undefined,
+        registeredAddress: body.registeredAddress ?? undefined,
+        zipCode: body.zipCode ?? undefined,
+        contactNumber: body.contactNumber ?? undefined,
+        isWithholdingAgent: body.isWithholdingAgent ?? undefined,
+        withholdingCategory: body.withholdingCategory ?? undefined,
+        corUrl: body.corUrl ?? undefined,
       },
     });
 
@@ -80,7 +80,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       userId: session.user.id,
       action: 'UPDATED',
       entity: 'BirInformation',
-      entityId: birInfo.id,
+      entityId: String(birInfo.id),
       description: `Updated BIR information for client ${client.businessName}`,
       ...getRequestMeta(request),
     });

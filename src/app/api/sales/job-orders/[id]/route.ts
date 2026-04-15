@@ -540,7 +540,7 @@ export async function PATCH(
     if (existing.preparedById) {
       void notify({
         userId: existing.preparedById,
-        type: "SUCCESS",
+        type: "TASK",
         priority: "NORMAL",
         title: "Job Order Fully Approved",
         message: `Job Order ${existing.jobOrderNumber} has been fully approved and tasks have been generated.`,

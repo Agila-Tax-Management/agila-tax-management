@@ -168,7 +168,7 @@ export async function PATCH(
           isActive: true,
           contract: {
             status: 'ACTIVE',
-            employments: { some: { employeeId: existing.employeeId, employmentStatus: 'ACTIVE' } },
+            employment: { employeeId: existing.employeeId, employmentStatus: 'ACTIVE' },
           },
         },
         select: {
