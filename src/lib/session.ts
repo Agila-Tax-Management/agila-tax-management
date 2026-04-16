@@ -2,7 +2,7 @@
 import { headers } from "next/headers";
 import { auth } from "./auth";
 import prisma from "./db";
-import type { AppPortal } from "@/generated/prisma/client";
+import type { AppPortal, PortalRole } from "@/generated/prisma/client";
 
 /**
  * Permission flags for a single portal.
@@ -36,6 +36,7 @@ export interface SessionWithAccess {
     employeeNo: string | null;
   } | null;
   portalAccess: Record<AppPortal, PortalPermissions>;
+  portalRoles: Record<AppPortal, PortalRole | null>; // Direct role mapping for access control
 }
 
 /** Default permission set — all denied. */
@@ -109,6 +110,11 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
     ALL_PORTALS.map((p) => [p, { ...DENIED }])
   ) as Record<AppPortal, PortalPermissions>;
 
+  // Build portal roles map — start with all portals null (no access)
+  const portalRoles = Object.fromEntries(
+    ALL_PORTALS.map((p) => [p, null])
+  ) as Record<AppPortal, PortalRole | null>;
+
   let employeeData: {
     id: number;
     firstName: string;
@@ -120,11 +126,13 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
     // SUPER_ADMIN gets full access to all portals — no DB lookup needed
     for (const portal of ALL_PORTALS) {
       portalAccess[portal] = { ...FULL_ACCESS };
+      portalRoles[portal] = "SETTINGS";
     }
   } else if (role === "ADMIN") {
     // ADMIN gets read, write, edit on all portals but NO delete
     for (const portal of ALL_PORTALS) {
       portalAccess[portal] = { ...ADMIN_ACCESS };
+      portalRoles[portal] = "ADMIN";
     }
   } else if (role === "EMPLOYEE") {
     // EMPLOYEE — resolve permissions from EmployeeAppAccess records
@@ -161,6 +169,7 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
           canEdit: role === 'ADMIN' || role === 'SETTINGS',
           canDelete: role === 'ADMIN' || role === 'SETTINGS',
         };
+        portalRoles[access.app.name] = role;
       }
     }
   }
@@ -197,6 +206,7 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
     },
     employee: employeeData,
     portalAccess,
+    portalRoles,
   };
 }
 

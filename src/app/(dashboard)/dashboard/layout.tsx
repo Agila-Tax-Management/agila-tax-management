@@ -12,6 +12,8 @@ import {
 import { AppHeader } from '@/components/UI/AppHeader';
 import { RoleProvider } from '@/lib/role-context';
 import { AuthProvider } from '@/context/AuthContext';
+import { getPortalFromRoute } from '@/lib/portal-mapping';
+import type { AppPortal } from '@/generated/prisma/client';
 
 
 const NAV_ITEMS = [
@@ -118,6 +120,32 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
   const [logoHovered, setLogoHovered] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  
+  // Portal access state
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [accessiblePortals, setAccessiblePortals] = useState<Set<AppPortal>>(new Set());
+  const [loadingAccess, setLoadingAccess] = useState(true);
+
+  // Fetch portal access on mount
+  useEffect(() => {
+    void fetch('/api/auth/portal-access')
+      .then(res => res.json())
+      .then(data => {
+        setUserRole(data.userRole);
+        setAccessiblePortals(new Set(data.portals.map((p: { portal: AppPortal }) => p.portal)));
+        setLoadingAccess(false);
+      })
+      .catch(() => {
+        setLoadingAccess(false);
+      });
+  }, []);
+
+  // Filter portal items based on user access
+  const visiblePortals = PORTAL_ITEMS.filter(item => {
+    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
+    const portal = getPortalFromRoute(item.href);
+    return portal && accessiblePortals.has(portal);
+  });
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
@@ -272,38 +300,54 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
 
             {portalOpen && isExpanded && (
               <div className="mt-1 mx-1 rounded-xl border border-slate-700/50 bg-slate-800/40 overflow-hidden">
-                {PORTAL_ITEMS.map(({ href, label, icon: Icon }) => (
-                  <button
-                    key={href}
-                    onClick={() => navigate(href)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                      isActive(href)
-                        ? 'bg-blue-600/80 text-white'
-                        : 'text-slate-400 hover:bg-slate-700/60 hover:text-white'
-                    }`}
-                  >
-                    <Icon size={15} className="shrink-0" />
-                    <span className="text-[13px] font-medium">{label}</span>
-                  </button>
-                ))}
+                {loadingAccess ? (
+                  <div className="px-4 py-3 text-center text-xs text-slate-500">Loading portals...</div>
+                ) : visiblePortals.length === 0 ? (
+                  <div className="px-4 py-3 text-center text-xs text-slate-500">No portal access</div>
+                ) : (
+                  visiblePortals.map(({ href, label, icon: Icon }) => (
+                    <button
+                      key={href}
+                      onClick={() => navigate(href)}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                        isActive(href)
+                          ? 'bg-blue-600/80 text-white'
+                          : 'text-slate-400 hover:bg-slate-700/60 hover:text-white'
+                      }`}
+                    >
+                      <Icon size={15} className="shrink-0" />
+                      <span className="text-[13px] font-medium">{label}</span>
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-sidebar-border shrink-0">
-          <button
-            onClick={() => navigate('/dashboard/settings')}
-            className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl transition
-              ${pathname.startsWith('/dashboard/settings')
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-            title={!isExpanded ? 'Settings' : undefined}
-          >
-            <Settings size={20} className="shrink-0" />
-            {isExpanded && <span className="text-sm font-medium">Settings</span>}
-          </button>
+        <div className="p-3 border-t border-sidebar-border shrink-0 space-y-2">
+          {/* Settings button - only visible for SUPER_ADMIN */}
+          {userRole === 'SUPER_ADMIN' && (
+            <button
+              onClick={() => navigate('/dashboard/settings')}
+              className={`flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center'} p-3 w-full rounded-xl transition
+                ${pathname.startsWith('/dashboard/settings')
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              title={!isExpanded ? 'Settings' : undefined}
+            >
+              <Settings size={20} className="shrink-0" />
+              {isExpanded && <span className="text-sm font-medium">Settings</span>}
+            </button>
+          )}
+          
+          {/* Version Display */}
+          {isExpanded && (
+            <div className="text-center text-xs text-muted-foreground py-1">
+              v0.1
+            </div>
+          )}
         </div>
       </aside>
     </>
