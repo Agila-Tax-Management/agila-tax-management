@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   ClipboardList, Calendar, UserCircle, CheckCircle, LayoutDashboard
 } from 'lucide-react';
+import type { PortalRole } from '@/generated/prisma/client';
 
 interface LiaisonSidebarData {
   dashboardBadge: number;
@@ -27,20 +28,69 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [badgeData, setBadgeData] = useState<LiaisonSidebarData>(EMPTY_SIDEBAR_DATA);
+  const [portalRole, setPortalRole] = useState<PortalRole | null>(null);
+  const [loadingAccess, setLoadingAccess] = useState(true);
+
+  // Fetch portal access to determine role
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const liaisonAccess = data.portals.find((p) => p.portal === 'LIAISON');
+          // SUPER_ADMIN and ADMIN get SETTINGS level access
+          if (data.userRole === 'SUPER_ADMIN' || data.userRole === 'ADMIN') {
+            setPortalRole('SETTINGS');
+          } else {
+            setPortalRole(liaisonAccess?.role ?? null);
+          }
+        }
+      } catch {
+        setPortalRole(null);
+      } finally {
+        setLoadingAccess(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   const navItems = useMemo(() => {
-    return [
+    // USER role: Only see Dashboard and My Tasks
+    // VIEWER, ADMIN, SETTINGS: See Dashboard, Task Board, My Tasks, and Reports
+    const items = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/liaison/dashboard', badge: badgeData.dashboardBadge },
       {
         id: 'management',
         label: 'MANAGEMENT',
         isSection: true,
       },
-      { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison/tasks', badge: badgeData.taskBoardBadge },
-      { id: 'myTasks', label: 'My Tasks', icon: CheckCircle, href: '/portal/liaison/my-task', badge: badgeData.myTasksBadge },
-      { id: 'report', label: 'Report', icon: Calendar, href: '/portal/liaison/report' },
     ];
-  }, [badgeData.dashboardBadge, badgeData.myTasksBadge, badgeData.taskBoardBadge]);
+
+    // Show Task Board only for VIEWER, ADMIN, and SETTINGS (hide for USER)
+    if (portalRole !== 'USER') {
+      items.push(
+        { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison/tasks', badge: badgeData.taskBoardBadge }
+      );
+    }
+
+    // My Tasks is visible to all roles
+    items.push(
+      { id: 'myTasks', label: 'My Tasks', icon: CheckCircle, href: '/portal/liaison/my-task', badge: badgeData.myTasksBadge }
+    );
+
+    // Show Reports only for ADMIN and SETTINGS (hide for VIEWER and USER)
+    if (portalRole === 'ADMIN' || portalRole === 'SETTINGS') {
+      items.push(
+        { id: 'report', label: 'Report', icon: Calendar, href: '/portal/liaison/report' }
+      );
+    }
+
+    return items;
+  }, [badgeData.dashboardBadge, badgeData.myTasksBadge, badgeData.taskBoardBadge, portalRole]);
 
    
   useEffect(() => {

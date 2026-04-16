@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Calendar, Tag, Send, Clock,
   ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search, X, Link,
+  Pencil, Trash2,
 } from 'lucide-react';
 import {
   SubtaskDetailModal,
@@ -188,6 +189,11 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [editClientId, setEditClientId] = useState('');
   const [clientOptions, setClientOptions] = useState<Array<{ id: string; name: string }>>([]);
+  // Comment edit/delete state
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editCommentValue, setEditCommentValue] = useState('');
+  const [hoveredCommentId, setHoveredCommentId] = useState<number | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/hr/clients')
@@ -373,6 +379,46 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
       }]);
     }
     setNewComment('');
+  };
+
+  const handleEditComment = (commentId: number, currentMessage: string) => {
+    setEditingCommentId(commentId);
+    setEditCommentValue(currentMessage);
+  };
+
+  const handleSaveEditComment = async () => {
+    if (!editCommentValue.trim() || editingCommentId === null) return;
+    if (taskId) {
+      setIsSaving(true);
+      const res = await fetch(`/api/tasks/${taskId}/conversations/${editingCommentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: editCommentValue.trim() }),
+      });
+      setIsSaving(false);
+      if (!res.ok) { toastError('Failed to update comment', 'Please try again.'); return; }
+    }
+    setConversations(prev => prev.map(c =>
+      c.id === editingCommentId ? { ...c, message: editCommentValue.trim() } : c
+    ));
+    setEditingCommentId(null);
+    setEditCommentValue('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCommentId(null);
+    setEditCommentValue('');
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (taskId) {
+      setIsSaving(true);
+      const res = await fetch(`/api/tasks/${taskId}/conversations/${commentId}`, { method: 'DELETE' });
+      setIsSaving(false);
+      if (!res.ok) { toastError('Failed to delete comment', 'Please try again.'); return; }
+    }
+    setConversations(prev => prev.filter(c => c.id !== commentId));
+    setDeletingCommentId(null);
   };
 
   const handleToggleSubtask = async (subtaskId: string) => {
@@ -1210,21 +1256,108 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
               {activityFeed.map(item => {
                 if (item.kind === 'conversation') {
                   const initials = item.author.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                  const isOwnComment = item.author.id === currentUser.id;
+                  const isEditing = editingCommentId === item.id;
+                  const isDeleting = deletingCommentId === item.id;
+                  const isHovered = hoveredCommentId === item.id;
                   return (
-                    <div key={`c-${item.id}`} className="flex gap-2.5">
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm"
-                        style={{ backgroundColor: accentColor }}
-                      >
-                        {initials}
-                      </div>
+                    <div
+                      key={`c-${item.id}`}
+                      className="flex gap-2.5"
+                      onMouseEnter={() => setHoveredCommentId(item.id)}
+                      onMouseLeave={() => setHoveredCommentId(null)}
+                    >
+                      {/* Avatar */}
+                      {item.author.image ? (
+                        <img
+                          src={item.author.image}
+                          alt={item.author.name}
+                          className="w-7 h-7 rounded-full shrink-0 mt-0.5 shadow-sm border border-slate-200 object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm"
+                          style={{ backgroundColor: accentColor }}
+                        >
+                          {initials}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 mb-1">
                           <span className="text-xs font-bold text-slate-800">{item.author.name}</span>
                           <span className="text-[10px] text-slate-400">{formatDateTime(item.createdAt)}</span>
                         </div>
-                        <div className="bg-white border border-slate-200 rounded-xl rounded-tl-sm px-3 py-2 shadow-sm">
-                          <p className="text-xs text-slate-700 leading-relaxed">{renderMessageWithLinks(item.message)}</p>
+                        <div className="relative group">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editCommentValue}
+                                onChange={e => setEditCommentValue(e.target.value)}
+                                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white resize-none leading-relaxed"
+                                rows={3}
+                                autoFocus
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition font-medium"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => void handleSaveEditComment()}
+                                  disabled={!editCommentValue.trim() || isSaving}
+                                  className="text-[10px] px-2.5 py-1 rounded-lg text-white transition font-medium disabled:opacity-40"
+                                  style={{ backgroundColor: accentColor }}
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : isDeleting ? (
+                            <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 shadow-sm">
+                              <p className="text-xs text-rose-700 font-medium mb-2">Delete this comment?</p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setDeletingCommentId(null)}
+                                  className="text-[10px] px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition font-medium"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => void handleDeleteComment(item.id)}
+                                  disabled={isSaving}
+                                  className="text-[10px] px-2.5 py-1 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition font-medium disabled:opacity-40"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="bg-white border border-slate-200 rounded-xl rounded-tl-sm px-3 py-2 shadow-sm">
+                                <p className="text-xs text-slate-700 leading-relaxed">{renderMessageWithLinks(item.message)}</p>
+                              </div>
+                              {isOwnComment && isHovered && (
+                                <div className="absolute top-1 right-1 flex gap-1">
+                                  <button
+                                    onClick={() => handleEditComment(item.id, item.message)}
+                                    className="p-1 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                                    title="Edit comment"
+                                  >
+                                    <Pencil size={11} />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingCommentId(item.id)}
+                                    className="p-1 rounded-md bg-white border border-slate-200 text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition shadow-sm"
+                                    title="Delete comment"
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

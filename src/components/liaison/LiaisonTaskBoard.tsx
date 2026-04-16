@@ -16,6 +16,7 @@ import {
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
 import { useToast } from '@/context/ToastContext';
 import type { AOTaskPriority } from '@/lib/types';
+import type { PortalRole } from '@/generated/prisma/client';
 
 interface ApiTask {
   id: number;
@@ -134,6 +135,36 @@ export function LiaisonTaskBoard() {
   const [sortBy, setSortBy] = useState<SortBy>('dueDate');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
+  // Portal access control
+  const [canEdit, setCanEdit] = useState(false);
+
+  // Fetch portal access to determine permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const liaisonAccess = data.portals.find((p) => p.portal === 'LIAISON');
+          // VIEWER can't edit/update tasks
+          const hasEditAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            liaisonAccess?.role === 'USER' ||
+            liaisonAccess?.role === 'ADMIN' ||
+            liaisonAccess?.role === 'SETTINGS';
+          setCanEdit(hasEditAccess);
+        }
+      } catch {
+        setCanEdit(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
+
   // Create modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -238,7 +269,7 @@ export function LiaisonTaskBoard() {
   };
 
   const handleCardDrop = async (statusId: number, statusName: string) => {
-    if (!draggedTaskId) return;
+    if (!draggedTaskId || !canEdit) return;
     const numericId = Number(draggedTaskId);
     if (isNaN(numericId)) return;
     const targetStatus = liaisonStatuses.find(s => s.id === statusId);
@@ -314,9 +345,11 @@ export function LiaisonTaskBoard() {
               <Columns3 size={14} className="inline mr-1" /> Kanban
             </button>
           </div>
-          <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={openCreateModal}>
-            <Plus size={16} /> New Task
-          </Button>
+          {canEdit && (
+            <Button className="bg-violet-600 hover:bg-violet-700 text-white" onClick={openCreateModal}>
+              <Plus size={16} /> New Task
+            </Button>
+          )}
         </div>
       </div>
 
@@ -410,11 +443,13 @@ export function LiaisonTaskBoard() {
                       return (
                         <div
                           key={task.id}
-                          draggable
+                          draggable={canEdit}
                           onDragStart={e => { e.stopPropagation(); setDraggedTaskId(task.id); }}
                           onDragEnd={() => setDraggedTaskId(null)}
                           onClick={() => router.push(`/portal/liaison/tasks/${task.id}`)}
-                          className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 hover:shadow-md cursor-grab active:cursor-grabbing transition-all group"
+                          className={`bg-white rounded-xl p-3 shadow-sm border border-slate-100 hover:shadow-md transition-all group ${
+                            canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                          }`}
                         >
                           <div className="flex items-start justify-between mb-1">
                             <p className="text-sm font-bold text-slate-800 line-clamp-2 flex-1">{task.title}</p>
