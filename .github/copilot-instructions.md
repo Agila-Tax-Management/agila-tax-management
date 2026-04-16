@@ -557,6 +557,52 @@ src/app/(dashboard)/dashboard/settings/user-management/
 
 ---
 
+## Documentation Storage
+
+All project documentation, architectural summaries, implementation guides, and codebase overviews must be stored in the `docs/` folder within the project repository — **never** in the `/memories/` system.
+
+### Documentation Structure
+
+```
+docs/
+  codebase/                      # Architecture & codebase knowledge (from acquire-codebase-knowledge skill)
+    STACK.md                      # Tech stack, dependencies, runtime
+    STRUCTURE.md                  # Directory layout, entry points
+    ARCHITECTURE.md               # Layers, patterns, data flow
+    CONVENTIONS.md                # Naming, formatting, code style
+    INTEGRATIONS.md               # External APIs, databases, auth
+    TESTING.md                    # Test frameworks, organization
+    CONCERNS.md                   # Tech debt, security, performance
+  *.md                           # Implementation guides, policies, checklists
+```
+
+### Storage Rules
+
+- **Codebase documentation** → `docs/codebase/` (architecture, stack, structure, etc.)
+- **Implementation guides** → `docs/` root (testing guides, deployment checklists, policies)
+- **Feature summaries** → `docs/` root or module-specific subfolder (e.g., `docs/features/`)
+- **API documentation** → `docs/api/` (if needed)
+- **Decision records** → `docs/decisions/` or `docs/ADR/` (if using Architecture Decision Records)
+
+### Memory System vs Project Docs
+
+| Storage | Purpose | Lifespan | Visibility |
+|---------|---------|----------|------------|
+| `docs/` | Project documentation, architecture, guides | Permanent, version-controlled | All team members, Git history |
+| `/memories/` | Temporary notes, session context, user preferences | Session or user-scoped | Agent only, not committed |
+
+**Rule:** Any knowledge that should be shared with the team, version-controlled, or referenced in the future must go in `docs/`, not `/memories/`.
+
+### When Creating Documentation
+
+- Always check `docs/` first to see what already exists before creating new files
+- Use clear, descriptive filenames (e.g., `TESTING_GUIDE.md`, not `notes.md`)
+- Include a brief description at the top of each doc explaining its purpose
+- Update existing docs rather than creating duplicates
+- Reference the existing structure in this project (see workspace structure above)
+
+---
+
 ## Client Portal Users (`ClientUser` + `ClientUserAssignment`)
 
 Client portal users are external users (typically client business owners) who access the client-facing portal. They are fully isolated from internal `User` accounts.
