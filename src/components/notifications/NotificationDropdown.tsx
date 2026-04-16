@@ -121,7 +121,7 @@ export function NotificationDropdown() {
   }, []);
 
   const perms = ROLE_PERMISSIONS[role] ?? [];
-  const isAdmin = perms.includes('*');
+  const _isAdmin = perms.includes('*');
 
   const displayed = filter === 'unread'
     ? notifications.filter(n => !n.isRead)

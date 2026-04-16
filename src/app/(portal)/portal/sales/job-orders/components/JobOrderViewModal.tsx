@@ -61,7 +61,7 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
     userRole: 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE';
     salesPortalRole: PortalRole | null;
   } | null>(null);
-  const [loadingSession, setLoadingSession] = useState(true);
+  const [_loadingSession, setLoadingSession] = useState(true);
 
   // Fetch user session with portal access
   useEffect(() => {

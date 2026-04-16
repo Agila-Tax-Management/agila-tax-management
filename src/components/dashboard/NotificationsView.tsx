@@ -116,7 +116,7 @@ export function NotificationsView() {
   }, []);
 
   const perms = ROLE_PERMISSIONS[role] ?? [];
-  const isAdmin = perms.includes('*');
+  const _isAdmin = perms.includes('*');
 
   const displayed = (() => {
     if (filter === 'all') return notifications;
