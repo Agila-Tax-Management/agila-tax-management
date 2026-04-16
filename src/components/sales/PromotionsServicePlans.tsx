@@ -7,6 +7,7 @@ import { Card } from '@/components/UI/Card';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
+import type { PortalRole } from '@/generated/prisma/client';
 import {
   BadgePercent,
   Gift,
@@ -125,6 +126,9 @@ export function PromotionsServicePlans(): React.ReactNode {
   const [deletePromoTarget, setDeletePromoTarget] = useState<{ id: string; name: string; type: 'discount' | 'bundle' } | null>(null);
   const [isDeletingPromo, setIsDeletingPromo] = useState(false);
 
+  // Portal access control
+  const [canEdit, setCanEdit] = useState(false);
+
   const { success, error } = useToast();
 
   const [offeringApiServices, setOfferingApiServices] = useState<ServiceApiItem[]>([]);
@@ -228,6 +232,31 @@ export function PromotionsServicePlans(): React.ReactNode {
         setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
+  }, []);
+
+  // Fetch portal access to determine edit/delete permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>; 
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          const hasEditAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanEdit(hasEditAccess);
+        }
+      } catch {
+        setCanEdit(false);
+      }
+    };
+    void fetchAccess();
   }, []);
 
   const offeringOptions = useMemo<PromotionOffering[]>(() => {
@@ -774,22 +803,26 @@ export function PromotionsServicePlans(): React.ReactNode {
               </button>
             </div>
 
-            {activeTab === 'discounted-services' ? (
-              <Button
-                onClick={() => setIsDiscountModalOpen(true)}
-                className="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-4 py-2"
-              >
-                <Plus size={14} className="mr-1" />
-                Add Discounted Offer
-              </Button>
-            ) : (
-              <Button
-                onClick={() => setIsPromoModalOpen(true)}
-                className="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-4 py-2"
-              >
-                <PackagePlus size={14} className="mr-1" />
-                Create Promo
-              </Button>
+            {canEdit && (
+              <>
+                {activeTab === 'discounted-services' ? (
+                  <Button
+                    onClick={() => setIsDiscountModalOpen(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-4 py-2"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    Add Discounted Offer
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setIsPromoModalOpen(true)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-4 py-2"
+                  >
+                    <PackagePlus size={14} className="mr-1" />
+                    Create Promo
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -893,22 +926,26 @@ export function PromotionsServicePlans(): React.ReactNode {
                     )}
 
                     <div className="mt-4 flex gap-2 pt-4 border-t border-amber-100">
-                      <button
-                        type="button"
-                        onClick={() => openEditDiscount(promotion)}
-                        className="p-2 text-slate-500 hover:bg-amber-100 rounded-lg transition-colors"
-                        title="Edit discount"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletePromoTarget({ id: promotion.id, name: promotion.promoName, type: 'discount' })}
-                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="Delete discount"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {canEdit && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditDiscount(promotion)}
+                            className="p-2 text-slate-500 hover:bg-amber-100 rounded-lg transition-colors"
+                            title="Edit discount"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletePromoTarget({ id: promotion.id, name: promotion.promoName, type: 'discount' })}
+                            className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete discount"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                       {promotion.status === 'Draft' ? (
                         <Button
                           className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1051,22 +1088,26 @@ export function PromotionsServicePlans(): React.ReactNode {
                     )}
 
                     <div className="mt-4 flex gap-2 pt-4 border-t border-rose-100">
-                      <button
-                        type="button"
-                        onClick={() => openEditBundle(bundle)}
-                        className="p-2 text-slate-500 hover:bg-rose-100 rounded-lg transition-colors"
-                        title="Edit bundle"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletePromoTarget({ id: bundle.id, name: bundle.name, type: 'bundle' })}
-                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="Delete bundle"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {canEdit && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditBundle(bundle)}
+                            className="p-2 text-slate-500 hover:bg-rose-100 rounded-lg transition-colors"
+                            title="Edit bundle"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletePromoTarget({ id: bundle.id, name: bundle.name, type: 'bundle' })}
+                            className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete bundle"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                       {bundle.status === 'Draft' ? (
                         <Button
                           className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"

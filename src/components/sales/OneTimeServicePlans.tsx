@@ -9,6 +9,7 @@ import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
+import type { PortalRole } from '@/generated/prisma/client';
 import {
   Trash2,
   Plus,
@@ -52,6 +53,34 @@ export function OneTimeServicePlans(): React.ReactNode {
 
   // View mode
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
+  // Portal access control
+  const [canEdit, setCanEdit] = useState(false);
+
+  // Fetch portal access to determine edit/delete permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          const hasEditAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanEdit(hasEditAccess);
+        }
+      } catch {
+        setCanEdit(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   useEffect(() => {
     fetch('/api/sales/services?billingType=ONE_TIME')
@@ -173,15 +202,17 @@ export function OneTimeServicePlans(): React.ReactNode {
               {searchTerm ? ' (filtered)' : ''}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => router.push('/portal/sales/services/one-time/new-service')}
-              className="bg-blue-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-blue-700 shadow-sm"
-            >
-              <Plus size={14} className="mr-1" />
-              Add Service
-            </Button>
-          </div>
+          {canEdit && (
+            <div className="flex gap-2">
+              <Button
+                onClick={() => router.push('/portal/sales/services/one-time/new-service')}
+                className="bg-blue-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-blue-700 shadow-sm"
+              >
+                <Plus size={14} className="mr-1" />
+                Add Service
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Table Controls */}
@@ -278,20 +309,22 @@ export function OneTimeServicePlans(): React.ReactNode {
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => router.push(`/portal/sales/services/one-time/update-service/${service.id}`)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-100"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(service)}
-                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-md transition-colors border border-transparent hover:border-rose-100"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+                        {canEdit && (
+                          <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => router.push(`/portal/sales/services/one-time/update-service/${service.id}`)}
+                              className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-100"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(service)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-md transition-colors border border-transparent hover:border-rose-100"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -326,20 +359,22 @@ export function OneTimeServicePlans(): React.ReactNode {
                       >
                         {service.status}
                       </Badge>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => router.push(`/portal/sales/services/one-time/update-service/${service.id}`)}
-                          className="p-1.5 text-blue-400 hover:bg-blue-50 rounded-md transition-colors"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(service)}
-                          className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-md transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => router.push(`/portal/sales/services/one-time/update-service/${service.id}`)}
+                            className="p-1.5 text-blue-400 hover:bg-blue-50 rounded-md transition-colors"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(service)}
+                            className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-md transition-colors"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <h4 className="text-sm font-bold text-slate-900 mb-2 line-clamp-2 leading-snug">
                       {service.name}

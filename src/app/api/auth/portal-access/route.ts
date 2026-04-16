@@ -10,6 +10,7 @@ import type { AppPortal, PortalRole } from "@/generated/prisma/client";
  * 
  * Response:
  * {
+ *   userId: "user_123",
  *   userRole: "SUPER_ADMIN" | "ADMIN" | "EMPLOYEE",
  *   portals: [
  *     { portal: "SALES", role: "ADMIN" },
@@ -36,6 +37,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    userId: user.id,
     userRole: user.role,
     portals,
   });

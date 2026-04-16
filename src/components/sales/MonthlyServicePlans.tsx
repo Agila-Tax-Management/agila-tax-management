@@ -8,6 +8,7 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
+import type { PortalRole } from '@/generated/prisma/client';
 import {
   Plus,
   CalendarClock,
@@ -57,6 +58,33 @@ export function MonthlyServicePlans(): React.ReactNode {
   const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [viewTarget, setViewTarget] = useState<ServiceItem | null>(null);
+  const [canEdit, setCanEdit] = useState(false);
+
+  // Fetch portal access to determine edit/delete permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          // Allow edit/delete for ADMIN and SETTINGS roles only
+          const hasEditAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanEdit(hasEditAccess);
+        }
+      } catch {
+        setCanEdit(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   useEffect(() => {
     fetch('/api/sales/services?billingType=RECURRING')
@@ -143,15 +171,17 @@ export function MonthlyServicePlans(): React.ReactNode {
       </div>
 
       {/* Add Plan Button */}
-      <div className="flex justify-end">
-        <Button
-          onClick={() => router.push('/portal/sales/services/monthly/new-service')}
-          className="bg-purple-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-purple-700 shadow-sm"
-        >
-          <Plus size={14} className="mr-1" />
-          Add Service Plan
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <Button
+            onClick={() => router.push('/portal/sales/services/monthly/new-service')}
+            className="bg-purple-600 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-purple-700 shadow-sm"
+          >
+            <Plus size={14} className="mr-1" />
+            Add Service Plan
+          </Button>
+        </div>
+      )}
 
       {/* Plan Cards */}
       <Card className="border-slate-200 shadow-lg overflow-visible">
@@ -239,20 +269,24 @@ export function MonthlyServicePlans(): React.ReactNode {
                       <Eye size={12} />
                       View
                     </Button>
-                    <Button
-                      className="flex-1 h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white text-[11px] flex items-center justify-center gap-1.5"
-                      onClick={(e) => { e.stopPropagation(); router.push(`/portal/sales/services/monthly/update-service-plan/${plan.id}`); }}
-                    >
-                      <Pencil size={12} />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-8 px-3 text-rose-600 border-rose-200 hover:bg-rose-50 text-[11px] flex items-center justify-center gap-1.5"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(plan); }}
-                    >
-                      <Trash2 size={12} />
-                    </Button>
+                    {canEdit && (
+                      <>
+                        <Button
+                          className="flex-1 h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white text-[11px] flex items-center justify-center gap-1.5"
+                          onClick={(e) => { e.stopPropagation(); router.push(`/portal/sales/services/monthly/update-service-plan/${plan.id}`); }}
+                        >
+                          <Pencil size={12} />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-8 px-3 text-rose-600 border-rose-200 hover:bg-rose-50 text-[11px] flex items-center justify-center gap-1.5"
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(plan); }}
+                        >
+                          <Trash2 size={12} />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -356,21 +390,25 @@ export function MonthlyServicePlans(): React.ReactNode {
               >
                 Close
               </Button>
-              <Button
-                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center gap-1.5"
-                onClick={() => { setViewTarget(null); router.push(`/portal/sales/services/monthly/update-service-plan/${viewTarget.id}`); }}
-              >
-                <Pencil size={13} />
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 text-rose-600 border-rose-200 hover:bg-rose-50 flex items-center justify-center gap-1.5"
-                onClick={() => { setDeleteTarget(viewTarget); setViewTarget(null); }}
-              >
-                <Trash2 size={13} />
-                Delete
-              </Button>
+              {canEdit && (
+                <>
+                  <Button
+                    className="flex-1 bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center gap-1.5"
+                    onClick={() => { setViewTarget(null); router.push(`/portal/sales/services/monthly/update-service-plan/${viewTarget.id}`); }}
+                  >
+                    <Pencil size={13} />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 text-rose-600 border-rose-200 hover:bg-rose-50 flex items-center justify-center gap-1.5"
+                    onClick={() => { setDeleteTarget(viewTarget); setViewTarget(null); }}
+                  >
+                    <Trash2 size={13} />
+                    Delete
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -9,6 +9,7 @@ import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 import { ServicePackageFormModal, type PackageRecord } from './ServicePackageFormModal';
+import type { PortalRole } from '@/generated/prisma/client';
 
 export function ServicePackages(): React.ReactNode {
   const { success, error } = useToast();
@@ -19,6 +20,34 @@ export function ServicePackages(): React.ReactNode {
   const [deleteTarget, setDeleteTarget] = useState<PackageRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+  // Portal access control
+  const [canEdit, setCanEdit] = useState(false);
+
+  // Fetch portal access to determine edit/delete permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          const hasEditAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanEdit(hasEditAccess);
+        }
+      } catch {
+        setCanEdit(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   useEffect(() => {
     fetch('/api/sales/services/packages')
@@ -124,15 +153,17 @@ export function ServicePackages(): React.ReactNode {
       </div>
 
       {/* Add Button */}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleOpenCreate}
-          className="bg-amber-500 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-amber-600 shadow-sm"
-        >
-          <Plus size={14} className="mr-1" />
-          New Package
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <Button
+            onClick={handleOpenCreate}
+            className="bg-amber-500 text-white rounded-md font-bold text-[11px] px-4 py-2 hover:bg-amber-600 shadow-sm"
+          >
+            <Plus size={14} className="mr-1" />
+            New Package
+          </Button>
+        </div>
+      )}
 
       {/* Table */}
       <Card className="border-slate-200 shadow-lg overflow-hidden">
@@ -236,22 +267,24 @@ export function ServicePackages(): React.ReactNode {
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            className="h-7 px-3 bg-slate-800 hover:bg-slate-900 text-white text-[11px] flex items-center gap-1"
-                            onClick={() => handleOpenEdit(pkg)}
-                          >
-                            <Pencil size={11} />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="h-7 px-2 text-rose-600 border-rose-200 hover:bg-rose-50"
-                            onClick={() => setDeleteTarget(pkg)}
-                          >
-                            <Trash2 size={12} />
-                          </Button>
-                        </div>
+                        {canEdit && (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              className="h-7 px-3 bg-slate-800 hover:bg-slate-900 text-white text-[11px] flex items-center gap-1"
+                              onClick={() => handleOpenEdit(pkg)}
+                            >
+                              <Pencil size={11} />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="h-7 px-2 text-rose-600 border-rose-200 hover:bg-rose-50"
+                              onClick={() => setDeleteTarget(pkg)}
+                            >
+                              <Trash2 size={11} />
+                            </Button>
+                          </div>
+                        )}
                       </td>
                     </tr>
 
