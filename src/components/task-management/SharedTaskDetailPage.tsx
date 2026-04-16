@@ -154,7 +154,7 @@ export function SharedTaskDetailPage({
   SubtaskModalComponent = SubtaskDetailModal,
 }: SharedTaskDetailPageProps): React.ReactNode {
   const router = useRouter();
-  const { error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [editingTask, setEditingTask] = useState<AOTask>(initialTask);
   const [conversations, setConversations] = useState<ConversationEntry[]>(initialConversations);
   const [historyLogs, setHistoryLogs] = useState<TaskHistoryEntry[]>(initialHistoryLogs);
@@ -397,6 +397,7 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
       });
       setIsSaving(false);
       if (!res.ok) { toastError('Failed to update comment', 'Please try again.'); return; }
+      toastSuccess('Comment updated', 'Your comment has been saved successfully.');
     }
     setConversations(prev => prev.map(c =>
       c.id === editingCommentId ? { ...c, message: editCommentValue.trim() } : c
@@ -416,6 +417,7 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
       const res = await fetch(`/api/tasks/${taskId}/conversations/${commentId}`, { method: 'DELETE' });
       setIsSaving(false);
       if (!res.ok) { toastError('Failed to delete comment', 'Please try again.'); return; }
+      toastSuccess('Comment deleted', 'The comment has been removed.');
     }
     setConversations(prev => prev.filter(c => c.id !== commentId));
     setDeletingCommentId(null);

@@ -240,53 +240,76 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     ...getRequestMeta(request),
   });
 
-  // Notify assigned employee and task creator on important changes
-  const importantTypes = ['STATUS_CHANGED', 'PRIORITY_CHANGED', 'DETAILS_UPDATED', 'ASSIGNEE_CHANGED'];
-  if (historyEntries.some(e => importantTypes.includes(e.changeType))) {
+  // Notify relevant users on important changes
+  const notifyTypes = ['STATUS_CHANGED', 'PRIORITY_CHANGED', 'DUE_DATE_CHANGED', 'ASSIGNEE_CHANGED'];
+  if (historyEntries.some(e => notifyTypes.includes(e.changeType))) {
     void (async () => {
-      const [creatorLog, assigneeEmployee] = await Promise.all([
-        prisma.activityLog.findFirst({
-          where: { entity: 'Task', entityId: String(taskId), action: 'CREATED' },
-          select: { userId: true },
-        }),
-        updated.assignedToId
-          ? prisma.employee.findUnique({ where: { id: updated.assignedToId }, select: { userId: true } })
-          : Promise.resolve(null),
-      ]);
-
-      const recipientIds = new Set<string>();
-      if (creatorLog?.userId && creatorLog.userId !== session.user.id) recipientIds.add(creatorLog.userId);
-      if (assigneeEmployee?.userId && assigneeEmployee.userId !== session.user.id) recipientIds.add(assigneeEmployee.userId);
-      if (recipientIds.size === 0) return;
+      // Determine portal URL based on department
+      const deptName = updated.department?.name?.toLowerCase() ?? '';
+      let portalUrl = `/portal/task-management/tasks/${taskId}`;
+      
+      if (deptName.includes('liaison')) {
+        portalUrl = `/portal/liaison/tasks/${taskId}`;
+      } else if (deptName.includes('compliance')) {
+        portalUrl = `/portal/compliance/tasks/${taskId}`;
+      } else if (deptName.includes('account officer') || deptName.includes('account-officer')) {
+        portalUrl = `/portal/account-officer/tasks/${taskId}`;
+      } else if (deptName.includes('operation')) {
+        portalUrl = `/portal/operations/tasks/${taskId}`;
+      }
 
       const statusEntry = historyEntries.find(e => e.changeType === 'STATUS_CHANGED');
       const priorityEntry = historyEntries.find(e => e.changeType === 'PRIORITY_CHANGED');
-      const nameEntry = historyEntries.find(e => e.changeType === 'DETAILS_UPDATED' && e.oldValue);
+      const dueDateEntry = historyEntries.find(e => e.changeType === 'DUE_DATE_CHANGED');
       const assigneeEntry = historyEntries.find(e => e.changeType === 'ASSIGNEE_CHANGED');
 
-      let title = `Task updated: "${updated.name}"`;
-      let message = 'A task has been updated.';
-      if (statusEntry) {
-        title = `Status changed on "${updated.name}"`;
-        message = `Status: "${statusEntry.oldValue ?? '—'}" → "${statusEntry.newValue ?? '—'}"`;
-      } else if (priorityEntry) {
-        title = `Priority changed on "${updated.name}"`;
-        message = `Priority: "${priorityEntry.oldValue ?? '—'}" → "${priorityEntry.newValue ?? '—'}"`;
-      } else if (nameEntry) {
-        title = 'Task renamed';
-        message = `"${nameEntry.oldValue}" was renamed to "${nameEntry.newValue}"`;
-      } else if (assigneeEntry) {
-        title = `Assignee changed on "${updated.name}"`;
-        message = `Assignee changed to "${assigneeEntry.newValue ?? 'Unassigned'}"`;
+      // Assignment change: Notify ONLY the new assignee
+      if (assigneeEntry && updated.assignedToId) {
+        const newAssignee = await prisma.employee.findUnique({
+          where: { id: updated.assignedToId },
+          select: { userId: true },
+        });
+        if (newAssignee?.userId && newAssignee.userId !== session.user.id) {
+          void notifyMany({
+            userIds: [newAssignee.userId],
+            type: 'TASK',
+            title: `You were assigned to "${updated.name}"`,
+            message: `${session.user.name} assigned you to this task.`,
+            linkUrl: portalUrl,
+          });
+        }
       }
 
-      void notifyMany({
-        userIds: [...recipientIds],
-        type: 'TASK',
-        title,
-        message,
-        linkUrl: `/portal/task-management/tasks/${taskId}`,
-      });
+      // Status/Priority/Due Date change: Notify current assignee
+      if ((statusEntry || priorityEntry || dueDateEntry) && updated.assignedToId) {
+        const currentAssignee = await prisma.employee.findUnique({
+          where: { id: updated.assignedToId },
+          select: { userId: true },
+        });
+        if (currentAssignee?.userId && currentAssignee.userId !== session.user.id) {
+          let title = `Task updated: "${updated.name}"`;
+          let message = 'A task has been updated.';
+          
+          if (statusEntry) {
+            title = `Task status changed to ${statusEntry.newValue}`;
+            message = `"${updated.name}" status: ${statusEntry.oldValue ?? '—'} → ${statusEntry.newValue ?? '—'}`;
+          } else if (priorityEntry) {
+            title = `Task priority changed to ${priorityEntry.newValue}`;
+            message = `"${updated.name}" priority: ${priorityEntry.oldValue ?? '—'} → ${priorityEntry.newValue ?? '—'}`;
+          } else if (dueDateEntry) {
+            title = 'Task due date updated';
+            message = `"${updated.name}" due date changed to ${dueDateEntry.newValue ?? '—'}`;
+          }
+
+          void notifyMany({
+            userIds: [currentAssignee.userId],
+            type: 'TASK',
+            title,
+            message,
+            linkUrl: portalUrl,
+          });
+        }
+      }
     })();
   }
 
