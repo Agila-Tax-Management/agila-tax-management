@@ -93,8 +93,8 @@ async function buildPdfBlobFromTsa(tsa: TsaListItem): Promise<Blob> {
     planName: tsa.packageName ?? '',
     planPrice: '',
     actualMonthlySubscription: tsa.totalMonthlyRecurring.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
-    planServices: tsa.recurringServiceNames,
-    additionalServices: tsa.oneTimeServiceNames,
+    planServices: [...tsa.recurringServiceNames, ...tsa.freeOneTimeServiceNames],
+    additionalServices: tsa.oneTimeServicesWithPricing,
     headerSrc: '',
     ...buildFlagsFromNames(tsa.serviceNames),
   };

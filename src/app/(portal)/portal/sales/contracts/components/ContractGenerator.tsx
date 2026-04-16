@@ -606,8 +606,8 @@ export function ContractGenerator() {
       tosDate: result.documentDate.slice(0, 10),
       planName: result.packageName ?? '',
       actualMonthlySubscription: result.totalMonthlyRecurring.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
-      planServices: result.recurringServiceNames,
-      additionalServices: result.oneTimeServiceNames,
+      planServices: [...result.recurringServiceNames, ...result.freeOneTimeServiceNames],
+      additionalServices: result.oneTimeServicesWithPricing,
       ...flags,
     }));
     setOpen({ client: true, plan: true, dti: true, sec: true, lgu: true, bir: true, birc: true, emp: true, rem: true });

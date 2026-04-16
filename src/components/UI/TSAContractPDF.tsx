@@ -259,19 +259,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     fontSize: 10,
     color: C.dark,
-    paddingTop: 0,
+    paddingTop: 40,
     paddingBottom: 54,
     paddingHorizontal: 0,
     lineHeight: 1.5,
   },
   pageContent: {
-    paddingTop: 16,
+    paddingTop: 0,
     paddingHorizontal: 54,
     flex: 1,
   },
   headerImage: {
     width: '100%',
     objectFit: 'contain',
+    marginTop: -40,
     marginBottom: 12,
   },
   titleBar: {
@@ -665,10 +666,10 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
           </View>
         ) : null}
 
-        {/* Additional / one-time paid services */}
-        <View style={{ marginBottom: 6 }}>
-          <Text style={[styles.indent, styles.bold]}>{'• Additional Services / One-Time Fees:'}</Text>
-          {(data.additionalServices ?? []).length > 0 ? (
+        {/* Additional / one-time paid services - only show if there are any */}
+        {(data.additionalServices ?? []).length > 0 ? (
+          <View style={{ marginBottom: 6 }}>
+            <Text style={[styles.indent, styles.bold]}>{'• Additional Services / One-Time Fees:'}</Text>
             <View style={{ marginLeft: 36, marginTop: 2 }}>
               {(data.additionalServices ?? []).map((svc, i) => (
                 <Text key={i} style={[styles.serviceItem, { marginLeft: 0 }]}>
@@ -676,12 +677,8 @@ export function TSAContractPDF({ data }: { data: ContractData }) {
                 </Text>
               ))}
             </View>
-          ) : (
-            <Text style={[styles.indent, { fontSize: 9, color: '#64748b' }]}>
-              {'Rates are based on selected service plans and will be confirmed prior to commencement of work.'}
-            </Text>
-          )}
-        </View>
+          </View>
+        ) : null}
 
         {/* II. Scope of Services */}
         <SectionTitle number="II" title="SCOPE OF SERVICES" />
