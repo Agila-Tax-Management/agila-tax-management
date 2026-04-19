@@ -62,18 +62,18 @@ export async function GET(request: NextRequest) {
         },
       },
       select: {
-        total: true,
+        totalAmount: true,
         issueDate: true,
       },
     });
 
     // Calculate total sales
-    const totalSales = invoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+    const totalSales = invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
 
     // Fetch active recurring subscriptions
-    const activeRetainers = await prisma.subscription.count({
+    const activeRetainers = await prisma.clientSubscription.count({
       where: {
-        status: "ACTIVE",
+        isActive: true,
       },
     });
 
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
 
         const hourSales = invoices
           .filter((inv) => new Date(inv.issueDate) >= hourStart && new Date(inv.issueDate) < hourEnd)
-          .reduce((sum, inv) => sum + Number(inv.total), 0);
+          .reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
 
         chartData.push({
           name: `${String(hour).padStart(2, "0")}:00`,
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 
         const daySales = invoices
           .filter((inv) => new Date(inv.issueDate) >= dayStart && new Date(inv.issueDate) <= dayEnd)
-          .reduce((sum, inv) => sum + Number(inv.total), 0);
+          .reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
 
         chartData.push({
           name: days[dayStart.getDay()]!,
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
 
         const weekSales = invoices
           .filter((inv) => new Date(inv.issueDate) >= weekStart && new Date(inv.issueDate) <= weekEnd)
-          .reduce((sum, inv) => sum + Number(inv.total), 0);
+          .reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
 
         chartData.push({
           name: `Week ${weekNum}`,
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
 
         const monthSales = invoices
           .filter((inv) => new Date(inv.issueDate) >= monthStart && new Date(inv.issueDate) <= monthEnd)
-          .reduce((sum, inv) => sum + Number(inv.total), 0);
+          .reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
 
         chartData.push({
           name: months[month]!,

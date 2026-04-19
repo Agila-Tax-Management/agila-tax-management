@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     data: {
       taskId,
       actorId: session.user.id,
-      changeType: "COMMENT_EDITED",
+      changeType: "DETAILS_UPDATED",
       oldValue: conversation.message.slice(0, 200),
       newValue: parsed.data.message.slice(0, 200),
     },
@@ -128,7 +128,7 @@ export async function DELETE(_request: NextRequest, { params }: Params): Promise
     data: {
       taskId,
       actorId: session.user.id,
-      changeType: "COMMENT_DELETED",
+      changeType: "DETAILS_UPDATED",
       oldValue: conversation.message.slice(0, 200),
     },
   });

@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   ArrowLeft, Calendar, Tag, Send, Clock,
   ChevronDown, ChevronLeft, Check, Plus, ChevronRight, History, MessageSquare, Search, X, Link,
@@ -1271,9 +1272,11 @@ const [isEditingTitle, setIsEditingTitle] = useState(false);
                     >
                       {/* Avatar */}
                       {item.author.image ? (
-                        <img
+                        <Image
                           src={item.author.image}
                           alt={item.author.name}
+                          width={28}
+                          height={28}
                           className="w-7 h-7 rounded-full shrink-0 mt-0.5 shadow-sm border border-slate-200 object-cover"
                         />
                       ) : (

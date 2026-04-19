@@ -29,7 +29,7 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
   const router = useRouter();
   const [badgeData, setBadgeData] = useState<LiaisonSidebarData>(EMPTY_SIDEBAR_DATA);
   const [portalRole, setPortalRole] = useState<PortalRole | null>(null);
-  const [loadingAccess, setLoadingAccess] = useState(true);
+  const [_loadingAccess, setLoadingAccess] = useState(true);
 
   // Fetch portal access to determine role
   useEffect(() => {
@@ -85,7 +85,7 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
     // Show Reports only for ADMIN and SETTINGS (hide for VIEWER and USER)
     if (portalRole === 'ADMIN' || portalRole === 'SETTINGS') {
       items.push(
-        { id: 'report', label: 'Report', icon: Calendar, href: '/portal/liaison/report' }
+        { id: 'report', label: 'Report', icon: Calendar, href: '/portal/liaison/report', badge: 0 }
       );
     }
 
