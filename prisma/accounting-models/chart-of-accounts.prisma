@@ -1,88 +1,88 @@
 enum FinancialStatementGroup {
-    ASSET
-    LIABILITY
-    EQUITY
-    REVENUE
-    EXPENSE
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
 }
 
 enum NormalBalance {
-    DEBIT
-    CREDIT
+  DEBIT
+  CREDIT
 }
 
 // ─── Account Type (e.g., "Current Asset", "Cost of Revenue") ─────
 model AccountType {
-    id   Int    @id @default(autoincrement())
-    name String @unique
+  id   Int    @id @default(autoincrement())
+  name String @unique
 
-    // The Anchor: Tells the system how to calculate this type
-    group         FinancialStatementGroup
-    normalBalance NormalBalance
+  // The Anchor: Tells the system how to calculate this type
+  group         FinancialStatementGroup
+  normalBalance NormalBalance
 
-    // Relations
-    detailTypes AccountDetailType[]
-    accounts    GlAccount[]
+  // Relations
+  detailTypes AccountDetailType[]
+  accounts    GlAccount[]
 
-    isActive  Boolean  @default(true)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@map("account_type")
+  @@map("account_type")
 }
 
 // ─── Account Detail Type (e.g., "Cash and Cash Equivalents") ─────
 model AccountDetailType {
-    id   Int    @id @default(autoincrement())
-    name String
+  id   Int    @id @default(autoincrement())
+  name String
 
-    accountTypeId Int
-    accountType   AccountType @relation(fields: [accountTypeId], references: [id], onDelete: Cascade)
+  accountTypeId Int
+  accountType   AccountType @relation(fields: [accountTypeId], references: [id], onDelete: Cascade)
 
-    accounts GlAccount[]
+  accounts GlAccount[]
 
-    isActive  Boolean  @default(true)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    // Prevents duplicate detail names under the same type
-    @@unique([accountTypeId, name])
-    @@map("account_detail_type")
+  // Prevents duplicate detail names under the same type
+  @@unique([accountTypeId, name])
+  @@map("account_detail_type")
 }
 
 // ─── Chart of Accounts (The Financial Ledger) ─────────────────────
 model GlAccount {
-    id String @id @default(cuid())
+  id String @id @default(cuid())
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-    accountCode String  //e.g. "1001", "1010-A", "4000-REV"
-    name        String  //e.g. "Cash", "Accounts Receivable", "Service Revenue"
-    description String? @db.Text
+  accountCode String //e.g. "1001", "1010-A", "4000-REV"
+  name        String //e.g. "Cash", "Accounts Receivable", "Service Revenue"
+  description String? @db.Text
 
-    // ─── THE DYNAMIC LINKS ───
-    accountTypeId Int
-    accountType   AccountType @relation(fields: [accountTypeId], references: [id], onDelete: Restrict)
+  // ─── THE DYNAMIC LINKS ───
+  accountTypeId Int
+  accountType   AccountType @relation(fields: [accountTypeId], references: [id], onDelete: Restrict)
 
-    accountDetailTypeId Int
-    accountDetailType   AccountDetailType @relation(fields: [accountDetailTypeId], references: [id], onDelete: Restrict)
+  accountDetailTypeId Int
+  accountDetailType   AccountDetailType @relation(fields: [accountDetailTypeId], references: [id], onDelete: Restrict)
 
-    // Hierarchy
-    parentId    String?
-    parent      GlAccount?  @relation("SubAccounts", fields: [parentId], references: [id], onDelete: Restrict)
-    subAccounts GlAccount[] @relation("SubAccounts")
+  // Hierarchy
+  parentId    String?
+  parent      GlAccount?  @relation("SubAccounts", fields: [parentId], references: [id], onDelete: Restrict)
+  subAccounts GlAccount[] @relation("SubAccounts")
 
-    isActive        Boolean  @default(true)
-    isBankAccount   Boolean  @default(false)
-    openingBalance  Decimal? @db.Decimal(15, 2)
+  isActive       Boolean  @default(true)
+  isBankAccount  Boolean  @default(false)
+  openingBalance Decimal? @db.Decimal(15, 2)
 
-    journalLines JournalLine[]
+  journalLines JournalLine[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@unique([clientId, accountCode])
-    @@index([clientId])
-    @@map("gl_account")
+  @@unique([clientId, accountCode])
+  @@index([clientId])
+  @@map("gl_account")
 }

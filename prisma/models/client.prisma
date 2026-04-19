@@ -71,8 +71,8 @@ model Client {
   // 1-to-Many
   shareholders CorporateShareholder[]
 
-  lead Lead?
-  jobOrders   JobOrder[]
+  lead         Lead?
+  jobOrders    JobOrder[]
   tsaContracts TsaContract[]
 
   activityLogs ActivityLog[]
@@ -92,10 +92,10 @@ model Client {
   payments      Payment[]
   cashAdvances  CashAdvance[]
 
-  hrSetting         HrSetting?
-  salesSetting      SalesSetting?
+  hrSetting    HrSetting?
+  salesSetting SalesSetting?
 
-  payrollSchedules  PayrollSchedule[]
+  payrollSchedules PayrollSchedule[]
 
   holidays         Holiday[]
   timesheets       Timesheet[]

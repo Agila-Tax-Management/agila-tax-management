@@ -3,246 +3,246 @@
 // ─── Enums ────────────────────────────────────────────────────────
 
 enum TaskPriority {
-    LOW
-    NORMAL
-    HIGH
-    URGENT
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }
 
 enum TaskChangeType {
-    CREATED
-    STATUS_CHANGED
-    DEPARTMENT_CHANGED
-    ASSIGNEE_CHANGED
-    PRIORITY_CHANGED
-    DUE_DATE_CHANGED
-    DETAILS_UPDATED
-    COMMENT_ADDED
-    JOB_ORDER_CHANGED
+  CREATED
+  STATUS_CHANGED
+  DEPARTMENT_CHANGED
+  ASSIGNEE_CHANGED
+  PRIORITY_CHANGED
+  DUE_DATE_CHANGED
+  DETAILS_UPDATED
+  COMMENT_ADDED
+  JOB_ORDER_CHANGED
 }
 
 // ─── Task Template (The Blueprint) ────────────────────────────────
 model TaskTemplate {
-    id          Int     @id @default(autoincrement())
-    name        String // e.g., "BIR Registration"
-    description String?
+  id          Int     @id @default(autoincrement())
+  name        String // e.g., "BIR Registration"
+  description String?
 
-    // Expected days to complete the full multi-department workflow
-    daysDue Int?
+  // Expected days to complete the full multi-department workflow
+  daysDue Int?
 
-    departmentRoutes    TaskTemplateRoute[]
-    tasks               Task[]
+  departmentRoutes TaskTemplateRoute[]
+  tasks            Task[]
 
-    services  ServiceTaskTemplate[] @relation("ServiceTemplates")
+  services ServiceTaskTemplate[] @relation("ServiceTemplates")
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@map("task_template")
+  @@map("task_template")
 }
 
 // ─── Task Template Route (One department step in the workflow) ─────
 model TaskTemplateRoute {
-    id         Int          @id @default(autoincrement())
-    templateId Int
-    template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  id         Int          @id @default(autoincrement())
+  templateId Int
+  template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
-    departmentId Int
-    department   Department @relation("DepartmentTemplateRoutes", fields: [departmentId], references: [id])
+  departmentId Int
+  department   Department @relation("DepartmentTemplateRoutes", fields: [departmentId], references: [id])
 
-    routeOrder Int @default(1)
-    daysDue    Int?
+  routeOrder Int  @default(1)
+  daysDue    Int?
 
-    subtasks TaskTemplateSubtask[]
+  subtasks TaskTemplateSubtask[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@unique([templateId, departmentId])
-    @@index([templateId])
-    @@map("task_template_route")
+  @@unique([templateId, departmentId])
+  @@index([templateId])
+  @@map("task_template_route")
 }
 
 // ─── Task Template Subtask (Blueprint Checklists) ─────────────────
 model TaskTemplateSubtask {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    // 🟢 Links to a specific route (department step), not the template directly
-    routeId Int
-    route   TaskTemplateRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  // 🟢 Links to a specific route (department step), not the template directly
+  routeId Int
+  route   TaskTemplateRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
-    name        String
-    description String?
+  name        String
+  description String?
 
-    subtaskOrder Int          @default(1)
-    priority     TaskPriority @default(NORMAL)
+  subtaskOrder Int          @default(1)
+  priority     TaskPriority @default(NORMAL)
 
-    daysDue Int?
+  daysDue Int?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([routeId])
-    @@map("task_template_subtask")
+  @@index([routeId])
+  @@map("task_template_subtask")
 }
 
 // ─── Department Task Status (Micro Kanban Columns) ────────────────
 model DepartmentTaskStatus {
-    id    Int     @id @default(autoincrement())
-    name  String
-    color String?
+  id    Int     @id @default(autoincrement())
+  name  String
+  color String?
 
-    departmentId Int
-    department   Department @relation("DepartmentStatuses", fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId Int
+  department   Department @relation("DepartmentStatuses", fields: [departmentId], references: [id], onDelete: Cascade)
 
-    statusOrder Int @default(1)
+  statusOrder Int @default(1)
 
-    isEntryStep Boolean @default(false) // Task automatically lands here
-    isExitStep  Boolean @default(false) // Triggers completion or handover
+  isEntryStep Boolean @default(false) // Task automatically lands here
+  isExitStep  Boolean @default(false) // Triggers completion or handover
 
-    activeTasks Task[] @relation("TaskStatus")
+  activeTasks Task[] @relation("TaskStatus")
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@unique([departmentId, name])
-    @@index([departmentId])
-    @@map("department_task_status")
+  @@unique([departmentId, name])
+  @@index([departmentId])
+  @@map("department_task_status")
 }
 
 // ─── Task (The Live Record) ───────────────────────────────────────
 model Task {
-    id          Int     @id @default(autoincrement())
-    name        String
-    description String?
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
 
-    clientId Int?
-    client   Client? @relation(fields: [clientId], references: [id])
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
 
-    templateId Int?
-    template   TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId Int?
+  template   TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
-    // ─── The Department & Kanban Status ───
-    departmentId Int?
-    department   Department? @relation("TaskDepartment", fields: [departmentId], references: [id])
+  // ─── The Department & Kanban Status ───
+  departmentId Int?
+  department   Department? @relation("TaskDepartment", fields: [departmentId], references: [id])
 
-    statusId Int?
-    status   DepartmentTaskStatus? @relation("TaskStatus", fields: [statusId], references: [id])
+  statusId Int?
+  status   DepartmentTaskStatus? @relation("TaskStatus", fields: [statusId], references: [id])
 
-    assignedToId Int?
-    assignedTo   Employee? @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedToId Int?
+  assignedTo   Employee? @relation("TaskAssignee", fields: [assignedToId], references: [id])
 
-    priority TaskPriority @default(NORMAL)
-    daysDue  Int?
-    dueDate  DateTime?
+  priority TaskPriority @default(NORMAL)
+  daysDue  Int?
+  dueDate  DateTime?
 
-    subtasks      TaskSubtask[]
-    conversations TaskConversation[]
-    historyLogs   TaskHistory[]
+  subtasks      TaskSubtask[]
+  conversations TaskConversation[]
+  historyLogs   TaskHistory[]
 
-    jobOrderId String?
-    jobOrder   JobOrder? @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
+  jobOrderId String?
+  jobOrder   JobOrder? @relation(fields: [jobOrderId], references: [id], onDelete: SetNull)
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([clientId])
-    @@index([jobOrderId])
-    @@index([departmentId, statusId])
-    @@map("task")
+  @@index([clientId])
+  @@index([jobOrderId])
+  @@index([departmentId, statusId])
+  @@map("task")
 }
 
 // ─── Task Subtask (The Live Checklist) ────────────────────────────
 model TaskSubtask {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    // 🟢 Strictly connected ONLY to the parent Task
-    parentTaskId Int
-    parentTask   Task @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
+  // 🟢 Strictly connected ONLY to the parent Task
+  parentTaskId Int
+  parentTask   Task @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
 
-    name        String
-    description String?
+  name        String
+  description String?
 
-    assignedToId Int?
-    assignedTo   Employee? @relation("SubtaskAssignee", fields: [assignedToId], references: [id])
+  assignedToId Int?
+  assignedTo   Employee? @relation("SubtaskAssignee", fields: [assignedToId], references: [id])
 
-    // 🟢 Replaced dynamic status with a simple boolean for the checklist
-    isCompleted Boolean @default(false)
+  // 🟢 Replaced dynamic status with a simple boolean for the checklist
+  isCompleted Boolean @default(false)
 
-    priority TaskPriority @default(NORMAL)
-    order    Int          @default(0)
+  priority TaskPriority @default(NORMAL)
+  order    Int          @default(0)
 
-    daysDue Int?
-    dueDate DateTime?
+  daysDue Int?
+  dueDate DateTime?
 
-    historyLogs TaskSubtaskHistory[]
+  historyLogs TaskSubtaskHistory[]
 
-    createdAt    DateTime    @default(now())
-    updatedAt    DateTime    @updatedAt
-    department   Department? @relation(fields: [departmentId], references: [id])
-    departmentId Int?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId Int?
 
-    @@index([parentTaskId])
-    @@map("task_subtask")
+  @@index([parentTaskId])
+  @@map("task_subtask")
 }
 
 // ─── Task History (Timeline Ledger) ───────────────────────────────
 model TaskHistory {
-    id String @id @default(cuid())
+  id String @id @default(cuid())
 
-    taskId Int
-    task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId Int
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-    actorId String
-    actor   User   @relation(fields: [actorId], references: [id])
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
 
-    changeType TaskChangeType
+  changeType TaskChangeType
 
-    oldValue String? @db.Text
-    newValue String? @db.Text
+  oldValue String? @db.Text
+  newValue String? @db.Text
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@index([taskId])
-    @@index([taskId, createdAt(sort: Desc)])
-    @@map("task_history")
+  @@index([taskId])
+  @@index([taskId, createdAt(sort: Desc)])
+  @@map("task_history")
 }
 
 // ─── Task Subtask History (Per-Subtask Change Log) ────────────────
 model TaskSubtaskHistory {
-    id String @id @default(cuid())
+  id String @id @default(cuid())
 
-    subtaskId Int
-    subtask   TaskSubtask @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
+  subtaskId Int
+  subtask   TaskSubtask @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
 
-    actorId String
-    actor   User   @relation("SubtaskHistoryActor", fields: [actorId], references: [id])
+  actorId String
+  actor   User   @relation("SubtaskHistoryActor", fields: [actorId], references: [id])
 
-    kind    String
-    message String @db.Text
+  kind    String
+  message String @db.Text
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@index([subtaskId])
-    @@index([subtaskId, createdAt(sort: Desc)])
-    @@map("task_subtask_history")
+  @@index([subtaskId])
+  @@index([subtaskId, createdAt(sort: Desc)])
+  @@map("task_subtask_history")
 }
 
 // ─── Task Conversation (Threaded Comments) ────────────────────────
 model TaskConversation {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    taskId Int
-    task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId Int
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-    authorId String
-    author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
 
-    message String @db.Text
+  message String @db.Text
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([taskId])
-    @@map("task_conversation")
+  @@index([taskId])
+  @@map("task_conversation")
 }

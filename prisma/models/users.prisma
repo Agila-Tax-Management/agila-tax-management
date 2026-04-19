@@ -50,16 +50,16 @@ model User {
   acknowledgedPayslips Payslip[] @relation("PayslipAcknowledger")
 
   // ─── Job Order Workflows ───
-  preparedJobOrders           JobOrder[]    @relation("JobOrderPreparer")
-  
-  assignedJoAccountManagers   JobOrder[]    @relation("JoAssignedAccountManager")
-  actualJoAccountManagers     JobOrder[]    @relation("JoActualAccountManager")
-  
-  assignedJoOperationsManagers JobOrder[]   @relation("JoAssignedOperationsManager")
-  actualJoOperationsManagers   JobOrder[]   @relation("JoActualOperationsManager")
-  
-  assignedJoExecutives        JobOrder[]    @relation("JoAssignedExecutive")
-  actualJoExecutives          JobOrder[]    @relation("JoActualExecutive")
+  preparedJobOrders JobOrder[] @relation("JobOrderPreparer")
+
+  assignedJoAccountManagers JobOrder[] @relation("JoAssignedAccountManager")
+  actualJoAccountManagers   JobOrder[] @relation("JoActualAccountManager")
+
+  assignedJoOperationsManagers JobOrder[] @relation("JoAssignedOperationsManager")
+  actualJoOperationsManagers   JobOrder[] @relation("JoActualOperationsManager")
+
+  assignedJoExecutives JobOrder[] @relation("JoAssignedExecutive")
+  actualJoExecutives   JobOrder[] @relation("JoActualExecutive")
 
   // ─── Compliance Defaults (From ClientCompliance) ───
   defaultProcessorFor        ClientCompliance[] @relation("DefaultProcessor")
@@ -70,17 +70,17 @@ model User {
   defaultSalesOfficerFor     ClientCompliance[] @relation("DefaultSalesOfficer")
 
   // ─── Actual Executions (From ComplianceRecord) ───
-  processedRecords           ComplianceRecord[] @relation("RecordProcessor")
-  verifiedRecords            ComplianceRecord[] @relation("RecordVerifier")
-  paymentProcessedRecords    ComplianceRecord[] @relation("RecordPaymentProcessor")
-  paymentApprovedRecords     ComplianceRecord[] @relation("RecordPaymentApprover")
-  finalApprovedRecords       ComplianceRecord[] @relation("RecordFinalApprover")
-  salesObservedRecords       ComplianceRecord[] @relation("RecordSalesOfficer")
+  processedRecords        ComplianceRecord[] @relation("RecordProcessor")
+  verifiedRecords         ComplianceRecord[] @relation("RecordVerifier")
+  paymentProcessedRecords ComplianceRecord[] @relation("RecordPaymentProcessor")
+  paymentApprovedRecords  ComplianceRecord[] @relation("RecordPaymentApprover")
+  finalApprovedRecords    ComplianceRecord[] @relation("RecordFinalApprover")
+  salesObservedRecords    ComplianceRecord[] @relation("RecordSalesOfficer")
 
- // ─── TSA Workflows ───
-  preparedTsas                TsaContract[] @relation("TsaPreparer")
-  assignedTsaApprovals        TsaContract[] @relation("TsaAssignedApprover")
-  actuallyApprovedTsas        TsaContract[] @relation("TsaActualApprover")
+  // ─── TSA Workflows ───
+  preparedTsas         TsaContract[] @relation("TsaPreparer")
+  assignedTsaApprovals TsaContract[] @relation("TsaAssignedApprover")
+  actuallyApprovedTsas TsaContract[] @relation("TsaActualApprover")
 
   // ─── Sales Portal Defaults (From SalesSetting) ───
   defaultJoProcessApprovals    SalesSetting[] @relation("DefaultJoProcessApprover")
@@ -90,7 +90,8 @@ model User {
   defaultTsaApprovals          SalesSetting[] @relation("DefaultTsaApprover")
 
   // ─── Communication ───
-  complianceNotes            ComplianceNote[]
+  complianceNotes  ComplianceNote[]
+  ewtItemHistories EwtItemHistory[]
 
   @@unique([email])
   @@map("user")

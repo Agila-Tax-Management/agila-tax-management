@@ -1,49 +1,49 @@
 // ─── Notification Enums ───
 enum NotificationType {
-    SYSTEM       // Scheduled Maintenance, System Errors
-    HR           // Leave Approved, COA Rejected, Schedule Changed
-    PAYROLL      // Payslip Available, Loan Approved
-    TASK         // New Task Assigned, Task Completed
-    DOCUMENT     // SEC Form Uploaded, Contract Signed
-    ANNOUNCEMENT // Company Team Building, Public Holidays
+  SYSTEM // Scheduled Maintenance, System Errors
+  HR // Leave Approved, COA Rejected, Schedule Changed
+  PAYROLL // Payslip Available, Loan Approved
+  TASK // New Task Assigned, Task Completed
+  DOCUMENT // SEC Form Uploaded, Contract Signed
+  ANNOUNCEMENT // Company Team Building, Public Holidays
 }
 
 enum NotificationPriority {
-    LOW          // Minor updates (e.g., someone commented on a task)
-    NORMAL       // Standard alerts (Default)
-    HIGH         // Action required (e.g., leave request awaiting your approval)
-    URGENT       // Critical (e.g., timesheet missing for payroll cutoff!)
+  LOW // Minor updates (e.g., someone commented on a task)
+  NORMAL // Standard alerts (Default)
+  HIGH // Action required (e.g., leave request awaiting your approval)
+  URGENT // Critical (e.g., timesheet missing for payroll cutoff!)
 }
 
 // ─── Notification (Targeted User Alerts) ──────────────────────────
 model Notification {
-    id              String   @id @default(cuid())
-    
-    // ─── The Recipient (Dual-Auth Routing) ───
-    userId          String?
-    user            User?       @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
-    
-    clientUserId    String?
-    clientUser      ClientUser? @relation("ClientUserNotifications", fields: [clientUserId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
 
-    // ─── Content & Routing ───
-    title           String      
-    message         String      @db.Text 
-    linkUrl         String?     // The exact frontend route to redirect to
-    
-    // ─── Categorization & Weight ───
-    type            NotificationType     @default(SYSTEM)
-    priority        NotificationPriority @default(NORMAL)
+  // ─── The Recipient (Dual-Auth Routing) ───
+  userId String?
+  user   User?   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
-    // ─── State ───
-    isRead          Boolean     @default(false)
-    readAt          DateTime?
+  clientUserId String?
+  clientUser   ClientUser? @relation("ClientUserNotifications", fields: [clientUserId], references: [id], onDelete: Cascade)
 
-    createdAt       DateTime    @default(now())
-    updatedAt       DateTime    @updatedAt
+  // ─── Content & Routing ───
+  title   String
+  message String  @db.Text
+  linkUrl String? // The exact frontend route to redirect to
 
-    @@index([userId])
-    @@index([clientUserId])
-    @@index([isRead, priority]) // Optimizes fetching unread, urgent alerts first
-    @@map("notification")
+  // ─── Categorization & Weight ───
+  type     NotificationType     @default(SYSTEM)
+  priority NotificationPriority @default(NORMAL)
+
+  // ─── State ───
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([clientUserId])
+  @@index([isRead, priority]) // Optimizes fetching unread, urgent alerts first
+  @@map("notification")
 }

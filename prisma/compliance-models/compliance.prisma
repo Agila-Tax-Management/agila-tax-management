@@ -1,28 +1,41 @@
 // prisma/models/compliance.prisma
 
 enum FilingStatus {
-    PENDING
-    PREPARING
-    FOR_REVIEW
-    FILED
-    LATE_FILED
+  PENDING
+  PREPARING
+  FOR_REVIEW
+  FILED
+  LATE_FILED
 }
 
 // Updated based on your mockup workflow
 enum ProcessStatus {
-    PENDING 
-    AWAITING_VERIFICATION
-    AWAITING_PAYMENT_PROCESS
-    AWAITING_PAYMENT_APPROVAL
-    AWAITING_FINAL_APPROVAL
-    PAID        // Corresponds to the green PAID badge in Image 5
-    COMPLETED   // The absolute final state
+  PENDING
+  AWAITING_VERIFICATION
+  AWAITING_PAYMENT_PROCESS
+  AWAITING_PAYMENT_APPROVAL
+  AWAITING_FINAL_APPROVAL
+  PAID // Corresponds to the green PAID badge in Image 5
+  COMPLETED // The absolute final state
 }
 
 enum ZeroFilingStatus {
-    NONE
-    REQUESTED
-    CONFIRMED_ZERO // If the "Zero Filing" button is clicked
+  NONE
+  REQUESTED
+  CONFIRMED_ZERO // If the "Zero Filing" button is clicked
+}
+
+enum ComplianceType {
+  NONE
+  EWT // Expanded Withholding Tax
+  COMPENSATION // 1601-C
+  PERCENTAGE // 2551Q
+  VAT // 2550M / 2550Q
+  INCOME_TAX // 1701 / 1702
+  SSS
+  PHILHEALTH
+  PAGIBIG
+  LGU_RENEWAL
 }
 
 // ==========================================
@@ -31,134 +44,159 @@ enum ZeroFilingStatus {
 
 // ─── 1. Client Compliance Subscription (The Master Setup) ─────────
 model ClientCompliance {
-    id                 String        @id @default(cuid())
-    
-    clientId           Int
-    client             Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-    
-    serviceId          Int
-    service            Service       @relation(fields: [serviceId], references: [id])
-    
-    status             ServiceStatus @default(ACTIVE)
+  id String @id @default(cuid())
 
-    // ─── Default Assignees (Auto-assigned each month) ───
-    processorId        String?
-    processor          User?         @relation("DefaultProcessor", fields: [processorId], references: [id])
-    
-    verifierId         String?
-    verifier           User?         @relation("DefaultVerifier", fields: [verifierId], references: [id])
-    
-    paymentProcessorId String?
-    paymentProcessor   User?         @relation("DefaultPaymentProcessor", fields: [paymentProcessorId], references: [id])
-    
-    paymentApproverId  String?
-    paymentApprover    User?         @relation("DefaultPaymentApprover", fields: [paymentApproverId], references: [id])
-    
-    finalApproverId    String?
-    finalApprover      User?         @relation("DefaultFinalApprover", fields: [finalApproverId], references: [id])
-    
-    salesOfficerId     String?
-    salesOfficer       User?         @relation("DefaultSalesOfficer", fields: [salesOfficerId], references: [id])
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-    filingRecords      ComplianceRecord[]
+  serviceId Int
+  service   Service @relation(fields: [serviceId], references: [id])
 
-    createdAt          DateTime      @default(now())
-    updatedAt          DateTime      @updatedAt
+  status ServiceStatus @default(ACTIVE)
 
-    @@unique([clientId, serviceId]) 
-    @@index([clientId])
-    @@map("client_compliance")
+  // ─── Default Assignees (Auto-assigned each month) ───
+  processorId String?
+  processor   User?   @relation("DefaultProcessor", fields: [processorId], references: [id])
+
+  verifierId String?
+  verifier   User?   @relation("DefaultVerifier", fields: [verifierId], references: [id])
+
+  paymentProcessorId String?
+  paymentProcessor   User?   @relation("DefaultPaymentProcessor", fields: [paymentProcessorId], references: [id])
+
+  paymentApproverId String?
+  paymentApprover   User?   @relation("DefaultPaymentApprover", fields: [paymentApproverId], references: [id])
+
+  finalApproverId String?
+  finalApprover   User?   @relation("DefaultFinalApprover", fields: [finalApproverId], references: [id])
+
+  salesOfficerId String?
+  salesOfficer   User?   @relation("DefaultSalesOfficer", fields: [salesOfficerId], references: [id])
+
+  filingRecords ComplianceRecord[]
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  clientSubscriptions ClientSubscription[]
+
+  @@unique([clientId, serviceId])
+  @@index([clientId])
+  @@map("client_compliance")
 }
 
 // ─── 2. Periodic Compliance Record (The Monthly Execution) ────────
 model ComplianceRecord {
-    id                   String           @id @default(cuid())
-    
-    clientComplianceId   String
-    clientCompliance     ClientCompliance @relation(fields: [clientComplianceId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
 
-    coverageDate         DateTime         @db.Date // March 1, 2025
-    deadline             DateTime         @db.Date // April 10, 2025
+  clientComplianceId String
+  clientCompliance   ClientCompliance @relation(fields: [clientComplianceId], references: [id], onDelete: Cascade)
 
-    // ─── Zero Filing Logic ───
-    // From the "Zero Filing" button in Image 5
-    isZeroFiling         ZeroFilingStatus @default(NONE)
+  coverageDate DateTime @db.Date
+  deadline     DateTime @db.Date
 
-    // ─── Documentary Requirements (Checklist from Image 5) ───
-    // These maps to your progress bars in Image 4
-    filedFormUrl          String?
-    emailConfirmUrl       String?
-    paymentConfirmUrl     String?
-    qapExcelUrl           String?
-    emailSubmissionUrl    String?
-    emailValidationUrl    String?
+  isZeroFiling ZeroFilingStatus @default(NONE)
 
-    // ─── Process Flow (Themaker-Checker Pipeline from Image 5) ───
-    // 1. Preparation
-    processorId          String?
-    processor            User?            @relation("RecordProcessor", fields: [processorId], references: [id])
-    processedAt          DateTime?        // The dynamic timestamp in Image 5
+  // ─── NEW: Amendment Versioning ───
+  amendmentVersion Int                @default(0) // 0 = Original, 1 = First Amendment, etc.
+  originalRecordId String?
+  originalRecord   ComplianceRecord?  @relation("RecordAmendments", fields: [originalRecordId], references: [id])
+  amendments       ComplianceRecord[] @relation("RecordAmendments")
 
-    // 2. Verification
-    verifierId           String?
-    verifier             User?            @relation("RecordVerifier", fields: [verifierId], references: [id])
-    verifiedAt           DateTime?
+  // ─── NEW: The Financial Bridge ───
+  // Links this operational pipeline directly to the billing engine
+  clientSubscriptionId Int?                @unique
+  clientSubscription   ClientSubscription? @relation(fields: [clientSubscriptionId], references: [id], onDelete: SetNull)
 
-    // 3. Payment Processing
-    paymentProcessorId   String?
-    paymentProcessor     User?            @relation("RecordPaymentProcessor", fields: [paymentProcessorId], references: [id])
-    paymentProcessedAt   DateTime?
+  status ServiceStatus @default(ACTIVE)
 
-    // 4. Payment Approval
-    paymentApproverId    String?
-    paymentApprover      User?            @relation("RecordPaymentApprover", fields: [paymentApproverId], references: [id])
-    paymentApprovedAt    DateTime?
+  // ─── NEW: Invoice Linking ───
+  // Links this specific month's filing to a specific bill
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
 
-// 5. Final Approval
-    finalApproverId      String?
-    finalApprover        User?            @relation("RecordFinalApprover", fields: [finalApproverId], references: [id])
-    finalApprovedAt      DateTime?
+  // ─── Process Flow (Maker-Checker Pipeline) ───
+  processorId String?
+  processor   User?     @relation("RecordProcessor", fields: [processorId], references: [id])
+  processedAt DateTime?
 
-    // ─── 6. Sales / Observer ───
-    salesOfficerId       String?
-    salesOfficer         User?            @relation("RecordSalesOfficer", fields: [salesOfficerId], references: [id])
+  verifierId String?
+  verifier   User?     @relation("RecordVerifier", fields: [verifierId], references: [id])
+  verifiedAt DateTime?
 
-    // ─── Status Tracking ───
-    filingStatus         FilingStatus     @default(PENDING)
-    processStatus        ProcessStatus    @default(PENDING)
-    // Tracks overall % (e.g., if 3/5 workflow steps are done, it's 60%)
-    completionRate       Int              @default(0) 
+  paymentProcessorId String?
+  paymentProcessor   User?     @relation("RecordPaymentProcessor", fields: [paymentProcessorId], references: [id])
+  paymentProcessedAt DateTime?
 
-    // The Specific Data Spokes (EWT math)
-    ewtRentalLines       EwtRentalLineItem[]
+  paymentApproverId String?
+  paymentApprover   User?     @relation("RecordPaymentApprover", fields: [paymentApproverId], references: [id])
+  paymentApprovedAt DateTime?
 
-    // ─── Internal Communication ───
-    notes                ComplianceNote[]
+  finalApproverId String?
+  finalApprover   User?     @relation("RecordFinalApprover", fields: [finalApproverId], references: [id])
+  finalApprovedAt DateTime?
 
-    createdAt            DateTime         @default(now())
-    updatedAt            DateTime         @updatedAt
+  salesOfficerId String?
+  salesOfficer   User?   @relation("RecordSalesOfficer", fields: [salesOfficerId], references: [id])
 
-    @@unique([clientComplianceId, coverageDate])
-    @@map("compliance_record")
+  // Status Tracking
+  filingStatus   FilingStatus  @default(PENDING)
+  processStatus  ProcessStatus @default(PENDING)
+  completionRate Int           @default(0)
+
+  // ─── The Specific Data Spokes ───
+  ewtItems EwtItem[]
+
+  // ─── NEW: Dynamic Documentary Requirements ───
+  documents ComplianceDocument[]
+
+  notes ComplianceNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientComplianceId, coverageDate, amendmentVersion]) // Ensures unique versions per month
+  @@map("compliance_record")
+}
+
+// ─── NEW: Dynamic Documentary Requirements ────────────────────────
+model ComplianceDocument {
+  id String @id @default(cuid())
+
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  // e.g., "Filed Form", "QAP DAT and Excel File", "Email Confirmation"
+  name String
+
+  // Array of URLs (PostgreSQL supports String[])
+  fileUrls String[]
+
+  isRequired Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@map("compliance_document")
 }
 
 // ─── Compliance Note (Internal Communication) ────────────────
 model ComplianceNote {
-    id                 String           @id @default(cuid())
-    
-    complianceRecordId String
-    complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
-    
-    authorId           String
-    author             User             @relation(fields: [authorId], references: [id])
-    
-    note               String           @db.Text
-    
-    createdAt          DateTime         @default(now())
-    updatedAt          DateTime         @updatedAt
-    
-    @@index([complianceRecordId])
-    @@map("compliance_note")
+  id String @id @default(cuid())
+
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  note String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@map("compliance_note")
 }
 
 // ==========================================
@@ -168,30 +206,54 @@ model ComplianceNote {
 // ─── Expanded Withholding Tax (EWT) Rental Table ──────────────────
 // Maps directly to the table in your 3rd mockup image
 
-model EwtRentalLineItem {
-    id                 String           @id @default(cuid())
+// ─── Expanded Withholding Tax (EWT) Items ─────────────────────────
+model EwtItem {
+  id String @id @default(cuid())
 
-    // Links to the specific month's generic record
-    complianceRecordId String
-    complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
 
-    // E.g., "Basic Rent", "CUSA", "Others"
-    rentalType         String           
+  // If this tax has been billed to the client, it links to the exact invoice line item.
+  invoiceItemId Int?         @unique
+  invoiceItem   InvoiceItem? @relation(fields: [invoiceItemId], references: [id], onDelete: SetNull)
 
-    // Computations
-    grossAmount        Decimal          @db.Decimal(12, 2) @default(0.00)
-    vatAmount          Decimal          @db.Decimal(12, 2) @default(0.00)
-    netOfVat           Decimal          @db.Decimal(12, 2) @default(0.00)
-    expandedTaxAmount  Decimal          @db.Decimal(12, 2) @default(0.00)
-    
-    effectiveMonth     String           // e.g., "March 2025"
+  name      String // e.g., "Basic Rent", "CUSA"
+  isVatable Boolean @default(true)
 
-    // The "Open File" link from your UI
-    contractOfLeaseUrl String?
+  grossAmount       Decimal @default(0.00) @db.Decimal(12, 2)
+  vatAmount         Decimal @default(0.00) @db.Decimal(12, 2)
+  netOfVat          Decimal @default(0.00) @db.Decimal(12, 2)
+  expandedTaxAmount Decimal @default(0.00) @db.Decimal(12, 2)
 
-    createdAt          DateTime         @default(now())
-    updatedAt          DateTime         @updatedAt
+  effectiveMonth String // e.g., "March 2025"\
 
-    @@index([complianceRecordId])
-    @@map("ewt_rental_line_item")
+  // Multiple documents can be uploaded for a single rental item
+  fileUrls String[]
+
+  historyLogs EwtItemHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@map("ewt_item")
+}
+
+// ─── NEW: EWT Item History (Audit Trail) ──────────────────────────
+model EwtItemHistory {
+  id String @id @default(cuid())
+
+  ewtItemId String
+  ewtItem   EwtItem @relation(fields: [ewtItemId], references: [id], onDelete: Cascade)
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+
+  // Captures exact text of what changed, e.g., "Updated grossAmount from 15000 to 17500" or "Added new file URL"
+  changeNotes String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([ewtItemId])
+  @@map("ewt_item_history")
 }
