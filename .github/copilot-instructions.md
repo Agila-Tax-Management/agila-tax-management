@@ -401,6 +401,106 @@ async function openInvoicePDF(invoice: InvoiceRecord) {
 - `logActivity` and `notify` (fire-and-forget) must also be called **outside** the transaction
 - Only use transactions where atomicity genuinely matters (multi-record mutations). Single-record operations do not need `$transaction`
 
+### Compliance Records Seeding Pattern
+
+When seeding compliance records with EWT items and invoices, follow this flow:
+
+1. **Create or find Service** with `complianceType: "EWT"` (e.g., "Expanded Withholding Tax & VAT Filing")
+2. **Create ClientCompliance** subscription linking client to service with default assignees
+3. **Create ComplianceRecord** for each month with coverage date, deadline, filing status, and process status
+4. **Create EwtItem** entries (typically 3 per month: Basic Rent, CUSA, Parking) with gross amounts and calculated EWT (5%)
+5. **Create Invoice** for each month with:
+   - One SERVICE_FEE line item (vatable)
+   - Multiple TAX_REIMBURSEMENT line items (non-vatable) matching EWT items
+6. **Link Invoice to ComplianceRecord** via `invoiceId`
+7. **Create Payment records** for PAID invoices with bank transfer details
+8. **Create PaymentAllocation** to link payment to invoice
+
+Example structure from `prisma/seed.ts`:
+```typescript
+// 1. Service
+const ewtService = await prisma.service.upsert({
+  where: { code: "TAX-EWT-MO" },
+  create: {
+    code: "TAX-EWT-MO",
+    name: "Expanded Withholding Tax & VAT Filing",
+    billingType: "RECURRING",
+    frequency: "MONTHLY",
+    serviceRate: 3500,
+    complianceType: "EWT",
+  },
+});
+
+// 2. ClientCompliance
+const clientCompliance = await prisma.clientCompliance.create({
+  data: {
+    clientId: santosClient.id,
+    serviceId: ewtService.id,
+    processorId: accountantUser.id,
+    verifierId: superAdminUser.id,
+  },
+});
+
+// 3. ComplianceRecord
+const complianceRecord = await prisma.complianceRecord.create({
+  data: {
+    clientComplianceId: clientCompliance.id,
+    coverageDate: new Date("2026-01-01"),
+    deadline: new Date("2026-02-10"),
+    filingStatus: "FILED",
+    processStatus: "COMPLETED",
+  },
+});
+
+// 4. EwtItems
+await prisma.ewtItem.create({
+  data: {
+    complianceRecordId: complianceRecord.id,
+    name: "Basic Rent",
+    grossAmount: 15000,
+    expandedTaxAmount: 750, // 5%
+    effectiveMonth: "January 2026",
+  },
+});
+
+// 5. Invoice with line items
+const invoice = await prisma.invoice.create({
+  data: {
+    invoiceNumber: "INV-2026-EWT-001",
+    clientId: santosClient.id,
+    status: "PAID",
+    totalAmount: 3800, // Service fee + VAT + EWT reimbursement
+    items: {
+      create: [
+        {
+          description: "EWT Filing Service - January 2026",
+          unitPrice: 2500,
+          category: "SERVICE_FEE",
+          isVatable: true,
+        },
+        {
+          description: "EWT - Basic Rent",
+          unitPrice: 750,
+          category: "TAX_REIMBURSEMENT",
+          isVatable: false,
+        },
+      ],
+    },
+  },
+});
+
+// 6. Payment
+const payment = await prisma.payment.create({
+  data: {
+    paymentNumber: "PAY-2026-EWT-JAN",
+    clientId: santosClient.id,
+    invoiceId: invoice.id,
+    amount: 3800,
+    method: "BANK_TRANSFER",
+  },
+});
+```
+
 ---
 
 ## Form Validation (Zod)

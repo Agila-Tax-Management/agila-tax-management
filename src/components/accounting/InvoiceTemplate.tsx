@@ -145,6 +145,9 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
               <th className="text-center pb-3 text-[10px] font-black text-slate-500 uppercase tracking-widest w-16">
                 Qty
               </th>
+              <th className="text-left pb-3 text-[10px] font-black text-slate-500 uppercase tracking-widest w-32">
+                Category
+              </th>
               <th className="text-left pb-3 text-[10px] font-black text-slate-500 uppercase tracking-widest w-36">
                 Remarks
               </th>
@@ -154,14 +157,30 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {invoice.items.map((item) => (
-              <tr key={item.id}>
-                <td className="py-3 text-slate-800 font-medium pr-4">{item.description}</td>
-                <td className="py-3 text-center text-slate-600">{item.quantity}</td>
-                <td className="py-3 text-slate-500 text-xs">{item.remarks ?? '—'}</td>
-                <td className="py-3 text-right font-bold text-slate-900">{fmt(item.unitPrice)}</td>
-              </tr>
-            ))}
+            {invoice.items.map((item) => {
+              const categoryConfig = {
+                SERVICE_FEE: { label: 'Service Fee', color: 'bg-purple-100 text-purple-700' },
+                TAX_REIMBURSEMENT: { label: 'Tax Reimb.', color: 'bg-amber-100 text-amber-700' },
+                GOV_FEE_REIMBURSEMENT: { label: 'Gov Fee Reimb.', color: 'bg-blue-100 text-blue-700' },
+                OUT_OF_POCKET: { label: 'Out of Pocket', color: 'bg-slate-100 text-slate-700' },
+              };
+              const category = item.category ?? 'SERVICE_FEE';
+              const cfg = categoryConfig[category] ?? categoryConfig.SERVICE_FEE;
+
+              return (
+                <tr key={item.id}>
+                  <td className="py-3 text-slate-800 font-medium pr-4">{item.description}</td>
+                  <td className="py-3 text-center text-slate-600">{item.quantity}</td>
+                  <td className="py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.color}`}>
+                      {cfg.label}
+                    </span>
+                  </td>
+                  <td className="py-3 text-slate-500 text-xs">{item.remarks ?? '—'}</td>
+                  <td className="py-3 text-right font-bold text-slate-900">{fmt(item.unitPrice)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

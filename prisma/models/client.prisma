@@ -94,6 +94,7 @@ model Client {
 
   hrSetting    HrSetting?
   salesSetting SalesSetting?
+  complianceSetting    ComplianceSetting?
 
   payrollSchedules PayrollSchedule[]
 

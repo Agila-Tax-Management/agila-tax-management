@@ -69,13 +69,31 @@ model User {
   defaultFinalApproverFor    ClientCompliance[] @relation("DefaultFinalApprover")
   defaultSalesOfficerFor     ClientCompliance[] @relation("DefaultSalesOfficer")
 
-  // ─── Actual Executions (From ComplianceRecord) ───
-  processedRecords        ComplianceRecord[] @relation("RecordProcessor")
-  verifiedRecords         ComplianceRecord[] @relation("RecordVerifier")
-  paymentProcessedRecords ComplianceRecord[] @relation("RecordPaymentProcessor")
-  paymentApprovedRecords  ComplianceRecord[] @relation("RecordPaymentApprover")
-  finalApprovedRecords    ComplianceRecord[] @relation("RecordFinalApprover")
-  salesObservedRecords    ComplianceRecord[] @relation("RecordSalesOfficer")
+ // ─── Compliance Actual Executions & Overrides ───
+  assignedProcessors         ComplianceRecord[] @relation("RecordAssignedProcessor")
+  actualProcessors           ComplianceRecord[] @relation("RecordActualProcessor")
+  
+  assignedVerifiers          ComplianceRecord[] @relation("RecordAssignedVerifier")
+  actualVerifiers            ComplianceRecord[] @relation("RecordActualVerifier")
+  
+  assignedPaymentProcessors  ComplianceRecord[] @relation("RecordAssignedPayProcessor")
+  actualPaymentProcessors    ComplianceRecord[] @relation("RecordActualPayProcessor")
+  
+  assignedPaymentApprovers   ComplianceRecord[] @relation("RecordAssignedPayApprover")
+  actualPaymentApprovers     ComplianceRecord[] @relation("RecordActualPayApprover")
+  
+  assignedFinalApprovers     ComplianceRecord[] @relation("RecordAssignedFinalApprover")
+  actualFinalApprovers       ComplianceRecord[] @relation("RecordActualFinalApprover")
+  
+  salesObservedRecords       ComplianceRecord[] @relation("RecordSalesOfficer")
+
+  // ─── Global Compliance Defaults (From ComplianceSetting) ───
+    defaultClientProcessors        ComplianceSetting[] @relation("DefaultClientProcessor")
+    defaultClientVerifiers         ComplianceSetting[] @relation("DefaultClientVerifier")
+    defaultClientPayProcessors     ComplianceSetting[] @relation("DefaultClientPayProcessor")
+    defaultClientPayApprovers      ComplianceSetting[] @relation("DefaultClientPayApprover")
+    defaultClientFinalApprovers    ComplianceSetting[] @relation("DefaultClientFinalApprover")
+    defaultClientSalesOfficers     ComplianceSetting[] @relation("DefaultClientSalesOfficer")
 
   // ─── TSA Workflows ───
   preparedTsas         TsaContract[] @relation("TsaPreparer")

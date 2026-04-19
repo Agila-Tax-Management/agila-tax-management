@@ -32,6 +32,7 @@ interface ServiceItem {
   serviceRate: string;
   isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  complianceType: 'NONE' | 'EWT' | 'COMPENSATION' | 'PERCENTAGE' | 'VAT' | 'INCOME_TAX' | 'SSS' | 'PHILHEALTH' | 'PAGIBIG' | 'LGU_RENEWAL';
   governmentOffices: { id: number; code: string; name: string }[];
   cities: { id: number; name: string; province: string | null }[];
   inclusions: { id: number; name: string; category: string | null }[];
@@ -300,7 +301,7 @@ export function MonthlyServicePlans(): React.ReactNode {
         {viewTarget && (
           <div className="p-6 space-y-5">
             {/* Status & Recurring */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge
                 variant={viewTarget.status === 'ACTIVE' ? 'success' : viewTarget.status === 'INACTIVE' ? 'warning' : 'neutral'}
                 className="text-[10px] font-black"
@@ -311,6 +312,20 @@ export function MonthlyServicePlans(): React.ReactNode {
                 <Clock size={10} />
                 {FREQUENCY_LABEL[viewTarget.frequency]}
               </Badge>
+              {viewTarget.complianceType && viewTarget.complianceType !== 'NONE' && (
+                <Badge variant="warning" className="text-[10px] font-bold">
+                  {viewTarget.complianceType === 'EWT' ? 'EWT - Expanded Withholding Tax' :
+                   viewTarget.complianceType === 'COMPENSATION' ? 'Compensation (1601-C)' :
+                   viewTarget.complianceType === 'PERCENTAGE' ? 'Percentage Tax (2551Q)' :
+                   viewTarget.complianceType === 'VAT' ? 'VAT (2550M / 2550Q)' :
+                   viewTarget.complianceType === 'INCOME_TAX' ? 'Income Tax (1701 / 1702)' :
+                   viewTarget.complianceType === 'SSS' ? 'SSS' :
+                   viewTarget.complianceType === 'PHILHEALTH' ? 'PhilHealth' :
+                   viewTarget.complianceType === 'PAGIBIG' ? 'Pag-IBIG' :
+                   viewTarget.complianceType === 'LGU_RENEWAL' ? 'LGU / Mayor\'s Permit Renewal' :
+                   viewTarget.complianceType}
+                </Badge>
+              )}
             </div>
 
             {/* Name */}

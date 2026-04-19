@@ -20,6 +20,7 @@ interface ServicePlanDetail {
   serviceRate: string;
   isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  complianceType: 'NONE' | 'EWT' | 'COMPENSATION' | 'PERCENTAGE' | 'VAT' | 'INCOME_TAX' | 'SSS' | 'PHILHEALTH' | 'PAGIBIG' | 'LGU_RENEWAL';
   taskTemplates: { taskTemplate: { id: number; name: string; description: string | null } }[];
 }
 
@@ -156,6 +157,7 @@ interface FormState {
   serviceRate: string;
   isVatable: boolean;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  complianceType: 'NONE' | 'EWT' | 'COMPENSATION' | 'PERCENTAGE' | 'VAT' | 'INCOME_TAX' | 'SSS' | 'PHILHEALTH' | 'PAGIBIG' | 'LGU_RENEWAL';
   taskTemplateIds: number[];
 }
 
@@ -175,6 +177,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
     serviceRate: '',
     isVatable: false,
     status: 'ACTIVE',
+    complianceType: 'NONE',
     taskTemplateIds: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -197,6 +200,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
           serviceRate: String(parseFloat(plan.serviceRate)),
           isVatable: plan.isVatable,
           status: plan.status,
+          complianceType: plan.complianceType ?? 'NONE',
           taskTemplateIds: plan.taskTemplates.map((t) => t.taskTemplate.id),
         });
         setTaskTemplates(tmpl.data ?? []);
@@ -232,6 +236,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
           serviceRate: parseFloat(form.serviceRate),
           isVatable: form.isVatable,
           status: form.status,
+          complianceType: form.complianceType,
           taskTemplateIds: form.taskTemplateIds,
         }),
       });
@@ -353,6 +358,26 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
                 <option value="ANNUALLY">Annually</option>
                 <option value="WEEKLY">Weekly</option>
                 <option value="DAILY">Daily</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Compliance Type</label>
+              <select
+                value={form.complianceType}
+                onChange={(e) => setForm({ ...form, complianceType: e.target.value as typeof form.complianceType })}
+                className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="NONE">None (No Compliance)</option>
+                <option value="EWT">EWT - Expanded Withholding Tax</option>
+                <option value="COMPENSATION">Compensation (1601-C)</option>
+                <option value="PERCENTAGE">Percentage Tax (2551Q)</option>
+                <option value="VAT">VAT (2550M / 2550Q)</option>
+                <option value="INCOME_TAX">Income Tax (1701 / 1702)</option>
+                <option value="SSS">SSS - Social Security System</option>
+                <option value="PHILHEALTH">PhilHealth</option>
+                <option value="PAGIBIG">Pag-IBIG</option>
+                <option value="LGU_RENEWAL">LGU / Mayor's Permit Renewal</option>
               </select>
             </div>
 

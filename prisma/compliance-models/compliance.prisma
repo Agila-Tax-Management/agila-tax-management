@@ -114,29 +114,44 @@ model ComplianceRecord {
   invoiceId String?
   invoice   Invoice? @relation(fields: [invoiceId], references: [id])
 
-  // ─── Process Flow (Maker-Checker Pipeline) ───
-  processorId String?
-  processor   User?     @relation("RecordProcessor", fields: [processorId], references: [id])
-  processedAt DateTime?
+  // ─── 1. Preparation ───
+    assignedProcessorId   String?
+    assignedProcessor     User?    @relation("RecordAssignedProcessor", fields: [assignedProcessorId], references: [id])
+    actualProcessorId     String?
+    actualProcessor       User?    @relation("RecordActualProcessor", fields: [actualProcessorId], references: [id])
+    processedAt           DateTime?
 
-  verifierId String?
-  verifier   User?     @relation("RecordVerifier", fields: [verifierId], references: [id])
-  verifiedAt DateTime?
+    // ─── 2. Verification ───
+    assignedVerifierId    String?
+    assignedVerifier      User?    @relation("RecordAssignedVerifier", fields: [assignedVerifierId], references: [id])
+    actualVerifierId      String?
+    actualVerifier        User?    @relation("RecordActualVerifier", fields: [actualVerifierId], references: [id])
+    verifiedAt            DateTime?
 
-  paymentProcessorId String?
-  paymentProcessor   User?     @relation("RecordPaymentProcessor", fields: [paymentProcessorId], references: [id])
-  paymentProcessedAt DateTime?
+    // ─── 3. Payment Processing ───
+    assignedPaymentProcessorId String?
+    assignedPaymentProcessor   User? @relation("RecordAssignedPayProcessor", fields: [assignedPaymentProcessorId], references: [id])
+    actualPaymentProcessorId   String?
+    actualPaymentProcessor     User? @relation("RecordActualPayProcessor", fields: [actualPaymentProcessorId], references: [id])
+    paymentProcessedAt         DateTime?
 
-  paymentApproverId String?
-  paymentApprover   User?     @relation("RecordPaymentApprover", fields: [paymentApproverId], references: [id])
-  paymentApprovedAt DateTime?
+    // ─── 4. Payment Approval ───
+    assignedPaymentApproverId String?
+    assignedPaymentApprover   User? @relation("RecordAssignedPayApprover", fields: [assignedPaymentApproverId], references: [id])
+    actualPaymentApproverId   String?
+    actualPaymentApprover     User? @relation("RecordActualPayApprover", fields: [actualPaymentApproverId], references: [id])
+    paymentApprovedAt         DateTime?
 
-  finalApproverId String?
-  finalApprover   User?     @relation("RecordFinalApprover", fields: [finalApproverId], references: [id])
-  finalApprovedAt DateTime?
+    // ─── 5. Final Approval ───
+    assignedFinalApproverId String?
+    assignedFinalApprover   User? @relation("RecordAssignedFinalApprover", fields: [assignedFinalApproverId], references: [id])
+    actualFinalApproverId   String?
+    actualFinalApprover     User? @relation("RecordActualFinalApprover", fields: [actualFinalApproverId], references: [id])
+    finalApprovedAt         DateTime?
 
-  salesOfficerId String?
-  salesOfficer   User?   @relation("RecordSalesOfficer", fields: [salesOfficerId], references: [id])
+    // ─── 6. Sales / Observer (No actual execution, just assigned observer) ───
+    salesOfficerId        String?
+    salesOfficer          User?    @relation("RecordSalesOfficer", fields: [salesOfficerId], references: [id])
 
   // Status Tracking
   filingStatus   FilingStatus  @default(PENDING)
@@ -156,6 +171,39 @@ model ComplianceRecord {
 
   @@unique([clientComplianceId, coverageDate, amendmentVersion]) // Ensures unique versions per month
   @@map("compliance_record")
+}
+
+// ─── Compliance Settings (Global defaults per Client) ─────────────
+model ComplianceSetting {
+    id                         String   @id @default(cuid())
+    
+    // Linked 1-to-1 with the Client
+    clientId                   Int      @unique
+    client                     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+    // ─── Global Default Assignees for this Client's Taxes ───
+    defaultProcessorId         String?
+    defaultProcessor           User?    @relation("DefaultClientProcessor", fields: [defaultProcessorId], references: [id])
+    
+    defaultVerifierId          String?
+    defaultVerifier            User?    @relation("DefaultClientVerifier", fields: [defaultVerifierId], references: [id])
+    
+    defaultPaymentProcessorId  String?
+    defaultPaymentProcessor    User?    @relation("DefaultClientPayProcessor", fields: [defaultPaymentProcessorId], references: [id])
+    
+    defaultPaymentApproverId   String?
+    defaultPaymentApprover     User?    @relation("DefaultClientPayApprover", fields: [defaultPaymentApproverId], references: [id])
+    
+    defaultFinalApproverId     String?
+    defaultFinalApprover       User?    @relation("DefaultClientFinalApprover", fields: [defaultFinalApproverId], references: [id])
+    
+    defaultSalesOfficerId      String?
+    defaultSalesOfficer        User?    @relation("DefaultClientSalesOfficer", fields: [defaultSalesOfficerId], references: [id])
+
+    createdAt                  DateTime @default(now())
+    updatedAt                  DateTime @updatedAt
+
+    @@map("compliance_setting")
 }
 
 // ─── NEW: Dynamic Documentary Requirements ────────────────────────
