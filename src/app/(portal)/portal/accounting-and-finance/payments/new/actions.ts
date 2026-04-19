@@ -69,19 +69,6 @@ export async function recordPaymentAction(
             totalAmount: true, 
             invoiceNumber: true,
             clientId: true,
-            subscription: {
-              select: {
-                id: true,
-                clientId: true,
-                serviceId: true,
-                isActive: true,
-                service: {
-                  select: {
-                    complianceType: true,
-                  },
-                },
-              },
-            },
           },
         });
         if (!invoice) continue;
@@ -102,59 +89,6 @@ export async function recordPaymentAction(
             newValue: `${input.method} ₱${alloc.amountApplied.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${newPayment.paymentNumber}`,
           },
         });
-
-        // ────────────────────────────────────────────────────────────────────
-        // NEW: When invoice is fully PAID, activate subscription and create ClientCompliance
-        // ────────────────────────────────────────────────────────────────────
-        if (newStatus === 'PAID' && invoice.subscription && !invoice.subscription.isActive) {
-          // Activate the subscription
-          await tx.clientSubscription.update({
-            where: { id: invoice.subscription.id },
-            data: { isActive: true },
-          });
-
-          // If service has compliance type, create ClientCompliance
-          const complianceType = invoice.subscription.service.complianceType;
-          if (complianceType && complianceType !== 'NONE') {
-            // Check if ClientCompliance already exists
-            const existing = await tx.clientCompliance.findFirst({
-              where: {
-                clientId: invoice.subscription.clientId,
-                serviceId: invoice.subscription.serviceId,
-              },
-            });
-
-            if (!existing) {
-              // Get default assignees from ComplianceSetting (if exists)
-              const setting = await tx.complianceSetting.findUnique({
-                where: { clientId: invoice.clientId },
-                select: {
-                  defaultProcessorId: true,
-                  defaultVerifierId: true,
-                  defaultPaymentProcessorId: true,
-                  defaultPaymentApproverId: true,
-                  defaultFinalApproverId: true,
-                  defaultSalesOfficerId: true,
-                },
-              });
-
-              // Create ClientCompliance with default assignees
-              await tx.clientCompliance.create({
-                data: {
-                  clientId: invoice.subscription.clientId,
-                  serviceId: invoice.subscription.serviceId,
-                  status: 'ACTIVE',
-                  processorId: setting?.defaultProcessorId ?? null,
-                  verifierId: setting?.defaultVerifierId ?? null,
-                  paymentProcessorId: setting?.defaultPaymentProcessorId ?? null,
-                  paymentApproverId: setting?.defaultPaymentApproverId ?? null,
-                  finalApproverId: setting?.defaultFinalApproverId ?? null,
-                  salesOfficerId: setting?.defaultSalesOfficerId ?? null,
-                },
-              });
-            }
-          }
-        }
       }
 
       return newPayment;

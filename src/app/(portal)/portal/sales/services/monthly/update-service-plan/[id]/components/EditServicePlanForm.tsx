@@ -377,7 +377,7 @@ export function EditServicePlanForm({ planId }: EditServicePlanFormProps): React
                 <option value="SSS">SSS - Social Security System</option>
                 <option value="PHILHEALTH">PhilHealth</option>
                 <option value="PAGIBIG">Pag-IBIG</option>
-                <option value="LGU_RENEWAL">LGU / Mayor's Permit Renewal</option>
+                <option value="LGU_RENEWAL">LGU / Mayor&apos;s Permit Renewal</option>
               </select>
             </div>
 
