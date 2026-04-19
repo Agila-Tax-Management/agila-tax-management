@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
+import { useTaskManagementRole } from '@/context/TaskManagementRoleContext';
 
 type SectionItem = { id: string; label: string; isSection: true };
 type NavItem   = { id: string; label: string; icon: LucideIcon; href: string; badge: number; isSection?: never };
@@ -23,6 +24,7 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
   const router = useRouter();
   const searchParams = useSearchParams();
   const { departments } = useTaskDepartments();
+  const { canAccessSettings } = useTaskManagementRole();
 
   // ── Real task counts from API ──────────────────────────────────────
   const [deptActiveCounts, setDeptActiveCounts] = useState<Map<number, number>>(new Map());
@@ -150,20 +152,22 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
           })}
         </nav>
 
-        {/* Footer — Settings shortcut */}
-        <div className="shrink-0 border-t border-slate-200 p-3">
-          <button
-            onClick={() => handleNavigation('/portal/task-management/settings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-              pathname === '/portal/task-management/settings'
-                ? 'bg-[#0f766e]/10 text-[#0f766e] font-bold'
-                : 'text-slate-500 hover:bg-slate-50 font-medium'
-            }`}
-          >
-            <Settings2 size={18} />
-            <span className="text-sm">Task Settings</span>
-          </button>
-        </div>
+        {/* Footer — Settings shortcut (only visible to SETTINGS role) */}
+        {canAccessSettings && (
+          <div className="shrink-0 border-t border-slate-200 p-3">
+            <button
+              onClick={() => handleNavigation('/portal/task-management/settings')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                pathname === '/portal/task-management/settings'
+                  ? 'bg-[#0f766e]/10 text-[#0f766e] font-bold'
+                  : 'text-slate-500 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              <Settings2 size={18} />
+              <span className="text-sm">Task Settings</span>
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

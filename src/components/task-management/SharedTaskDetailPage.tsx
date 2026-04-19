@@ -73,6 +73,7 @@ export interface SharedTaskDetailPageProps {
   onUpdate?: (updated: AOTask) => void;
   jobOrder?: { id: string; jobOrderNumber: string } | null;
   SubtaskModalComponent?: (props: SubtaskDetailModalProps) => React.ReactNode;
+  canEdit?: boolean; // NEW: Controls whether user can edit task fields
 }
 
 const DEFAULT_STATUS_COLORS: Record<string, string> = {
@@ -153,6 +154,7 @@ export function SharedTaskDetailPage({
   onUpdate,
   jobOrder,
   SubtaskModalComponent = SubtaskDetailModal,
+  canEdit: _canEdit = true, // Default to true for backward compatibility
 }: SharedTaskDetailPageProps): React.ReactNode {
   const router = useRouter();
   const { success: toastSuccess, error: toastError } = useToast();

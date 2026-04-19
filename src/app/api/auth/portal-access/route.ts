@@ -8,7 +8,10 @@ import type { AppPortal, PortalRole } from "@/generated/prisma/client";
  * 
  * Returns the current user's role and accessible portals for client-side filtering.
  * 
- * Response:
+ * Query Parameters:
+ * - portal: (optional) Return role for a specific portal
+ * 
+ * Response (no portal param):
  * {
  *   userId: "user_123",
  *   userRole: "SUPER_ADMIN" | "ADMIN" | "EMPLOYEE",
@@ -17,17 +20,33 @@ import type { AppPortal, PortalRole } from "@/generated/prisma/client";
  *     { portal: "COMPLIANCE", role: "VIEWER" }
  *   ]
  * }
+ * 
+ * Response (with portal param):
+ * {
+ *   role: "ADMIN" | "USER" | "VIEWER" | "SETTINGS" | null,
+ *   userRole: "SUPER_ADMIN" | "ADMIN" | "EMPLOYEE"
+ * }
  */
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSessionWithAccess();
 
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { user, portalRoles = {} } = session;
+  const { user, portalRoles } = session;
+  const { searchParams } = new URL(request.url);
+  const portalParam = searchParams.get('portal') as AppPortal | null;
 
-  // Build array of accessible portals (where role is not null)
+  // If portal param is provided, return role for that specific portal
+  if (portalParam) {
+    return NextResponse.json({
+      role: portalRoles[portalParam] ?? null,
+      userRole: user.role,
+    });
+  }
+
+  // Otherwise, return all accessible portals
   const portals: Array<{ portal: AppPortal; role: PortalRole }> = [];
 
   for (const [portal, role] of Object.entries(portalRoles) as Array<[AppPortal, PortalRole | null]>) {

@@ -8,6 +8,7 @@ import type { AOTeamMember } from '@/lib/types';
 import { SharedTaskDetailPage } from './SharedTaskDetailPage';
 import type { ConversationEntry, TaskHistoryEntry, DeptWithStatuses } from './SharedTaskDetailPage';
 import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
+import { useTaskManagementRole } from '@/context/TaskManagementRoleContext';
 import { authClient } from '@/lib/auth-client';
 
 const SOURCE_TO_DEPT_NAME: Record<TaskSource, string> = {
@@ -38,6 +39,7 @@ interface TaskDetailPageProps {
 
 export function TaskDetailPage({ task, taskId, initialConversations, initialHistoryLogs, jobOrder }: TaskDetailPageProps) {
   const { departments } = useTaskDepartments();
+  const { canEdit } = useTaskManagementRole();
   const { data: session } = authClient.useSession();
   const [teamMembers, setTeamMembers] = useState<AOTeamMember[]>([]);
 
@@ -89,6 +91,7 @@ export function TaskDetailPage({ task, taskId, initialConversations, initialHist
       allDeptStatuses={allDeptStatuses}
       initialConversations={initialConversations}
       initialHistoryLogs={initialHistoryLogs}
+      canEdit={canEdit}
       jobOrder={jobOrder ?? null}
     />
   );
