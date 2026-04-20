@@ -1,14 +1,18 @@
 // src/app/api/notifications/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionWithAccess } from "@/lib/session";
-import prisma from "@/lib/db";
 import { z } from "zod";
+import { updateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 import type { NotificationType, NotificationPriority } from "@/generated/prisma/client";
+import { getNotifications } from '@/lib/data/users/notifications';
+import prisma from "@/lib/db";
 
 /**
  * GET /api/notifications
  *
  * Returns the authenticated user's notifications (paginated, newest first).
+ * Cached for 1 minute, invalidated on any notification mutation.
  *
  * Query params:
  *  - page     (default: 1)
@@ -24,50 +28,28 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 20));
-  const skip = (page - 1) * limit;
   const unreadOnly = searchParams.get("unread") === "true";
   const typeFilter = searchParams.get("type") as NotificationType | null;
   const priorityFilter = searchParams.get("priority") as NotificationPriority | null;
 
-  const where: Record<string, unknown> = {
+  // Use cached data-fetching function
+  const result = await getNotifications({
     userId: session.user.id,
-  };
-  if (unreadOnly) where.isRead = false;
-  if (typeFilter) where.type = typeFilter;
-  if (priorityFilter) where.priority = priorityFilter;
-
-  const [notifications, total, unreadCount] = await Promise.all([
-    prisma.notification.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: limit,
-      select: {
-        id: true,
-        type: true,
-        priority: true,
-        title: true,
-        message: true,
-        linkUrl: true,
-        isRead: true,
-        readAt: true,
-        createdAt: true,
-      },
-    }),
-    prisma.notification.count({ where }),
-    prisma.notification.count({
-      where: { userId: session.user.id, isRead: false },
-    }),
-  ]);
+    page,
+    limit,
+    unreadOnly,
+    typeFilter,
+    priorityFilter,
+  });
 
   return NextResponse.json({
-    data: notifications,
-    unreadCount,
+    data: result.notifications,
+    unreadCount: result.unreadCount,
     pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+      page: result.pagination.page,
+      limit: result.pagination.limit,
+      total: result.total,
+      totalPages: result.pagination.totalPages,
     },
   });
 }
@@ -118,6 +100,11 @@ export async function PATCH(request: NextRequest) {
       data: { isRead: true, readAt: now },
     });
   }
+
+  // Invalidate notification caches
+  updateTag(`notifications-user-${session.user.id}`);
+  updateTag(`notifications-unread-user-${session.user.id}`);
+  revalidatePath('/dashboard/notifications');
 
   return NextResponse.json({ data: { success: true } });
 }

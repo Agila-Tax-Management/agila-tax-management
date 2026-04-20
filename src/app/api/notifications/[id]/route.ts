@@ -1,6 +1,8 @@
 // src/app/api/notifications/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import { updateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 
@@ -42,6 +44,11 @@ export async function PATCH(
         readAt: new Date(),
       },
     });
+
+    // Invalidate notification caches
+    updateTag(`notifications-user-${session.user.id}`);
+    updateTag(`notifications-unread-user-${session.user.id}`);
+    revalidatePath('/dashboard/notifications');
 
     return NextResponse.json({ data: updated });
   } catch (err) {

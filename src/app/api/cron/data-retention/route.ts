@@ -136,6 +136,5 @@ export async function GET(request: Request) {
   }
 }
 
-// Prevent this route from being cached
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Note: With cacheComponents enabled, this route is naturally dynamic (uncached)
+// No 'use cache' directive = route remains dynamic
