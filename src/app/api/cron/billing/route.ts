@@ -50,6 +50,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ generated: 0, invoices: [] });
   }
 
+  // Step 2: Batch process all subscriptions in a single transaction for atomicity
   const results: Array<{
     subscriptionId: number;
     invoiceNumber: string;
@@ -57,38 +58,41 @@ export async function GET(request: Request) {
   }> = [];
   const errors: Array<{ subscriptionId: number; error: string }> = [];
 
-  // Step 2: Process each subscription sequentially to avoid invoice number collisions
-  for (const sub of dueSubscriptions) {
-    try {
-      const invoiceNumber = await prisma.$transaction(async (tx) => {
-        // Generate next invoice number for the current year
-        const year = now.getFullYear();
-        const prefix = `INV-${year}-`;
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Generate invoice numbers sequentially within transaction to prevent collisions
+      const year = now.getFullYear();
+      const prefix = `INV-${year}-`;
 
-        const latest = await tx.invoice.findFirst({
-          where: { invoiceNumber: { startsWith: prefix } },
-          orderBy: { invoiceNumber: 'desc' },
-          select: { invoiceNumber: true },
-        });
+      const latest = await tx.invoice.findFirst({
+        where: { invoiceNumber: { startsWith: prefix } },
+        orderBy: { invoiceNumber: 'desc' },
+        select: { invoiceNumber: true },
+      });
 
-        let nextSeq = 1;
-        if (latest) {
-          const parts = latest.invoiceNumber.split('-');
-          const lastSeq = parseInt(parts[parts.length - 1], 10);
-          if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
-        }
+      let nextSeq = 1;
+      if (latest) {
+        const parts = latest.invoiceNumber.split('-');
+        const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+        if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+      }
+
+      const monthYear = now.toLocaleDateString('en-PH', {
+        month: 'long',
+        year: 'numeric',
+      });
+
+      const dueDate = new Date(now);
+      dueDate.setDate(dueDate.getDate() + 15);
+
+      // Process all subscriptions in batch
+      for (const sub of dueSubscriptions) {
         const invNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
+        nextSeq++;
 
         const agreedRate = Number(sub.agreedRate);
-        const dueDate = new Date(now);
-        dueDate.setDate(dueDate.getDate() + 15);
 
-        const monthYear = now.toLocaleDateString('en-PH', {
-          month: 'long',
-          year: 'numeric',
-        });
-
-        // Create the invoice
+        // Create invoice
         const invoice = await tx.invoice.create({
           data: {
             invoiceNumber: invNumber,
@@ -105,7 +109,7 @@ export async function GET(request: Request) {
           },
         });
 
-        // Create the invoice line item
+        // Create invoice line item
         await tx.invoiceItem.create({
           data: {
             invoiceId: invoice.id,
@@ -116,7 +120,7 @@ export async function GET(request: Request) {
           },
         });
 
-        // Log invoice creation in audit history (actorId: null = SYSTEM)
+        // Log invoice creation
         await tx.invoiceHistory.create({
           data: {
             invoiceId: invoice.id,
@@ -126,7 +130,7 @@ export async function GET(request: Request) {
           },
         });
 
-        // Advance the next billing date
+        // Advance next billing date
         const currentBillingDate = sub.nextBillingDate ?? now;
         const newNextBillingDate = advanceBillingDate(currentBillingDate, sub.billingCycle);
 
@@ -135,18 +139,16 @@ export async function GET(request: Request) {
           data: { nextBillingDate: newNextBillingDate },
         });
 
-        return invNumber;
-      });
-
-      results.push({
-        subscriptionId: sub.id,
-        invoiceNumber,
-        clientId: sub.clientId ?? 0,
-      });
-    } catch (err) {
-      console.error(`[cron/billing] Failed for subscription #${sub.id}:`, err);
-      errors.push({ subscriptionId: sub.id, error: String(err) });
-    }
+        results.push({
+          subscriptionId: sub.id,
+          invoiceNumber: invNumber,
+          clientId: sub.clientId ?? 0,
+        });
+      }
+    });
+  } catch (err) {
+    console.error('[cron/billing] Batch transaction failed:', err);
+    errors.push({ subscriptionId: 0, error: String(err) });
   }
 
   // Step 3: Return summary
