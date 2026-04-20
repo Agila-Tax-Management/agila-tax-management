@@ -142,7 +142,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       });
     });
 
-    if (parsed.data.status) {
+    if (parsed.data.status && existing.leadId != null) {
       void logLeadHistory({
         leadId: existing.leadId,
         actorId: session.user.id,

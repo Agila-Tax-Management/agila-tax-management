@@ -87,14 +87,16 @@ model Client {
   employeeLevels EmployeeLevel[]
   tasks          Task[]
 
+  quotes Quote[]
+
   subscriptions ClientSubscription[]
   invoices      Invoice[]
   payments      Payment[]
   cashAdvances  CashAdvance[]
 
-  hrSetting    HrSetting?
-  salesSetting SalesSetting?
-  complianceSetting    ComplianceSetting?
+  hrSetting         HrSetting?
+  salesSetting      SalesSetting?
+  complianceSetting ComplianceSetting?
 
   payrollSchedules PayrollSchedule[]
 

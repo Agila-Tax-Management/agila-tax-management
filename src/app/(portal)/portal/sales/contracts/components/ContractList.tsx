@@ -4,10 +4,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Eye, Download, Trash2, Loader2, Search, X, FileText,
-  ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, Clock,
+  ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, Clock, Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
+import { TsaEditModal } from './TsaEditModal';
 import type { TsaListItem } from '@/app/api/sales/tsa/route';
 import type { ContractData } from '@/components/UI/TSAContractPDF';
 import type { PortalRole } from '@/generated/prisma/client';
@@ -199,6 +200,8 @@ export function ContractList(): React.ReactNode {
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
   // Confirm delete dialog
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Edit modal
+  const [editingTsa, setEditingTsa] = useState<TsaListItem | null>(null);
 
   // Portal access control
   const [canEdit, setCanEdit] = useState(false);
@@ -458,6 +461,19 @@ export function ContractList(): React.ReactNode {
                               : <Download size={12} />}
                             PDF
                           </Button>
+                          {/* Edit — only for DRAFT */}
+                          {tsa.status === 'DRAFT' && canEdit && (
+                            <Button
+                              variant="outline"
+                              className="gap-1.5 text-xs h-auto py-1.5 px-2.5"
+                              disabled={isPdfBusy || isDeleting}
+                              onClick={() => setEditingTsa(tsa)}
+                              title="Edit contract"
+                            >
+                              <Pencil size={12} />
+                              Edit
+                            </Button>
+                          )}
                           {/* Delete — only for DRAFT / PENDING_APPROVAL */}
                           {canDelete && canEdit && (
                             <Button
@@ -508,6 +524,19 @@ export function ContractList(): React.ReactNode {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Edit modal ── */}
+      {editingTsa && (
+        <TsaEditModal
+          isOpen={editingTsa !== null}
+          onClose={() => setEditingTsa(null)}
+          tsa={editingTsa}
+          onSaved={(updated) => {
+            setRows((prev) => prev.map((r) => r.id === updated.id ? updated : r));
+            setEditingTsa(null);
+          }}
+        />
       )}
 
       {/* ── Delete confirmation dialog ── */}

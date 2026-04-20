@@ -204,7 +204,7 @@ export async function provisionLeadAccountAction(
       // ── Step 1e: Migrate lead invoices to the new client ─────
       const migratedCount = await tx.invoice.updateMany({
         where: { leadId },
-        data: { clientId: newClient.id, leadId: null },
+        data: { clientId: newClient.id },
       });
 
       // ── Step 2: Update the lead record ────────────────────────
