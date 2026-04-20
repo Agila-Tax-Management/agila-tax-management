@@ -1,5 +1,6 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { prismaQueryInsights } from "@prisma/sqlcommenter-query-insights";
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
@@ -13,7 +14,10 @@ function createPrismaClient() {
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
   });
 
-  return new PrismaClient({ adapter: new PrismaPg(pool) });
+  return new PrismaClient({
+    adapter: new PrismaPg(pool),
+    comments: [prismaQueryInsights()],
+  });
 }
 
 const prisma = globalForPrisma.prisma ?? createPrismaClient();
