@@ -72,18 +72,12 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       return prisma.employeeAppAccess.upsert({
         where: { employeeId_appId: { employeeId: empId, appId } },
         update: {
-          canRead: entry.canRead,
-          canWrite: entry.canWrite,
-          canEdit: entry.canEdit,
-          canDelete: entry.canDelete,
+          role: entry.role,
         },
         create: {
           employeeId: empId,
           appId,
-          canRead: entry.canRead,
-          canWrite: entry.canWrite,
-          canEdit: entry.canEdit,
-          canDelete: entry.canDelete,
+          role: entry.role,
         },
       });
     }),

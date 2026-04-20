@@ -1,23 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  ClipboardList, Calendar, UserCircle
+  ClipboardList, Calendar, UserCircle, CheckCircle, LayoutDashboard
 } from 'lucide-react';
-import { INITIAL_LIAISON_TASKS } from '@/lib/mock-liaison-data';
+import type { PortalRole } from '@/generated/prisma/client';
 
-const TASK_BADGE_COUNT = INITIAL_LIAISON_TASKS.filter(t => t.status !== 'Done').length;
+interface LiaisonSidebarData {
+  dashboardBadge: number;
+  taskBoardBadge: number;
+  myTasksBadge: number;
+}
 
-const LIAISON_NAV_ITEMS = [
-  {
-    id: 'management',
-    label: 'MANAGEMENT',
-    isSection: true,
-  },
-  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison', badge: TASK_BADGE_COUNT },
-  { id: 'calendar', label: 'Schedule Calendar', icon: Calendar, href: '/portal/liaison/calendar', badge: 0 },
-];
+const EMPTY_SIDEBAR_DATA: LiaisonSidebarData = {
+  dashboardBadge: 0,
+  taskBoardBadge: 0,
+  myTasksBadge: 0,
+};
 
 interface LiaisonSidebarProps {
   isOpen: boolean;
@@ -27,6 +27,91 @@ interface LiaisonSidebarProps {
 export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [badgeData, setBadgeData] = useState<LiaisonSidebarData>(EMPTY_SIDEBAR_DATA);
+  const [portalRole, setPortalRole] = useState<PortalRole | null>(null);
+  const [_loadingAccess, setLoadingAccess] = useState(true);
+
+  // Fetch portal access to determine role
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const liaisonAccess = data.portals.find((p) => p.portal === 'LIAISON');
+          // SUPER_ADMIN and ADMIN get SETTINGS level access
+          if (data.userRole === 'SUPER_ADMIN' || data.userRole === 'ADMIN') {
+            setPortalRole('SETTINGS');
+          } else {
+            setPortalRole(liaisonAccess?.role ?? null);
+          }
+        }
+      } catch {
+        setPortalRole(null);
+      } finally {
+        setLoadingAccess(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
+
+  const navItems = useMemo(() => {
+    // USER role: Only see Dashboard and My Tasks
+    // VIEWER, ADMIN, SETTINGS: See Dashboard, Task Board, My Tasks, and Reports
+    const items = [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/liaison/dashboard', badge: badgeData.dashboardBadge },
+      {
+        id: 'management',
+        label: 'MANAGEMENT',
+        isSection: true,
+      },
+    ];
+
+    // Show Task Board only for VIEWER, ADMIN, and SETTINGS (hide for USER)
+    if (portalRole !== 'USER') {
+      items.push(
+        { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/liaison/tasks', badge: badgeData.taskBoardBadge }
+      );
+    }
+
+    // My Tasks is visible to all roles
+    items.push(
+      { id: 'myTasks', label: 'My Tasks', icon: CheckCircle, href: '/portal/liaison/my-task', badge: badgeData.myTasksBadge }
+    );
+
+    // Show Reports only for ADMIN and SETTINGS (hide for VIEWER and USER)
+    if (portalRole === 'ADMIN' || portalRole === 'SETTINGS') {
+      items.push(
+        { id: 'report', label: 'Report', icon: Calendar, href: '/portal/liaison/report', badge: 0 }
+      );
+    }
+
+    return items;
+  }, [badgeData.dashboardBadge, badgeData.myTasksBadge, badgeData.taskBoardBadge, portalRole]);
+
+   
+  useEffect(() => {
+    async function loadSidebarCounts(): Promise<void> {
+      try {
+        const response = await fetch('/api/liaison/sidebar', { cache: 'no-store' });
+        if (!response.ok) {
+          setBadgeData(EMPTY_SIDEBAR_DATA);
+          return;
+        }
+
+        const json = (await response.json()) as { data?: LiaisonSidebarData };
+        setBadgeData(json.data ?? EMPTY_SIDEBAR_DATA);
+      } catch {
+        setBadgeData(EMPTY_SIDEBAR_DATA);
+      }
+    }
+
+    void loadSidebarCounts();
+  }, []);
+   
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -61,8 +146,8 @@ export function LiaisonSidebar({ isOpen, onClose }: LiaisonSidebarProps) {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {LIAISON_NAV_ITEMS.map((item) => {
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          {navItems.map((item) => {
             if (item.isSection) {
               return (
                 <div key={item.id} className="pt-6 pb-2">

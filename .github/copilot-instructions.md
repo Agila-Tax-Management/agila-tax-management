@@ -34,11 +34,21 @@
    - The problem or feature being addressed
    - Which files will be created, edited, or deleted
    - The implementation approach and any trade-offs
+   - Any UI/theme decisions (including whether dark mode is involved)
 2. **Wait for approval** — Do **not** proceed with code changes until the user explicitly confirms the plan.
 3. **Iterate** — If the user requests adjustments to the plan, revise and re-present before implementing.
 4. **Execute** — Only after approval, carry out the changes and report what was done.
+5. **Validate** — **IMMEDIATELY** after completing code changes:
+   - **ALWAYS** run `get_errors` to check for TypeScript/build/syntax errors
+   - If errors are found, fix them **immediately** before considering the task complete
+   - Re-run `get_errors` after fixes until zero errors remain
+   - **CRITICAL**: When using `replace_string_in_file`, ensure `oldString` matches **exactly** with proper context (3-5 lines before/after). File corruption occurs when oldString doesn't match precisely.
+   - For large multi-section replacements, prefer multiple smaller targeted replacements over one large replacement
+   - After any file edit, verify the change succeeded by checking for errors
 
 This applies to all feature work, refactors, bug fixes, and schema changes. Trivial questions, file reads, or research tasks do not require a plan.
+
+**Default behavior:** For implementation tasks, always present the plan in chat first and wait for explicit user confirmation before making edits. After executing changes, **always validate with `get_errors`** before reporting completion.
 
 ---
 
@@ -67,8 +77,8 @@ This applies to all feature work, refactors, bug fixes, and schema changes. Triv
 prisma/
   schema.prisma          # Prisma config (generator + datasource only)
   models/                # Multi-file schema models
-    users.prisma          # User, Session, Account, Verification + Role enum
-    employee.prisma       # Employee, Department, Position, Teams
+    users.prisma          # User, Session, Account, Verification + Role enum (SUPER_ADMIN, ADMIN, EMPLOYEE)
+    employee.prisma       # Employee (structured address fields, extended personal info), Department, Position, Teams
     client.prisma         # Client, ClientUser, ProfessionalClient, SoleProprietorship
     app-access.prisma     # App, EmployeeAppAccess (RBAC per module)
   migrations/
@@ -267,7 +277,7 @@ useEffect(() => {
 - Client: `src/lib/auth-client.ts` — `createAuthClient()` with `nextCookies()` plugin
 - API route: `src/app/api/auth/[...all]/route.ts` — catch-all handler
 - Auth models: `User`, `Session`, `Account`, `Verification` in `prisma/models/users.prisma`
-- Roles enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`, `CLIENT`
+- Roles enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`
 
 ### BetterAuth Conventions
 
@@ -276,6 +286,73 @@ useEffect(() => {
 - Protect API routes by calling `auth.api.getSession({ headers })` and returning 401 if null
 - Protect pages with middleware or server-side session checks
 - Refer to official docs: https://www.better-auth.com/docs
+
+---
+
+## Media & File Uploads (Cloudinary)
+
+- Helper: `src/lib/cloudinary.ts` — exports `uploadToCloudinary`, `deleteFromCloudinary`, `getPublicIdFromUrl`
+- SDK: `cloudinary` npm package (v2 API via `import { v2 as cloudinary } from 'cloudinary'`)
+- Required environment variables: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- Profile images are stored as `User.image` (string URL) in the database after upload
+
+### Cloudinary Conventions
+
+- Use `uploadToCloudinary(buffer, folder?, publicId?)` for all uploads — returns `{ publicId, secureUrl, width, height, format, bytes }`
+- Always use `secureUrl` (HTTPS) when storing the URL — never `url`
+- Use `folder: 'atms/profiles'` for profile avatars; add module-specific sub-folders for other assets (e.g., `atms/documents`)
+- Use a fixed `publicId` (e.g., `user-{userId}`) for overwritable assets so re-uploads replace the old file
+- Call `deleteFromCloudinary(publicId)` when replacing or removing an asset — use `getPublicIdFromUrl(url)` to extract the ID from a stored URL
+- Upload transformations for profile photos: `{ width: 400, height: 400, crop: 'fill', gravity: 'face' }` + `{ quality: 'auto', fetch_format: 'auto' }`
+- Validate on both client and server: allowed types `image/jpeg`, `image/png`, `image/webp`, `image/gif`; max size 5 MB
+- File upload API example:
+
+  ```typescript
+  // src/app/api/profile/avatar/route.ts
+  import { uploadToCloudinary } from '@/lib/cloudinary';
+
+  const file = formData.get('file') as File;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const result = await uploadToCloudinary(buffer, 'atms/profiles', `user-${session.user.id}`);
+  // result.secureUrl → store in database
+  ```
+
+---
+
+## PDF Generation (@react-pdf/renderer)
+
+- Package: `@react-pdf/renderer` — installed, use for all client-side PDF generation
+- **Never** use `window.open` with injected HTML to print — Tailwind classes do not carry over to a new window
+- PDF template file: `src/components/accounting/InvoicePDF.tsx` — uses `Document`, `Page`, `View`, `Text`, `StyleSheet` primitives
+- **Always lazy-load** via dynamic `import()` inside click handlers — `@react-pdf/renderer` must never be imported at the module level in App Router components (causes SSR errors)
+
+### Standard `openPDF` helper pattern
+
+```typescript
+async function openInvoicePDF(invoice: InvoiceRecord) {
+  const [{ pdf }, { InvoicePDF }] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('@/components/accounting/InvoicePDF'),
+  ]);
+  const el = React.createElement(InvoicePDF, { invoice }) as Parameters<typeof pdf>[0];
+  const blob = await pdf(el).toBlob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');           // opens browser's native PDF viewer
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+```
+
+- Use `React.createElement(Component, props) as Parameters<typeof pdf>[0]` — required type assertion because `pdf()` expects `ReactElement<DocumentProps>`, not a generic JSX element
+- The browser's native PDF viewer provides its own Print / Save buttons — no custom print modal needed
+- Call `URL.revokeObjectURL` after a delay to free memory
+- Show a loading indicator (`isPrinting` state) while generating; disable the button to prevent double-clicks
+
+### InvoicePDF styling rules
+
+- Use `StyleSheet.create()` — inline style objects in JSX are not supported by react-pdf
+- Only `Helvetica`, `Helvetica-Bold`, `Helvetica-Oblique`, and `Courier` are available without registering fonts
+- Use `textTransform: 'uppercase'` and `letterSpacing` for section headings
+- Monetary values rendered with `₱` + `toLocaleString('en-PH', { minimumFractionDigits: 2 })`
 
 ---
 
@@ -295,6 +372,134 @@ useEffect(() => {
 - Use `@default(cuid())` for string IDs, `@default(autoincrement())` for integer IDs
 - Use `Decimal` with `@db.Decimal(precision, scale)` for monetary values
 - Always include `createdAt DateTime @default(now())` and `updatedAt DateTime @updatedAt` on models
+- `Employee` model uses **structured address fields** (no flat `address` string): `currentStreet`, `currentBarangay`, `currentCity`, `currentProvince`, `currentZip` + permanent equivalents — all optional
+- `Employee` model has extended personal info: `nameExtension`, `username`, `personalEmail`, `placeOfBirth`, `civilStatus`, `citizenship`, `educationalBackground`, `school`, `course`, `yearGraduated`, `certifications` — all optional
+- `Employee` has a `softDelete Boolean @default(false)` flag alongside `active`
+
+### Database Transactions (`prisma.$transaction`)
+
+- Wrap all **multi-step mutations** in a single `prisma.$transaction(async (tx) => { ... })` to guarantee full atomicity — all writes roll back on any failure
+- Inside the callback, use `tx` (not `prisma`) for every DB operation
+- **Sequential code generation** (e.g., `INV-YYYY-XXXX`, `PAY-YYYY-XXXX`) must be done **inside** the transaction to prevent duplicates:
+  ```typescript
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const latest = await tx.invoice.findFirst({
+    where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: 'desc' },
+    select: { invoiceNumber: true },
+  });
+  let nextSeq = 1;
+  if (latest) {
+    const parts = latest.invoiceNumber.split('-');
+    const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+    if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+  }
+  const invoiceNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  ```
+- `revalidatePath` calls must be placed **after** the transaction resolves — never inside it
+- `logActivity` and `notify` (fire-and-forget) must also be called **outside** the transaction
+- Only use transactions where atomicity genuinely matters (multi-record mutations). Single-record operations do not need `$transaction`
+
+### Compliance Records Seeding Pattern
+
+When seeding compliance records with EWT items and invoices, follow this flow:
+
+1. **Create or find Service** with `complianceType: "EWT"` (e.g., "Expanded Withholding Tax & VAT Filing")
+2. **Create ClientCompliance** subscription linking client to service with default assignees
+3. **Create ComplianceRecord** for each month with coverage date, deadline, filing status, and process status
+4. **Create EwtItem** entries (typically 3 per month: Basic Rent, CUSA, Parking) with gross amounts and calculated EWT (5%)
+5. **Create Invoice** for each month with:
+   - One SERVICE_FEE line item (vatable)
+   - Multiple TAX_REIMBURSEMENT line items (non-vatable) matching EWT items
+6. **Link Invoice to ComplianceRecord** via `invoiceId`
+7. **Create Payment records** for PAID invoices with bank transfer details
+8. **Create PaymentAllocation** to link payment to invoice
+
+Example structure from `prisma/seed.ts`:
+```typescript
+// 1. Service
+const ewtService = await prisma.service.upsert({
+  where: { code: "TAX-EWT-MO" },
+  create: {
+    code: "TAX-EWT-MO",
+    name: "Expanded Withholding Tax & VAT Filing",
+    billingType: "RECURRING",
+    frequency: "MONTHLY",
+    serviceRate: 3500,
+    complianceType: "EWT",
+  },
+});
+
+// 2. ClientCompliance
+const clientCompliance = await prisma.clientCompliance.create({
+  data: {
+    clientId: santosClient.id,
+    serviceId: ewtService.id,
+    processorId: accountantUser.id,
+    verifierId: superAdminUser.id,
+  },
+});
+
+// 3. ComplianceRecord
+const complianceRecord = await prisma.complianceRecord.create({
+  data: {
+    clientComplianceId: clientCompliance.id,
+    coverageDate: new Date("2026-01-01"),
+    deadline: new Date("2026-02-10"),
+    filingStatus: "FILED",
+    processStatus: "COMPLETED",
+  },
+});
+
+// 4. EwtItems
+await prisma.ewtItem.create({
+  data: {
+    complianceRecordId: complianceRecord.id,
+    name: "Basic Rent",
+    grossAmount: 15000,
+    expandedTaxAmount: 750, // 5%
+    effectiveMonth: "January 2026",
+  },
+});
+
+// 5. Invoice with line items
+const invoice = await prisma.invoice.create({
+  data: {
+    invoiceNumber: "INV-2026-EWT-001",
+    clientId: santosClient.id,
+    status: "PAID",
+    totalAmount: 3800, // Service fee + VAT + EWT reimbursement
+    items: {
+      create: [
+        {
+          description: "EWT Filing Service - January 2026",
+          unitPrice: 2500,
+          category: "SERVICE_FEE",
+          isVatable: true,
+        },
+        {
+          description: "EWT - Basic Rent",
+          unitPrice: 750,
+          category: "TAX_REIMBURSEMENT",
+          isVatable: false,
+        },
+      ],
+    },
+  },
+});
+
+// 6. Payment
+const payment = await prisma.payment.create({
+  data: {
+    paymentNumber: "PAY-2026-EWT-JAN",
+    clientId: santosClient.id,
+    invoiceId: invoice.id,
+    amount: 3800,
+    method: "BANK_TRANSFER",
+  },
+});
+```
 
 ---
 
@@ -397,7 +602,7 @@ useEffect(() => {
 
 ## Role-Based Access Control
 
-- Roles defined in Prisma enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`, `CLIENT`
+- Roles defined in Prisma enum: `SUPER_ADMIN`, `ADMIN`, `EMPLOYEE`
 - App-level permissions: `EmployeeAppAccess` model with `canRead`, `canWrite`, `canEdit`, `canDelete` per app module
 - Client context roles: `Employee`, `HR`, `Admin` (in `src/lib/role-context.tsx`)
 - Permissions map in `src/lib/constants.ts` (`ROLE_PERMISSIONS`)
@@ -452,6 +657,74 @@ src/app/(dashboard)/dashboard/settings/user-management/
 
 ---
 
+## Documentation Storage
+
+All project documentation, architectural summaries, implementation guides, and codebase overviews must be stored in the `docs/` folder within the project repository — **never** in the `/memories/` system.
+
+### Documentation Structure
+
+```
+docs/
+  codebase/                      # Architecture & codebase knowledge (from acquire-codebase-knowledge skill)
+    STACK.md                      # Tech stack, dependencies, runtime
+    STRUCTURE.md                  # Directory layout, entry points
+    ARCHITECTURE.md               # Layers, patterns, data flow
+    CONVENTIONS.md                # Naming, formatting, code style
+    INTEGRATIONS.md               # External APIs, databases, auth
+    TESTING.md                    # Test frameworks, organization
+    CONCERNS.md                   # Tech debt, security, performance
+  *.md                           # Implementation guides, policies, checklists
+```
+
+### Storage Rules
+
+- **Codebase documentation** → `docs/codebase/` (architecture, stack, structure, etc.)
+- **Implementation guides** → `docs/` root (testing guides, deployment checklists, policies)
+- **Feature summaries** → `docs/` root or module-specific subfolder (e.g., `docs/features/`)
+- **API documentation** → `docs/api/` (if needed)
+- **Decision records** → `docs/decisions/` or `docs/ADR/` (if using Architecture Decision Records)
+
+### Memory System vs Project Docs
+
+| Storage | Purpose | Lifespan | Visibility |
+|---------|---------|----------|------------|
+| `docs/` | Project documentation, architecture, guides | Permanent, version-controlled | All team members, Git history |
+| `/memories/` | Temporary notes, session context, user preferences | Session or user-scoped | Agent only, not committed |
+
+**Rule:** Any knowledge that should be shared with the team, version-controlled, or referenced in the future must go in `docs/`, not `/memories/`.
+
+### When Creating Documentation
+
+- Always check `docs/` first to see what already exists before creating new files
+- Use clear, descriptive filenames (e.g., `TESTING_GUIDE.md`, not `notes.md`)
+- Include a brief description at the top of each doc explaining its purpose
+- Update existing docs rather than creating duplicates
+- Reference the existing structure in this project (see workspace structure above)
+
+---
+
+## Client Portal Users (`ClientUser` + `ClientUserAssignment`)
+
+Client portal users are external users (typically client business owners) who access the client-facing portal. They are fully isolated from internal `User` accounts.
+
+- Model: `ClientUser` in `prisma/models/user-client.prisma` — BetterAuth-compatible with its own `ClientSession`, `ClientAccount`, `ClientVerification` tables
+- Join table: `ClientUserAssignment` links a `ClientUser` to one or more `Client` records with a `ClientPortalRole`
+- Role enum: `ClientPortalRole` — `OWNER`, `ADMIN`, `EMPLOYEE`, `VIEWER`
+- **Default role for `ClientUserAssignment` is `OWNER`** — the admin management page always creates assignments with `role: "OWNER"`
+- `ClientUserStatus` enum: `ACTIVE`, `INACTIVE`, `SUSPENDED`
+
+### Client User Management Conventions
+
+- API: `GET/POST /api/admin/settings/client-users` and `GET/PUT/PATCH/DELETE /api/admin/settings/client-users/[id]`
+- The management UI (`UserClientManagement`, `UserClientFormModal`, `UserClientViewModal`) lives in `src/components/dashboard/`
+- Shared types live in `src/types/client-user-management.types.ts` — `ClientUserRecord`, `ApiAssignment`, `ClientUserFormValues`, `ClientOption`
+- The GET endpoint accepts `?role=OWNER` to filter by role
+- Creating or updating a client user always uses `role: "OWNER"` for all assignments
+- The view modal displays a role badge (`a.role`) alongside the client active status badge
+- Auth client for the portal: `src/lib/auth-client-portal.ts` (separate BetterAuth instance)
+
+---
+
 ## Portal Apps (AppPortal Enum)
 
 All portal apps are defined in `prisma/models/app-access.prisma` and seeded in `prisma/seed.ts`:
@@ -465,6 +738,7 @@ All portal apps are defined in `prisma/models/app-access.prisma` and seeded in `
 | `ACCOUNT_OFFICER`  | Account Officer Portal   |
 | `HR`               | HR Portal                |
 | `TASK_MANAGEMENT`  | Task Management Portal   |
+| `CLIENT_RELATIONS` | Client Relations Portal  |
 
 When adding portal-related UI (checkboxes, labels), always include **all** portals from this list.
 
@@ -493,3 +767,4 @@ All module sidebars follow the same structure:
 - Dark mode: `.dark` class on `<html>` (variables overridden)
 - Toggle via `ThemeContext` → persisted in `localStorage`
 - Use theme-aware classes: `bg-background`, `text-foreground`, `bg-card`, `border-border`, etc.
+- Copilot default: do **not** use, suggest, or implement dark-theme UI/styles unless the user explicitly prompts for dark mode.

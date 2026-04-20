@@ -1,9 +1,10 @@
-import React from 'react'
+// src/app/(dashboard)/dashboard/sop/page.tsx
+import { Sop } from '@/components/quick-links/Sop';
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
+export default function SopPage() {
+  return <Sop />;
 }
 
-export default page
+
+
+

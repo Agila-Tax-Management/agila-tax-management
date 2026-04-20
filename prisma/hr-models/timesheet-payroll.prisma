@@ -1,0 +1,420 @@
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  INCOMPLETE
+  PAID_LEAVE
+  UNPAID_LEAVE
+  DAY_OFF
+  REGULAR_HOLIDAY
+  SPECIAL_HOLIDAY
+}
+
+enum PayrollPeriodStatus {
+  DRAFT
+  PROCESSING
+  APPROVED
+  PAID
+  CLOSED
+}
+
+enum DisbursedStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum HolidayType {
+  REGULAR
+  SPECIAL_NON_WORKING
+  SPECIAL_WORKING
+  LOCAL_HOLIDAY
+}
+
+enum CashAdvanceStatus {
+  PENDING
+  APPROVED
+  ACTIVE // Currently being deducted from payroll
+  COMPLETED // Fully paid off
+  CANCELLED
+}
+
+enum SalaryRateType {
+  DAILY
+  MONTHLY
+}
+
+enum SalaryFrequency {
+  ONCE_A_MONTH
+  TWICE_A_MONTH
+  WEEKLY
+}
+
+enum PayType {
+  FIXED_PAY
+  VARIABLE_PAY
+}
+
+enum DisbursementType {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  E_WALLET
+}
+
+enum PagibigContributionType {
+  REGULAR // 2% of monthly compensation (employee + employer)
+  MINIMUM // Flat ₱200/month (employee + employer)
+}
+
+// ─── Company / Client Holiday Calendar ────────────────────────────
+model Holiday {
+  id Int @id @default(autoincrement())
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
+  name String
+  date DateTime    @db.Date
+  type HolidayType
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, date])
+  @@index([clientId])
+  @@map("holiday")
+}
+
+// ─── Schedule Override (Ad-hoc Rest Days & Shift Changes) ─────────
+model ScheduleOverride {
+  id String @id @default(cuid())
+
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  date      DateTime @db.Date
+  isRestDay Boolean  @default(false)
+
+  startTime String?
+  endTime   String?
+  reason    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@map("schedule_override")
+}
+
+// ─── Timesheet (Daily Breakdown) ──────────────────────────────────
+model Timesheet {
+  id String @id @default(cuid())
+
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
+  date   DateTime         @db.Date
+  status AttendanceStatus @default(ABSENT)
+
+  // ─── Raw Punch Data ───
+  timeIn     DateTime?
+  lunchStart DateTime?
+  lunchEnd   DateTime?
+  timeOut    DateTime?
+
+  lateMinutes      Int @default(0)
+  undertimeMinutes Int @default(0)
+
+  // ─── DOLE Hours (Defaults to 0.00 to prevent crashing) ───
+  regularHours Decimal @default(0.00) @db.Decimal(5, 2)
+
+  regOtHours Decimal @default(0.00) @db.Decimal(5, 2)
+  rdHours    Decimal @default(0.00) @db.Decimal(5, 2)
+  rdOtHours  Decimal @default(0.00) @db.Decimal(5, 2)
+
+  shHours     Decimal @default(0.00) @db.Decimal(5, 2)
+  shOtHours   Decimal @default(0.00) @db.Decimal(5, 2)
+  shRdHours   Decimal @default(0.00) @db.Decimal(5, 2)
+  shRdOtHours Decimal @default(0.00) @db.Decimal(5, 2)
+
+  rhHours     Decimal @default(0.00) @db.Decimal(5, 2)
+  rhOtHours   Decimal @default(0.00) @db.Decimal(5, 2)
+  rhRdHours   Decimal @default(0.00) @db.Decimal(5, 2)
+  rhRdOtHours Decimal @default(0.00) @db.Decimal(5, 2)
+
+  dailyGrossPay Decimal @default(0.00) @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([clientId])
+  @@map("timesheet")
+}
+
+// ─── Employee Compensation (DOLE-Compliant Configuration) ─────────
+model EmployeeCompensation {
+  id String @id @default(cuid())
+
+  // ─── Linked directly to the specific Contract ───
+  contractId Int
+  contract   EmployeeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  // ─── Basic Compensation (From your UI) ───
+  baseRate      Decimal @db.Decimal(10, 2)
+  allowanceRate Decimal @default(0.00) @db.Decimal(10, 2)
+
+  // ─── Allowance Payout Behavior ───
+  // If true: Give 100% of the allowance on the 1st payroll of the month
+  // If false: Split it evenly across all pay periods (e.g., 50/50 for semi-monthly).
+  allowanceOnFirstCutoffOnly Boolean @default(true)
+
+  // ─── Salary Configuration ───
+  rateType         SalaryRateType   @default(DAILY)
+  frequency        SalaryFrequency  @default(TWICE_A_MONTH)
+  payType          PayType          @default(VARIABLE_PAY)
+  disbursementType DisbursementType @default(CASH)
+  bankDetails      String?
+
+  // ─── Rest Days & DOLE Factor Logic ───
+  isPaidRestDays  Boolean @default(false)
+  restDaysPerWeek Int     @default(1)
+  doleFactor      Decimal @db.Decimal(5, 2)
+
+  // ─── Government Benefits Toggles (Moved from Contract) ───
+  deductSss        Boolean                 @default(false)
+  deductPhilhealth Boolean                 @default(false)
+  deductPagibig    Boolean                 @default(false)
+  pagibigType      PagibigContributionType @default(REGULAR)
+  deductTax        Boolean                 @default(false)
+
+  // ─── Calculated Rates (The outputs for Payslip generation) ───
+  calculatedDailyRate   Decimal @db.Decimal(10, 2)
+  calculatedMonthlyRate Decimal @db.Decimal(10, 2)
+
+  payrollScheduleId String?
+  payrollSchedule   PayrollSchedule? @relation(fields: [payrollScheduleId], references: [id], onDelete: Restrict)
+
+  // ─── State ───
+  isActive      Boolean  @default(true)
+  effectiveDate DateTime @default(now()) @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId, isActive])
+  @@map("employee_compensation")
+}
+
+// ─── Payroll Period ───────────────────────────────────────────────
+model PayrollPeriod {
+  id Int @id @default(autoincrement())
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
+  // ─── ADD THIS: Link to the specific schedule used ───
+  payrollScheduleId String?
+  payrollSchedule   PayrollSchedule? @relation(fields: [payrollScheduleId], references: [id], onDelete: Restrict)
+
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+
+  // ─── ADD THIS: The target date the money should hit the bank ───
+  payoutDate DateTime @db.Date
+
+  status PayrollPeriodStatus @default(DRAFT)
+
+  payslips Payslip[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([payrollScheduleId]) // New index for faster queries
+  @@map("payroll_period")
+}
+
+// ─── Payroll Schedule (Settings) ──────────────────────────────────
+// Defines the cutoff and payout rules for a group of employees.
+model PayrollSchedule {
+  id String @id @default(cuid())
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
+  name      String // e.g., "Standard Semi-Monthly (1st-15th, 16th-EOM)"
+  frequency SalaryFrequency @default(TWICE_A_MONTH)
+
+  // ─── First Period Cutoff & Payout ───
+  firstPeriodStartDay Int // e.g., 1
+  firstPeriodEndDay   Int // e.g., 15
+  firstPayoutDay      Int // e.g., 20
+
+  // ─── Second Period Cutoff & Payout (Nullable for Monthly/Weekly) ───
+  secondPeriodStartDay Int? // e.g., 16
+  // 💡 PRO TIP: Use 31 to represent "End of Month" in your app logic, 
+  // since February has 28 days and April has 30.
+  secondPeriodEndDay   Int? // e.g., 31 
+  secondPayoutDay      Int? // e.g., 5
+
+  isActive Boolean @default(true)
+
+  // Employees assigned to this specific schedule rule
+  compensations  EmployeeCompensation[]
+  payrollPeriods PayrollPeriod[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("payroll_schedule")
+}
+
+// ─── Payslip (Dual-Auth Approvals & Acknowledgments) ──────────────
+model Payslip {
+  id String @id @default(cuid())
+
+  payrollPeriodId Int
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  // ─── ADD THIS: Frozen Hour Summaries (The "Why" behind the pay) ───
+  totalRegularDays    Decimal @default(0.00) @db.Decimal(5, 2)
+  totalRegularHours   Decimal @default(0.00) @db.Decimal(7, 2)
+  totalOvertimeHours  Decimal @default(0.00) @db.Decimal(7, 2)
+  totalNightDiffHours Decimal @default(0.00) @db.Decimal(7, 2) // Highly recommended for PH/DOLE
+  totalHolidayHours   Decimal @default(0.00) @db.Decimal(7, 2)
+  totalLateMins       Int     @default(0)
+  totalUndertimeMins  Int     @default(0)
+
+  basicPay     Decimal @default(0.00) @db.Decimal(10, 2)
+  holidayPay   Decimal @default(0.00) @db.Decimal(10, 2)
+  overtimePay  Decimal @default(0.00) @db.Decimal(10, 2)
+  paidLeavePay Decimal @default(0.00) @db.Decimal(10, 2)
+  allowance    Decimal @default(0.00) @db.Decimal(10, 2)
+
+  grossPay Decimal @default(0.00) @db.Decimal(10, 2)
+
+  sssDeduction        Decimal @default(0.00) @db.Decimal(10, 2)
+  philhealthDeduction Decimal @default(0.00) @db.Decimal(10, 2)
+  pagibigDeduction    Decimal @default(0.00) @db.Decimal(10, 2)
+  withholdingTax      Decimal @default(0.00) @db.Decimal(10, 2)
+
+  lateUndertimeDeduction Decimal @default(0.00) @db.Decimal(10, 2)
+  pagibigLoan            Decimal @default(0.00) @db.Decimal(10, 2)
+  sssLoan                Decimal @default(0.00) @db.Decimal(10, 2)
+  cashAdvanceRepayment   Decimal @default(0.00) @db.Decimal(10, 2)
+
+  totalDeductions Decimal @default(0.00) @db.Decimal(10, 2)
+  netPay          Decimal @default(0.00) @db.Decimal(10, 2)
+
+  // ─── Approvals & Audits ───
+  preparedById String?
+  preparedBy   User?     @relation("PayslipPreparer", fields: [preparedById], references: [id])
+  preparedAt   DateTime?
+
+  approvedById String?
+  approvedBy   User?   @relation("PayslipApprover", fields: [approvedById], references: [id])
+
+  approvedByClientUserId String?
+  approvedByClientUser   ClientUser? @relation("ClientPayslipApprover", fields: [approvedByClientUserId], references: [id])
+  approvedAt             DateTime?
+
+  // ─── Employee Acknowledgments ───
+  acknowledgedById String?
+  acknowledgedBy   User?   @relation("PayslipAcknowledger", fields: [acknowledgedById], references: [id])
+
+  acknowledgedByClientUserId String?
+  acknowledgedByClientUser   ClientUser? @relation("ClientPayslipAcknowledger", fields: [acknowledgedByClientUserId], references: [id])
+  acknowledgedAt             DateTime?
+
+  disbursedStatus DisbursedStatus @default(PENDING)
+
+  cashAdvanceDeductions    CashAdvanceDeduction[]
+  governmentLoanDeductions GovernmentLoanDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([payrollPeriodId, employeeId])
+  @@index([employeeId])
+  @@map("payslip")
+}
+
+// ─── Cash Advance (The Loan Record) ───────────────────────────────
+model CashAdvance {
+  id String @id @default(cuid())
+
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
+  // ─── Financial Terms ───
+  principalAmount Decimal @db.Decimal(10, 2)
+
+  // How many payroll cutoffs this will be split across
+  installmentCount Int
+
+  // Amount to deduct per payslip (usually principalAmount / installmentCount)
+  installmentAmount Decimal @db.Decimal(10, 2)
+
+  // Live tracker of what is left to pay
+  remainingBalance Decimal @db.Decimal(10, 2)
+
+  // ─── Schedule ───
+  grantedDate        DateTime? @db.Date
+  deductionStartDate DateTime? @db.Date
+
+  remarks String?           @db.Text
+  status  CashAdvanceStatus @default(PENDING)
+
+  // ─── Dual Auth Approvers ───
+  approvedById String?
+  approvedBy   User?   @relation("CashAdvanceApprover", fields: [approvedById], references: [id])
+
+  approvedByClientUserId String?
+  approvedByClientUser   ClientUser? @relation("ClientCashAdvanceApprover", fields: [approvedByClientUserId], references: [id])
+
+  approvedAt DateTime?
+
+  // The history of deductions applied to payslips
+  deductions CashAdvanceDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([clientId])
+  @@map("cash_advance")
+}
+
+// ─── Cash Advance Deduction (The Repayment Ledger) ────────────────
+model CashAdvanceDeduction {
+  id String @id @default(cuid())
+
+  cashAdvanceId String
+  cashAdvance   CashAdvance @relation(fields: [cashAdvanceId], references: [id], onDelete: Cascade)
+
+  // Links directly to the generated payslip snapshot
+  payslipId String
+  payslip   Payslip @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+  amountDeducted Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cashAdvanceId])
+  @@index([payslipId])
+  @@map("cash_advance_deduction")
+}

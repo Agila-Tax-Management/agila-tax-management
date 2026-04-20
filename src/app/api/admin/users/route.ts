@@ -35,15 +35,11 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
           lastName: true,
           employeeNo: true,
           phone: true,
-          address: true,
           birthDate: true,
           gender: true,
           appAccess: {
             select: {
-              canRead: true,
-              canWrite: true,
-              canEdit: true,
-              canDelete: true,
+              role: true,
               app: { select: { name: true } },
             },
           },
@@ -86,7 +82,6 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
             lastName: emp.lastName,
             employeeNo: emp.employeeNo,
             phone: emp.phone,
-            address: emp.address,
             birthDate: emp.birthDate.toISOString(),
             gender: emp.gender,
             employment: employment
@@ -105,10 +100,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       portalAccess: emp
         ? emp.appAccess.map((a) => ({
             portal: a.app.name,
-            canRead: a.canRead,
-            canWrite: a.canWrite,
-            canEdit: a.canEdit,
-            canDelete: a.canDelete,
+            role: a.role,
           }))
         : [],
     };
@@ -149,7 +141,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const {
     name, email, password, role, active,
-    firstName, middleName, lastName, phone, address, birthDate, gender,
+    firstName, middleName, lastName, phone, birthDate, gender,
     portalAccess, employeeLevelId,
   } = parsed.data;
 
@@ -219,7 +211,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           birthDate: new Date(birthDate),
           gender,
           phone,
-          address: address || "N/A",
           active: true,
         },
       });
@@ -253,10 +244,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           .map((p) => ({
             employeeId: employee.id,
             appId: appMap.get(p.portal)!,
-            canRead: p.canRead,
-            canWrite: p.canWrite,
-            canEdit: p.canEdit,
-            canDelete: p.canDelete,
+            role: p.role,
           }));
 
         if (accessData.length > 0) {

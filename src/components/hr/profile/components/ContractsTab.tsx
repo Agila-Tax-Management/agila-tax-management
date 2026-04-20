@@ -8,8 +8,9 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import { ContractFormModal } from './ContractFormModal';
+import { ContractDetailView } from './ContractDetailView';
 import { useToast } from '@/context/ToastContext';
-import type { ContractRecord, EmploymentRecord } from '../profile-types';
+import type { ContractRecord, EmploymentRecord, ScheduleOption } from '../profile-types';
 
 const CONTRACT_STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   ACTIVE: 'success', DRAFT: 'warning', EXPIRED: 'neutral', TERMINATED: 'danger',
@@ -18,7 +19,7 @@ const CONTRACT_STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | '
 interface ContractsTabProps {
   contracts: ContractRecord[];
   employmentRecords: EmploymentRecord[];
-  scheduleOptions: { id: number; name: string }[];
+  scheduleOptions: ScheduleOption[];
   employeeId: number;
   onContractSaved: () => void;
 }
@@ -31,7 +32,9 @@ export function ContractsTab({
   const [editContract, setEditContract] = useState<ContractRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContractRecord | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
 
+  const selectedContract = contracts.find((c) => c.id === selectedContractId) ?? null;
   const hasActiveContract = contracts.some((c) => c.status === 'ACTIVE');
 
   const handleSaved = () => {
@@ -63,6 +66,21 @@ export function ContractsTab({
     }
   };
 
+  // ── Detail view mode ──────────────────────────────────────────
+  if (selectedContract) {
+    return (
+      <ContractDetailView
+        contract={selectedContract}
+        employeeId={employeeId}
+        scheduleOptions={scheduleOptions}
+        onBack={() => setSelectedContractId(null)}
+        onContractSaved={() => {
+          onContractSaved();
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -71,7 +89,10 @@ export function ContractsTab({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-lg font-black text-foreground">Contracts</h2>
-              <p className="text-sm text-muted-foreground mt-1">Legal agreement records for each employment period.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Legal agreement records for each employment period. Click a contract to view details
+                and compensation.
+              </p>
             </div>
             <Button className="gap-2 shrink-0" onClick={() => setAddModalOpen(true)}>
               <Plus size={16} /> Add Contract
@@ -79,7 +100,7 @@ export function ContractsTab({
           </div>
 
           {hasActiveContract && (
-            <div className="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3">
+            <div className="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 border border-amber-200 dark:border-amber-800 px-4 py-3">
               <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
               <p className="text-sm text-amber-700 dark:text-amber-400">
                 There is already an <span className="font-semibold">Active</span> contract on record.
@@ -91,7 +112,9 @@ export function ContractsTab({
 
         {/* Contract Records */}
         <Card className="p-6 space-y-4">
-          <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Contract Records</h3>
+          <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+            Contract Records
+          </h3>
 
           {contracts.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
@@ -102,7 +125,13 @@ export function ContractsTab({
               {contracts.map((contract) => (
                 <div
                   key={contract.id}
-                  className="rounded-xl border border-border p-4"
+                  role="button"
+                  tabIndex={0}
+                  className="rounded-xl border border-border p-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+                  onClick={() => setSelectedContractId(contract.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setSelectedContractId(contract.id);
+                  }}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -113,21 +142,15 @@ export function ContractsTab({
                         {contract.positionTitle} · {contract.departmentName}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {contract.startDate ? new Date(contract.startDate).toLocaleDateString('en-PH') : '—'}{' '}–{' '}
-                        {contract.endDate ? new Date(contract.endDate).toLocaleDateString('en-PH') : 'Open-ended'}
+                        {contract.startDate
+                          ? new Date(contract.startDate).toLocaleDateString('en-PH')
+                          : '—'}
+                        {' '}–{' '}
+                        {contract.endDate
+                          ? new Date(contract.endDate).toLocaleDateString('en-PH')
+                          : 'Open-ended'}
                       </p>
-                      {(contract.monthlyRate ?? contract.dailyRate ?? contract.hourlyRate) && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {[
-                            contract.monthlyRate ? `₱${parseFloat(contract.monthlyRate).toLocaleString('en-PH')}/mo` : null,
-                            contract.dailyRate ? `₱${parseFloat(contract.dailyRate).toLocaleString('en-PH')}/day` : null,
-                            contract.hourlyRate ? `₱${parseFloat(contract.hourlyRate).toLocaleString('en-PH')}/hr` : null,
-                            contract.disbursedMethod
-                              ? (contract.disbursedMethod === 'FUND_TRANSFER' ? 'Fund Transfer' : 'Cash Salary')
-                              : null,
-                          ].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
+                      <p className="text-xs text-blue-500 mt-1.5">Click to view details &amp; compensation →</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant={CONTRACT_STATUS_VARIANT[contract.status] ?? 'neutral'}>
@@ -137,15 +160,21 @@ export function ContractsTab({
                         type="button"
                         title="Edit contract"
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        onClick={() => setEditContract(contract)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditContract(contract);
+                        }}
                       >
                         <Pencil size={15} />
                       </button>
                       <button
                         type="button"
                         title="Delete contract"
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        onClick={() => setDeleteTarget(contract)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(contract);
+                        }}
                       >
                         <Trash2 size={15} />
                       </button>
@@ -189,18 +218,27 @@ export function ContractsTab({
       >
         <div className="space-y-4">
           {deleteTarget?.status === 'ACTIVE' && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400">
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 dark:border-red-800 dark:text-red-400">
               <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-              <p className="text-xs font-medium">This is an <strong>Active</strong> contract. Deleting it will immediately remove the employee&apos;s current contractual agreement.</p>
+              <p className="text-xs font-medium">
+                This is an <strong>Active</strong> contract. Deleting it will immediately remove the
+                employee&apos;s current contractual agreement.
+              </p>
             </div>
           )}
           <p className="text-sm text-foreground">
             Are you sure you want to delete the{' '}
-            <span className="font-semibold">{deleteTarget?.contractType.replace(/_/g, ' ')}</span>{' '}
+            <span className="font-semibold">
+              {deleteTarget?.contractType.replace(/_/g, ' ')}
+            </span>{' '}
             contract? This action cannot be undone.
           </p>
           <div className="flex justify-end gap-3 pt-1">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteLoading}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteLoading}
+            >
               No, keep it
             </Button>
             <Button
@@ -216,4 +254,5 @@ export function ContractsTab({
     </>
   );
 }
+
 

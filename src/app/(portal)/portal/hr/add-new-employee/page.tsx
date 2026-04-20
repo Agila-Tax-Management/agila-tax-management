@@ -2,19 +2,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { ArrowLeft, Check, ChevronRight, Loader2, Search, SkipForward, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Loader2, SkipForward, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { useRouter } from 'next/navigation';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
-
-interface UserOption {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
 
 interface DepartmentOption {
   id: number;
@@ -48,7 +41,7 @@ interface WorkScheduleOption {
   days: WorkScheduleDay[];
 }
 
-type UserLinkMode = 'none' | 'existing' | 'create';
+type UserLinkMode = 'create';
 
 interface Step1Data {
   firstName: string;
@@ -57,11 +50,19 @@ interface Step1Data {
   birthDate: string;
   gender: string;
   phone: string;
-  address: string;
+  currentStreet: string;
+  currentBarangay: string;
+  currentCity: string;
+  currentProvince: string;
+  currentZip: string;
+  permanentStreet: string;
+  permanentBarangay: string;
+  permanentCity: string;
+  permanentProvince: string;
+  permanentZip: string;
   email: string;
   employeeNo: string;
   userLinkMode: UserLinkMode;
-  selectedUserId: string;
   newUserName: string;
   newUserEmail: string;
   newUserPassword: string;
@@ -83,14 +84,30 @@ interface Step3Data {
   status: string;
   contractStart: string;
   contractEnd: string;
-  monthlyRate: string;
-  dailyRate: string;
-  hourlyRate: string;
-  disbursedMethod: string;
-  payType: string;
-  bankDetails: string;
   workingHoursPerWeek: string;
   notes: string;
+}
+
+type RateType = 'DAILY' | 'MONTHLY';
+type SalaryFrequency = 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
+type PayType = 'FIXED_PAY' | 'VARIABLE_PAY';
+type DisbursementType = 'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'E_WALLET';
+
+interface Step3CompensationData {
+  baseRate: string;
+  allowanceRate: string;
+  rateType: RateType;
+  frequency: SalaryFrequency;
+  payType: PayType;
+  disbursementType: DisbursementType;
+  bankDetails: string;
+  isPaidRestDays: boolean;
+  restDaysPerWeek: number;
+  deductSss: boolean;
+  deductPhilhealth: boolean;
+  deductPagibig: boolean;
+  pagibigType: 'REGULAR' | 'MINIMUM';
+  allowanceOnFirstCutoff: boolean;
 }
 
 interface Step4Data {
@@ -134,6 +151,30 @@ const DEFAULT_STEP4: Step4Data = {
   })),
 };
 
+function getDoleFactor(isPaidRestDays: boolean, restDaysPerWeek: number): number {
+  if (isPaidRestDays) return 365;
+  if (restDaysPerWeek === 2) return 261;
+  if (restDaysPerWeek === 1) return 313;
+  return 393.8;
+}
+
+const DEFAULT_S3C: Step3CompensationData = {
+  baseRate: '',
+  allowanceRate: '',
+  rateType: 'DAILY',
+  frequency: 'TWICE_A_MONTH',
+  payType: 'VARIABLE_PAY',
+  disbursementType: 'CASH',
+  bankDetails: '',
+  isPaidRestDays: false,
+  restDaysPerWeek: 1,
+  deductSss: false,
+  deductPhilhealth: false,
+  deductPagibig: false,
+  pagibigType: 'REGULAR',
+  allowanceOnFirstCutoff: true,
+};
+
 const inputCls =
   'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500';
 const selectCls =
@@ -160,8 +201,7 @@ export default function AddNewEmployeePage(): React.ReactNode {
   const [createdEmploymentId, setCreatedEmploymentId] = useState<number | null>(null);
   const [createdContractId, setCreatedContractId] = useState<number | null>(null);
 
-  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
-  const [userSearch, setUserSearch] = useState('');
+
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [positions, setPositions] = useState<PositionOption[]>([]);
   const [levels, setLevels] = useState<EmployeeLevelOption[]>([]);
@@ -171,8 +211,11 @@ export default function AddNewEmployeePage(): React.ReactNode {
 
   const [s1, setS1] = useState<Step1Data>({
     firstName: '', middleName: '', lastName: '', birthDate: '', gender: '',
-    phone: '', address: '', email: '', employeeNo: '',
-    userLinkMode: 'none', selectedUserId: '',
+    phone: '',
+    currentStreet: '', currentBarangay: '', currentCity: '', currentProvince: '', currentZip: '',
+    permanentStreet: '', permanentBarangay: '', permanentCity: '', permanentProvince: '', permanentZip: '',
+    email: '', employeeNo: '',
+    userLinkMode: 'create',
     newUserName: '', newUserEmail: '', newUserPassword: '', newUserRole: 'EMPLOYEE',
   });
 
@@ -183,9 +226,10 @@ export default function AddNewEmployeePage(): React.ReactNode {
 
   const [s3, setS3] = useState<Step3Data>({
     contractType: '', status: 'DRAFT', contractStart: '', contractEnd: '',
-    monthlyRate: '', dailyRate: '', hourlyRate: '', disbursedMethod: '',
-    payType: 'Variable Pay', bankDetails: '', workingHoursPerWeek: '', notes: '',
+    workingHoursPerWeek: '', notes: '',
   });
+
+  const [s3c, setS3c] = useState<Step3CompensationData>(DEFAULT_S3C);
 
   const [s4, setS4] = useState<Step4Data>(DEFAULT_STEP4);
 
@@ -198,7 +242,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
         fetch('/api/admin/employee-levels'),
         fetch('/api/hr/work-schedules'),
       ]);
-      const unlinkedUsers = await fetch('/api/hr/users').then((r) => r.json()).catch(() => ({ data: [] }));
 
       const [deptData, levelData, schedData] = await Promise.all([
         deptRes.json().catch(() => ({ data: [] })),
@@ -207,7 +250,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
       ]);
 
       setDepartments(deptData.data ?? []);
-      setUserOptions((unlinkedUsers as { data: UserOption[] }).data ?? []);
       setLevels((levelData.data ?? []).sort((a: EmployeeLevelOption, b: EmployeeLevelOption) => a.position - b.position));
       setSchedules(schedData.data ?? []);
     } catch {
@@ -249,8 +291,8 @@ export default function AddNewEmployeePage(): React.ReactNode {
       error('Missing fields', 'First name and last name are required.');
       return;
     }
-    if (!s1.birthDate || !s1.gender || !s1.phone.trim() || !s1.address.trim()) {
-      error('Missing fields', 'Birth date, gender, phone, and address are required.');
+    if (!s1.birthDate || !s1.gender || !s1.phone.trim()) {
+      error('Missing fields', 'Birth date, gender, and phone are required.');
       return;
     }
     if (empNoConflict) {
@@ -262,32 +304,28 @@ export default function AddNewEmployeePage(): React.ReactNode {
     try {
       let resolvedUserId: string | null = null;
 
-      if (s1.userLinkMode === 'create') {
-        if (!s1.newUserEmail || !s1.newUserPassword || !s1.newUserName) {
-          error('Missing fields', 'Name, email, and password are required to create a user account.');
-          setLoading(false);
-          return;
-        }
-        const userRes = await fetch('/api/hr/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: s1.newUserName,
-            email: s1.newUserEmail,
-            password: s1.newUserPassword,
-            role: s1.newUserRole,
-          }),
-        });
-        const userData = (await userRes.json()) as { data?: { id: string }; error?: string };
-        if (!userRes.ok) {
-          error('Failed to create user', userData.error ?? 'An error occurred.');
-          setLoading(false);
-          return;
-        }
-        resolvedUserId = userData.data!.id;
-      } else if (s1.userLinkMode === 'existing') {
-        resolvedUserId = s1.selectedUserId || null;
+      if (!s1.newUserEmail || !s1.newUserPassword || !s1.newUserName) {
+        error('Missing fields', 'Name, email, and password are required to create a portal account.');
+        setLoading(false);
+        return;
       }
+      const userRes = await fetch('/api/hr/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: s1.newUserName,
+          email: s1.newUserEmail,
+          password: s1.newUserPassword,
+          role: s1.newUserRole,
+        }),
+      });
+      const userData = (await userRes.json()) as { data?: { id: string }; error?: string };
+      if (!userRes.ok) {
+        error('Failed to create user', userData.error ?? 'An error occurred.');
+        setLoading(false);
+        return;
+      }
+      resolvedUserId = userData.data!.id;
 
       const res = await fetch('/api/hr/employees', {
         method: 'POST',
@@ -299,7 +337,16 @@ export default function AddNewEmployeePage(): React.ReactNode {
           birthDate: s1.birthDate,
           gender: s1.gender,
           phone: s1.phone.trim(),
-          address: s1.address.trim(),
+          currentStreet: s1.currentStreet.trim() || null,
+          currentBarangay: s1.currentBarangay.trim() || null,
+          currentCity: s1.currentCity.trim() || null,
+          currentProvince: s1.currentProvince.trim() || null,
+          currentZip: s1.currentZip.trim() || null,
+          permanentStreet: s1.permanentStreet.trim() || null,
+          permanentBarangay: s1.permanentBarangay.trim() || null,
+          permanentCity: s1.permanentCity.trim() || null,
+          permanentProvince: s1.permanentProvince.trim() || null,
+          permanentZip: s1.permanentZip.trim() || null,
           email: s1.email.trim() || null,
           employeeNo: s1.employeeNo.trim() || null,
           userId: resolvedUserId,
@@ -383,7 +430,8 @@ export default function AddNewEmployeePage(): React.ReactNode {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/hr/employees/${createdEmployeeId}/contract`, {
+      // Phase 1: Create contract
+      const contractRes = await fetch(`/api/hr/employees/${createdEmployeeId}/contract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -392,26 +440,55 @@ export default function AddNewEmployeePage(): React.ReactNode {
           status: s3.status,
           contractStart: s3.contractStart,
           contractEnd: s3.contractEnd || null,
-          monthlyRate: s3.monthlyRate || null,
-          dailyRate: s3.dailyRate || null,
-          hourlyRate: s3.hourlyRate || null,
-          disbursedMethod: s3.disbursedMethod || null,
-          payType: s3.payType || null,
-          bankDetails: s3.bankDetails || null,
           workingHoursPerWeek: s3.workingHoursPerWeek ? parseInt(s3.workingHoursPerWeek, 10) : null,
           notes: s3.notes || null,
         }),
       });
 
-      const data = (await res.json()) as { data?: { id: number }; error?: string };
-      if (!res.ok) {
-        error('Failed to save contract', data.error ?? 'An error occurred.');
+      const contractData = (await contractRes.json()) as { data?: { id: number }; error?: string };
+      if (!contractRes.ok) {
+        error('Failed to save contract', contractData.error ?? 'An error occurred.');
         setLoading(false);
         return;
       }
 
-      setCreatedContractId(data.data!.id);
-      success('Contract saved', 'Employee contract has been recorded.');
+      const newContractId = contractData.data!.id;
+      setCreatedContractId(newContractId);
+
+      // Phase 2: Create compensation (only if base rate provided)
+      if (s3c.baseRate.trim()) {
+        const compRes = await fetch(`/api/hr/employees/${createdEmployeeId}/compensation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractId: newContractId,
+            baseRate: s3c.baseRate,
+            allowanceRate: s3c.allowanceRate || '0',
+            rateType: s3c.rateType,
+            frequency: s3c.frequency,
+            payType: s3c.payType,
+            disbursementType: s3c.disbursementType,
+            bankDetails: s3c.bankDetails || null,
+            isPaidRestDays: s3c.isPaidRestDays,
+            restDaysPerWeek: s3c.restDaysPerWeek,
+            deductSss: s3c.deductSss,
+            deductPhilhealth: s3c.deductPhilhealth,
+            deductPagibig: s3c.deductPagibig,
+            pagibigType: s3c.pagibigType,
+            deductTax: false,
+            allowanceOnFirstCutoffOnly: s3c.allowanceOnFirstCutoff,
+          }),
+        });
+
+        const compData = (await compRes.json()) as { error?: string };
+        if (!compRes.ok) {
+          error('Contract saved but compensation failed', compData.error ?? 'An error occurred.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      success('Contract saved', 'Employee contract and compensation have been recorded.');
       setStep(4);
     } catch {
       error('Network error', 'Could not connect to the server. Please try again.');
@@ -490,12 +567,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
   };
 
   const handleCancel = () => router.push('/portal/hr/employee-management');
-
-  const filteredUsers = userOptions.filter(
-    (u) =>
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase()),
-  );
 
   /* ─── Render ────────────────────────────────────────────────────── */
 
@@ -586,11 +657,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
                 <input className={inputCls} value={s1.phone}
                   onChange={(e) => setS1((p) => ({ ...p, phone: e.target.value }))} placeholder="09xxxxxxxxx" />
               </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Address <span className="text-red-500">*</span></label>
-                <input className={inputCls} value={s1.address}
-                  onChange={(e) => setS1((p) => ({ ...p, address: e.target.value }))} placeholder="City, Province" />
-              </div>
               <div>
                 <label className={labelCls}>Email</label>
                 <input type="email" className={inputCls} value={s1.email}
@@ -619,95 +685,103 @@ export default function AddNewEmployeePage(): React.ReactNode {
               </div>
             </div>
 
+            {/* Address */}
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Current Address</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Street / House No.</label>
+                    <input className={inputCls} value={s1.currentStreet}
+                      onChange={(e) => setS1((p) => ({ ...p, currentStreet: e.target.value }))} placeholder="123 Mabini St." />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Barangay</label>
+                    <input className={inputCls} value={s1.currentBarangay}
+                      onChange={(e) => setS1((p) => ({ ...p, currentBarangay: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>City / Municipality</label>
+                    <input className={inputCls} value={s1.currentCity}
+                      onChange={(e) => setS1((p) => ({ ...p, currentCity: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Province</label>
+                    <input className={inputCls} value={s1.currentProvince}
+                      onChange={(e) => setS1((p) => ({ ...p, currentProvince: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>ZIP Code</label>
+                    <input className={inputCls} value={s1.currentZip}
+                      onChange={(e) => setS1((p) => ({ ...p, currentZip: e.target.value }))} placeholder="6000" />
+                  </div>
+                </div>
+              </div>
+              <hr className="border-border" />
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Permanent Address</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Street / House No.</label>
+                    <input className={inputCls} value={s1.permanentStreet}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentStreet: e.target.value }))} placeholder="123 Mabini St." />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Barangay</label>
+                    <input className={inputCls} value={s1.permanentBarangay}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentBarangay: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>City / Municipality</label>
+                    <input className={inputCls} value={s1.permanentCity}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentCity: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Province</label>
+                    <input className={inputCls} value={s1.permanentProvince}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentProvince: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>ZIP Code</label>
+                    <input className={inputCls} value={s1.permanentZip}
+                      onChange={(e) => setS1((p) => ({ ...p, permanentZip: e.target.value }))} placeholder="6000" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* User Linkage */}
             <div className="border border-border rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-foreground">Portal Account Linkage</p>
-              <div className="flex flex-wrap gap-2">
-                {(['none', 'existing', 'create'] as UserLinkMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setS1((p) => ({ ...p, userLinkMode: mode }))}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      s1.userLinkMode === mode
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'border-border text-muted-foreground hover:border-blue-400'
-                    }`}
-                  >
-                    {mode === 'none' && 'No portal access'}
-                    {mode === 'existing' && 'Link existing user'}
-                    {mode === 'create' && 'Create & link new user'}
-                  </button>
-                ))}
+              <div>
+                <p className="text-sm font-semibold text-foreground">Portal Account</p>
+                <p className="text-xs text-muted-foreground mt-0.5">A new portal account will be created and linked to this employee.</p>
               </div>
-
-              {s1.userLinkMode === 'existing' && (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      className={`${inputCls} pl-9`}
-                      placeholder="Search user by name or email..."
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="max-h-36 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                    {filteredUsers.length === 0 ? (
-                      <p className="text-xs text-muted-foreground p-3 text-center">No unlinked users found</p>
-                    ) : (
-                      filteredUsers.map((u) => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => setS1((p) => ({ ...p, selectedUserId: u.id }))}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors ${
-                            s1.selectedUserId === u.id ? 'bg-blue-50 dark:bg-blue-950' : ''
-                          }`}
-                        >
-                          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
-                            {u.name.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{u.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                          </div>
-                          {s1.selectedUserId === u.id && <Check size={14} className="text-blue-600 shrink-0" />}
-                        </button>
-                      ))
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
+                  <input className={inputCls} value={s1.newUserName}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserName: e.target.value }))} />
                 </div>
-              )}
-
-              {s1.userLinkMode === 'create' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
-                    <input className={inputCls} value={s1.newUserName}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserName: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Email <span className="text-red-500">*</span></label>
-                    <input type="email" className={inputCls} value={s1.newUserEmail}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserEmail: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Password <span className="text-red-500">*</span></label>
-                    <input type="password" className={inputCls} value={s1.newUserPassword}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserPassword: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Role</label>
-                    <select className={selectCls} value={s1.newUserRole}
-                      onChange={(e) => setS1((p) => ({ ...p, newUserRole: e.target.value }))}>
-                      <option value="EMPLOYEE">Employee</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="SUPER_ADMIN">Super Admin</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className={labelCls}>Email <span className="text-red-500">*</span></label>
+                  <input type="email" className={inputCls} value={s1.newUserEmail}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserEmail: e.target.value }))} />
                 </div>
-              )}
+                <div>
+                  <label className={labelCls}>Password <span className="text-red-500">*</span></label>
+                  <input type="password" className={inputCls} value={s1.newUserPassword}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserPassword: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Role</label>
+                  <select className={selectCls} value={s1.newUserRole}
+                    onChange={(e) => setS1((p) => ({ ...p, newUserRole: e.target.value }))}>
+                    <option value="EMPLOYEE">Employee</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="SUPER_ADMIN">Super Admin</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -789,89 +863,307 @@ export default function AddNewEmployeePage(): React.ReactNode {
           </div>
         )}
 
-        {/* ── Step 3: Contract ────────────────────────────────────── */}
-        {step === 3 && (
-          <div className="space-y-5">
-            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Contract</h3>
-            <p className="text-xs text-muted-foreground -mt-3">This step is optional — you can skip and add it later.</p>
+        {/* ── Step 3: Contract & Compensation ─────────────────────── */}
+        {step === 3 && (() => {
+          const doleFactor = getDoleFactor(s3c.isPaidRestDays, s3c.restDaysPerWeek);
+          const baseRateNum = parseFloat(s3c.baseRate) || 0;
+          const allowanceNum = parseFloat(s3c.allowanceRate) || 0;
+          const calcDailyRate = baseRateNum === 0 ? 0
+            : s3c.rateType === 'DAILY' ? baseRateNum : (baseRateNum * 12) / doleFactor;
+          const calcMonthlyRate = baseRateNum === 0 ? 0
+            : s3c.rateType === 'MONTHLY' ? baseRateNum : (baseRateNum * doleFactor) / 12;
+          const fmtRate = (v: number) =>
+            `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          return (
+            <div className="space-y-7">
+              <div>
+                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Contract &amp; Compensation</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">This step is optional — you can skip and add it later.</p>
+              </div>
 
-            {!createdEmploymentId && (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-4 py-3">
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  No employment record found. Go back to step 2 to add employment, or skip this step.
-                </p>
-              </div>
-            )}
+              {!createdEmploymentId && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 dark:border-amber-800 px-4 py-3">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    No employment record found. Go back to step 2 to add employment, or skip this step.
+                  </p>
+                </div>
+              )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Contract Type <span className="text-red-500">*</span></label>
-                <select className={selectCls} value={s3.contractType}
-                  onChange={(e) => setS3((p) => ({ ...p, contractType: e.target.value }))}>
-                  <option value="">Select type</option>
-                  <option value="PROBATIONARY">Probationary</option>
-                  <option value="REGULAR">Regular</option>
-                  <option value="CONTRACTUAL">Contractual</option>
-                  <option value="PROJECT_BASED">Project Based</option>
-                  <option value="CONSULTANT">Consultant</option>
-                  <option value="INTERN">Intern</option>
-                </select>
+              {/* ── Section 1: Contract Details ── */}
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Contract Details</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Contract Type <span className="text-red-500">*</span></label>
+                    <select className={selectCls} value={s3.contractType}
+                      onChange={(e) => setS3((p) => ({ ...p, contractType: e.target.value }))}>
+                      <option value="">Select type</option>
+                      <option value="PROBATIONARY">Probationary</option>
+                      <option value="REGULAR">Regular</option>
+                      <option value="CONTRACTUAL">Contractual</option>
+                      <option value="PROJECT_BASED">Project Based</option>
+                      <option value="CONSULTANT">Consultant</option>
+                      <option value="INTERN">Intern</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Status</label>
+                    <select className={selectCls} value={s3.status}
+                      onChange={(e) => setS3((p) => ({ ...p, status: e.target.value }))}>
+                      <option value="DRAFT">Draft</option>
+                      <option value="ACTIVE">Active</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Start Date <span className="text-red-500">*</span></label>
+                    <input type="date" className={inputCls} value={s3.contractStart}
+                      onChange={(e) => setS3((p) => ({ ...p, contractStart: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>End Date</label>
+                    <input type="date" className={inputCls} value={s3.contractEnd}
+                      onChange={(e) => setS3((p) => ({ ...p, contractEnd: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Working Hours / Week</label>
+                    <input type="number" className={inputCls} value={s3.workingHoursPerWeek}
+                      onChange={(e) => setS3((p) => ({ ...p, workingHoursPerWeek: e.target.value }))}
+                      placeholder="e.g. 40" min="0" max="168" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Notes</label>
+                    <textarea className={`${inputCls} resize-none`} rows={2} value={s3.notes}
+                      onChange={(e) => setS3((p) => ({ ...p, notes: e.target.value }))} />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Status</label>
-                <select className={selectCls} value={s3.status}
-                  onChange={(e) => setS3((p) => ({ ...p, status: e.target.value }))}>
-                  <option value="DRAFT">Draft</option>
-                  <option value="ACTIVE">Active</option>
-                </select>
+
+              {/* ── Section 2: Basic Compensation ── */}
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Basic Compensation</p>
+                <p className="text-xs text-muted-foreground -mt-2">Leave blank to configure compensation later.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Salary Rate (₱)</label>
+                    <input type="number" className={inputCls} value={s3c.baseRate}
+                      onChange={(e) => setS3c((p) => ({ ...p, baseRate: e.target.value }))}
+                      placeholder="e.g. 540.00" min="0" step="0.01" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Allowance Rate (₱)</label>
+                    <input type="number" className={inputCls} value={s3c.allowanceRate}
+                      onChange={(e) => setS3c((p) => ({ ...p, allowanceRate: e.target.value }))}
+                      placeholder="0.00" min="0" step="0.01" />
+                  </div>
+                </div>
+                {parseFloat(s3c.allowanceRate) > 0 && (
+                  <div>
+                    <label className={labelCls}>Allowance Payout Schedule</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'First cutoff only' }, { value: false, label: 'Split across periods' }] as const).map(({ value, label }) => (
+                        <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-allowanceOnFirstCutoff" checked={s3c.allowanceOnFirstCutoff === value}
+                            onChange={() => setS3c((p) => ({ ...p, allowanceOnFirstCutoff: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {s3c.allowanceOnFirstCutoff
+                        ? 'Full allowance released only on the first payroll cutoff of the month.'
+                        : 'Allowance is divided equally across all payroll periods in the month.'}
+                    </p>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className={labelCls}>Start Date <span className="text-red-500">*</span></label>
-                <input type="date" className={inputCls} value={s3.contractStart}
-                  onChange={(e) => setS3((p) => ({ ...p, contractStart: e.target.value }))} />
+
+              {/* ── Section 3: Salary Configuration ── */}
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Salary Configuration</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Agreed Salary Rate</label>
+                    <select className={selectCls} value={s3c.rateType}
+                      onChange={(e) => setS3c((p) => ({ ...p, rateType: e.target.value as RateType }))}>
+                      <option value="DAILY">Daily Rate</option>
+                      <option value="MONTHLY">Monthly Rate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Salary Frequency</label>
+                    <select className={selectCls} value={s3c.frequency}
+                      onChange={(e) => setS3c((p) => ({ ...p, frequency: e.target.value as SalaryFrequency }))}>
+                      <option value="ONCE_A_MONTH">Once a Month</option>
+                      <option value="TWICE_A_MONTH">Twice a Month</option>
+                      <option value="WEEKLY">Weekly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Pay Type</label>
+                    <select className={selectCls} value={s3c.payType}
+                      onChange={(e) => setS3c((p) => ({ ...p, payType: e.target.value as PayType }))}>
+                      <option value="VARIABLE_PAY">Variable Pay (Timesheet-based)</option>
+                      <option value="FIXED_PAY">Fixed Pay (No timesheet needed)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Disbursement Type</label>
+                    <select className={selectCls} value={s3c.disbursementType}
+                      onChange={(e) => setS3c((p) => ({ ...p, disbursementType: e.target.value as DisbursementType }))}>
+                      <option value="CASH">Cash</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                      <option value="CHEQUE">Cheque</option>
+                      <option value="E_WALLET">E-Wallet</option>
+                    </select>
+                  </div>
+                  {s3c.disbursementType !== 'CASH' && (
+                    <div className="md:col-span-2">
+                      <label className={labelCls}>Bank / Account Details</label>
+                      <input className={inputCls} value={s3c.bankDetails}
+                        onChange={(e) => setS3c((p) => ({ ...p, bankDetails: e.target.value }))}
+                        placeholder="Bank name, account number" />
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>End Date</label>
-                <input type="date" className={inputCls} value={s3.contractEnd}
-                  onChange={(e) => setS3((p) => ({ ...p, contractEnd: e.target.value }))} />
+
+              {/* ── Section 4: Rest Days Configuration ── */}
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Rest Days Configuration</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Paid on Rest Days</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No (Default)' }] as const).map(({ value, label }) => (
+                        <label key={label} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-isPaidRestDays" checked={s3c.isPaidRestDays === value}
+                            onChange={() => setS3c((p) => ({ ...p, isPaidRestDays: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Rest Days per Week</label>
+                    <select className={selectCls} value={s3c.restDaysPerWeek}
+                      onChange={(e) => setS3c((p) => ({ ...p, restDaysPerWeek: parseInt(e.target.value, 10) }))}>
+                      <option value={0}>0 rest days</option>
+                      <option value={1}>1 rest day</option>
+                      <option value={2}>2 rest days</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Monthly Rate (₱)</label>
-                <input type="number" className={inputCls} value={s3.monthlyRate}
-                  onChange={(e) => setS3((p) => ({ ...p, monthlyRate: e.target.value }))} placeholder="0.00" />
+
+              {/* ── Section 5: Government Benefits ── */}
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Government Benefits Registration</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* SSS */}
+                  <div>
+                    <label className={labelCls}>SSS Registration</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label }) => (
+                        <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-deductSss" checked={s3c.deductSss === value}
+                            onChange={() => setS3c((p) => ({ ...p, deductSss: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* PhilHealth */}
+                  <div>
+                    <label className={labelCls}>PhilHealth Registration</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label }) => (
+                        <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-deductPhilhealth" checked={s3c.deductPhilhealth === value}
+                            onChange={() => setS3c((p) => ({ ...p, deductPhilhealth: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {s3c.deductPhilhealth && (
+                      <p className="text-[11px] text-muted-foreground mt-1.5">2.5% of monthly salary</p>
+                    )}
+                  </div>
+                  {/* Pag-IBIG */}
+                  <div>
+                    <label className={labelCls}>Pag-IBIG Registration</label>
+                    <div className="flex gap-4 mt-1">
+                      {([{ value: true, label: 'Yes' }, { value: false, label: 'No' }] as const).map(({ value, label }) => (
+                        <label key={String(value)} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="anp-deductPagibig" checked={s3c.deductPagibig === value}
+                            onChange={() => setS3c((p) => ({ ...p, deductPagibig: value }))}
+                            className="h-4 w-4 accent-blue-600" />
+                          <span className="text-sm text-foreground">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {s3c.deductPagibig && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-[11px] font-semibold text-muted-foreground">Contribution Type</p>
+                        <div className="flex gap-4">
+                          {([{ value: 'REGULAR', label: 'Regular (2%)' }, { value: 'MINIMUM', label: 'Minimum (₱200)' }] as const).map(({ value, label }) => (
+                            <label key={value} className="flex items-center gap-2 cursor-pointer">
+                              <input type="radio" name="anp-pagibigType" checked={s3c.pagibigType === value}
+                                onChange={() => setS3c((p) => ({ ...p, pagibigType: value }))}
+                                className="h-4 w-4 accent-blue-600" />
+                              <span className="text-sm text-foreground">{label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Daily Rate (₱)</label>
-                <input type="number" className={inputCls} value={s3.dailyRate}
-                  onChange={(e) => setS3((p) => ({ ...p, dailyRate: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div>
-                <label className={labelCls}>Disbursement Method</label>
-                <select className={selectCls} value={s3.disbursedMethod}
-                  onChange={(e) => setS3((p) => ({ ...p, disbursedMethod: e.target.value }))}>
-                  <option value="">Select method</option>
-                  <option value="CASH_SALARY">Cash Salary</option>
-                  <option value="FUND_TRANSFER">Fund Transfer</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Working Hours/Week</label>
-                <input type="number" className={inputCls} value={s3.workingHoursPerWeek}
-                  onChange={(e) => setS3((p) => ({ ...p, workingHoursPerWeek: e.target.value }))} placeholder="40" />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Bank Details</label>
-                <input className={inputCls} value={s3.bankDetails}
-                  onChange={(e) => setS3((p) => ({ ...p, bankDetails: e.target.value }))} placeholder="Bank name, account number" />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Notes</label>
-                <textarea className={`${inputCls} resize-none`} rows={2} value={s3.notes}
-                  onChange={(e) => setS3((p) => ({ ...p, notes: e.target.value }))} />
-              </div>
+
+              {/* ── Section 6: Calculated Rates (live preview) ── */}
+              {baseRateNum > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border pb-1.5">Calculated Rates (Preview)</p>
+                  <div className="rounded-xl bg-blue-50 border border-blue-200 dark:border-blue-800 p-4 space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Salary Basis</p>
+                        <p className="text-sm font-bold text-foreground">{s3c.rateType === 'DAILY' ? 'Daily Rate' : 'Monthly Rate'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">DOLE Factor</p>
+                        <p className="text-sm font-bold text-foreground">{doleFactor}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Daily Rate</p>
+                        <p className="text-sm font-bold text-emerald-600">{fmtRate(calcDailyRate)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Monthly Rate (EEMR)</p>
+                        <p className="text-sm font-bold text-emerald-600">{fmtRate(calcMonthlyRate)}</p>
+                      </div>
+                    </div>
+                    {allowanceNum > 0 && (
+                      <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
+                        <p className="text-[11px] text-muted-foreground">Allowance</p>
+                        <p className="text-sm font-bold text-foreground">{fmtRate(allowanceNum)}</p>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      Formula: {s3c.rateType === 'DAILY'
+                        ? `Monthly = (${fmtRate(calcDailyRate)} × ${doleFactor}) ÷ 12`
+                        : `Daily = (${fmtRate(calcMonthlyRate)} × 12) ÷ ${doleFactor}`}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Step 4: Work Schedule ────────────────────────────────── */}
         {step === 4 && (

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useMemo } from 'react';
 import { Card } from '@/components/UI/Card';
@@ -155,7 +155,7 @@ export function AccountingDashboard() {
               <h3 className="text-sm font-black text-slate-800">Action Required</h3>
               <p className="text-[10px] text-slate-400 font-medium mt-0.5">Payments awaiting confirmation</p>
             </div>
-            <Button variant="ghost" className="text-xs text-amber-600 font-bold" onClick={() => router.push('/portal/accounting/payments')}>
+            <Button variant="ghost" className="text-xs text-amber-600 font-bold" onClick={() => router.push('/portal/accounting-and-finance/payments')}>
               View All <ArrowRight size={12} />
             </Button>
           </div>

@@ -1,0 +1,30 @@
+// ─── Sales Portal General Settings ────────────────────────────────
+model SalesSetting {
+  id String @id @default(cuid())
+
+  // Linked to the main internal firm (e.g., ATMS)
+  clientId Int    @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // ─── Job Order Approval Defaults ───
+  defaultJoProcessApproverId String?
+  defaultJoProcessApprover   User?   @relation("DefaultJoProcessApprover", fields: [defaultJoProcessApproverId], references: [id])
+
+  defaultJoOperationsApproverId String?
+  defaultJoOperationsApprover   User?   @relation("DefaultJoOperationsApprover", fields: [defaultJoOperationsApproverId], references: [id])
+
+  defaultJoAccountApproverId String?
+  defaultJoAccountApprover   User?   @relation("DefaultJoAccountApprover", fields: [defaultJoAccountApproverId], references: [id])
+
+  defaultJoGeneralApproverId String?
+  defaultJoGeneralApprover   User?   @relation("DefaultJoGeneralApprover", fields: [defaultJoGeneralApproverId], references: [id])
+
+  // ─── TSA Contract Approval Defaults ───
+  defaultTsaApproverId String?
+  defaultTsaApprover   User?   @relation("DefaultTsaApprover", fields: [defaultTsaApproverId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("sales_setting")
+}

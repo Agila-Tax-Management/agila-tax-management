@@ -156,6 +156,8 @@ export const Reports: React.FC = () => {
   const [reportData, setReportData] = useState<ReportData>(MOCK_DATA.weekly);
   const [benchmarkData] = useState<BenchmarkData>(MOCK_BENCHMARK_DATA);
   const [isBenchmarkModalOpen, setIsBenchmarkModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const getCurrentWeek = () => {
     const now = new Date();
@@ -175,9 +177,42 @@ export const Reports: React.FC = () => {
   });
   const [yearlyValue, setYearlyValue] = useState(() => String(new Date().getFullYear()));
 
+  // Fetch report data from API
   useEffect(() => {
-    setReportData(MOCK_DATA[filter]);
-  }, [filter]);
+    const fetchReportData = async () => {
+      setIsLoading(true);
+      setIsError(false);
+      try {
+        // Determine the date to send based on filter
+        let dateParam = '';
+        if (filter === 'daily') dateParam = dailyValue;
+        else if (filter === 'weekly') {
+          // Convert week format to date
+          const [year, week] = weeklyValue.split('-W');
+          const jan1 = new Date(Number(year), 0, 1);
+          const daysOffset = (Number(week) - 1) * 7;
+          const weekDate = new Date(jan1.getTime() + daysOffset * 24 * 60 * 60 * 1000);
+          dateParam = weekDate.toISOString().split('T')[0] ?? '';
+        } else if (filter === 'monthly') {
+          dateParam = `${monthlyValue}-01`;
+        } else if (filter === 'yearly') {
+          dateParam = `${yearlyValue}-01-01`;
+        }
+
+        const res = await fetch(`/api/sales/reports?filter=${filter}&date=${dateParam}`);
+        if (!res.ok) throw new Error('Failed to fetch report data');
+        const json = await res.json() as { data: ReportData };
+        setReportData(json.data);
+      } catch {
+        setIsError(true);
+        // Fallback to mock data on error
+        setReportData(MOCK_DATA[filter]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void fetchReportData();
+  }, [filter, dailyValue, weeklyValue, monthlyValue, yearlyValue]);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('en-PH', {
@@ -242,10 +277,22 @@ export const Reports: React.FC = () => {
       </div>
 
       {/* Data Source Indicator */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-bold">
-        <Activity size={14} />
-        Displaying mock data — connect database to see real analytics
-      </div>
+      {isError ? (
+        <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-bold">
+          <Activity size={14} />
+          Failed to load report data — showing fallback data
+        </div>
+      ) : isLoading ? (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs font-bold">
+          <Activity size={14} className="animate-pulse" />
+          Loading report data...
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold">
+          <Activity size={14} />
+          Displaying live data from database
+        </div>
+      )}
 
       {/* Main Widgets */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -276,10 +323,19 @@ export const Reports: React.FC = () => {
               <Wallet size={20} />
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Commission</p>
-            <h3 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">
-              {formatCurrency(reportData.totalCommission)}
-            </h3>
-            <p className="text-xs text-slate-500 font-bold">{reportData.averageCommissionRate}% avg rate</p>
+            {reportData.totalCommission === 0 ? (
+              <>
+                <h3 className="text-2xl font-black text-slate-400 mb-1 tracking-tight">Coming Soon</h3>
+                <p className="text-xs text-slate-400 font-bold">Not yet available</p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">
+                  {formatCurrency(reportData.totalCommission)}
+                </h3>
+                <p className="text-xs text-slate-500 font-bold">{reportData.averageCommissionRate}% avg rate</p>
+              </>
+            )}
           </div>
         </Card>
 

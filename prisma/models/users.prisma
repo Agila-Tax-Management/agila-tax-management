@@ -1,17 +1,17 @@
 enum Role {
-    SUPER_ADMIN
-    ADMIN
-    EMPLOYEE
+  SUPER_ADMIN
+  ADMIN
+  EMPLOYEE
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    
-  role          Role
-  active        Boolean @default(true)
+  id     String  @id @default(cuid())
+  name   String
+  email  String
+  role   Role
+  active Boolean @default(true)
 
-  employee      Employee?
+  employee Employee?
 
   emailVerified Boolean   @default(false)
   image         String?
@@ -20,9 +20,96 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
-  activityLogs           ActivityLog[]
-  notificationsReceived  InternalNotification[] @relation("NotificationRecipient")
-  notificationsTriggered InternalNotification[] @relation("NotificationActor")
+  // ─── CRM / Account Management ───
+  managedClientsAsCro Client[] @relation("ClientRelationOfficer")
+  managedClientsAsOm  Client[] @relation("OperationsManager")
+
+  assignedLeads Lead[] @relation("AssignedAgent")
+
+  activityLogs       ActivityLog[]        @relation("InternalUserLogs")
+  notifications      Notification[]       @relation("UserNotifications")
+  taskConversations  TaskConversation[]
+  taskHistoryLogs    TaskHistory[]
+  subtaskHistoryLogs TaskSubtaskHistory[] @relation("SubtaskHistoryActor")
+
+  leadComments    LeadComment[]
+  leadHistoryLogs LeadHistory[]
+
+  paymentsRecorded        Payment[]
+  paymentHistories        PaymentHistory[]
+  invoiceHistoryLogs      InvoiceHistory[]
+  subscriptionHistoryLogs SubscriptionHistory[]
+  cashAdvancesApproved    CashAdvance[]         @relation("CashAdvanceApprover")
+
+  approvedOvertimes OvertimeRequest[] @relation("OvertimeApprover")
+  approvedLeaves    LeaveRequest[]    @relation("LeaveApprover")
+  approvedCoas      CoaRequest[]      @relation("CoaApprover")
+
+  payslipsPrepared     Payslip[] @relation("PayslipPreparer")
+  payslipsApproved     Payslip[] @relation("PayslipApprover")
+  acknowledgedPayslips Payslip[] @relation("PayslipAcknowledger")
+
+  // ─── Job Order Workflows ───
+  preparedJobOrders JobOrder[] @relation("JobOrderPreparer")
+
+  assignedJoAccountManagers JobOrder[] @relation("JoAssignedAccountManager")
+  actualJoAccountManagers   JobOrder[] @relation("JoActualAccountManager")
+
+  assignedJoOperationsManagers JobOrder[] @relation("JoAssignedOperationsManager")
+  actualJoOperationsManagers   JobOrder[] @relation("JoActualOperationsManager")
+
+  assignedJoExecutives JobOrder[] @relation("JoAssignedExecutive")
+  actualJoExecutives   JobOrder[] @relation("JoActualExecutive")
+
+  // ─── Compliance Defaults (From ClientCompliance) ───
+  defaultProcessorFor        ClientCompliance[] @relation("DefaultProcessor")
+  defaultVerifierFor         ClientCompliance[] @relation("DefaultVerifier")
+  defaultPaymentProcessorFor ClientCompliance[] @relation("DefaultPaymentProcessor")
+  defaultPaymentApproverFor  ClientCompliance[] @relation("DefaultPaymentApprover")
+  defaultFinalApproverFor    ClientCompliance[] @relation("DefaultFinalApprover")
+  defaultSalesOfficerFor     ClientCompliance[] @relation("DefaultSalesOfficer")
+
+ // ─── Compliance Actual Executions & Overrides ───
+  assignedProcessors         ComplianceRecord[] @relation("RecordAssignedProcessor")
+  actualProcessors           ComplianceRecord[] @relation("RecordActualProcessor")
+  
+  assignedVerifiers          ComplianceRecord[] @relation("RecordAssignedVerifier")
+  actualVerifiers            ComplianceRecord[] @relation("RecordActualVerifier")
+  
+  assignedPaymentProcessors  ComplianceRecord[] @relation("RecordAssignedPayProcessor")
+  actualPaymentProcessors    ComplianceRecord[] @relation("RecordActualPayProcessor")
+  
+  assignedPaymentApprovers   ComplianceRecord[] @relation("RecordAssignedPayApprover")
+  actualPaymentApprovers     ComplianceRecord[] @relation("RecordActualPayApprover")
+  
+  assignedFinalApprovers     ComplianceRecord[] @relation("RecordAssignedFinalApprover")
+  actualFinalApprovers       ComplianceRecord[] @relation("RecordActualFinalApprover")
+  
+  salesObservedRecords       ComplianceRecord[] @relation("RecordSalesOfficer")
+
+  // ─── Global Compliance Defaults (From ComplianceSetting) ───
+    defaultClientProcessors        ComplianceSetting[] @relation("DefaultClientProcessor")
+    defaultClientVerifiers         ComplianceSetting[] @relation("DefaultClientVerifier")
+    defaultClientPayProcessors     ComplianceSetting[] @relation("DefaultClientPayProcessor")
+    defaultClientPayApprovers      ComplianceSetting[] @relation("DefaultClientPayApprover")
+    defaultClientFinalApprovers    ComplianceSetting[] @relation("DefaultClientFinalApprover")
+    defaultClientSalesOfficers     ComplianceSetting[] @relation("DefaultClientSalesOfficer")
+
+  // ─── TSA Workflows ───
+  preparedTsas         TsaContract[] @relation("TsaPreparer")
+  assignedTsaApprovals TsaContract[] @relation("TsaAssignedApprover")
+  actuallyApprovedTsas TsaContract[] @relation("TsaActualApprover")
+
+  // ─── Sales Portal Defaults (From SalesSetting) ───
+  defaultJoProcessApprovals    SalesSetting[] @relation("DefaultJoProcessApprover")
+  defaultJoOperationsApprovals SalesSetting[] @relation("DefaultJoOperationsApprover")
+  defaultJoAccountApprovals    SalesSetting[] @relation("DefaultJoAccountApprover")
+  defaultJoGeneralApprovals    SalesSetting[] @relation("DefaultJoGeneralApprover")
+  defaultTsaApprovals          SalesSetting[] @relation("DefaultTsaApprover")
+
+  // ─── Communication ───
+  complianceNotes  ComplianceNote[]
+  ewtItemHistories EwtItemHistory[]
 
   @@unique([email])
   @@map("user")
@@ -75,4 +162,3 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
-

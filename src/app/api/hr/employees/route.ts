@@ -4,17 +4,24 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createEmployeeSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getClientIdFromSession } from "@/lib/session";
 
 /**
  * GET /api/hr/employees
- * Returns all non-deleted employees with their current employment snapshot.
+ * Returns all non-deleted employees linked to the session user's client.
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
   const employees = await prisma.employee.findMany({
-    where: { softDelete: false },
+    where: {
+      softDelete: false,
+      employments: { some: { clientId, employmentStatus: "ACTIVE" } },
+    },
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, email: true, role: true, active: true } },
@@ -48,7 +55,16 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       phone: e.phone,
       gender: e.gender,
       birthDate: e.birthDate.toISOString(),
-      address: e.address,
+      currentStreet: e.currentStreet ?? null,
+      currentBarangay: e.currentBarangay ?? null,
+      currentCity: e.currentCity ?? null,
+      currentProvince: e.currentProvince ?? null,
+      currentZip: e.currentZip ?? null,
+      permanentStreet: e.permanentStreet ?? null,
+      permanentBarangay: e.permanentBarangay ?? null,
+      permanentCity: e.permanentCity ?? null,
+      permanentProvince: e.permanentProvince ?? null,
+      permanentZip: e.permanentZip ?? null,
       active: e.active,
       createdAt: e.createdAt.toISOString(),
       user: e.user
@@ -84,6 +100,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
   let body: unknown;
   try {
     body = await request.json();
@@ -96,8 +115,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
-  const { firstName, middleName, lastName, birthDate, gender, phone, address, email, employeeNo, userId } =
-    parsed.data;
+  const {
+    firstName, middleName, lastName, nameExtension,
+    birthDate, placeOfBirth, gender, civilStatus, citizenship,
+    phone, personalEmail, email, employeeNo, userId,
+    currentStreet, currentBarangay, currentCity, currentProvince, currentZip,
+    permanentStreet, permanentBarangay, permanentCity, permanentProvince, permanentZip,
+    educationalBackground, school, course, yearGraduated, certifications,
+  } = parsed.data;
 
   // Unique employee number check
   if (employeeNo) {
@@ -121,16 +146,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Auto-generate employee number if not provided
   let resolvedEmployeeNo = employeeNo ?? null;
   if (!resolvedEmployeeNo) {
-    const lastEmployee = await prisma.employee.findFirst({
-      orderBy: { id: "desc" },
-      select: { id: true },
+    // Use the client's configured prefix (fall back to "EMP" if no setting exists)
+    const hrSetting = await prisma.hrSetting.findUnique({
+      where: { clientId },
+      select: { employeeNumberPrefix: true },
     });
-    const nextNo = (lastEmployee?.id ?? 0) + 1;
-    resolvedEmployeeNo = `EMP-${String(nextNo).padStart(5, "0")}`;
-    // Ensure the auto-generated number doesn't collide
+    const prefix = hrSetting?.employeeNumberPrefix ?? 'EMP';
+
+    // Find the highest existing number for this prefix to increment safely
+    const lastWithPrefix = await prisma.employee.findFirst({
+      where: { employeeNo: { startsWith: `${prefix}-` } },
+      orderBy: { employeeNo: 'desc' },
+      select: { employeeNo: true },
+    });
+
+    let nextNo = 1;
+    if (lastWithPrefix?.employeeNo) {
+      const parts = lastWithPrefix.employeeNo.split('-');
+      const last = parseInt(parts[parts.length - 1]!, 10);
+      if (!isNaN(last)) nextNo = last + 1;
+    }
+
+    resolvedEmployeeNo = `${prefix}-${String(nextNo).padStart(5, "0")}`;
+    // Ensure no collision
     const autoConflict = await prisma.employee.findUnique({ where: { employeeNo: resolvedEmployeeNo } });
     if (autoConflict) {
-      resolvedEmployeeNo = `EMP-${String(nextNo + 1).padStart(5, "0")}`;
+      resolvedEmployeeNo = `${prefix}-${String(nextNo + 1).padStart(5, "0")}`;
     }
   }
 
@@ -139,13 +180,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       firstName,
       middleName: middleName ?? null,
       lastName,
+      nameExtension: nameExtension ?? null,
       birthDate: new Date(birthDate),
+      placeOfBirth: placeOfBirth ?? null,
       gender,
+      civilStatus: civilStatus ?? null,
+      citizenship: citizenship ?? null,
       phone,
-      address,
+      personalEmail: personalEmail ?? null,
       email: email ?? null,
       employeeNo: resolvedEmployeeNo,
       userId: userId ?? null,
+      currentStreet: currentStreet ?? null,
+      currentBarangay: currentBarangay ?? null,
+      currentCity: currentCity ?? null,
+      currentProvince: currentProvince ?? null,
+      currentZip: currentZip ?? null,
+      permanentStreet: permanentStreet ?? null,
+      permanentBarangay: permanentBarangay ?? null,
+      permanentCity: permanentCity ?? null,
+      permanentProvince: permanentProvince ?? null,
+      permanentZip: permanentZip ?? null,
+      educationalBackground: educationalBackground ?? null,
+      school: school ?? null,
+      course: course ?? null,
+      yearGraduated: yearGraduated ?? null,
+      certifications: certifications ?? null,
       active: true,
     },
   });

@@ -92,15 +92,15 @@ const VARIANT_STYLES: Record<
 > = {
   success: {
     container:
-      'border-emerald-500/30 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100 dark:border-emerald-400/30',
+      'border-emerald-500/30 bg-emerald-50 text-emerald-900',
     icon: CheckCircleIcon,
-    progressBar: 'bg-emerald-500 dark:bg-emerald-400',
+    progressBar: 'bg-emerald-500',
   },
   error: {
     container:
-      'border-red-500/30 bg-red-50 text-red-900 dark:bg-red-950/60 dark:text-red-100 dark:border-red-400/30',
+      'border-red-500/30 bg-red-50 text-red-900',
     icon: XCircleIcon,
-    progressBar: 'bg-red-500 dark:bg-red-400',
+    progressBar: 'bg-red-500',
   },
 };
 
@@ -153,7 +153,7 @@ function ToastItem({
       </button>
 
       {/* Progress bar */}
-      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/5 dark:bg-white/10">
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/5">
         <div
           className={`h-full ${style.progressBar} animate-[shrink_linear_forwards]`}
           style={{ animationDuration: `${duration}ms` }}

@@ -1,7 +1,5 @@
-'use client';
-
-import { LiaisonTaskBoard } from '@/components/liaison/LiaisonTaskBoard';
+import { LiaisonDashboard } from '@/components/liaison/LiaisonDashboard';
 
 export default function LiaisonPage() {
-  return <LiaisonTaskBoard />;
+  return <LiaisonDashboard />;
 }

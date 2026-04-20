@@ -9,14 +9,12 @@ const portalAccessEntrySchema = z.object({
     "COMPLIANCE",
     "LIAISON",
     "ACCOUNTING",
-    "ACCOUNT_OFFICER",
+    "OPERATIONS_MANAGEMENT",
     "HR",
     "TASK_MANAGEMENT",
+    "CLIENT_RELATIONS",
   ]),
-  canRead: z.boolean().default(false),
-  canWrite: z.boolean().default(false),
-  canEdit: z.boolean().default(false),
-  canDelete: z.boolean().default(false),
+  role: z.enum(["VIEWER", "USER", "ADMIN", "SETTINGS"]),
 });
 
 /* ─── Create user (also creates Employee + Employment for ATMS) ──── */
@@ -34,7 +32,6 @@ export const createUserSchema = z.object({
   middleName: z.string().optional().default(""),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(1, "Phone is required"),
-  address: z.string().optional().default(""),
   birthDate: z.string().min(1, "Birth date is required"),
   gender: z.string().min(1, "Gender is required"),
 
@@ -64,7 +61,6 @@ export const updateUserSchema = z.object({
   middleName: z.string().optional().default(""),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(1, "Phone is required"),
-  address: z.string().optional().default(""),
   birthDate: z.string().min(1, "Birth date is required"),
   gender: z.string().min(1, "Gender is required"),
 
@@ -79,10 +75,7 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export interface PortalAccessEntry {
   portal: string;
-  canRead: boolean;
-  canWrite: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  role: "VIEWER" | "USER" | "ADMIN" | "SETTINGS";
 }
 
 export interface UserRecord {
@@ -101,7 +94,6 @@ export interface UserRecord {
     lastName: string;
     employeeNo: string | null;
     phone: string;
-    address: string;
     birthDate: string;
     gender: string;
     employment: {

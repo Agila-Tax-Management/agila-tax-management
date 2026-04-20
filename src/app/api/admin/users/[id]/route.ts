@@ -19,15 +19,11 @@ const USER_INCLUDE = {
       lastName: true,
       employeeNo: true,
       phone: true,
-      address: true,
       birthDate: true,
       gender: true,
       appAccess: {
         select: {
-          canRead: true,
-          canWrite: true,
-          canEdit: true,
-          canDelete: true,
+          role: true,
           app: { select: { name: true } },
         },
       },
@@ -65,14 +61,10 @@ function toUserRecord(u: {
     lastName: string;
     employeeNo: string | null;
     phone: string;
-    address: string;
     birthDate: Date;
     gender: string;
     appAccess: {
-      canRead: boolean;
-      canWrite: boolean;
-      canEdit: boolean;
-      canDelete: boolean;
+      role: string;
       app: { name: string };
     }[];
     employments: {
@@ -105,7 +97,6 @@ function toUserRecord(u: {
           lastName: emp.lastName,
           employeeNo: emp.employeeNo,
           phone: emp.phone,
-          address: emp.address,
           birthDate: emp.birthDate.toISOString(),
           gender: emp.gender,
           employment: employment
@@ -124,10 +115,7 @@ function toUserRecord(u: {
     portalAccess: emp
       ? emp.appAccess.map((a) => ({
           portal: a.app.name,
-          canRead: a.canRead,
-          canWrite: a.canWrite,
-          canEdit: a.canEdit,
-          canDelete: a.canDelete,
+          role: a.role as "VIEWER" | "USER" | "ADMIN" | "SETTINGS",
         }))
       : [],
   };
@@ -199,7 +187,7 @@ export async function PUT(
 
   const {
     name, email, password, role, active,
-    firstName, middleName, lastName, phone, address, birthDate, gender,
+    firstName, middleName, lastName, phone, birthDate, gender,
     portalAccess, employeeLevelId,
   } = parsed.data;
 
@@ -256,7 +244,6 @@ export async function PUT(
             lastName,
             email,
             phone,
-            address: address || "N/A",
             birthDate: new Date(birthDate),
             gender,
           },
@@ -287,10 +274,7 @@ export async function PUT(
               .map((p) => ({
                 employeeId: employee.id,
                 appId: appMap.get(p.portal)!,
-                canRead: p.canRead,
-                canWrite: p.canWrite,
-                canEdit: p.canEdit,
-                canDelete: p.canDelete,
+                role: p.role,
               }));
 
             if (accessData.length > 0) {

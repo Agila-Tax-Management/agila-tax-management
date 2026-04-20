@@ -1,178 +1,35 @@
 // src/components/dashboard/ClientManagement.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Ban,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Pencil,
+  Plus,
+  Power,
+  Search,
+  UserCheck,
+  UserX,
+  Users,
+} from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Input } from '@/components/UI/Input';
-import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
-import {
-  Search,
-  UserCheck,
-  ChevronLeft,
-  ChevronRight,
-  Building2,
-  Eye,
-  Ban,
-  UserX,
-  Power,
-} from 'lucide-react';
-
-/* ─── Types (matching Prisma ClientUser + Client models) ──────────── */
-
-type AccountStatus = 'Active' | 'Inactive' | 'Suspended';
-
-interface MockClientUser {
-  id: string;
-  email: string;
-  role: string;
-  active: boolean;
-  accountStatus: AccountStatus;
-  name: string | null;
-  createdAt: string;
-  updatedAt: string;
-  client: {
-    id: number;
-    companyCode: string | null;
-    clientNo: string | null;
-    businessName: string | null;
-    businessType: string | null;
-    portalName: string | null;
-    active: boolean;
-    branchType: string | null;
-    timezone: string;
-    createdAt: string | null;
-  } | null;
-}
-
-/* ─── Constants ───────────────────────────────────────────────────── */
-
-const STATUS_VARIANT: Record<AccountStatus, 'success' | 'danger' | 'warning'> = {
-  Active: 'success',
-  Inactive: 'danger',
-  Suspended: 'warning',
-};
+import ClientFormModal from './ClientFormModal';
+import type {
+  ClientFormValues,
+  ClientRecord,
+  ClientStatusFilter,
+} from '@/types/client-management.types';
 
 const ITEMS_PER_PAGE = 10;
-
-type StatusFilter = 'All' | 'Active' | 'Inactive' | 'Suspended';
-
-/* ─── Mock Data (follows Prisma ClientUser + Client model shape) ──── */
-
-const MOCK_CLIENT_USERS: MockClientUser[] = [
-  {
-    id: 'cu-001', email: 'roberto.v@villanuevatrading.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Roberto Villanueva',
-    createdAt: '2025-10-15T09:00:00Z', updatedAt: '2026-03-01T10:00:00Z',
-    client: {
-      id: 1, companyCode: 'VTC-001', clientNo: '2026-0001',
-      businessName: 'Villanueva Trading Co.', businessType: 'SOLE_PROPRIETORSHIP',
-      portalName: 'Villanueva Trading Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-10-15T09:00:00Z',
-    },
-  },
-  {
-    id: 'cu-002', email: 'patricia.lim@limholdings.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Patricia Lim',
-    createdAt: '2025-08-22T14:30:00Z', updatedAt: '2026-02-20T09:00:00Z',
-    client: {
-      id: 2, companyCode: 'LHC-002', clientNo: '2026-0002',
-      businessName: 'Lim Holdings Corporation', businessType: 'CORPORATION',
-      portalName: 'Lim Holdings Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-08-22T14:30:00Z',
-    },
-  },
-  {
-    id: 'cu-003', email: 'marco.tan@tanlaw.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Marco Tan',
-    createdAt: '2025-11-05T11:00:00Z', updatedAt: '2026-03-05T11:00:00Z',
-    client: {
-      id: 3, companyCode: 'TAL-003', clientNo: '2026-0003',
-      businessName: 'Tan & Associates Law Firm', businessType: 'PARTNERSHIP',
-      portalName: 'Tan Law Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-11-05T11:00:00Z',
-    },
-  },
-  {
-    id: 'cu-004', email: 'isabella.cruz@cruzenterprises.ph', role: 'CLIENT',
-    active: false, accountStatus: 'Inactive', name: 'Isabella Cruz',
-    createdAt: '2026-01-10T08:00:00Z', updatedAt: '2026-02-28T09:00:00Z',
-    client: {
-      id: 4, companyCode: 'CEI-004', clientNo: '2026-0004',
-      businessName: 'Cruz Enterprises Inc.', businessType: 'CORPORATION',
-      portalName: 'Cruz Enterprises Portal', active: false, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2026-01-10T08:00:00Z',
-    },
-  },
-  {
-    id: 'cu-005', email: 'diego.aquino@aquinotech.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Diego Aquino',
-    createdAt: '2025-06-01T10:00:00Z', updatedAt: '2026-03-10T08:00:00Z',
-    client: {
-      id: 5, companyCode: 'ATS-005', clientNo: '2026-0005',
-      businessName: 'Aquino Tech Solutions', businessType: 'CORPORATION',
-      portalName: 'Aquino Tech Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-06-01T10:00:00Z',
-    },
-  },
-  {
-    id: 'cu-006', email: 'carmen.reyes@reyeslaw.ph', role: 'CLIENT',
-    active: false, accountStatus: 'Suspended', name: 'Carmen Reyes',
-    createdAt: '2025-12-20T09:00:00Z', updatedAt: '2026-03-01T09:00:00Z',
-    client: {
-      id: 6, companyCode: 'RLO-006', clientNo: '2026-0006',
-      businessName: 'Reyes Law Office', businessType: 'INDIVIDUAL',
-      portalName: 'Reyes Law Portal', active: false, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-12-20T09:00:00Z',
-    },
-  },
-  {
-    id: 'cu-007', email: 'angelo.santos@santosfood.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Angelo Santos',
-    createdAt: '2026-02-01T10:00:00Z', updatedAt: '2026-03-11T08:00:00Z',
-    client: {
-      id: 7, companyCode: 'SFC-007', clientNo: '2026-0007',
-      businessName: 'Santos Food Corporation', businessType: 'CORPORATION',
-      portalName: 'Santos Food Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2026-02-01T10:00:00Z',
-    },
-  },
-  {
-    id: 'cu-008', email: 'sofia.b@bautistaretail.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Sofia Bautista',
-    createdAt: '2025-09-10T09:00:00Z', updatedAt: '2026-03-08T10:00:00Z',
-    client: {
-      id: 8, companyCode: 'BRS-008', clientNo: '2026-0008',
-      businessName: 'Bautista Retail Shop', businessType: 'SOLE_PROPRIETORSHIP',
-      portalName: 'Bautista Retail Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-09-10T09:00:00Z',
-    },
-  },
-  {
-    id: 'cu-009', email: 'elena.m@mendozacorp.ph', role: 'CLIENT',
-    active: false, accountStatus: 'Inactive', name: 'Elena Mendoza',
-    createdAt: '2025-07-15T08:00:00Z', updatedAt: '2026-01-15T10:00:00Z',
-    client: {
-      id: 9, companyCode: 'MC-009', clientNo: '2026-0009',
-      businessName: 'Mendoza Construction Corp.', businessType: 'CORPORATION',
-      portalName: 'Mendoza Construction Portal', active: false, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2025-07-15T08:00:00Z',
-    },
-  },
-  {
-    id: 'cu-010', email: 'rafael.g@garciafarms.ph', role: 'CLIENT',
-    active: true, accountStatus: 'Active', name: 'Rafael Garcia',
-    createdAt: '2026-01-20T08:00:00Z', updatedAt: '2026-03-12T08:00:00Z',
-    client: {
-      id: 10, companyCode: 'GF-010', clientNo: '2026-0010',
-      businessName: 'Garcia Farms & Produce', businessType: 'SOLE_PROPRIETORSHIP',
-      portalName: 'Garcia Farms Portal', active: true, branchType: 'Main',
-      timezone: 'Asia/Manila', createdAt: '2026-01-20T08:00:00Z',
-    },
-  },
-];
 
 const BIZ_TYPE_LABELS: Record<string, string> = {
   INDIVIDUAL: 'Individual',
@@ -182,89 +39,184 @@ const BIZ_TYPE_LABELS: Record<string, string> = {
   COOPERATIVE: 'Cooperative',
 };
 
-/* ─── Component ───────────────────────────────────────────────────── */
+function formatDate(val: string | null): string {
+  if (!val) return '—';
+  return new Intl.DateTimeFormat('en-PH', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(val));
+}
 
 export default function ClientManagement(): React.ReactNode {
-  const { success } = useToast();
+  const router = useRouter();
+  const { success, error: toastError } = useToast();
 
-  const [clientUsers, setClientUsers] = useState<MockClientUser[]>(MOCK_CLIENT_USERS);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
+  const [statusFilter, setStatusFilter] = useState<ClientStatusFilter>('All');
   const [page, setPage] = useState(1);
-  const [viewingUser, setViewingUser] = useState<MockClientUser | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
 
-  /* ─── Derived ────────────────────────────────────────────── */
+  const fetchClients = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/admin/settings/clients');
+      if (!response.ok) {
+        toastError('Failed to load clients', 'Could not fetch the client list.');
+        return;
+      }
+      const json = (await response.json()) as { data: ClientRecord[] };
+      setClients(json.data);
+    } catch {
+      toastError('Failed to load clients', 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  }, [toastError]);
+
+  useEffect(() => {
+    void fetchClients();
+  }, [fetchClients]);
+
+  // Reset page on filter change — adjust state during render (no useEffect)
+  const [prevFilters, setPrevFilters] = useState({ search, statusFilter });
+  if (prevFilters.search !== search || prevFilters.statusFilter !== statusFilter) {
+    setPrevFilters({ search, statusFilter });
+    setPage(1);
+  }
 
   const filtered = useMemo(() => {
-    let result = clientUsers;
+    let result = clients;
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
-        (u) =>
-          (u.name?.toLowerCase().includes(q) ?? false) ||
-          u.email.toLowerCase().includes(q) ||
-          (u.client?.businessName?.toLowerCase().includes(q) ?? false) ||
-          (u.client?.clientNo?.toLowerCase().includes(q) ?? false) ||
-          (u.client?.companyCode?.toLowerCase().includes(q) ?? false)
+        (c) =>
+          (c.businessName?.toLowerCase().includes(q) ?? false) ||
+          (c.companyCode?.toLowerCase().includes(q) ?? false) ||
+          (c.clientNo?.toLowerCase().includes(q) ?? false) ||
+          (c.owner?.name?.toLowerCase().includes(q) ?? false) ||
+          (c.owner?.email.toLowerCase().includes(q) ?? false),
       );
     }
-    if (statusFilter === 'Active') result = result.filter((u) => u.accountStatus === 'Active');
-    if (statusFilter === 'Inactive') result = result.filter((u) => u.accountStatus === 'Inactive');
-    if (statusFilter === 'Suspended') result = result.filter((u) => u.accountStatus === 'Suspended');
+    if (statusFilter === 'Active') result = result.filter((c) => c.active);
+    if (statusFilter === 'Inactive') result = result.filter((c) => !c.active);
     return result;
-  }, [clientUsers, search, statusFilter]);
+  }, [clients, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  const activeCount = clientUsers.filter((u) => u.accountStatus === 'Active').length;
-  const inactiveCount = clientUsers.filter((u) => u.accountStatus === 'Inactive').length;
-  const suspendedCount = clientUsers.filter((u) => u.accountStatus === 'Suspended').length;
+  const activeCount = clients.filter((c) => c.active).length;
+  const inactiveCount = clients.filter((c) => !c.active).length;
+  const totalUsers = clients.reduce((sum, c) => sum + c.userCount, 0);
 
-  /* ─── Handlers ───────────────────────────────────────────── */
-
-  function changeStatus(userId: string, newStatus: AccountStatus): void {
-    setClientUsers((prev) =>
-      prev.map((u) =>
-        u.id === userId
-          ? { ...u, accountStatus: newStatus, active: newStatus === 'Active', updatedAt: new Date().toISOString() }
-          : u
-      )
-    );
-    setViewingUser((prev) =>
-      prev && prev.id === userId
-        ? { ...prev, accountStatus: newStatus, active: newStatus === 'Active', updatedAt: new Date().toISOString() }
-        : prev
-    );
-    const label = newStatus === 'Active' ? 'activated' : newStatus === 'Inactive' ? 'deactivated' : 'suspended';
-    const user = clientUsers.find((u) => u.id === userId);
-    success('Account updated', `${user?.name ?? 'Client'} has been ${label}.`);
+  async function saveClient(values: ClientFormValues): Promise<void> {
+    try {
+      const url = editingClient
+        ? `/api/admin/settings/clients/${editingClient.id}`
+        : '/api/admin/settings/clients';
+      const response = await fetch(url, {
+        method: editingClient ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        toastError('Failed to save client', data.error ?? 'An unexpected error occurred.');
+        return;
+      }
+      await fetchClients();
+      success(
+        editingClient ? 'Client updated' : 'Client created',
+        `${values.businessName} has been saved successfully.`,
+      );
+      setFormOpen(false);
+      setEditingClient(null);
+    } catch {
+      toastError('Failed to save client', 'An unexpected error occurred.');
+    }
   }
 
-  /* ─── Stats ──────────────────────────────────────────────── */
+  async function toggleActive(client: ClientRecord): Promise<void> {
+    try {
+      const response = await fetch(`/api/admin/settings/clients/${client.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !client.active }),
+      });
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        toastError('Failed to update status', data.error ?? 'An unexpected error occurred.');
+        return;
+      }
+      setClients((prev) =>
+        prev.map((c) => (c.id === client.id ? { ...c, active: !client.active } : c)),
+      );
+      success(
+        'Client status updated',
+        `${client.businessName} is now ${client.active ? 'inactive' : 'active'}.`,
+      );
+    } catch {
+      toastError('Failed to update status', 'An unexpected error occurred.');
+    }
+  }
 
   const stats = [
-    { label: 'Total Clients', value: clientUsers.length, icon: Building2, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400' },
-    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
-    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' },
-    { label: 'Suspended', value: suspendedCount, icon: Ban, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400' },
+    {
+      label: 'Total Clients',
+      value: clients.length,
+      icon: Building2,
+      color: 'text-blue-600 dark:text-blue-400',
+    },
+    {
+      label: 'Active',
+      value: activeCount,
+      icon: UserCheck,
+      color: 'text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      label: 'Inactive',
+      value: inactiveCount,
+      icon: Ban,
+      color: 'text-red-500 dark:text-red-400',
+    },
+    {
+      label: 'Total Portal Users',
+      value: totalUsers,
+      icon: Users,
+      color: 'text-amber-600 dark:text-amber-400',
+    },
   ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Client Management</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage client user accounts and access
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Client Management</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage client companies and view their assigned portal users.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setEditingClient(null);
+            setFormOpen(true);
+          }}
+        >
+          <Plus size={16} />
+          Add Client
+        </Button>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((s) => (
-          <Card key={s.label} className="p-4 flex items-center gap-4">
-            <div className={`p-2.5 rounded-xl ${s.color}`}>
+          <Card key={s.label} className="flex items-center gap-4 p-4">
+            <div className={`rounded-xl p-2.5 ${s.color}`}>
               <s.icon size={20} />
             </div>
             <div>
@@ -277,292 +229,240 @@ export default function ClientManagement(): React.ReactNode {
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <Input
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by name, email, business name, or client no..."
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by business name, code, or owner…"
               className="pl-9"
             />
           </div>
           <select
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as StatusFilter);
-              setPage(1);
-            }}
-            className="rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => setStatusFilter(e.target.value as ClientStatusFilter)}
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="All">All Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
-            <option value="Suspended">Suspended</option>
           </select>
         </div>
       </Card>
 
-      {/* Client Users Table */}
+      {/* Table */}
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Client User</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Business Name</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Business Type</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">Client No.</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                    No client users found.
-                  </td>
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={24} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">
+                    Client
+                  </th>
+                  <th className="hidden px-4 py-3 text-left font-semibold text-muted-foreground md:table-cell">
+                    Business Type
+                  </th>
+                  <th className="hidden px-4 py-3 text-left font-semibold text-muted-foreground lg:table-cell">
+                    Owner
+                  </th>
+                  <th className="hidden px-4 py-3 text-center font-semibold text-muted-foreground sm:table-cell">
+                    Users
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="hidden px-4 py-3 text-left font-semibold text-muted-foreground xl:table-cell">
+                    Registered
+                  </th>
+                  <th className="px-4 py-3 text-right font-semibold text-muted-foreground">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                paginated.map((user) => {
-                  const initials = (user.name ?? user.email)
-                    .split(/[\s@]/)
-                    .map((n) => n[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase();
-
-                  return (
-                    <tr
-                      key={user.id}
-                      className="border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => setViewingUser(user)}
-                          className="flex items-center gap-3 hover:opacity-80 transition text-left"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
-                            {initials}
-                          </div>
-                          <div>
-                            <span className="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap underline-offset-2 hover:underline block">
-                              {user.name ?? '—'}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground block">{user.email}</span>
-                          </div>
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-foreground hidden md:table-cell">
-                        {user.client?.businessName ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {user.client?.businessType ? (
-                          <Badge variant="neutral">
-                            {BIZ_TYPE_LABELS[user.client.businessType] ?? user.client.businessType}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs hidden xl:table-cell">
-                        {user.client?.clientNo ?? '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[user.accountStatus]}>
-                          {user.accountStatus}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <a
-                            href={`/dashboard/clients/${user.client?.id ?? user.client}/users`}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
-                            title="Manage client users"
+              </thead>
+              <tbody>
+                {paginated.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                      No clients matched the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  paginated.map((client) => {
+                    const initials = (client.businessName ?? client.companyCode ?? '?')
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase();
+                    return (
+                      <tr
+                        key={client.id}
+                        className="border-b border-border last:border-b-0 transition-colors hover:bg-muted/20"
+                      >
+                        {/* Business name / code */}
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => router.push(`/dashboard/settings/client-management/${client.id}`)}
+                            className="flex items-center gap-3 text-left transition hover:opacity-80"
                           >
-                            <Eye size={15} />
-                          </a>
-                          {user.accountStatus !== 'Active' && (
-                            <button
-                              onClick={() => changeStatus(user.id, 'Active')}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition"
-                              title="Activate account"
-                            >
-                              <Power size={15} />
-                            </button>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:text-blue-300">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="block truncate font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
+                                {client.businessName ?? '—'}
+                              </span>
+                              <span className="block text-[11px] text-muted-foreground">
+                                {client.companyCode}
+                                {client.clientNo ? ` · ${client.clientNo}` : ''}
+                              </span>
+                            </div>
+                          </button>
+                        </td>
+
+                        {/* Business type */}
+                        <td className="hidden px-4 py-3 md:table-cell">
+                          {client.businessEntity ? (
+                            <Badge variant="neutral">
+                              {BIZ_TYPE_LABELS[client.businessEntity] ?? client.businessEntity}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
                           )}
-                          {user.accountStatus === 'Active' && (
-                            <button
-                              onClick={() => changeStatus(user.id, 'Inactive')}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                              title="Deactivate account"
-                            >
-                              <UserX size={15} />
-                            </button>
+                        </td>
+
+                        {/* Owner */}
+                        <td className="hidden px-4 py-3 lg:table-cell">
+                          {client.owner ? (
+                            <div className="min-w-0">
+                              <p className="truncate text-sm text-foreground">
+                                {client.owner.name ?? '—'}
+                              </p>
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {client.owner.email}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">
+                              No owner assigned
+                            </span>
                           )}
-                          {user.accountStatus !== 'Suspended' && (
+                        </td>
+
+                        {/* User count */}
+                        <td className="hidden px-4 py-3 text-center sm:table-cell">
+                          <button
+                            onClick={() => router.push(`/dashboard/settings/client-management/${client.id}`)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-xs font-semibold text-foreground transition hover:bg-muted/70"
+                            title="View assigned users"
+                          >
+                            <Users size={12} />
+                            {client.userCount}
+                          </button>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-3">
+                          <Badge variant={client.active ? 'success' : 'danger'}>
+                            {client.active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </td>
+
+                        {/* Registered date */}
+                        <td className="hidden px-4 py-3 text-muted-foreground xl:table-cell">
+                          {formatDate(client.createdAt)}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
                             <button
-                              onClick={() => changeStatus(user.id, 'Suspended')}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition"
-                              title="Suspend account"
+                              onClick={() => {
+                                setEditingClient(client);
+                                setFormOpen(true);
+                              }}
+                              className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-blue-50 hover:text-blue-600"
+                              title="Edit client"
                             >
-                              <Ban size={15} />
+                              <Pencil size={15} />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                            {client.active ? (
+                              <button
+                                onClick={() => void toggleActive(client)}
+                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-slate-100 hover:text-slate-600"
+                                title="Deactivate client"
+                              >
+                                <UserX size={15} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => void toggleActive(client)}
+                                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-emerald-50 hover:text-emerald-600"
+                                title="Activate client"
+                              >
+                                <Power size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <p className="text-xs text-muted-foreground">
-              Showing {(page - 1) * ITEMS_PER_PAGE + 1}–
-              {Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} clients
-            </p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
-                    n === page ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing{' '}
+            {filtered.length === 0 ? 0 : (page - 1) * ITEMS_PER_PAGE + 1}–
+            {Math.min(page * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} clients
+          </p>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <Button
+              variant="outline"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft size={16} />
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+            >
+              <ChevronRight size={16} />
+            </Button>
           </div>
-        )}
+        </div>
       </Card>
 
-      {/* ─── Detail Modal ─────────────────────────────────────── */}
-      <Modal isOpen={!!viewingUser} onClose={() => setViewingUser(null)} title="Client User Details" size="lg">
-        {viewingUser && (
-          <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
-                {(viewingUser.name ?? viewingUser.email).split(/[\s@]/).map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold text-foreground truncate">{viewingUser.name ?? '—'}</h3>
-                <p className="text-sm text-muted-foreground">{viewingUser.email}</p>
-              </div>
-              <Badge variant={STATUS_VARIANT[viewingUser.accountStatus]} className="shrink-0">
-                {viewingUser.accountStatus}
-              </Badge>
-            </div>
+      {/* Modals */}
+      <ClientFormModal
+        isOpen={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingClient(null);
+        }}
+        onSave={(values) => void saveClient(values)}
+        editingClient={editingClient}
+      />
 
-            {/* Client Business Info */}
-            {viewingUser.client && (
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-3">Business Information</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {[
-                    { label: 'Business Name', value: viewingUser.client.businessName ?? '—' },
-                    { label: 'Company Code', value: viewingUser.client.companyCode ?? '—' },
-                    { label: 'Client No.', value: viewingUser.client.clientNo ?? '—' },
-                    { label: 'Business Type', value: viewingUser.client.businessType ? BIZ_TYPE_LABELS[viewingUser.client.businessType] ?? viewingUser.client.businessType : '—' },
-                    { label: 'Portal Name', value: viewingUser.client.portalName ?? '—' },
-                    { label: 'Branch Type', value: viewingUser.client.branchType ?? '—' },
-                    { label: 'Timezone', value: viewingUser.client.timezone },
-                    { label: 'Client Active', value: viewingUser.client.active ? 'Yes' : 'No' },
-                    { label: 'Registered', value: viewingUser.client.createdAt ? new Date(viewingUser.client.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—' },
-                  ].map((f) => (
-                    <div key={f.label} className="space-y-0.5">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{f.label}</p>
-                      <p className="text-sm text-foreground">{f.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Account Info */}
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-3">Account Information</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {[
-                  { label: 'Role', value: viewingUser.role },
-                  { label: 'Account Active', value: viewingUser.active ? 'Yes' : 'No' },
-                  { label: 'Created', value: new Date(viewingUser.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) },
-                  { label: 'Last Updated', value: new Date(viewingUser.updatedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) },
-                ].map((f) => (
-                  <div key={f.label} className="space-y-0.5">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{f.label}</p>
-                    <p className="text-sm text-foreground">{f.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Account Actions */}
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-3">Account Actions</h4>
-              <div className="flex flex-wrap gap-2">
-                {viewingUser.accountStatus !== 'Active' && (
-                  <Button
-                    onClick={() => changeStatus(viewingUser.id, 'Active')}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                  >
-                    <Power size={14} /> Activate
-                  </Button>
-                )}
-                {viewingUser.accountStatus === 'Active' && (
-                  <Button
-                    variant="outline"
-                    onClick={() => changeStatus(viewingUser.id, 'Inactive')}
-                    className="gap-2"
-                  >
-                    <UserX size={14} /> Deactivate
-                  </Button>
-                )}
-                {viewingUser.accountStatus !== 'Suspended' && (
-                  <Button
-                    variant="outline"
-                    onClick={() => changeStatus(viewingUser.id, 'Suspended')}
-                    className="gap-2 text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                  >
-                    <Ban size={14} /> Suspend
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setViewingUser(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }

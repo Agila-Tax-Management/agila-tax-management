@@ -23,8 +23,10 @@ export type AppPortalName =
   | 'COMPLIANCE'
   | 'LIAISON'
   | 'ACCOUNTING'
-  | 'ACCOUNT_OFFICER'
-  | 'HR';
+  | 'OPERATIONS_MANAGEMENT'
+  | 'HR'
+  | 'TASK_MANAGEMENT'
+  | 'CLIENT_RELATIONS';
 
 export interface PortalPermissions {
   canRead: boolean;
@@ -145,6 +147,20 @@ export interface AOTaskComment {
   createdAt: string;
 }
 
+export interface AOTaskSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  assigneeId?: string;
+  assigneeName?: string;
+  department?: { id: number; name: string };
+  priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
+  dueDate?: string;
+  notes?: string;
+  createdAt: string;
+  comments?: AOTaskComment[];
+}
+
 export interface AOTask {
   id: string;
   title: string;
@@ -158,6 +174,7 @@ export interface AOTask {
   updatedAt: string;
   comments: AOTaskComment[];
   tags: string[];
+  subtasks?: AOTaskSubtask[];
 }
 
 export interface AONotification {

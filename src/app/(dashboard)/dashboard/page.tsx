@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -9,6 +9,8 @@ import {
   Calculator, CalendarDays
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getPortalFromRoute } from '@/lib/portal-mapping';
+import type { AppPortal } from '@/generated/prisma/client';
 
 /* ─── Inline mock data ─────────────────────────────────────────── */
 
@@ -20,16 +22,17 @@ const EMPLOYEE_SERVICES = [
 
 const PORTALS = [
   { id: 'sales',      title: 'Sales Portal',         description: 'Manage leads, pipeline, and client engagements.',    href: '/portal/sales',      icon: <Megaphone />,   color: 'bg-rose-600',    stats: { label: 'Active Leads', value: '124' } },
-  { id: 'accounting', title: 'Accounting Portal',     description: 'Handle bookkeeping, invoices, and financial reports.',href: '/portal/accounting', icon: <BarChart3 />,   color: 'bg-blue-600',    stats: { label: 'Open Invoices', value: '38' } },
+  { id: 'accounting', title: 'ACF Portal',     description: 'Handle bookkeeping, invoices, and financial reports.',href: '/portal/accounting-and-finance', icon: <BarChart3 />,   color: 'bg-blue-600',    stats: { label: 'Open Invoices', value: '38' } },
   { id: 'compliance', title: 'Compliance Portal',     description: 'Track BIR filings, permits, and regulatory tasks.',  href: '/portal/compliance', icon: <ShieldCheck />, color: 'bg-indigo-600',  stats: { label: 'Pending Filings', value: '7' } },
   { id: 'liaison',    title: 'Liaison Portal',        description: 'Coordinate government agency tasks and schedules.',  href: '/portal/liaison',    icon: <Building2 />,   color: 'bg-amber-600',   stats: { label: 'Active Tasks', value: '15' } },
   { id: 'hr',         title: 'HR Portal',             description: 'Manage employees, onboarding, and company policies.',href: '/portal/hr',         icon: <UserCheck />,   color: 'bg-teal-600',    stats: { label: 'Employees', value: '52' } },
   { id: 'ao',         title: 'Account Officer Portal', description: 'Oversee client accounts and service delivery.',     href: '/portal/account-officer', icon: <Briefcase />, color: 'bg-violet-600', stats: { label: 'Clients Managed', value: '86' } },
-  { id: 'task-mgmt',   title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
+  { id: 'task-mgmt',  title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
+  { id: 'crm',        title: 'Client Gateway System', description: 'Client portal and self-service gateway.',            href: '/portal/client-gateway',  icon: <Users />,     color: 'bg-blue-500',    stats: { label: 'Active Clients', value: '0' } },
+  { id: 'operation',  title: 'Operations Portal',     description: 'Manage active clients, requirements, and operations tasks.', href: '/portal/operation', icon: <Zap />,       color: 'bg-amber-600',   stats: { label: 'Active Clients', value: '0' } },
 ];
 
 const APP_SYSTEMS = [
-  { id: 'crm',     title: 'CRM System',        description: 'Customer relationship management',        href: '/dashboard/crm',       icon: <Users />,    color: 'bg-blue-500'   },
   { id: 'sop',    title: 'Standard Operating Procedures (SOPPs)',   description: 'Company document storage',                href: '/dashboard/sop',      icon: <BookOpen />, color: 'bg-emerald-500' },
   { id: 'reports', title: 'Reports Engine',      description: 'Generate and export business reports',    href: '/dashboard/reports',   icon: <BarChart3 />,color: 'bg-purple-500' },
   { id: 'web',     title: 'Company Website',     description: 'Manage the public website',               href: 'https://agilaworkspace.com', icon: <Globe />, color: 'bg-slate-700', external: true },
@@ -51,6 +54,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export default function DashboardPage() {
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Portal access state
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [accessiblePortals, setAccessiblePortals] = useState<Set<AppPortal>>(new Set());
+  const [loadingAccess, setLoadingAccess] = useState(true);
 
   // Demo user data
   const displayName = 'User';
@@ -59,6 +67,27 @@ export default function DashboardPage() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Fetch portal access on mount
+  useEffect(() => {
+    void fetch('/api/auth/portal-access')
+      .then(res => res.json())
+      .then(data => {
+        setUserRole(data.userRole);
+        setAccessiblePortals(new Set(data.portals.map((p: { portal: AppPortal }) => p.portal)));
+        setLoadingAccess(false);
+      })
+      .catch(() => {
+        setLoadingAccess(false);
+      });
+  }, []);
+
+  // Filter portals based on user access
+  const visiblePortals = PORTALS.filter(portal => {
+    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
+    const portalKey = getPortalFromRoute(portal.href);
+    return portalKey && accessiblePortals.has(portalKey);
+  });
 
   const formatDate = (d: Date) => `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 
@@ -131,39 +160,48 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {PORTALS.map(portal => (
-            <button
-              key={portal.id}
-              onClick={() => handleNav(portal.href)}
-              className="group text-left bg-card rounded-2xl border border-border shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden"
-            >
-              <div className="p-7 flex flex-col justify-between h-full">
-                <div className="flex justify-between items-start mb-8">
-                  <div className={`${portal.color} w-14 h-14 rounded-2xl shadow-lg text-white flex items-center justify-center group-hover:rotate-3 group-hover:scale-105 transition-all`}>
-                    {React.cloneElement(portal.icon as React.ReactElement<{ size?: number }>, { size: 28 })}
+        {loadingAccess ? (
+          <div className="text-center py-12 text-muted-foreground">Loading portals...</div>
+        ) : visiblePortals.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-muted-foreground text-sm">No portal access assigned.</div>
+            <p className="text-xs text-muted-foreground mt-2">Contact your administrator to request access.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {visiblePortals.map(portal => (
+              <button
+                key={portal.id}
+                onClick={() => handleNav(portal.href)}
+                className="group text-left bg-card rounded-2xl border border-border shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden"
+              >
+                <div className="p-7 flex flex-col justify-between h-full">
+                  <div className="flex justify-between items-start mb-8">
+                    <div className={`${portal.color} w-14 h-14 rounded-2xl shadow-lg text-white flex items-center justify-center group-hover:rotate-3 group-hover:scale-105 transition-all`}>
+                      {React.cloneElement(portal.icon as React.ReactElement<{ size?: number }>, { size: 28 })}
+                    </div>
+                    <div className="p-2.5 bg-muted rounded-full text-muted-foreground group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      <ExternalLink size={16} />
+                    </div>
                   </div>
-                  <div className="p-2.5 bg-muted rounded-full text-muted-foreground group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    <ExternalLink size={16} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-foreground mb-1.5">{portal.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{portal.description}</p>
-                </div>
-                <div className="mt-6 pt-5 border-t border-border flex items-center justify-between">
                   <div>
-                    <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">{portal.stats.label}</p>
-                    <p className="text-xl font-extrabold text-foreground mt-0.5">{portal.stats.value}</p>
+                    <h3 className="font-bold text-lg text-foreground mb-1.5">{portal.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{portal.description}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
-                    <ShieldCheck size={12} className="text-blue-500" /> Verified
+                  <div className="mt-6 pt-5 border-t border-border flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">{portal.stats.label}</p>
+                      <p className="text-xl font-extrabold text-foreground mt-0.5">{portal.stats.value}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
+                      <ShieldCheck size={12} className="text-blue-500" /> Verified
+                    </div>
                   </div>
                 </div>
-              </div>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── 4. App Systems + Quick Links ───────────────────── */}

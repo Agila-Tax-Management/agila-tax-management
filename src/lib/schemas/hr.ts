@@ -31,15 +31,37 @@ export const updatePositionSchema = z.object({
 
 export const createEmployeeSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
-  middleName: z.string().optional(),
+  middleName: z.string().optional().nullable(),
   lastName: z.string().min(1, "Last name is required"),
+  nameExtension: z.string().optional().nullable(),
   birthDate: z.string().min(1, "Birth date is required"),
+  placeOfBirth: z.string().optional().nullable(),
   gender: z.string().min(1, "Gender is required"),
+  civilStatus: z.string().optional().nullable(),
+  citizenship: z.string().optional().nullable(),
   phone: z.string().min(1, "Phone is required"),
-  address: z.string().min(1, "Address is required"),
+  personalEmail: z.string().email("Invalid personal email").optional().nullable(),
   email: z.string().email("Invalid email").optional().nullable(),
   employeeNo: z.string().optional().nullable(),
   userId: z.string().optional().nullable(),
+  // Current address
+  currentStreet: z.string().optional().nullable(),
+  currentBarangay: z.string().optional().nullable(),
+  currentCity: z.string().optional().nullable(),
+  currentProvince: z.string().optional().nullable(),
+  currentZip: z.string().optional().nullable(),
+  // Permanent address
+  permanentStreet: z.string().optional().nullable(),
+  permanentBarangay: z.string().optional().nullable(),
+  permanentCity: z.string().optional().nullable(),
+  permanentProvince: z.string().optional().nullable(),
+  permanentZip: z.string().optional().nullable(),
+  // Education
+  educationalBackground: z.string().optional().nullable(),
+  school: z.string().optional().nullable(),
+  course: z.string().optional().nullable(),
+  yearGraduated: z.string().optional().nullable(),
+  certifications: z.string().optional().nullable(),
 });
 
 export const updateEmployeeSchema = z.object({
@@ -51,13 +73,26 @@ export const updateEmployeeSchema = z.object({
   placeOfBirth: z.string().optional().nullable(),
   gender: z.string().optional(),
   civilStatus: z.string().optional().nullable(),
+  citizenship: z.string().optional().nullable(),
   phone: z.string().optional(),
   personalEmail: z.string().email("Invalid personal email").optional().nullable(),
-  address: z.string().optional(),
   email: z.string().email("Invalid email").optional().nullable(),
   employeeNo: z.string().optional().nullable(),
   userId: z.string().optional().nullable(),
   active: z.boolean().optional(),
+  // Current address
+  currentStreet: z.string().optional().nullable(),
+  currentBarangay: z.string().optional().nullable(),
+  currentCity: z.string().optional().nullable(),
+  currentProvince: z.string().optional().nullable(),
+  currentZip: z.string().optional().nullable(),
+  // Permanent address
+  permanentStreet: z.string().optional().nullable(),
+  permanentBarangay: z.string().optional().nullable(),
+  permanentCity: z.string().optional().nullable(),
+  permanentProvince: z.string().optional().nullable(),
+  permanentZip: z.string().optional().nullable(),
+  // Education
   educationalBackground: z.string().optional().nullable(),
   school: z.string().optional().nullable(),
   course: z.string().optional().nullable(),
@@ -97,20 +132,37 @@ export const createContractSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED"]).default("DRAFT"),
   contractStart: z.string().min(1, "Contract start date is required"),
   contractEnd: z.string().optional().nullable(),
-  monthlyRate: z.string().optional().nullable(),
-  weeklyRate: z.string().optional().nullable(),
-  dailyRate: z.string().optional().nullable(),
-  hourlyRate: z.string().optional().nullable(),
-  disbursedMethod: z.enum(["CASH_SALARY", "FUND_TRANSFER"]).optional().nullable(),
-  payType: z.string().optional().nullable(),
-  bankDetails: z.string().optional().nullable(),
   scheduleId: z.number().int().positive().optional().nullable(),
-  workingHoursPerWeek: z.number().int().positive().optional().nullable(),
+  workingHoursPerWeek: z.number().int().min(0).optional().nullable(),
   signedDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
 export const updateContractSchema = createContractSchema.omit({ employmentId: true }).partial();
+
+/* ─── Compensation (DOLE-compliant, linked to Contract) ───────── */
+
+export const createCompensationSchema = z.object({
+  contractId: z.number().int().positive("Contract is required"),
+  baseRate: z.string().min(1, "Base rate is required"),
+  allowanceRate: z.string().optional().default("0"),
+  rateType: z.enum(["DAILY", "MONTHLY"]).default("DAILY"),
+  frequency: z.enum(["ONCE_A_MONTH", "TWICE_A_MONTH", "WEEKLY"]).default("TWICE_A_MONTH"),
+  payType: z.enum(["FIXED_PAY", "VARIABLE_PAY"]).default("VARIABLE_PAY"),
+  disbursementType: z.enum(["CASH", "BANK_TRANSFER", "CHEQUE", "E_WALLET"]).default("CASH"),
+  bankDetails: z.string().optional().nullable(),
+  isPaidRestDays: z.boolean().default(false),
+  restDaysPerWeek: z.number().int().min(0).max(2).default(1),
+  deductSss: z.boolean().default(false),
+  deductPhilhealth: z.boolean().default(false),
+  deductPagibig: z.boolean().default(false),
+  pagibigType: z.enum(['REGULAR', 'MINIMUM']).default('REGULAR'),
+  deductTax: z.boolean().default(false),
+  allowanceOnFirstCutoffOnly: z.boolean().default(true),
+  payrollScheduleId: z.string().nullable().optional(),
+});
+
+export const updateCompensationSchema = createCompensationSchema.omit({ contractId: true }).partial();
 
 /* ─── Work Schedule (Step 4) ─────────────────────────────────────── */
 
@@ -139,14 +191,12 @@ export const upsertAccessSchema = z.object({
         "COMPLIANCE",
         "LIAISON",
         "ACCOUNTING",
-        "ACCOUNT_OFFICER",
+        "OPERATIONS_MANAGEMENT",
         "HR",
         "TASK_MANAGEMENT",
+        "CLIENT_RELATIONS",
       ]),
-      canRead: z.boolean().default(false),
-      canWrite: z.boolean().default(false),
-      canEdit: z.boolean().default(false),
-      canDelete: z.boolean().default(false),
+      role: z.enum(["VIEWER", "USER", "ADMIN", "SETTINGS"]),
     }),
   ),
 });
@@ -172,6 +222,8 @@ export type CreateEmploymentInput = z.infer<typeof createEmploymentSchema>;
 export type UpdateEmploymentInput = z.infer<typeof updateEmploymentSchema>;
 export type CreateContractInput = z.infer<typeof createContractSchema>;
 export type UpdateContractInput = z.infer<typeof updateContractSchema>;
+export type CreateCompensationInput = z.infer<typeof createCompensationSchema>;
+export type UpdateCompensationInput = z.infer<typeof updateCompensationSchema>;
 export type CreateWorkScheduleInput = z.infer<typeof createWorkScheduleSchema>;
 export type UpsertAccessInput = z.infer<typeof upsertAccessSchema>;
 export type UpdateGovernmentIdsInput = z.infer<typeof updateGovernmentIdsSchema>;

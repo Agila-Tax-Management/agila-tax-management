@@ -1,17 +1,17 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Input } from '@/components/UI/Input';
-import { TaskDetailsModal } from './TaskDetailsModal';
+import { useToast } from '@/context/ToastContext';
+import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
 import {
   Search, LayoutGrid, LayoutList, Building2,
-  Mail, User, ClipboardList,
+  Mail, User, ClipboardList, Loader2,
   CheckCircle2, Clock, AlertTriangle, X, ChevronRight,
 } from 'lucide-react';
-import { INITIAL_AO_TASKS, AO_TEAM_MEMBERS } from '@/lib/mock-ao-data';
-import { INITIAL_CLIENTS } from '@/lib/mock-clients';
 import type { AOTask, AOTaskStatus, Client } from '@/lib/types';
 
 type ClientViewMode = 'card' | 'list';
@@ -30,15 +30,167 @@ const PRIORITY_CONFIG: Record<string, { variant: 'neutral' | 'info' | 'warning' 
   Urgent: { variant: 'danger' },
 };
 
+interface ApiOperationClient {
+  id: number;
+  clientNo: string | null;
+  businessName: string;
+  assignedAOId: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownerStatus: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | null;
+  onboardedDate: string;
+}
+
+interface ApiTask {
+  id: number;
+  name: string;
+  description: string | null;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' | null;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  client: { id: number; businessName: string } | null;
+  status: { id: number; name: string; color: string | null } | null;
+  assignedTo: { id: number; firstName: string; lastName: string } | null;
+}
+
+interface ApiEmployee {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
+
+interface LocalClient {
+  id: string;
+  clientNo: string;
+  businessName: string;
+  companyCode: string;
+  authorizedRep: string;
+  email: string;
+  phone: string;
+  status: 'Active' | 'Pending' | 'Suspended';
+  planDetails: Client['planDetails'];
+  clientServices: Client['clientServices'];
+  createdAt: string;
+}
+
+const DB_PRIORITY_MAP: Record<string, AOTask['priority']> = {
+  LOW: 'Low',
+  NORMAL: 'Medium',
+  HIGH: 'High',
+  URGENT: 'Urgent',
+};
+
+function mapStatus(name: string | null | undefined): AOTaskStatus {
+  if (!name) return 'To Do';
+  const n = name.toLowerCase();
+  if (n.includes('progress')) return 'In Progress';
+  if (n.includes('review')) return 'Review';
+  if (n.includes('done') || n.includes('complet') || n.includes('finish')) return 'Done';
+  return 'To Do';
+}
+
+function mapClientStatus(ownerStatus: ApiOperationClient['ownerStatus']): LocalClient['status'] {
+  if (ownerStatus === 'ACTIVE') return 'Active';
+  if (ownerStatus === 'SUSPENDED') return 'Suspended';
+  return 'Pending';
+}
+
 export function AOClientList() {
-  const [tasks, setTasks] = useState<AOTask[]>(INITIAL_AO_TASKS);
+  const router = useRouter();
+  const { error: toastError } = useToast();
+  const { departments } = useTaskDepartments();
+  const [tasks, setTasks] = useState<AOTask[]>([]);
+  const [clients, setClients] = useState<LocalClient[]>([]);
+  const [employeeMap, setEmployeeMap] = useState<Map<string, string>>(new Map());
+  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ClientViewMode>('card');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [selectedTask, setSelectedTask] = useState<AOTask | null>(null);
+  const [selectedClient, setSelectedClient] = useState<LocalClient | null>(null);
 
-  const clients = INITIAL_CLIENTS;
+  const aoDept = useMemo(
+    () =>
+      departments.find(d => /account.?officer/i.test(d.name)) ??
+      departments.find(d => /client.?relation/i.test(d.name)) ??
+      null,
+    [departments],
+  );
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [clientsRes, tasksRes, employeesRes] = await Promise.all([
+        fetch('/api/operation/clients', { cache: 'no-store' }),
+        fetch(`/api/tasks${aoDept?.id ? `?departmentId=${aoDept.id}` : ''}`, { cache: 'no-store' }),
+        fetch('/api/hr/employees', { cache: 'no-store' }),
+      ]);
+
+      if (!clientsRes.ok || !tasksRes.ok || !employeesRes.ok) {
+        toastError('Failed to load clients', 'Please refresh and try again.');
+        setClients([]);
+        setTasks([]);
+        return;
+      }
+
+      const clientsJson = await clientsRes.json() as { data?: ApiOperationClient[] };
+      const tasksJson = await tasksRes.json() as { data?: ApiTask[] };
+      const employeesJson = await employeesRes.json() as { data?: ApiEmployee[] };
+
+      const allClients = clientsJson.data ?? [];
+
+      const mappedClients: LocalClient[] = allClients.map(c => ({
+        id: String(c.id),
+        clientNo: c.clientNo ?? `CLIENT-${c.id}`,
+        businessName: c.businessName,
+        companyCode: `C-${c.id}`,
+        authorizedRep: c.ownerName ?? 'Unassigned Owner',
+        email: c.ownerEmail ?? '—',
+        phone: '—',
+        status: mapClientStatus(c.ownerStatus),
+        planDetails: null,
+        clientServices: [],
+        createdAt: c.onboardedDate,
+      }));
+
+      const mappedTasks: AOTask[] = (tasksJson.data ?? []).map(t => ({
+        id: String(t.id),
+        title: t.name,
+        description: t.description ?? '',
+        status: mapStatus(t.status?.name),
+        priority: DB_PRIORITY_MAP[t.priority ?? 'NORMAL'] ?? 'Medium',
+        clientId: String(t.client?.id ?? ''),
+        assigneeId: String(t.assignedTo?.id ?? ''),
+        dueDate: t.dueDate ?? new Date().toISOString(),
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+        comments: [],
+        tags: [],
+        subtasks: [],
+      }));
+
+      const newEmployeeMap = new Map<string, string>();
+      for (const e of employeesJson.data ?? []) {
+        newEmployeeMap.set(String(e.id), `${e.firstName} ${e.lastName}`);
+      }
+
+      setEmployeeMap(newEmployeeMap);
+      setClients(mappedClients);
+      setTasks(mappedTasks);
+    } catch {
+      toastError('Failed to load clients', 'Please refresh and try again.');
+      setClients([]);
+      setTasks([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [aoDept?.id, toastError]);
+
+   
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+   
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
@@ -55,7 +207,7 @@ export function AOClientList() {
     tasks.filter(t => t.clientId === clientId);
 
   const getAssigneeName = (assigneeId: string) =>
-    AO_TEAM_MEMBERS.find(m => m.id === assigneeId)?.name ?? 'Unassigned';
+    employeeMap.get(assigneeId) ?? 'Unassigned';
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
@@ -64,19 +216,17 @@ export function AOClientList() {
     const clientTasks = getClientTasks(clientId);
     const total = clientTasks.length;
     const done = clientTasks.filter(t => t.status === 'Done').length;
-    const overdue = clientTasks.filter(t => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-11')).length;
+    const overdue = clientTasks.filter(t => t.status !== 'Done' && new Date(t.dueDate) < new Date()).length;
     return { total, done, overdue, active: total - done };
   };
 
-  const handleUpdateTask = (updated: AOTask) => {
-    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-    setSelectedTask(updated);
-  };
-
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    setSelectedTask(null);
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 size={24} className="animate-spin text-[#25238e]" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -241,7 +391,7 @@ export function AOClientList() {
       )}
 
       {/* Client Tasks Modal (Global modal) */}
-      {selectedClient && !selectedTask && (
+      {selectedClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedClient(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
@@ -327,11 +477,11 @@ export function AOClientList() {
                     <div className="py-12 text-center text-sm text-slate-400 font-medium">No tasks assigned to this client.</div>
                   )}
                   {getClientTasks(selectedClient.id).map(task => {
-                    const overdue = task.status !== 'Done' && new Date(task.dueDate) < new Date('2026-03-11');
+                    const overdue = task.status !== 'Done' && new Date(task.dueDate) < new Date();
                     return (
                       <div
                         key={task.id}
-                        onClick={() => setSelectedTask(task)}
+                        onClick={() => router.push(`/portal/account-officer/tasks/${task.id}`)}
                         className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors group"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -359,17 +509,6 @@ export function AOClientList() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Task Details (from client view) */}
-      {selectedTask && (
-        <TaskDetailsModal
-          task={selectedTask}
-          isOpen={!!selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onUpdate={handleUpdateTask}
-          onDelete={handleDeleteTask}
-        />
       )}
     </div>
   );

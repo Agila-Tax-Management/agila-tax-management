@@ -4,20 +4,21 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createDepartmentSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getClientIdFromSession } from "@/lib/session";
 
 /**
  * GET /api/hr/departments
- * Returns all departments for the ATMS client with position + staff counts.
+ * Returns departments scoped to the session user's client.
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const atmsClient = await prisma.client.findUnique({ where: { companyCode: "atms" } });
-  if (!atmsClient) return NextResponse.json({ error: "ATMS client not found" }, { status: 500 });
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   const departments = await prisma.department.findMany({
-    where: { clientId: atmsClient.id },
+    where: { clientId },
     orderBy: { name: "asc" },
     include: {
       _count: { select: { positions: true, employments: true } },

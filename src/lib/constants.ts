@@ -11,7 +11,7 @@ export const LEAD_STATUSES = [
   { id: '4',  name: 'Proposal',            color: 'bg-amber-500' },
   { id: '5',  name: 'Negotiation',         color: 'bg-orange-500' },
   { id: '6',  name: 'Closed Won',          color: 'bg-green-600' },
-  { id: '7',  name: 'Pending Onboarding',  color: 'bg-violet-500' },
+  { id: '7',  name: 'Account Creation',   color: 'bg-violet-500' },
   { id: '8',  name: 'Contract Signing',    color: 'bg-indigo-500' },
   { id: '9',  name: 'Waiting for Payment', color: 'bg-yellow-500' },
   { id: '10', name: 'Turnover',            color: 'bg-teal-600' },
@@ -26,10 +26,10 @@ export const MOCK_AGENTS = [
 ];
 
 export const BUSINESS_TYPES = [
+  'Not Specified',
+  'Professional',
   'Sole Proprietorship',
-  'Partnership',
   'Corporation',
-  'One Person Corporation (OPC)',
 ];
 
 export const LEAD_SOURCES = [

@@ -20,20 +20,26 @@ const PORTAL_LABELS: Record<string, string> = {
   SALES: 'Sales Portal',
   COMPLIANCE: 'Compliance Portal',
   LIAISON: 'Liaison Portal',
-  ACCOUNTING: 'Accounting Portal',
-  ACCOUNT_OFFICER: 'Account Officer Portal',
+  ACCOUNTING: 'ACF Portal',
+  OPERATIONS_MANAGEMENT: 'Operations Management Portal',
   HR: 'HR Portal',
   TASK_MANAGEMENT: 'Task Management Portal',
+  CLIENT_RELATIONS: 'Client Relations Portal',
 };
 
-const PERM_LABELS: Record<string, string> = {
-  canRead: 'Read',
-  canWrite: 'Write',
-  canEdit: 'Edit',
-  canDelete: 'Delete',
+const ROLE_VARIANT: Record<string, 'info' | 'warning' | 'success' | 'neutral'> = {
+  VIEWER: 'neutral',
+  USER: 'info',
+  ADMIN: 'warning',
+  SETTINGS: 'success',
 };
 
-const PERMISSIONS = ['canRead', 'canWrite', 'canEdit', 'canDelete'] as const;
+const ROLE_DESC: Record<string, string> = {
+  VIEWER: 'Read-only access',
+  USER: 'Standard operations (Maker)',
+  ADMIN: 'Approvals & deletions (Checker)',
+  SETTINGS: 'Full portal configuration',
+};
 
 /* ─── Props ───────────────────────────────────────────────────────── */
 
@@ -66,7 +72,7 @@ export default function UserViewModal({
       <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
+          <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 dark:text-blue-300 flex items-center justify-center text-lg font-bold shrink-0">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
@@ -103,7 +109,6 @@ export default function UserViewModal({
                       })
                     : '—',
                 },
-                { label: 'Address', value: user.employee.address || '—' },
               ].map((f) => (
                 <div key={f.label} className="space-y-0.5">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -194,8 +199,8 @@ export default function UserViewModal({
             <div className="p-3 rounded-xl border border-border bg-muted/30 mb-3">
               <p className="text-sm text-muted-foreground">
                 {user.role === 'SUPER_ADMIN'
-                  ? 'Super Admins have full access to all portals with all permissions.'
-                  : 'Admins have read, write, and edit access to all portals (no delete).'}
+                  ? 'Super Admins have full settings-level access to all portals.'
+                  : 'Admins have admin-level access to all portals by default.'}
               </p>
             </div>
           )}
@@ -207,20 +212,18 @@ export default function UserViewModal({
               {user.portalAccess.map((access) => (
                 <div
                   key={access.portal}
-                  className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl border border-border bg-muted/30"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-border bg-muted/30"
                 >
-                  <span className="text-sm font-medium text-foreground min-w-44">
+                  <span className="text-sm font-medium text-foreground">
                     {PORTAL_LABELS[access.portal] ?? access.portal}
                   </span>
-                  <div className="flex flex-wrap gap-2">
-                    {PERMISSIONS.map((perm) => (
-                      <Badge
-                        key={perm}
-                        variant={access[perm] ? 'success' : 'neutral'}
-                      >
-                        {PERM_LABELS[perm]}
-                      </Badge>
-                    ))}
+                  <div className="flex flex-col sm:items-end gap-1">
+                    <Badge variant={ROLE_VARIANT[access.role] ?? 'neutral'}>
+                      {access.role}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {ROLE_DESC[access.role]}
+                    </p>
                   </div>
                 </div>
               ))}

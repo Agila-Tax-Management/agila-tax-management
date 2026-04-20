@@ -2,7 +2,7 @@
 import { headers } from "next/headers";
 import { auth } from "./auth";
 import prisma from "./db";
-import type { AppPortal } from "@/generated/prisma/client";
+import type { AppPortal, PortalRole } from "@/generated/prisma/client";
 
 /**
  * Permission flags for a single portal.
@@ -36,6 +36,7 @@ export interface SessionWithAccess {
     employeeNo: string | null;
   } | null;
   portalAccess: Record<AppPortal, PortalPermissions>;
+  portalRoles: Record<AppPortal, PortalRole | null>; // Direct role mapping for access control
 }
 
 /** Default permission set — all denied. */
@@ -68,9 +69,10 @@ const ALL_PORTALS: AppPortal[] = [
   "COMPLIANCE",
   "LIAISON",
   "ACCOUNTING",
-  "ACCOUNT_OFFICER",
+  "OPERATIONS_MANAGEMENT",
   "HR",
   "TASK_MANAGEMENT",
+  "CLIENT_RELATIONS",
 ];
 
 /**
@@ -108,6 +110,11 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
     ALL_PORTALS.map((p) => [p, { ...DENIED }])
   ) as Record<AppPortal, PortalPermissions>;
 
+  // Build portal roles map — start with all portals null (no access)
+  const portalRoles = Object.fromEntries(
+    ALL_PORTALS.map((p) => [p, null])
+  ) as Record<AppPortal, PortalRole | null>;
+
   let employeeData: {
     id: number;
     firstName: string;
@@ -119,11 +126,13 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
     // SUPER_ADMIN gets full access to all portals — no DB lookup needed
     for (const portal of ALL_PORTALS) {
       portalAccess[portal] = { ...FULL_ACCESS };
+      portalRoles[portal] = "SETTINGS";
     }
   } else if (role === "ADMIN") {
     // ADMIN gets read, write, edit on all portals but NO delete
     for (const portal of ALL_PORTALS) {
       portalAccess[portal] = { ...ADMIN_ACCESS };
+      portalRoles[portal] = "ADMIN";
     }
   } else if (role === "EMPLOYEE") {
     // EMPLOYEE — resolve permissions from EmployeeAppAccess records
@@ -136,10 +145,7 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
         employeeNo: true,
         appAccess: {
           select: {
-            canRead: true,
-            canWrite: true,
-            canEdit: true,
-            canDelete: true,
+            role: true,
             app: { select: { name: true } },
           },
         },
@@ -155,12 +161,15 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
       };
 
       for (const access of employee.appAccess) {
+        // Map role to permissions
+        const role = access.role;
         portalAccess[access.app.name] = {
-          canRead: access.canRead,
-          canWrite: access.canWrite,
-          canEdit: access.canEdit,
-          canDelete: access.canDelete,
+          canRead: role === 'VIEWER' || role === 'USER' || role === 'ADMIN' || role === 'SETTINGS',
+          canWrite: role === 'USER' || role === 'ADMIN' || role === 'SETTINGS',
+          canEdit: role === 'ADMIN' || role === 'SETTINGS',
+          canDelete: role === 'ADMIN' || role === 'SETTINGS',
         };
+        portalRoles[access.app.name] = role;
       }
     }
   }
@@ -197,7 +206,35 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
     },
     employee: employeeData,
     portalAccess,
+    portalRoles,
   };
+}
+
+/**
+ * Resolves the `clientId` that the currently authenticated user belongs to.
+ *
+ * - For internal users (User → Employee → EmployeeEmployment), returns the
+ *   `clientId` of their active employment record.
+ * - Returns `null` when the session or employee link is missing, or when no
+ *   active employment record exists.
+ *
+ * Usage in HR API routes:
+ * ```ts
+ * const clientId = await getClientIdFromSession();
+ * if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+ * ```
+ */
+export async function getClientIdFromSession(): Promise<number | null> {
+  const session = await getSessionWithAccess();
+  if (!session?.employee) return null;
+
+  const employment = await prisma.employeeEmployment.findFirst({
+    where: { employeeId: session.employee.id, employmentStatus: "ACTIVE" },
+    select: { clientId: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return employment?.clientId ?? null;
 }
 
 /**

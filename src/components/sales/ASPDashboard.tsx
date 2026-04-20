@@ -128,9 +128,9 @@ const MOCK_AUDIT_DATA: AuditData = {
 };
 
 export const ASPDashboard: React.FC = () => {
-  const [data] = useState<DashboardData>(MOCK_DASHBOARD_DATA);
+  const [data, setData] = useState<DashboardData>(MOCK_DASHBOARD_DATA);
   const [isLoading, setIsLoading] = useState(true);
-  const [_error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Modal states
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
@@ -145,9 +145,24 @@ export const ASPDashboard: React.FC = () => {
   const [auditData] = useState<AuditData>(MOCK_AUDIT_DATA);
 
   useEffect(() => {
-    // Simulate initial load
-    const t = setTimeout(() => setIsLoading(false), 400);
-    return () => clearTimeout(t);
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        const res = await fetch('/api/sales/dashboard');
+        if (res.ok) {
+          const json = await res.json() as { data: DashboardData };
+          setData(json.data);
+          setError(null);
+        } else {
+          setError('Failed to load dashboard data');
+        }
+      } catch {
+        setError('Network error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void fetchDashboardData();
   }, []);
 
   const totalLeads = data.stageCounts.reduce((sum, count) => sum + count, 0);
@@ -183,6 +198,15 @@ export const ASPDashboard: React.FC = () => {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-center">
+        <p className="text-rose-700 font-semibold">Failed to load dashboard</p>
+        <p className="text-rose-600 text-sm mt-1">{error}</p>
       </div>
     );
   }

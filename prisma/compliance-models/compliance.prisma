@@ -1,0 +1,307 @@
+// prisma/models/compliance.prisma
+
+enum FilingStatus {
+  PENDING
+  PREPARING
+  FOR_REVIEW
+  FILED
+  LATE_FILED
+}
+
+// Updated based on your mockup workflow
+enum ProcessStatus {
+  PENDING
+  AWAITING_VERIFICATION
+  AWAITING_PAYMENT_PROCESS
+  AWAITING_PAYMENT_APPROVAL
+  AWAITING_FINAL_APPROVAL
+  PAID // Corresponds to the green PAID badge in Image 5
+  COMPLETED // The absolute final state
+}
+
+enum ZeroFilingStatus {
+  NONE
+  REQUESTED
+  CONFIRMED_ZERO // If the "Zero Filing" button is clicked
+}
+
+enum ComplianceType {
+  NONE
+  EWT // Expanded Withholding Tax
+  COMPENSATION // 1601-C
+  PERCENTAGE // 2551Q
+  VAT // 2550M / 2550Q
+  INCOME_TAX // 1701 / 1702
+  SSS
+  PHILHEALTH
+  PAGIBIG
+  LGU_RENEWAL
+}
+
+// ==========================================
+// 🦴 THE GENERIC BACKBONE (The Hub)
+// ==========================================
+
+// ─── 1. Client Compliance Subscription (The Master Setup) ─────────
+model ClientCompliance {
+  id String @id @default(cuid())
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  serviceId Int
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  status ServiceStatus @default(ACTIVE)
+
+  // ─── Default Assignees (Auto-assigned each month) ───
+  processorId String?
+  processor   User?   @relation("DefaultProcessor", fields: [processorId], references: [id])
+
+  verifierId String?
+  verifier   User?   @relation("DefaultVerifier", fields: [verifierId], references: [id])
+
+  paymentProcessorId String?
+  paymentProcessor   User?   @relation("DefaultPaymentProcessor", fields: [paymentProcessorId], references: [id])
+
+  paymentApproverId String?
+  paymentApprover   User?   @relation("DefaultPaymentApprover", fields: [paymentApproverId], references: [id])
+
+  finalApproverId String?
+  finalApprover   User?   @relation("DefaultFinalApprover", fields: [finalApproverId], references: [id])
+
+  salesOfficerId String?
+  salesOfficer   User?   @relation("DefaultSalesOfficer", fields: [salesOfficerId], references: [id])
+
+  filingRecords ComplianceRecord[]
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  clientSubscriptions ClientSubscription[]
+
+  @@unique([clientId, serviceId])
+  @@index([clientId])
+  @@map("client_compliance")
+}
+
+// ─── 2. Periodic Compliance Record (The Monthly Execution) ────────
+model ComplianceRecord {
+  id String @id @default(cuid())
+
+  clientComplianceId String
+  clientCompliance   ClientCompliance @relation(fields: [clientComplianceId], references: [id], onDelete: Cascade)
+
+  coverageDate DateTime @db.Date
+  deadline     DateTime @db.Date
+
+  isZeroFiling ZeroFilingStatus @default(NONE)
+
+  // ─── NEW: Amendment Versioning ───
+  amendmentVersion Int                @default(0) // 0 = Original, 1 = First Amendment, etc.
+  originalRecordId String?
+  originalRecord   ComplianceRecord?  @relation("RecordAmendments", fields: [originalRecordId], references: [id])
+  amendments       ComplianceRecord[] @relation("RecordAmendments")
+
+  // ─── NEW: The Financial Bridge ───
+  // Links this operational pipeline directly to the billing engine
+  clientSubscriptionId Int?                @unique
+  clientSubscription   ClientSubscription? @relation(fields: [clientSubscriptionId], references: [id], onDelete: SetNull)
+
+  status ServiceStatus @default(ACTIVE)
+
+  // ─── NEW: Invoice Linking ───
+  // Links this specific month's filing to a specific bill
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  // ─── 1. Preparation ───
+    assignedProcessorId   String?
+    assignedProcessor     User?    @relation("RecordAssignedProcessor", fields: [assignedProcessorId], references: [id])
+    actualProcessorId     String?
+    actualProcessor       User?    @relation("RecordActualProcessor", fields: [actualProcessorId], references: [id])
+    processedAt           DateTime?
+
+    // ─── 2. Verification ───
+    assignedVerifierId    String?
+    assignedVerifier      User?    @relation("RecordAssignedVerifier", fields: [assignedVerifierId], references: [id])
+    actualVerifierId      String?
+    actualVerifier        User?    @relation("RecordActualVerifier", fields: [actualVerifierId], references: [id])
+    verifiedAt            DateTime?
+
+    // ─── 3. Payment Processing ───
+    assignedPaymentProcessorId String?
+    assignedPaymentProcessor   User? @relation("RecordAssignedPayProcessor", fields: [assignedPaymentProcessorId], references: [id])
+    actualPaymentProcessorId   String?
+    actualPaymentProcessor     User? @relation("RecordActualPayProcessor", fields: [actualPaymentProcessorId], references: [id])
+    paymentProcessedAt         DateTime?
+
+    // ─── 4. Payment Approval ───
+    assignedPaymentApproverId String?
+    assignedPaymentApprover   User? @relation("RecordAssignedPayApprover", fields: [assignedPaymentApproverId], references: [id])
+    actualPaymentApproverId   String?
+    actualPaymentApprover     User? @relation("RecordActualPayApprover", fields: [actualPaymentApproverId], references: [id])
+    paymentApprovedAt         DateTime?
+
+    // ─── 5. Final Approval ───
+    assignedFinalApproverId String?
+    assignedFinalApprover   User? @relation("RecordAssignedFinalApprover", fields: [assignedFinalApproverId], references: [id])
+    actualFinalApproverId   String?
+    actualFinalApprover     User? @relation("RecordActualFinalApprover", fields: [actualFinalApproverId], references: [id])
+    finalApprovedAt         DateTime?
+
+    // ─── 6. Sales / Observer (No actual execution, just assigned observer) ───
+    salesOfficerId        String?
+    salesOfficer          User?    @relation("RecordSalesOfficer", fields: [salesOfficerId], references: [id])
+
+  // Status Tracking
+  filingStatus   FilingStatus  @default(PENDING)
+  processStatus  ProcessStatus @default(PENDING)
+  completionRate Int           @default(0)
+
+  // ─── The Specific Data Spokes ───
+  ewtItems EwtItem[]
+
+  // ─── NEW: Dynamic Documentary Requirements ───
+  documents ComplianceDocument[]
+
+  notes ComplianceNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientComplianceId, coverageDate, amendmentVersion]) // Ensures unique versions per month
+  @@map("compliance_record")
+}
+
+// ─── Compliance Settings (Global defaults per Client) ─────────────
+model ComplianceSetting {
+    id                         String   @id @default(cuid())
+    
+    // Linked 1-to-1 with the Client
+    clientId                   Int      @unique
+    client                     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+    // ─── Global Default Assignees for this Client's Taxes ───
+    defaultProcessorId         String?
+    defaultProcessor           User?    @relation("DefaultClientProcessor", fields: [defaultProcessorId], references: [id])
+    
+    defaultVerifierId          String?
+    defaultVerifier            User?    @relation("DefaultClientVerifier", fields: [defaultVerifierId], references: [id])
+    
+    defaultPaymentProcessorId  String?
+    defaultPaymentProcessor    User?    @relation("DefaultClientPayProcessor", fields: [defaultPaymentProcessorId], references: [id])
+    
+    defaultPaymentApproverId   String?
+    defaultPaymentApprover     User?    @relation("DefaultClientPayApprover", fields: [defaultPaymentApproverId], references: [id])
+    
+    defaultFinalApproverId     String?
+    defaultFinalApprover       User?    @relation("DefaultClientFinalApprover", fields: [defaultFinalApproverId], references: [id])
+    
+    defaultSalesOfficerId      String?
+    defaultSalesOfficer        User?    @relation("DefaultClientSalesOfficer", fields: [defaultSalesOfficerId], references: [id])
+
+    createdAt                  DateTime @default(now())
+    updatedAt                  DateTime @updatedAt
+
+    @@map("compliance_setting")
+}
+
+// ─── NEW: Dynamic Documentary Requirements ────────────────────────
+model ComplianceDocument {
+  id String @id @default(cuid())
+
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  // e.g., "Filed Form", "QAP DAT and Excel File", "Email Confirmation"
+  name String
+
+  // Array of URLs (PostgreSQL supports String[])
+  fileUrls String[]
+
+  isRequired Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@map("compliance_document")
+}
+
+// ─── Compliance Note (Internal Communication) ────────────────
+model ComplianceNote {
+  id String @id @default(cuid())
+
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  note String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@map("compliance_note")
+}
+
+// ==========================================
+// 📊 SPECIFIC DATA MODELS (The Spokes)
+// ==========================================
+
+// ─── Expanded Withholding Tax (EWT) Rental Table ──────────────────
+// Maps directly to the table in your 3rd mockup image
+
+// ─── Expanded Withholding Tax (EWT) Items ─────────────────────────
+model EwtItem {
+  id String @id @default(cuid())
+
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  // If this tax has been billed to the client, it links to the exact invoice line item.
+  invoiceItemId Int?         @unique
+  invoiceItem   InvoiceItem? @relation(fields: [invoiceItemId], references: [id], onDelete: SetNull)
+
+  name      String // e.g., "Basic Rent", "CUSA"
+  isVatable Boolean @default(true)
+
+  grossAmount       Decimal @default(0.00) @db.Decimal(12, 2)
+  vatAmount         Decimal @default(0.00) @db.Decimal(12, 2)
+  netOfVat          Decimal @default(0.00) @db.Decimal(12, 2)
+  expandedTaxAmount Decimal @default(0.00) @db.Decimal(12, 2)
+
+  effectiveMonth String // e.g., "March 2025"\
+
+  // Multiple documents can be uploaded for a single rental item
+  fileUrls String[]
+
+  historyLogs EwtItemHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@map("ewt_item")
+}
+
+// ─── NEW: EWT Item History (Audit Trail) ──────────────────────────
+model EwtItemHistory {
+  id String @id @default(cuid())
+
+  ewtItemId String
+  ewtItem   EwtItem @relation(fields: [ewtItemId], references: [id], onDelete: Cascade)
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+
+  // Captures exact text of what changed, e.g., "Updated grossAmount from 15000 to 17500" or "Added new file URL"
+  changeNotes String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([ewtItemId])
+  @@map("ewt_item_history")
+}

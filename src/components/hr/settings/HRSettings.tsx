@@ -1,21 +1,27 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CalendarClock, FileText, Layers } from 'lucide-react';
+import { Settings, CalendarClock, CalendarDays, Layers, CalendarRange, CalendarX } from 'lucide-react';
+import { GeneralSettingsTab } from './GeneralSettingsTab';
 import { WorkingSchedulesSettingsTab } from './WorkingSchedulesSettingsTab';
-import { ContractsSettingsTab } from './ContractsSettingsTab';
+import { LeaveTypesSettingsTab } from './LeaveTypesSettingsTab';
 import { EmployeeLevelSettingsTab } from '@/components/hr/settings/EmployeeLevelSettingsTab';
+import { PayrollSchedulesSettingsTab } from '@/components/hr/settings/PayrollSchedulesSettingsTab';
+import { HolidaysSettingsTab } from '@/components/hr/settings/HolidaysSettingsTab';
 
-type SettingsTab = 'working-schedules' | 'contracts' | 'employee-level';
+type SettingsTab = 'general' | 'working-schedules' | 'leave-types' | 'employee-level' | 'payroll-schedules' | 'holidays';
 
-const SETTINGS_TABS: { key: SettingsTab; label: string; icon: typeof CalendarClock }[] = [
+const SETTINGS_TABS: { key: SettingsTab; label: string; icon: typeof Settings }[] = [
+  { key: 'general', label: 'General', icon: Settings },
   { key: 'working-schedules', label: 'Working Schedules', icon: CalendarClock },
-  { key: 'contracts', label: 'Contracts', icon: FileText },
+  { key: 'leave-types', label: 'Leave Types', icon: CalendarDays },
   { key: 'employee-level', label: 'Employee Level', icon: Layers },
+  { key: 'payroll-schedules', label: 'Payroll Schedules', icon: CalendarRange },
+  { key: 'holidays', label: 'Holidays', icon: CalendarX },
 ];
 
 export function HRSettings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('working-schedules');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   return (
     <div className="space-y-6">
@@ -43,11 +49,17 @@ export function HRSettings() {
         ))}
       </div>
 
+      {activeTab === 'general' && <GeneralSettingsTab />}
+
       {activeTab === 'working-schedules' && <WorkingSchedulesSettingsTab />}
 
-      {activeTab === 'contracts' && <ContractsSettingsTab />}
+      {activeTab === 'leave-types' && <LeaveTypesSettingsTab />}
 
       {activeTab === 'employee-level' && <EmployeeLevelSettingsTab />}
+
+      {activeTab === 'payroll-schedules' && <PayrollSchedulesSettingsTab />}
+
+      {activeTab === 'holidays' && <HolidaysSettingsTab />}
     </div>
   );
 }

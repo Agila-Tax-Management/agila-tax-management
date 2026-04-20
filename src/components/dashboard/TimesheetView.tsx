@@ -8,10 +8,22 @@ import {
   LogIn, LogOut, Utensils, Coffee,
   Calendar, Activity, ChevronLeft, ChevronRight,
   Info, ArrowUpRight, Download, History, Timer,
-  ShieldCheck,
+  ShieldCheck, AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import type { AttendanceLog } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+
+// ── API record shape returned by POST /api/dashboard/timesheet/me ──────────
+interface TimesheetActionRecord {
+  id: string;
+  isoDate: string;
+  timeIn: string | null;
+  lunchStart: string | null;
+  lunchEnd: string | null;
+  timeOut: string | null;
+  regularHours: string;
+}
 
 // ── Date/Time helpers (no locale) ────────────────────────────────────────────
 const MS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -67,7 +79,12 @@ export const TimesheetView: React.FC = () => {
     updateLunchStatus,
     updateClockInTime,
     updateLunchStartTime,
+    hasActiveContract,
+    hasActiveCompensation,
+    isLoadingEmployee,
   } = useAuth();
+
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const [isClient,     setIsClient]     = useState(false);
   const [currentTime,  setCurrentTime]  = useState(new Date());
@@ -77,6 +94,15 @@ export const TimesheetView: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<'week'|'month'>('week');
   const [offset,   setOffset]   = useState(0);
+
+  // Derived from attendanceLogs — true once today's record has a lunchEnd value.
+  // Using useMemo ensures it updates in the SAME render as attendanceLogs/user changes,
+  // eliminating any race between status returning to 'Clocked In' and the flag being set.
+  const lunchTakenToday = useMemo(() => {
+    const todayKey = fmtIso(new Date());
+    const todayLog = attendanceLogs.find(l => l.isoDate === todayKey);
+    return !!(todayLog?.lunchEnd && todayLog.lunchEnd !== '-');
+  }, [attendanceLogs]);
 
   const status: 'Clocked Out'|'Clocked In'|'On Lunch' =
     !user?.isClockedIn   ? 'Clocked Out' :
@@ -126,81 +152,126 @@ export const TimesheetView: React.FC = () => {
     return { hrs: hrs.toFixed(1), days: filtered.length, ot: ot.toFixed(1) };
   }, [filtered]);
 
-  // ── Mock-data driven actions (no API calls) ─────────────────────────────
+  // ── Convert an API record to the AttendanceLog shape ─────────────────────
+  const toLog = (r: TimesheetActionRecord): AttendanceLog => ({
+    id: r.id,
+    date: fmtLogDate(new Date(`${r.isoDate}T00:00:00`)),
+    isoDate: r.isoDate,
+    clockIn:    r.timeIn     ? fmtTime(new Date(r.timeIn))     : '-',
+    clockOut:   r.timeOut    ? fmtTime(new Date(r.timeOut))    : '-',
+    lunchStart: r.lunchStart ? fmtTime(new Date(r.lunchStart)) : '-',
+    lunchEnd:   r.lunchEnd   ? fmtTime(new Date(r.lunchEnd))   : '-',
+    totalHours: r.regularHours ?? '0.00',
+    status:     r.timeOut ? 'Completed' : 'In Progress',
+  });
+
+  // ── API-backed clock actions ────────────────────────────────────────────
   const handleAction = async (action: 'IN'|'OUT'|'LUNCH_START'|'LUNCH_END') => {
     if (!user) return;
-    const now = new Date();
-    const ts  = fmtTime(now);
     setIsSubmitting(true);
-
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      const res  = await fetch('/api/dashboard/timesheet/me', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action }),
+      });
+      const json = (await res.json()) as { data?: TimesheetActionRecord; error?: string };
+      if (!res.ok || !json.data) {
+        toastError('Action failed', json.error ?? `Could not record ${action}. Please try again.`);
+        return;
+      }
+      const record = json.data;
 
       if (action === 'IN') {
-        if (status !== 'Clocked Out') { alert('Already clocked in.'); return; }
-
         updateClockedIn(true);
-        updateClockInTime(now.toISOString());
+        updateClockInTime(record.timeIn);
         setLunchMins(0);
         setOffset(0);
-
-        const newLog: AttendanceLog = {
-          id: `LOG-${Date.now()}`,
-          date: fmtLogDate(now),
-          isoDate: fmtIso(now),
-          clockIn: ts,
-          clockOut: '-',
-          lunchStart: '-',
-          lunchEnd: '-',
-          totalHours: '0.00',
-          status: 'In Progress',
-        };
-        setAttendanceLogs(prev => [newLog, ...prev]);
+        setAttendanceLogs(prev => {
+          const idx = prev.findIndex(l => l.isoDate === record.isoDate);
+          const log = toLog(record);
+          return idx >= 0 ? prev.map((l, i) => (i === idx ? log : l)) : [log, ...prev];
+        });
+        toastSuccess('Clocked in', `Session started at ${record.timeIn ? fmtTime(new Date(record.timeIn)) : 'now'}.`);
 
       } else if (action === 'LUNCH_START') {
-        if (status !== 'Clocked In') { alert('Clock in first.'); return; }
-
         updateLunchStatus(true);
-        updateLunchStartTime(now.toISOString());
-        setAttendanceLogs(p => p.map((l, i) => i === 0 ? { ...l, lunchStart: ts } : l));
+        updateLunchStartTime(record.lunchStart);
+        setAttendanceLogs(p => p.map(l => l.isoDate === record.isoDate ? toLog(record) : l));
+        toastSuccess('Lunch started', 'Enjoy your break!');
 
       } else if (action === 'LUNCH_END') {
-        if (status !== 'On Lunch') { alert('Not on lunch.'); return; }
-
         if (lunchStartCtx)
-          setLunchMins(p => p + Math.floor((now.getTime() - lunchStartCtx.getTime()) / 60000));
-
+          setLunchMins(p => p + Math.floor((new Date().getTime() - lunchStartCtx.getTime()) / 60000));
         updateLunchStatus(false);
         updateLunchStartTime(null);
-        setAttendanceLogs(p => p.map((l, i) => i === 0 ? { ...l, lunchEnd: ts } : l));
+        setAttendanceLogs(p => p.map(l => l.isoDate === record.isoDate ? toLog(record) : l));
+        toastSuccess('Lunch ended', 'Back to work!');
 
       } else if (action === 'OUT') {
-        if (status === 'Clocked Out') { alert('Already clocked out.'); return; }
-        if (status === 'On Lunch')    { alert('End lunch break first.'); return; }
-        if (!clockInTime)             { alert('Clock-in time not found.'); return; }
-
-        const work       = Math.floor((now.getTime() - clockInTime.getTime()) / 60000) - lunchMins;
-        const totalHours = Math.max(0, work / 60).toFixed(2);
-
         updateClockedIn(false);
         updateClockInTime(null);
         updateLunchStartTime(null);
-
         setLunchMins(0);
         setLiveHours('0.00');
-        setAttendanceLogs(p =>
-          p.map((l, i) => i === 0 ? { ...l, clockOut: ts, status: 'Completed' as const, totalHours } : l)
-        );
+        setAttendanceLogs(p => p.map(l => l.isoDate === record.isoDate ? toLog(record) : l));
+        toastSuccess('Clocked out', `Session ended. Total: ${record.regularHours} hrs.`);
       }
     } catch (err) {
       console.error(`Action ${action} failed:`, err);
-      alert(`Failed to record ${action}. Please try again.`);
+      toastError('Action failed', `Could not record ${action}. Please try again.`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const todayIso = fmtIso(new Date());
+
+  // ── Guard: loading ────────────────────────────────────────────────────────
+  if (isLoadingEmployee) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-10 h-10 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+          <p className="text-xs font-black uppercase tracking-widest">Loading your timesheet…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Guard: no active contract or compensation ───────────────────────────
+  if (!hasActiveContract || !hasActiveCompensation) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] p-6">
+        <Card className="max-w-md w-full p-10 text-center border-none bg-card shadow-sm">
+          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle size={32} className="text-amber-500" />
+          </div>
+          <h2 className="text-xl font-black text-foreground mb-2 tracking-tight">Timesheet Unavailable</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+            Your timesheet cannot be accessed yet.
+          </p>
+          <div className="text-left space-y-2 mb-6">
+            {!hasActiveContract && (
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <span className="mt-0.5 text-amber-500">&#8226;</span>
+                <span>No <strong className="text-foreground">active employment contract</strong> found for your account.</span>
+              </div>
+            )}
+            {!hasActiveCompensation && (
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <span className="mt-0.5 text-amber-500">&#8226;</span>
+                <span>No <strong className="text-foreground">active compensation</strong> is configured on your contract.</span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Please contact your administrator to activate your contract and configure compensation before using the timesheet.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   const displayName = user?.name ?? 'Employee';
   const initials    = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -298,9 +369,9 @@ export const TimesheetView: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleAction('LUNCH_START')}
-                disabled={status !== 'Clocked In' || isSubmitting}
+                disabled={status !== 'Clocked In' || lunchTakenToday || isSubmitting}
                 className={`h-14 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
-                  status === 'Clocked In'
+                  status === 'Clocked In' && !lunchTakenToday
                     ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 hover:bg-amber-600'
                     : 'bg-muted text-muted-foreground'
                 }`}

@@ -1,38 +1,52 @@
+// ─── Existing Enums ───
 enum AppPortal {
-    SALES
-    COMPLIANCE
-    LIAISON
-    ACCOUNTING
-    ACCOUNT_OFFICER
-    HR
-    TASK_MANAGEMENT
+  SALES
+  COMPLIANCE
+  LIAISON
+  ACCOUNTING
+  OPERATIONS_MANAGEMENT
+  HR
+  TASK_MANAGEMENT
+  CLIENT_RELATIONS
 }
 
+// ─── NEW: Portal-Specific Roles ───
+enum PortalRole {
+  VIEWER // Read-only access
+  USER // Standard day-to-day operations (Maker)
+  ADMIN // Approvals, deletions, and team management (Checker)
+  SETTINGS // Full control, including portal configurations and rule changes
+}
+
+// ─── Models ───
 model App {
-    id    String    @id @default(cuid())
-    name  AppPortal @unique
-    label String
+  id    String    @id @default(cuid())
+  name  AppPortal @unique
+  label String
 
-    accesses EmployeeAppAccess[]
+  accesses EmployeeAppAccess[]
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("app")
 }
 
 model EmployeeAppAccess {
-    id String @id @default(cuid())
+  id String @id @default(cuid())
 
-    employeeId Int
-    employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-    appId String
-    app   App    @relation(fields: [appId], references: [id])
+  appId String
+  app   App    @relation(fields: [appId], references: [id], onDelete: Cascade)
 
-    canRead   Boolean @default(false)
-    canWrite  Boolean @default(false)
-    canEdit   Boolean @default(false)
-    canDelete Boolean @default(false)
+  // ─── The Simplified Access Control ───
+  role PortalRole @default(VIEWER)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@unique([employeeId, appId])
+  @@unique([employeeId, appId])
+  @@map("employee_app_access")
 }

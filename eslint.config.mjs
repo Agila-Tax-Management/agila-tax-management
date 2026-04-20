@@ -35,6 +35,15 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // ── Jest/test file overrides ─────────────────────────────────────
+  {
+    files: ["**/*.setup.js", "**/*.config.js", "jest.setup.js"],
+    rules: {
+      // Allow require() in Jest setup and config files (CommonJS)
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -45,6 +54,7 @@ const eslintConfig = defineConfig([
 
     // Generated files — never lint
     "src/generated/**",
+    "coverage/**",
   ]),
 ]);
 

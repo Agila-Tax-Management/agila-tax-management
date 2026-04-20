@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, List, Wallet,
   ShoppingBag, BarChart3, ChevronDown, ChevronUp,
-  CalendarClock, FileText, TicketPercent
+  CalendarClock, FileText, TicketPercent, Settings, FileSignature, ClipboardList, Boxes
 } from 'lucide-react';
+import type { PortalRole } from '@/generated/prisma/client';
 
 interface NavItem {
   id: string;
@@ -32,14 +33,17 @@ const ASP_NAV_ITEMS: NavItem[] = [
     icon: Briefcase,
     isDropdown: true,
     children: [
-      { id: 'monthly-services', label: 'Monthly Service Plans', icon: CalendarClock, href: '/portal/sales/services/monthly' },
+      { id: 'monthly-services', label: 'Recurring Services', icon: CalendarClock, href: '/portal/sales/services/monthly' },
       { id: 'one-time-services', label: 'One-Time Service Plans', icon: FileText, href: '/portal/sales/services/one-time' },
+      { id: 'service-packages', label: 'Service Packages', icon: Boxes, href: '/portal/sales/services/packages' },
       { id: 'promotions', label: 'Promotions', icon: TicketPercent, href: '/portal/sales/services/promotions' },
     ],
   },
   { id: 'client-list', label: 'Client List', icon: List, href: '/portal/sales/client-list' },
   { id: 'commissions', label: 'Commissions', icon: Wallet, href: '/portal/sales/commissions' },
   { id: 'after-sales', label: 'After Sales', icon: ShoppingBag, href: '/portal/sales/after-sales' },
+  { id: 'contracts', label: 'Contracts', icon: FileSignature, href: '/portal/sales/contracts' },
+  { id: 'job-orders', label: 'Job Orders', icon: ClipboardList, href: '/portal/sales/job-orders' },
   { id: 'reports', label: 'Reports', icon: BarChart3, href: '/portal/sales/reports' },
 ];
 
@@ -52,6 +56,36 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [servicesOpen, setServicesOpen] = useState(pathname.startsWith('/portal/sales/services'));
+  const [canAccessSettings, setCanAccessSettings] = useState(false);
+  const [loadingAccess, setLoadingAccess] = useState(true);
+
+  // Fetch user's portal access to determine if settings should be visible
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          // Show settings if: SUPER_ADMIN, ADMIN, or SALES portal SETTINGS role
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          const hasSettingsAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanAccessSettings(hasSettingsAccess);
+        }
+      } catch {
+        // Access check failed — hide settings by default
+        setCanAccessSettings(false);
+      } finally {
+        setLoadingAccess(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -93,7 +127,7 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           {ASP_NAV_ITEMS.map((item) => {
             if (item.isSection) {
               return (
@@ -105,15 +139,17 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
               );
             }
 
-            // Dropdown item (Services)
+            // Dropdown item (Services, etc.)
             if (item.isDropdown && item.children) {
               const Icon = item.icon!;
               const isChildActive = item.children.some(c => pathname === c.href);
+              const isOpen = item.id === 'services' ? servicesOpen : false;
+              const toggleOpen = item.id === 'services' ? setServicesOpen : null;
 
               return (
                 <div key={item.id}>
                   <button
-                    onClick={() => setServicesOpen(prev => !prev)}
+                    onClick={() => toggleOpen && toggleOpen(prev => !prev)}
                     className={`
                       w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
                       ${isChildActive
@@ -124,9 +160,9 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
                   >
                     <Icon size={18} />
                     <span className="text-sm flex-1 text-left">{item.label}</span>
-                    {servicesOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
-                  {servicesOpen && (
+                  {isOpen && (
                     <div className="ml-7 mt-1 space-y-1">
                       {item.children.map(child => {
                         const ChildIcon = child.icon;
@@ -175,6 +211,25 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
             );
           })}
         </nav>
+
+        {/* Settings Footer */}
+        {!loadingAccess && canAccessSettings && (
+          <div className="border-t border-slate-200 p-4 shrink-0">
+            <button
+              onClick={() => handleNavigation('/portal/sales/settings')}
+              className={`
+                w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+                ${pathname === '/portal/sales/settings'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm font-bold'
+                  : 'text-slate-600 hover:bg-slate-50 font-medium'
+                }
+              `}
+            >
+              <Settings size={18} />
+              <span className="text-sm">Settings</span>
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

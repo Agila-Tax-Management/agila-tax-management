@@ -6,7 +6,7 @@ import { Save } from 'lucide-react';
 import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
-import type { ContractRecord, EmploymentRecord } from '../profile-types';
+import type { ContractRecord, EmploymentRecord, ScheduleOption } from '../profile-types';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ interface ContractFormModalProps {
   onSaved: () => void;
   employeeId: number;
   employmentRecords: EmploymentRecord[];
-  scheduleOptions: { id: number; name: string }[];
+  scheduleOptions: ScheduleOption[];
   contract: ContractRecord | null; // null = add mode, non-null = edit mode
 }
 
@@ -24,13 +24,8 @@ interface ContractFormLocal {
   status: string;
   startDate: string;
   endDate: string;
-  monthlyRate: string;
-  dailyRate: string;
-  hourlyRate: string;
-  disbursedMethod: string;
-  scheduleId: string;
   workingHoursPerWeek: string;
-  bankDetails: string;
+  scheduleId: string;
   notes: string;
 }
 
@@ -40,13 +35,8 @@ const DEFAULT_FORM: ContractFormLocal = {
   status: 'DRAFT',
   startDate: '',
   endDate: '',
-  monthlyRate: '',
-  dailyRate: '',
-  hourlyRate: '',
-  disbursedMethod: '',
-  scheduleId: '',
   workingHoursPerWeek: '',
-  bankDetails: '',
+  scheduleId: '',
   notes: '',
 };
 
@@ -57,15 +47,19 @@ function mapToForm(c: ContractRecord): ContractFormLocal {
     status: c.status,
     startDate: c.startDate ? c.startDate.slice(0, 10) : '',
     endDate: c.endDate ? c.endDate.slice(0, 10) : '',
-    monthlyRate: c.monthlyRate ?? '',
-    dailyRate: c.dailyRate ?? '',
-    hourlyRate: c.hourlyRate ?? '',
-    disbursedMethod: c.disbursedMethod ?? '',
+    workingHoursPerWeek: c.workingHoursPerWeek != null ? String(c.workingHoursPerWeek) : '',
     scheduleId: c.scheduleId ? String(c.scheduleId) : '',
-    workingHoursPerWeek: c.workingHoursPerWeek ? String(c.workingHoursPerWeek) : '',
-    bankDetails: c.bankDetails ?? '',
     notes: c.notes ?? '',
   };
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatTime(t: string): string {
+  const [h, m] = t.split(':').map(Number);
+  const period = (h ?? 0) >= 12 ? 'PM' : 'AM';
+  const hour = (h ?? 0) % 12 || 12;
+  return `${hour}:${String(m ?? 0).padStart(2, '0')} ${period}`;
 }
 
 const modalInputClass =
@@ -116,13 +110,8 @@ export function ContractFormModal({
             status: form.status,
             contractStart: form.startDate,
             contractEnd: form.endDate || null,
-            monthlyRate: form.monthlyRate || null,
-            dailyRate: form.dailyRate || null,
-            hourlyRate: form.hourlyRate || null,
-            disbursedMethod: form.disbursedMethod || null,
             workingHoursPerWeek: form.workingHoursPerWeek ? parseInt(form.workingHoursPerWeek, 10) : null,
             scheduleId: form.scheduleId ? parseInt(form.scheduleId, 10) : null,
-            bankDetails: form.bankDetails || null,
             notes: form.notes || null,
           }),
         });
@@ -136,13 +125,8 @@ export function ContractFormModal({
             status: form.status,
             contractStart: form.startDate,
             contractEnd: form.endDate || null,
-            monthlyRate: form.monthlyRate || null,
-            dailyRate: form.dailyRate || null,
-            hourlyRate: form.hourlyRate || null,
-            disbursedMethod: form.disbursedMethod || null,
             workingHoursPerWeek: form.workingHoursPerWeek ? parseInt(form.workingHoursPerWeek, 10) : null,
             scheduleId: form.scheduleId ? parseInt(form.scheduleId, 10) : null,
-            bankDetails: form.bankDetails || null,
             notes: form.notes || null,
           }),
         });
@@ -246,51 +230,19 @@ export function ContractFormModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Monthly Rate (₱)</label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Working Hours / Week</label>
             <input
               type="number"
               className={modalInputClass}
-              value={form.monthlyRate}
-              onChange={(e) => set('monthlyRate', e.target.value)}
-              placeholder="0.00"
+              value={form.workingHoursPerWeek}
+              onChange={(e) => set('workingHoursPerWeek', e.target.value)}
+              placeholder="e.g. 40"
               min="0"
+              max="168"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Daily Rate (₱)</label>
-            <input
-              type="number"
-              className={modalInputClass}
-              value={form.dailyRate}
-              onChange={(e) => set('dailyRate', e.target.value)}
-              placeholder="0.00"
-              min="0"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hourly Rate (₱)</label>
-            <input
-              type="number"
-              className={modalInputClass}
-              value={form.hourlyRate}
-              onChange={(e) => set('hourlyRate', e.target.value)}
-              placeholder="0.00"
-              min="0"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Disbursement Method</label>
-            <select className={modalSelectClass} value={form.disbursedMethod} onChange={(e) => set('disbursedMethod', e.target.value)}>
-              <option value="">Select method</option>
-              <option value="CASH_SALARY">Cash Salary</option>
-              <option value="FUND_TRANSFER">Fund Transfer</option>
-            </select>
-          </div>
-
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Work Schedule</label>
             <select className={modalSelectClass} value={form.scheduleId} onChange={(e) => set('scheduleId', e.target.value)}>
               <option value="">No schedule assigned</option>
@@ -298,29 +250,31 @@ export function ContractFormModal({
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Working Hours / Week</label>
-            <input
-              type="number"
-              className={modalInputClass}
-              value={form.workingHoursPerWeek}
-              onChange={(e) => set('workingHoursPerWeek', e.target.value)}
-              placeholder="40"
-              min="1"
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Bank Details</label>
-            <input
-              type="text"
-              className={modalInputClass}
-              value={form.bankDetails}
-              onChange={(e) => set('bankDetails', e.target.value)}
-              placeholder="Bank name, account number"
-            />
+            {(() => {
+              const sel = scheduleOptions.find((s) => String(s.id) === form.scheduleId);
+              if (!sel) return null;
+              const working = sel.days.filter((d) => d.isWorkingDay);
+              if (working.length === 0) return null;
+              return (
+                <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">Schedule Preview</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {working.map((d) => (
+                      <div key={d.dayOfWeek} className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-foreground w-8">{DAY_NAMES[d.dayOfWeek]}</span>
+                        <span className="text-muted-foreground">
+                          {formatTime(d.startTime)} – {formatTime(d.endTime)}
+                          {d.breakStart && d.breakEnd
+                            ? ` (Break: ${formatTime(d.breakStart)} – ${formatTime(d.breakEnd)})`
+                            : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{sel.timezone}</p>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="sm:col-span-2">

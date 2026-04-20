@@ -1,290 +1,354 @@
 // src/components/task-management/TaskManagementDashboard.tsx
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import {
   ClipboardList, AlertTriangle, CheckCircle2, Clock,
-  ArrowRight, Calendar, Shield, Truck,
+  ArrowRight, Calendar, TrendingUp, FolderKanban,
+  ChevronRight, Loader2,
 } from 'lucide-react';
-import { ALL_TASKS, SOURCE_CONFIG } from '@/lib/mock-task-management-data';
-import { INITIAL_CLIENTS } from '@/lib/mock-clients';
-import type { AOTaskStatus, AOTaskPriority } from '@/lib/types';
+import { useTaskDepartments } from '@/context/TaskDepartmentsContext';
+import { useToast } from '@/context/ToastContext';
 
-const STATUS_CONFIG: Record<AOTaskStatus, { variant: 'neutral' | 'info' | 'warning' | 'success'; color: string }> = {
-  'To Do': { variant: 'neutral', color: 'bg-slate-500' },
-  'In Progress': { variant: 'info', color: 'bg-blue-500' },
-  'Review': { variant: 'warning', color: 'bg-amber-500' },
-  'Done': { variant: 'success', color: 'bg-emerald-500' },
+// -- Types ----------------------------------------------------------
+
+interface DashboardStats {
+  total: number;
+  active: number;
+  done: number;
+  overdue: number;
+  urgent: number;
+}
+
+interface DepartmentStats {
+  departmentId: number;
+  departmentName: string;
+  total: number;
+  active: number;
+  done: number;
+  overdue: number;
+}
+
+interface StatusBreakdown {
+  statusName: string;
+  statusColor: string | null;
+  count: number;
+}
+
+interface TaskSummary {
+  id: number;
+  name: string;
+  priority: string | null;
+  dueDate: string | null;
+  client: { id: number; businessName: string } | null;
+  assignedTo: { id: number; firstName: string; lastName: string } | null;
+  department: { id: number; name: string } | null;
+  status: { id: number; name: string; color: string | null } | null;
+}
+
+interface DashboardData {
+  stats: DashboardStats;
+  departmentStats: DepartmentStats[];
+  statusBreakdown: StatusBreakdown[];
+  overdueTasks: TaskSummary[];
+  upcomingTasks: TaskSummary[];
+}
+
+// -- Constants ------------------------------------------------------
+
+const PRIORITY_MAP: Record<string, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
+  LOW: { variant: 'neutral' },
+  NORMAL: { variant: 'info' },
+  HIGH: { variant: 'warning' },
+  URGENT: { variant: 'danger' },
 };
 
-const PRIORITY_CONFIG: Record<AOTaskPriority, { variant: 'neutral' | 'info' | 'warning' | 'danger' }> = {
-  Low: { variant: 'neutral' },
-  Medium: { variant: 'info' },
-  High: { variant: 'warning' },
-  Urgent: { variant: 'danger' },
-};
+function getStatusColor(color: string | null): string {
+  if (color) return color;
+  return '#64748b'; // slate-400
+}
+
+function statusVariant(name: string): 'neutral' | 'info' | 'warning' | 'success' | 'danger' {
+  const lower = name.toLowerCase();
+  if (/done|complet|finish/.test(lower)) return 'success';
+  if (/progress|doing|active|ongoing/.test(lower)) return 'info';
+  if (/review|pending|wait|hold/.test(lower)) return 'warning';
+  if (/cancel|block|reject|fail/.test(lower)) return 'danger';
+  return 'neutral';
+}
+
+// -- Component ------------------------------------------------------
 
 export function TaskManagementDashboard() {
   const router = useRouter();
+  const { departments: _departments } = useTaskDepartments();
+  const { error: toastError } = useToast();
 
-  const stats = useMemo(() => {
-    const total = ALL_TASKS.length;
-    const done = ALL_TASKS.filter(t => t.status === 'Done').length;
-    const overdue = ALL_TASKS.filter(t => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-12')).length;
-    const urgent = ALL_TASKS.filter(t => t.priority === 'Urgent' && t.status !== 'Done').length;
-    const liaisonCount = ALL_TASKS.filter(t => t.source === 'liaison').length;
-    const complianceCount = ALL_TASKS.filter(t => t.source === 'compliance').length;
-    return { total, done, overdue, urgent, liaisonCount, complianceCount };
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(null);
 
-  const statusBreakdown = useMemo(() => {
-    const statuses: AOTaskStatus[] = ['To Do', 'In Progress', 'Review', 'Done'];
-    return statuses.map(status => ({
-      status,
-      count: ALL_TASKS.filter(t => t.status === status).length,
-      config: STATUS_CONFIG[status],
-    }));
-  }, []);
+  useEffect(() => {
+    fetch('/api/task-management/dashboard')
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load dashboard');
+        return r.json();
+      })
+      .then((json: { data: DashboardData }) => {
+        setData(json.data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        toastError('Failed to load', err instanceof Error ? err.message : 'Could not fetch dashboard data');
+        setLoading(false);
+      });
+  }, [toastError]);
 
-  const overdueTasks = useMemo(() =>
-    ALL_TASKS
-      .filter(t => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-12'))
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
-    []
-  );
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+  };
 
-  const upcomingTasks = useMemo(() =>
-    ALL_TASKS
-      .filter(t => t.status !== 'Done' && new Date(t.dueDate) >= new Date('2026-03-12'))
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 6),
-    []
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 size={32} className="animate-spin text-teal-700" />
+      </div>
+    );
+  }
 
-  const getClientName = (clientId: string) =>
-    INITIAL_CLIENTS.find(c => c.id === clientId)?.businessName ?? 'Unknown';
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-slate-500">No dashboard data available</p>
+      </div>
+    );
+  }
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+  const { stats, departmentStats, statusBreakdown, overdueTasks, upcomingTasks } = data;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-      {/* Header */}
+
+      {/* -- Header --------------------------------------------------- */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Task Management</h2>
+          <p className="text-sm text-slate-500 font-medium mt-0.5">
+            Overview across all departments and task pipelines.
+          </p>
+        </div>
+      </div>
+
+      {/* -- Summary strip ------------------------------------------ */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {([
+          {
+            label: 'Total Tasks',  value: stats.total,
+            icon: <ClipboardList size={18} />, iconBg: 'bg-[#0f766e]/10', iconColor: 'text-[#0f766e]',
+          },
+          {
+            label: 'Active Tasks', value: stats.active,
+            icon: <TrendingUp size={18} />,    iconBg: 'bg-blue-50',       iconColor: 'text-blue-600',
+          },
+          {
+            label: 'Overdue',      value: stats.overdue,
+            icon: <AlertTriangle size={18} />, iconBg: 'bg-rose-50',       iconColor: 'text-rose-500',
+          },
+          {
+            label: 'Completed',    value: stats.done,
+            icon: <CheckCircle2 size={18} />,  iconBg: 'bg-emerald-50',    iconColor: 'text-emerald-600',
+          },
+        ] as const).map(stat => (
+          <Card
+            key={stat.label}
+            className="p-5 border-none shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => router.push('/portal/task-management/tasks')}
+          >
+            <div className="flex items-start justify-between">
+              <div className={`w-10 h-10 ${stat.iconBg} rounded-xl flex items-center justify-center ${stat.iconColor}`}>
+                {stat.icon}
+              </div>
+              <ChevronRight size={14} className="text-slate-300 mt-1" />
+            </div>
+            <p className="text-2xl font-black text-slate-900 mt-3">{stat.value}</p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">{stat.label}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* -- Department cards --------------------------------------- */}
       <div>
-        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Task Management Dashboard</h2>
-        <p className="text-sm text-slate-500 font-medium">Overview of all liaison and compliance tasks across teams.</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card
-          className="p-5 cursor-pointer hover:shadow-md transition-shadow border-none shadow-sm"
-          onClick={() => router.push('/portal/task-management/tasks')}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-[#0f766e]/10 rounded-xl flex items-center justify-center">
-              <ClipboardList size={20} className="text-[#0f766e]" />
-            </div>
-            <ArrowRight size={14} className="text-slate-300" />
-          </div>
-          <p className="text-2xl font-black text-slate-900">{stats.total}</p>
-          <p className="text-xs text-slate-500 font-medium">Total Tasks</p>
-          <div className="flex gap-2 mt-2">
-            <Badge variant="success" className="text-[9px]">{stats.done} Done</Badge>
-            <Badge variant="info" className="text-[9px]">{stats.total - stats.done} Active</Badge>
-          </div>
-        </Card>
-
-        <Card className="p-5 border-none shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
-              <AlertTriangle size={20} className="text-rose-500" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-slate-900">{stats.overdue}</p>
-          <p className="text-xs text-slate-500 font-medium">Overdue Tasks</p>
-          {stats.urgent > 0 && (
-            <Badge variant="danger" className="text-[9px] mt-2">{stats.urgent} Urgent</Badge>
-          )}
-        </Card>
-
-        <Card
-          className="p-5 cursor-pointer hover:shadow-md transition-shadow border-none shadow-sm"
-          onClick={() => router.push('/portal/task-management/liaison')}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-cyan-50 rounded-xl flex items-center justify-center">
-              <Truck size={20} className="text-cyan-600" />
-            </div>
-            <ArrowRight size={14} className="text-slate-300" />
-          </div>
-          <p className="text-2xl font-black text-slate-900">{stats.liaisonCount}</p>
-          <p className="text-xs text-slate-500 font-medium">Liaison Tasks</p>
-          <Badge variant="info" className="text-[9px] mt-2">
-            {ALL_TASKS.filter(t => t.source === 'liaison' && t.status !== 'Done').length} Active
-          </Badge>
-        </Card>
-
-        <Card
-          className="p-5 cursor-pointer hover:shadow-md transition-shadow border-none shadow-sm"
-          onClick={() => router.push('/portal/task-management/compliance')}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center">
-              <Shield size={20} className="text-violet-600" />
-            </div>
-            <ArrowRight size={14} className="text-slate-300" />
-          </div>
-          <p className="text-2xl font-black text-slate-900">{stats.complianceCount}</p>
-          <p className="text-xs text-slate-500 font-medium">Compliance Tasks</p>
-          <Badge variant="info" className="text-[9px] mt-2">
-            {ALL_TASKS.filter(t => t.source === 'compliance' && t.status !== 'Done').length} Active
-          </Badge>
-        </Card>
-      </div>
-
-      {/* Task Pipeline */}
-      <Card className="p-5 border-none shadow-sm">
-        <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight mb-4">Task Pipeline</h3>
-        <div className="grid grid-cols-4 gap-3">
-          {statusBreakdown.map(({ status, count, config }) => {
-            const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Departments</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {departmentStats.map((deptStat) => {
+            const donePct = deptStat.total > 0 ? Math.round(((deptStat.total - deptStat.active) / deptStat.total) * 100) : 0;
             return (
-              <div key={status} className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <div className={`w-2.5 h-2.5 rounded-full ${config.color}`} />
-                  <span className="text-xs font-black text-slate-700 uppercase tracking-wide">{status}</span>
+              <button
+                key={deptStat.departmentId}
+                onClick={() => router.push(`/portal/task-management/tasks?dept=${deptStat.departmentId}`)}
+                className="group text-left p-5 rounded-2xl bg-slate-50 hover:bg-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-teal-700">
+                    <FolderKanban size={18} />
+                  </div>
+                  <ArrowRight size={13} className="text-teal-700 opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
                 </div>
-                <p className="text-2xl font-black text-slate-900">{count}</p>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-                  <div className={`h-1.5 rounded-full ${config.color}`} style={{ width: `${pct}%` }} />
+                <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 mb-1">{deptStat.departmentName}</p>
+                <p className="text-2xl font-black text-slate-900">{deptStat.total}</p>
+                <p className="text-[10px] text-slate-500 font-medium mb-3">total tasks</p>
+                <div className="w-full bg-white rounded-full h-1.5 mb-2">
+                  <div className="h-1.5 rounded-full bg-teal-700 transition-all" style={{ width: `${donePct}%` }} />
                 </div>
-                <p className="text-[10px] text-slate-400 font-bold mt-1">{pct}%</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 font-semibold">{donePct}% done</span>
+                  {deptStat.overdue > 0
+                    ? <span className="text-[10px] font-bold text-rose-600">{deptStat.overdue} overdue</span>
+                    : deptStat.active > 0
+                      ? <span className="text-[10px] font-bold text-teal-700">{deptStat.active} active</span>
+                      : <span className="text-[10px] font-bold text-emerald-600">All done</span>
+                  }
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* -- Status pipeline --------------------------------------- */}
+      <Card className="p-5 border-none shadow-sm">
+        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">Task Pipeline</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {statusBreakdown.map((status) => {
+            const pct = stats.total > 0 ? Math.round((status.count / stats.total) * 100) : 0;
+            const bgColor = statusVariant(status.statusName);
+            const bgMap: Record<typeof bgColor, string> = {
+              neutral: 'bg-slate-50',
+              info: 'bg-blue-50',
+              warning: 'bg-amber-50',
+              success: 'bg-emerald-50',
+              danger: 'bg-rose-50',
+            };
+            return (
+              <div key={status.statusName} className={`${bgMap[bgColor]} rounded-xl p-4`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: getStatusColor(status.statusColor) }}
+                  />
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide">{status.statusName}</span>
+                </div>
+                <p className="text-2xl font-black text-slate-900">{status.count}</p>
+                <div className="w-full bg-white/60 rounded-full h-1.5 mt-2">
+                  <div
+                    className="h-1.5 rounded-full"
+                    style={{ width: `${pct}%`, backgroundColor: getStatusColor(status.statusColor) }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 font-bold mt-1">{pct}% of total</p>
               </div>
             );
           })}
         </div>
       </Card>
 
-      {/* Two-column: Overdue + Upcoming */}
+      {/* -- Overdue + Upcoming ------------------------------------- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Overdue Tasks */}
-        <Card className="p-5 border-none shadow-sm border-l-4 border-l-rose-400">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle size={16} className="text-rose-500" />
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Overdue Tasks</h3>
-            <span className="ml-auto text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
+
+        {/* Overdue */}
+        <Card className="border-none shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3.5 bg-rose-50 border-b border-rose-100">
+            <AlertTriangle size={14} className="text-rose-500" />
+            <h3 className="text-[10px] font-black text-rose-700 uppercase tracking-widest">Overdue Tasks</h3>
+            <span className="ml-auto text-[10px] font-bold text-white bg-rose-500 px-2 py-0.5 rounded-full">
+              {overdueTasks.length}
+            </span>
           </div>
           {overdueTasks.length === 0 ? (
-            <div className="flex items-center gap-2 py-6 justify-center">
+            <div className="flex items-center gap-2 py-8 justify-center">
               <CheckCircle2 size={16} className="text-emerald-500" />
-              <span className="text-sm text-slate-500">No overdue tasks. Great job!</span>
+              <span className="text-sm text-slate-500">All clear — no overdue tasks!</span>
             </div>
           ) : (
-            <div className="space-y-2">
-              {overdueTasks.map(task => {
-                const src = SOURCE_CONFIG[task.source];
-                return (
+            <div className="divide-y divide-slate-50">
+              {overdueTasks.map(task => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-rose-50/40 transition cursor-pointer"
+                  onClick={() => router.push(`/portal/task-management/tasks/${task.id}`)}
+                >
                   <div
-                    key={task.id}
-                    className="flex items-center gap-3 p-3 bg-rose-50/50 rounded-xl hover:bg-rose-50 transition cursor-pointer"
-                    onClick={() => router.push('/portal/task-management/tasks')}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-800 truncate">{task.title}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{getClientName(task.clientId)}</p>
-                    </div>
-                    <span className={`shrink-0 text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${src.bg} ${src.textColor}`}>
-                      {src.label}
-                    </span>
-                    <Badge variant={PRIORITY_CONFIG[task.priority].variant} className="text-[8px] shrink-0">
-                      {task.priority}
-                    </Badge>
-                    <span className="text-[10px] font-bold text-rose-600 shrink-0 flex items-center gap-1">
-                      <Calendar size={10} /> {formatDate(task.dueDate)}
-                    </span>
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: getStatusColor(task.status?.color ?? null) }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-800 truncate">{task.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {task.client?.businessName ?? 'No client'}
+                    </p>
                   </div>
-                );
-              })}
+                  {task.department && (
+                    <span className="shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                      {task.department.name}
+                    </span>
+                  )}
+                  <span className="text-[10px] font-bold text-rose-600 shrink-0 flex items-center gap-1 whitespace-nowrap">
+                    <Calendar size={9} /> {formatDate(task.dueDate)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </Card>
 
-        {/* Upcoming Tasks */}
-        <Card className="p-5 border-none shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={16} className="text-[#0f766e]" />
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Upcoming Tasks</h3>
+        {/* Upcoming */}
+        <Card className="border-none shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3.5 bg-slate-50 border-b border-slate-100">
+            <Clock size={14} className="text-[#0f766e]" />
+            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Upcoming Tasks</h3>
+            <span className="ml-auto text-[10px] font-bold text-[#0f766e] bg-[#0f766e]/10 px-2 py-0.5 rounded-full">
+              {upcomingTasks.length}
+            </span>
           </div>
-          <div className="space-y-2">
-            {upcomingTasks.map(task => {
-              const src = SOURCE_CONFIG[task.source];
-              return (
+          <div className="divide-y divide-slate-50">
+            {upcomingTasks.map(task => (
+              <div
+                key={task.id}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition cursor-pointer"
+                onClick={() => router.push(`/portal/task-management/tasks/${task.id}`)}
+              >
                 <div
-                  key={task.id}
-                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition cursor-pointer"
-                  onClick={() => router.push('/portal/task-management/tasks')}
-                >
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_CONFIG[task.status].color}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-slate-800 truncate">{task.title}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{getClientName(task.clientId)}</p>
-                  </div>
-                  <span className={`shrink-0 text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${src.bg} ${src.textColor}`}>
-                    {src.label}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-500 shrink-0 flex items-center gap-1">
-                    <Calendar size={10} /> {formatDate(task.dueDate)}
-                  </span>
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: getStatusColor(task.status?.color ?? null) }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-slate-800 truncate">{task.name}</p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {task.client?.businessName ?? 'No client'}
+                  </p>
                 </div>
-              );
-            })}
+                {task.department && (
+                  <span className="shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                    {task.department.name}
+                  </span>
+                )}
+                {task.priority && (
+                  <Badge variant={PRIORITY_MAP[task.priority]?.variant ?? 'neutral'} className="text-[8px] px-1.5 py-0 shrink-0">
+                    {task.priority.toLowerCase()}
+                  </Badge>
+                )}
+                <span className="text-[10px] font-medium text-slate-400 shrink-0 flex items-center gap-1 whitespace-nowrap">
+                  <Calendar size={9} /> {formatDate(task.dueDate)}
+                </span>
+              </div>
+            ))}
           </div>
         </Card>
+
       </div>
-
-      {/* Department Breakdown */}
-      <Card className="p-5 border-none shadow-sm">
-        <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight mb-4">Department Breakdown</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {(['liaison', 'compliance'] as const).map(source => {
-            const cfg = SOURCE_CONFIG[source];
-            const tasks = ALL_TASKS.filter(t => t.source === source);
-            const todo = tasks.filter(t => t.status === 'To Do').length;
-            const inProgress = tasks.filter(t => t.status === 'In Progress').length;
-            const review = tasks.filter(t => t.status === 'Review').length;
-            const done = tasks.filter(t => t.status === 'Done').length;
-            const overdue = tasks.filter(t => t.status !== 'Done' && new Date(t.dueDate) < new Date('2026-03-12')).length;
-
-            return (
-              <div key={source} className={`p-4 rounded-xl border ${cfg.bg}`}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className={`w-3 h-3 rounded-full ${cfg.color}`} />
-                  <span className={`text-sm font-black uppercase tracking-tight ${cfg.textColor}`}>{cfg.label}</span>
-                  <span className="ml-auto text-lg font-black text-slate-900">{tasks.length}</span>
-                </div>
-                <div className="grid grid-cols-5 gap-2 text-center">
-                  {[
-                    { label: 'To Do', value: todo },
-                    { label: 'Active', value: inProgress },
-                    { label: 'Review', value: review },
-                    { label: 'Done', value: done },
-                    { label: 'Overdue', value: overdue },
-                  ].map(item => (
-                    <div key={item.label}>
-                      <p className="text-lg font-black text-slate-800">{item.value}</p>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase">{item.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
     </div>
   );
 }

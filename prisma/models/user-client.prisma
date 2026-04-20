@@ -1,0 +1,121 @@
+// prisma/models/user-client.prisma
+//
+// BetterAuth-compatible auth tables for external client portal users.
+// These mirror the internal User/Session/Account/Verification models
+// in users.prisma but are fully isolated for the client-facing auth instance.
+//
+// BetterAuth config (src/lib/auth-client-portal.ts) must override the schema
+// mapping to point to these models:
+//   schema: { user: "clientUser", session: "clientSession",
+//             account: "clientAccount", verification: "clientVerification" }
+
+// ─── Client Sessions ──────────────────────────────────────────────
+model ClientSession {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+
+  userId String
+  user   ClientUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("client_session")
+}
+
+// ─── Client Accounts (credential + OAuth) ─────────────────────────
+// BetterAuth stores the hashed password here — never on ClientUser directly.
+model ClientAccount {
+  id         String @id
+  accountId  String
+  providerId String
+
+  userId String
+  user   ClientUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  password              String?
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("client_account")
+}
+
+// ─── Client Verification (email / password-reset tokens) ──────────
+model ClientVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("client_verification")
+}
+
+model ClientUser {
+  id String @id @default(cuid())
+
+  name          String?
+  email         String           @unique
+  emailVerified Boolean          @default(false)
+  image         String?
+  active        Boolean          @default(true)
+  status        ClientUserStatus @default(ACTIVE)
+
+  // Legacy single-client FK kept for BetterAuth additionalFields compatibility
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  assignments ClientUserAssignment[]
+  employee    Employee?
+  sessions    ClientSession[]
+  accounts    ClientAccount[]
+
+  activityLogs  ActivityLog[]  @relation("ClientUserLogs")
+  notifications Notification[] @relation("ClientUserNotifications")
+
+  approvedOvertimes OvertimeRequest[] @relation("ClientOvertimeApprover")
+  approvedLeaves    LeaveRequest[]    @relation("ClientLeaveApprover")
+  approvedCoas      CoaRequest[]      @relation("ClientCoaApprover")
+
+  payslipsApproved     Payslip[]     @relation("ClientPayslipApprover")
+  payslipsAcknowledged Payslip[]     @relation("ClientPayslipAcknowledger")
+  cashAdvancesApproved CashAdvance[] @relation("ClientCashAdvanceApprover")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("client_user")
+}
+
+// ─── Client ↔ ClientUser Join Table ──────────────────────────────
+model ClientUserAssignment {
+  id Int @id @default(autoincrement())
+
+  clientUserId String
+  clientUser   ClientUser @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  role ClientPortalRole @default(OWNER)
+
+  createdAt DateTime @default(now())
+
+  @@unique([clientUserId, clientId])
+  @@map("client_user_assignment")
+}

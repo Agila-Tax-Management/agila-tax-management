@@ -1,0 +1,34 @@
+// ─── HR General Settings (Per Client) ─────────────────────────────
+model HrSetting {
+  id String @id @default(cuid())
+
+  clientId Int    @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // ─── Employee ID Generation ───
+  employeeNumberPrefix String @default("EMP")
+
+  // ─── Overtime Logic ───
+  // If true: CSV uploads strictly follow the shift schedule. Excess hours are ignored unless an approved OvertimeRequest exists.
+  // If false: Excess hours in the CSV are automatically converted to paid Overtime.
+  strictOvertimeApproval Boolean @default(true)
+
+  // The "Exception" List: Employees who get auto-overtime even if the strict rule is enabled.
+  autoOvertimeEmployees Employee[] @relation("AutoOvertimeEmployees")
+
+  // ─── Late & Undertime Logic ───
+  // If true: Nobody in the company gets late/undertime deductions.
+  disableLateUndertimeGlobal Boolean @default(true)
+
+  // The "Exception" List: Specific employees (e.g., VIPs, Managers) who are immune to late deductions.
+  exemptLateUndertimeEmployees Employee[] @relation("ExemptLateUndertimeEmployees")
+
+  // ─── Automatic Time Out ───
+  enableAutoTimeOut Boolean @default(false)
+  autoTimeOutTime   String? // Stored as "23:59:00" or "22:00"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hr_setting")
+}
