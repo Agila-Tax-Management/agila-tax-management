@@ -20,10 +20,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Find the main firm client (assumed to be the first active client or one with a specific flag)
-  // For now, we'll get the first client - adjust this logic based on your firm identification
-  const firmClient = await prisma.client.findFirst({
-    where: { active: true },
+  // Find the main ATMS internal firm client by its fixed company code
+  const firmClient = await prisma.client.findUnique({
+    where: { companyCode: "ATMS-001" },
     select: { id: true },
   });
 
@@ -113,9 +112,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Find firm client
-  const firmClient = await prisma.client.findFirst({
-    where: { active: true },
+  // Find the main ATMS internal firm client by its fixed company code
+  const firmClient = await prisma.client.findUnique({
+    where: { companyCode: "ATMS-001" },
     select: { id: true },
   });
 

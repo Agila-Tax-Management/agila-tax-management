@@ -114,26 +114,25 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
+  // Pre-read sales settings outside the transaction (read-only, no atomicity needed)
+  const firmClient = await prisma.client.findFirst({
+    where: { active: true },
+    select: { id: true },
+  });
+  const salesSettings = firmClient
+    ? await prisma.salesSetting.findUnique({
+        where: { clientId: firmClient.id },
+        select: {
+          defaultJoOperationsApproverId: true,
+          defaultJoAccountApproverId: true,
+          defaultJoGeneralApproverId: true,
+        },
+      })
+    : null;
+
   try {
+    // Transaction is now minimal: sequence generation + job order create + lead flag update
     const result = await prisma.$transaction(async (tx) => {
-      // Fetch sales settings for default approvers
-      const firmClient = await tx.client.findFirst({
-        where: { active: true },
-        select: { id: true },
-      });
-
-      let salesSettings = null;
-      if (firmClient) {
-        salesSettings = await tx.salesSetting.findUnique({
-          where: { clientId: firmClient.id },
-          select: {
-            defaultJoOperationsApproverId: true,
-            defaultJoAccountApproverId: true,
-            defaultJoGeneralApproverId: true,
-          },
-        });
-      }
-
       // Generate job order number: JO-YYYY-XXXX
       const year = new Date().getFullYear();
       const prefix = `JO-${year}-`;
@@ -165,7 +164,6 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
           notes: parsed.data.notes ?? null,
           preparedById: session.user.id,
           datePrepared: new Date(),
-          // Auto-assign default approvers from sales settings
           assignedOperationsManagerId: salesSettings?.defaultJoOperationsApproverId ?? null,
           assignedAccountManagerId: salesSettings?.defaultJoAccountApproverId ?? null,
           assignedExecutiveId: salesSettings?.defaultJoGeneralApproverId ?? null,
@@ -197,27 +195,22 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
         },
       });
 
-      // Mark lead as job order created
-      const updatedLead = await tx.lead.update({
+      // Mark lead as job order created (minimal update — no LEAD_INCLUDE here)
+      await tx.lead.update({
         where: { id: leadId },
         data: { isCreatedJobOrder: true },
-        include: LEAD_INCLUDE,
       });
 
-      // Log history inside the transaction
-      await tx.leadHistory.create({
-        data: {
-          leadId,
-          actorId: session.user.id,
-          changeType: "JOB_ORDER_GENERATED",
-          newValue: `Job Order ${jobOrderNumber} created`,
-        },
-      });
+      return { jobOrder };
+    }, { timeout: 15000 });
 
-      return { updatedLead, jobOrder, salesSettings };
+    // Fetch the full lead AFTER the transaction (no longer holding a DB connection)
+    const updatedLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      include: LEAD_INCLUDE,
     });
 
-    const { updatedLead, jobOrder, salesSettings } = result;
+    const { jobOrder } = result;
 
     // Send notification to operations manager (first approver)
     if (salesSettings?.defaultJoOperationsApproverId) {

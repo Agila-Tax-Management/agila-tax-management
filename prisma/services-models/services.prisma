@@ -186,24 +186,32 @@ model ServicePackageItem {
 model Quote {
   id          String @id @default(cuid())
   quoteNumber String @unique
-  leadId      Int
-  lead        Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  // ─── UPDATED: Can belong to a Lead OR an existing Client ───
+  leadId      Int?
+  lead        Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  status    QuoteStatus     @default(DRAFT)
-  lineItems QuoteLineItem[]
+  clientId    Int?
+  client      Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  status      QuoteStatus     @default(DRAFT)
+  lineItems   QuoteLineItem[]
 
   subTotal      Decimal @default(0.00) @db.Decimal(10, 2)
   totalDiscount Decimal @default(0.00) @db.Decimal(10, 2)
   grandTotal    Decimal @default(0.00) @db.Decimal(10, 2)
 
-  validUntil DateTime? @db.Date
-  notes      String?   @db.Text
+  validUntil  DateTime? @db.Date
+  notes       String?   @db.Text
 
   tsaContract TsaContract?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  // Good practice to index foreign keys for faster queries
+  @@index([leadId])
+  @@index([clientId])
   @@map("quote")
 }
 

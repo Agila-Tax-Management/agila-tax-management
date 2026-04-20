@@ -13,6 +13,9 @@ import {
   Ban,
   Eye,
   Download,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react';
 import { Modal } from '@/components/UI/Modal';
 import { Button } from '@/components/UI/button';
@@ -41,6 +44,8 @@ interface FullTsaDetail {
   residenceAddress: string | null;
   isBusinessRegistered: boolean;
   documentDate: string;
+  lockInMonths: number;
+  billingCycleStart: number;
   quote: { lineItems: FullTsaLineItem[] } | null;
 }
 
@@ -170,11 +175,17 @@ export function TsaModal({
   const [pdfUrl, setPdfUrl] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<'view' | 'download' | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   
   // Local TSA state to show immediate updates after actions
   const [currentTsa, setCurrentTsa] = useState<LeadTsaInfo | null>(tsa);
 
-  // Populate defaults from lead when opening (create mode)
+  // Populate defaults from lead when opening (create mode).
+  // Intentionally only depends on `isOpen` — `lead` and `tsa` are read as initial
+  // values at open time. Including them as deps would cause the effect to re-run
+  // every time the parent refreshes the lead (e.g. after onUpdated propagates),
+  // which resets currentTsa mid-session and discards the locally-updated status.
+  /* eslint-disable react-hooks/exhaustive-deps -- open-time initialisation only; parent-driven re-runs must not reset currentTsa */
   useEffect(() => {
     if (!isOpen) return;
     setBusinessName(lead.businessName ?? `${lead.firstName} ${lead.lastName}`);
@@ -191,8 +202,83 @@ export function TsaModal({
     setBillingCycleStart(1);
     setClientSignerName('');
     setPdfUrl(tsa?.pdfUrl ?? '');
-    setCurrentTsa(tsa); // Reset local TSA state when modal opens
-  }, [isOpen, lead, tsa]);
+    setCurrentTsa(tsa);
+    setIsEditing(false);
+  }, [isOpen]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  // ─── Pre-fill form from full TSA for editing ────────────────────────────────
+  const handleStartEdit = async () => {
+    if (!currentTsa) return;
+    setActionLoading('loading_edit');
+    try {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`);
+      const json = (await res.json()) as { data?: FullTsaDetail; error?: string };
+      if (!res.ok || !json.data) {
+        error('Failed to load TSA', json.error ?? 'Could not fetch contract details.');
+        return;
+      }
+      const d = json.data;
+      setBusinessName(d.businessName);
+      setAuthorizedRep(d.authorizedRep);
+      setDocumentDate(d.documentDate.slice(0, 10));
+      setEmail(d.email ?? '');
+      setPhone(d.phone ?? '');
+      setTin(d.tin ?? '');
+      setCivilStatus(d.civilStatus ?? '');
+      setBusinessAddress(d.businessAddress ?? '');
+      setResidenceAddress(d.residenceAddress ?? '');
+      setIsBusinessRegistered(d.isBusinessRegistered);
+      setLockInMonths(d.lockInMonths);
+      setBillingCycleStart(d.billingCycleStart);
+      setIsEditing(true);
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ─── Save TSA edits (DRAFT only) ─────────────────────────────────────────────
+  const handleUpdate = async () => {
+    if (!currentTsa || !businessName.trim() || !authorizedRep.trim()) {
+      error('Required fields', 'Business name and authorized representative are required.');
+      return;
+    }
+    setActionLoading('update');
+    try {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          documentDate: new Date(documentDate).toISOString(),
+          businessName: businessName.trim(),
+          authorizedRep: authorizedRep.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          tin: tin.trim() || null,
+          civilStatus: civilStatus.trim() || null,
+          businessAddress: businessAddress.trim() || null,
+          residenceAddress: residenceAddress.trim() || null,
+          isBusinessRegistered,
+          lockInMonths,
+          billingCycleStart,
+        }),
+      });
+      const json = (await res.json()) as { data?: LeadTsaInfo; error?: string };
+      if (!res.ok) { error('Failed to save', json.error ?? 'Please try again.'); return; }
+      success('TSA updated', 'Contract details have been saved.');
+      if (json.data) setCurrentTsa(json.data as LeadTsaInfo);
+      setIsEditing(false);
+      const updated = await refreshLead();
+      if (updated) onUpdated(updated);
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // ─── Refetch the lead and propagate ─────────────────────────────────────────
   const refreshLead = async (): Promise<Lead | null> => {
@@ -423,16 +509,103 @@ export function TsaModal({
           )}
         </div>
 
-        {/* ── Status & Workflow (existing TSA) ── */}
-        {currentTsa ? (
+        {/* ── Edit form (DRAFT only) ── */}
+        {currentTsa && isEditing ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Business Name <span className="text-red-500">*</span></label>
+                <input type="text" className={inputClass} value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Authorized Representative <span className="text-red-500">*</span></label>
+                <input type="text" className={inputClass} value={authorizedRep} onChange={(e) => setAuthorizedRep(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Document Date <span className="text-red-500">*</span></label>
+                <input type="date" className={inputClass} value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">TIN</label>
+                <input type="text" className={inputClass} placeholder="e.g. 123-456-789" value={tin} onChange={(e) => setTin(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+                <input type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+                <input type="text" className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Civil Status</label>
+                <select className={inputClass} value={civilStatus} onChange={(e) => setCivilStatus(e.target.value)}>
+                  <option value="">— Select —</option>
+                  <option>Single</option>
+                  <option>Married</option>
+                  <option>Widowed</option>
+                  <option>Legally Separated</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Lock-in Period (months)</label>
+                <input type="number" min={1} max={36} className={inputClass} value={lockInMonths} onChange={(e) => setLockInMonths(Math.max(1, parseInt(e.target.value, 10) || 6))} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Business Address</label>
+                <input type="text" className={inputClass} value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Residence Address</label>
+                <input type="text" className={inputClass} value={residenceAddress} onChange={(e) => setResidenceAddress(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" className="rounded border-border accent-blue-600" checked={isBusinessRegistered} onChange={(e) => setIsBusinessRegistered(e.target.checked)} />
+                  <span className="text-sm text-foreground">Business is registered (DTI / SEC)</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
+              <Button variant="outline" onClick={() => setIsEditing(false)} disabled={actionLoading === 'update'}>
+                <X size={14} className="mr-1.5" /> Cancel
+              </Button>
+              <Button
+                className="bg-[#25238e] text-white hover:bg-[#1e1c7a]"
+                disabled={actionLoading === 'update' || !businessName.trim() || !authorizedRep.trim()}
+                onClick={() => { void handleUpdate(); }}
+              >
+                {actionLoading === 'update'
+                  ? <Loader2 size={14} className="animate-spin mr-2" />
+                  : <Save size={14} className="mr-2" />}
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        ) : currentTsa ? (
           <div className="space-y-4">
             {/* Status badge + PDF actions */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${STATUS_COLOR[currentTsa.status]}`}>
-                {currentTsa.status === 'SIGNED' && <CheckCircle2 size={14} />}
-                {currentTsa.status === 'PENDING_APPROVAL' && <Clock size={14} />}
-                {STATUS_LABEL[currentTsa.status]}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${STATUS_COLOR[currentTsa.status]}`}>
+                  {currentTsa.status === 'SIGNED' && <CheckCircle2 size={14} />}
+                  {currentTsa.status === 'PENDING_APPROVAL' && <Clock size={14} />}
+                  {STATUS_LABEL[currentTsa.status]}
+                </span>
+                {currentTsa.status === 'DRAFT' && (
+                  <Button
+                    variant="outline"
+                    className="gap-1.5 text-xs h-auto py-1.5 px-2.5"
+                    disabled={actionLoading !== null}
+                    onClick={() => { void handleStartEdit(); }}
+                  >
+                    {actionLoading === 'loading_edit'
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <Pencil size={12} />}
+                    Edit
+                  </Button>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
