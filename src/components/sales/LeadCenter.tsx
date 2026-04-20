@@ -13,6 +13,7 @@ import { useToast } from '@/context/ToastContext';
 import { LEAD_SOURCES } from '@/lib/constants';
 import { CreateLeadModal } from '@/app/(portal)/portal/sales/lead-center/components/CreateLeadModal';
 import { LeadDetailModal, type Lead } from '@/app/(portal)/portal/sales/lead-center/components/LeadDetailModal';
+import type { PortalRole } from '@/generated/prisma/client';
 
 /* -- Types ---------------------------------------------------------- */
 interface LeadStatus {
@@ -51,6 +52,34 @@ export function LeadCenter(): React.ReactNode {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  // Portal access control
+  const [canCreate, setCanCreate] = useState(false);
+
+  // Fetch portal access to determine create permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          // Allow create for all roles except VIEWER
+          const hasCreateAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            (salesAccess?.role !== 'VIEWER');
+          setCanCreate(hasCreateAccess);
+        }
+      } catch {
+        setCanCreate(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   const fetchStatuses = useCallback(async () => {
     const res = await fetch('/api/admin/settings/sales/lead-statuses');
@@ -245,12 +274,14 @@ export function LeadCenter(): React.ReactNode {
               <LayoutList size={14} /> List
             </button>
           </div>
-          <Button
-            onClick={() => setIsCreateOpen(true)}
-            className="bg-[#25238e] rounded-xl shadow-lg shadow-[#25238e]/20 text-white font-bold"
-          >
-            <Plus size={16} className="mr-2" /> Add Opportunity
-          </Button>
+          {canCreate && (
+            <Button
+              onClick={() => setIsCreateOpen(true)}
+              className="bg-[#25238e] rounded-xl shadow-lg shadow-[#25238e]/20 text-white font-bold"
+            >
+              <Plus size={16} className="mr-2" /> Add Opportunity
+            </Button>
+          )}
         </div>
       </div>
 

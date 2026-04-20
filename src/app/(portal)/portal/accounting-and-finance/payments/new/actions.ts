@@ -64,7 +64,12 @@ export async function recordPaymentAction(
 
         const invoice = await tx.invoice.findUnique({
           where: { id: alloc.invoiceId },
-          select: { balanceDue: true, totalAmount: true, invoiceNumber: true },
+          select: { 
+            balanceDue: true, 
+            totalAmount: true, 
+            invoiceNumber: true,
+            clientId: true,
+          },
         });
         if (!invoice) continue;
 
@@ -81,7 +86,7 @@ export async function recordPaymentAction(
             invoiceId: alloc.invoiceId,
             actorId: session.user.id,
             changeType: 'PAYMENT_ADDED',
-            newValue: `${input.method} ?${alloc.amountApplied.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${newPayment.paymentNumber}`,
+            newValue: `${input.method} ₱${alloc.amountApplied.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${newPayment.paymentNumber}`,
           },
         });
       }

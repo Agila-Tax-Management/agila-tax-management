@@ -293,7 +293,13 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       let createdInvoiceNumber: string | null = null;
 
       // Auto-create invoice from accepted quote if not yet created
-      if (lead && !lead.isCreatedInvoice) {
+      // Double-check: ensure no invoice already exists for this lead
+      const existingInvoice = await tx.invoice.findFirst({
+        where: { leadId },
+        select: { invoiceNumber: true },
+      });
+
+      if (lead && !lead.isCreatedInvoice && !existingInvoice) {
         const acceptedQuote = lead.quotes[0] ?? null;
         if (acceptedQuote && acceptedQuote.lineItems.length > 0) {
           const year = new Date().getFullYear();
@@ -312,6 +318,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
           const invoiceNumber = `${prefix}${String(nextSeq).padStart(4, "0")}`;
           createdInvoiceNumber = invoiceNumber;
 
+          // Calculate invoice totals
           let subTotal = 0;
           let taxAmount = 0;
           const invoiceItems = acceptedQuote.lineItems.map((li) => {
@@ -327,6 +334,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
               unitPrice,
               total: lineTotal,
               isVatable: li.isVatable,
+              category: "SERVICE_FEE" as const,
             };
           });
           const totalAmount = subTotal + taxAmount;
@@ -352,6 +360,9 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
 
           leadUpdateData.isCreatedInvoice = true;
         }
+      } else if (existingInvoice && !lead?.isCreatedInvoice) {
+        // Invoice exists but flag not set — sync the flag
+        leadUpdateData.isCreatedInvoice = true;
       }
 
       await tx.lead.update({ where: { id: leadId }, data: leadUpdateData });

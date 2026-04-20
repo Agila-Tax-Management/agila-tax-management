@@ -1,62 +1,63 @@
 enum LogAction {
-    CREATED
-    UPDATED
-    DELETED
-    VIEWED
-    EXPORTED
-    IMPORTED
-    LOGIN
-    LOGOUT
-    STATUS_CHANGE
-    PERMISSION_CHANGE
-    ASSIGNED
-    UNASSIGNED
-    APPROVED
-    REJECTED
-    SUBMITTED
-    CANCELLED
-    ARCHIVED
-    RESTORED
+  CREATED
+  UPDATED
+  DELETED
+  VIEWED
+  EXPORTED
+  IMPORTED
+  LOGIN
+  LOGOUT
+  STATUS_CHANGE
+  PERMISSION_CHANGE
+  ASSIGNED
+  UNASSIGNED
+  APPROVED
+  REJECTED
+  SUBMITTED
+  CANCELLED
+  ARCHIVED
+  RESTORED
 }
+
 // ─── Business Activity Log (The Universal Audit Trail) ────────────
 model ActivityLog {
-    id              String @id @default(cuid())
+  id String @id @default(cuid())
 
-    // ─── Multi-Tenancy (Which workspace did this happen in?) ───
-    clientId        Int?
-    client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // ─── Multi-Tenancy (Which workspace did this happen in?) ───
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-    // ─── Dual-Auth Actors (Who did it?) ───
-    userId          String?
-    user            User?   @relation("InternalUserLogs", fields: [userId], references: [id], onDelete: Cascade)
+  // ─── Dual-Auth Actors (Who did it?) ───
+  userId String?
+  user   User?   @relation("InternalUserLogs", fields: [userId], references: [id], onDelete: Cascade)
 
-    clientUserId    String?
-    clientUser      ClientUser? @relation("ClientUserLogs", fields: [clientUserId], references: [id], onDelete: Cascade)
-    
-    isSystemAction  Boolean @default(false)
+  clientUserId String?
+  clientUser   ClientUser? @relation("ClientUserLogs", fields: [clientUserId], references: [id], onDelete: Cascade)
 
-    // ─── The Action ───
-    action          LogAction
-    entity          String   // e.g., "Client", "Employee", "Payslip", "Task"
-    entityId        String?  // The primary key of the affected record
-    description     String   @db.Text // Human-readable summary for the timeline
+  isSystemAction Boolean @default(false)
 
-    // ─── Technical Audit Data ───
-    metadata        Json?    // Optional JSON blob for old/new values
-    ipAddress       String?  // Security tracking
-    userAgent       String?  // Browser/Device tracking
+  // ─── The Action ───
+  action      LogAction
+  entity      String // e.g., "Client", "Employee", "Payslip", "Task"
+  entityId    String? // The primary key of the affected record
+  description String    @db.Text // Human-readable summary for the timeline
 
-    // ─── Data Retention ───
-    archivedAt      DateTime? // For 7-year retention policy (Philippine BIR requirement)
+  // ─── Technical Audit Data ───
+  metadata  Json? // Optional JSON blob for old/new values
+  ipAddress String? // Security tracking
+  userAgent String? // Browser/Device tracking
 
-    createdAt       DateTime @default(now())
+  // ─── Data Retention ───
+  archivedAt DateTime? // For 7-year retention policy (Philippine BIR requirement)
 
-    // ─── Optimized Indexes ───
-    @@index([clientId])
-    @@index([userId])
-    @@index([clientUserId])
-    @@index([entity, entityId])
-    @@index([action])
-    @@index([createdAt])
-    @@map("activity_log")
+  createdAt DateTime @default(now())
+
+  // ─── Optimized Indexes ───
+  @@index([clientId])
+  @@index([userId])
+  @@index([clientUserId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_log")
 }

@@ -39,6 +39,8 @@ export interface InvoiceItemRecord {
   quantity: number;
   unitPrice: number;
   total: number;
+  category?: 'SERVICE_FEE' | 'TAX_REIMBURSEMENT' | 'GOV_FEE_REIMBURSEMENT' | 'OUT_OF_POCKET';
+  isVatable?: boolean;
   remarks: string | null;
 }
 

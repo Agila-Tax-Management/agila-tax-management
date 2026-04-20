@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, List, Wallet,
   ShoppingBag, BarChart3, ChevronDown, ChevronUp,
   CalendarClock, FileText, TicketPercent, Settings, FileSignature, ClipboardList, Boxes
 } from 'lucide-react';
+import type { PortalRole } from '@/generated/prisma/client';
 
 interface NavItem {
   id: string;
@@ -55,6 +56,36 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [servicesOpen, setServicesOpen] = useState(pathname.startsWith('/portal/sales/services'));
+  const [canAccessSettings, setCanAccessSettings] = useState(false);
+  const [loadingAccess, setLoadingAccess] = useState(true);
+
+  // Fetch user's portal access to determine if settings should be visible
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          // Show settings if: SUPER_ADMIN, ADMIN, or SALES portal SETTINGS role
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          const hasSettingsAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanAccessSettings(hasSettingsAccess);
+        }
+      } catch {
+        // Access check failed — hide settings by default
+        setCanAccessSettings(false);
+      } finally {
+        setLoadingAccess(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -182,21 +213,23 @@ export function ASPSidebar({ isOpen, onClose }: ASPSidebarProps) {
         </nav>
 
         {/* Settings Footer */}
-        <div className="border-t border-slate-200 p-4 shrink-0">
-          <button
-            onClick={() => handleNavigation('/portal/sales/settings')}
-            className={`
-              w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-              ${pathname === '/portal/sales/settings'
-                ? 'bg-blue-50 text-blue-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:bg-slate-50 font-medium'
-              }
-            `}
-          >
-            <Settings size={18} />
-            <span className="text-sm">Settings</span>
-          </button>
-        </div>
+        {!loadingAccess && canAccessSettings && (
+          <div className="border-t border-slate-200 p-4 shrink-0">
+            <button
+              onClick={() => handleNavigation('/portal/sales/settings')}
+              className={`
+                w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+                ${pathname === '/portal/sales/settings'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm font-bold'
+                  : 'text-slate-600 hover:bg-slate-50 font-medium'
+                }
+              `}
+            >
+              <Settings size={18} />
+              <span className="text-sm">Settings</span>
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

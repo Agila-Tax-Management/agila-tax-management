@@ -50,16 +50,16 @@ model User {
   acknowledgedPayslips Payslip[] @relation("PayslipAcknowledger")
 
   // ─── Job Order Workflows ───
-  preparedJobOrders           JobOrder[]    @relation("JobOrderPreparer")
-  
-  assignedJoAccountManagers   JobOrder[]    @relation("JoAssignedAccountManager")
-  actualJoAccountManagers     JobOrder[]    @relation("JoActualAccountManager")
-  
-  assignedJoOperationsManagers JobOrder[]   @relation("JoAssignedOperationsManager")
-  actualJoOperationsManagers   JobOrder[]   @relation("JoActualOperationsManager")
-  
-  assignedJoExecutives        JobOrder[]    @relation("JoAssignedExecutive")
-  actualJoExecutives          JobOrder[]    @relation("JoActualExecutive")
+  preparedJobOrders JobOrder[] @relation("JobOrderPreparer")
+
+  assignedJoAccountManagers JobOrder[] @relation("JoAssignedAccountManager")
+  actualJoAccountManagers   JobOrder[] @relation("JoActualAccountManager")
+
+  assignedJoOperationsManagers JobOrder[] @relation("JoAssignedOperationsManager")
+  actualJoOperationsManagers   JobOrder[] @relation("JoActualOperationsManager")
+
+  assignedJoExecutives JobOrder[] @relation("JoAssignedExecutive")
+  actualJoExecutives   JobOrder[] @relation("JoActualExecutive")
 
   // ─── Compliance Defaults (From ClientCompliance) ───
   defaultProcessorFor        ClientCompliance[] @relation("DefaultProcessor")
@@ -69,18 +69,36 @@ model User {
   defaultFinalApproverFor    ClientCompliance[] @relation("DefaultFinalApprover")
   defaultSalesOfficerFor     ClientCompliance[] @relation("DefaultSalesOfficer")
 
-  // ─── Actual Executions (From ComplianceRecord) ───
-  processedRecords           ComplianceRecord[] @relation("RecordProcessor")
-  verifiedRecords            ComplianceRecord[] @relation("RecordVerifier")
-  paymentProcessedRecords    ComplianceRecord[] @relation("RecordPaymentProcessor")
-  paymentApprovedRecords     ComplianceRecord[] @relation("RecordPaymentApprover")
-  finalApprovedRecords       ComplianceRecord[] @relation("RecordFinalApprover")
+ // ─── Compliance Actual Executions & Overrides ───
+  assignedProcessors         ComplianceRecord[] @relation("RecordAssignedProcessor")
+  actualProcessors           ComplianceRecord[] @relation("RecordActualProcessor")
+  
+  assignedVerifiers          ComplianceRecord[] @relation("RecordAssignedVerifier")
+  actualVerifiers            ComplianceRecord[] @relation("RecordActualVerifier")
+  
+  assignedPaymentProcessors  ComplianceRecord[] @relation("RecordAssignedPayProcessor")
+  actualPaymentProcessors    ComplianceRecord[] @relation("RecordActualPayProcessor")
+  
+  assignedPaymentApprovers   ComplianceRecord[] @relation("RecordAssignedPayApprover")
+  actualPaymentApprovers     ComplianceRecord[] @relation("RecordActualPayApprover")
+  
+  assignedFinalApprovers     ComplianceRecord[] @relation("RecordAssignedFinalApprover")
+  actualFinalApprovers       ComplianceRecord[] @relation("RecordActualFinalApprover")
+  
   salesObservedRecords       ComplianceRecord[] @relation("RecordSalesOfficer")
 
- // ─── TSA Workflows ───
-  preparedTsas                TsaContract[] @relation("TsaPreparer")
-  assignedTsaApprovals        TsaContract[] @relation("TsaAssignedApprover")
-  actuallyApprovedTsas        TsaContract[] @relation("TsaActualApprover")
+  // ─── Global Compliance Defaults (From ComplianceSetting) ───
+    defaultClientProcessors        ComplianceSetting[] @relation("DefaultClientProcessor")
+    defaultClientVerifiers         ComplianceSetting[] @relation("DefaultClientVerifier")
+    defaultClientPayProcessors     ComplianceSetting[] @relation("DefaultClientPayProcessor")
+    defaultClientPayApprovers      ComplianceSetting[] @relation("DefaultClientPayApprover")
+    defaultClientFinalApprovers    ComplianceSetting[] @relation("DefaultClientFinalApprover")
+    defaultClientSalesOfficers     ComplianceSetting[] @relation("DefaultClientSalesOfficer")
+
+  // ─── TSA Workflows ───
+  preparedTsas         TsaContract[] @relation("TsaPreparer")
+  assignedTsaApprovals TsaContract[] @relation("TsaAssignedApprover")
+  actuallyApprovedTsas TsaContract[] @relation("TsaActualApprover")
 
   // ─── Sales Portal Defaults (From SalesSetting) ───
   defaultJoProcessApprovals    SalesSetting[] @relation("DefaultJoProcessApprover")
@@ -90,7 +108,8 @@ model User {
   defaultTsaApprovals          SalesSetting[] @relation("DefaultTsaApprover")
 
   // ─── Communication ───
-  complianceNotes            ComplianceNote[]
+  complianceNotes  ComplianceNote[]
+  ewtItemHistories EwtItemHistory[]
 
   @@unique([email])
   @@map("user")

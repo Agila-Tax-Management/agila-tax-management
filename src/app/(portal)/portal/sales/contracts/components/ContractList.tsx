@@ -10,6 +10,7 @@ import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import type { TsaListItem } from '@/app/api/sales/tsa/route';
 import type { ContractData } from '@/components/UI/TSAContractPDF';
+import type { PortalRole } from '@/generated/prisma/client';
 
 // ── Flag helper (mirrors TsaModal / ContractGenerator) ───────────────────────
 
@@ -92,8 +93,8 @@ async function buildPdfBlobFromTsa(tsa: TsaListItem): Promise<Blob> {
     planName: tsa.packageName ?? '',
     planPrice: '',
     actualMonthlySubscription: tsa.totalMonthlyRecurring.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
-    planServices: tsa.recurringServiceNames,
-    additionalServices: tsa.oneTimeServiceNames,
+    planServices: [...tsa.recurringServiceNames, ...tsa.freeOneTimeServiceNames],
+    additionalServices: tsa.oneTimeServicesWithPricing,
     headerSrc: '',
     ...buildFlagsFromNames(tsa.serviceNames),
   };
@@ -198,6 +199,34 @@ export function ContractList(): React.ReactNode {
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
   // Confirm delete dialog
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Portal access control
+  const [canEdit, setCanEdit] = useState(false);
+
+  // Fetch portal access to determine delete permissions
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          const hasEditAccess =
+            data.userRole === 'SUPER_ADMIN' ||
+            data.userRole === 'ADMIN' ||
+            salesAccess?.role === 'ADMIN' ||
+            salesAccess?.role === 'SETTINGS';
+          setCanEdit(hasEditAccess);
+        }
+      } catch {
+        setCanEdit(false);
+      }
+    };
+    void fetchAccess();
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -430,7 +459,7 @@ export function ContractList(): React.ReactNode {
                             PDF
                           </Button>
                           {/* Delete — only for DRAFT / PENDING_APPROVAL */}
-                          {canDelete && (
+                          {canDelete && canEdit && (
                             <Button
                               variant="outline"
                               className="gap-1.5 text-xs h-auto py-1.5 px-2.5 text-red-600 border-red-200 hover:bg-red-50"

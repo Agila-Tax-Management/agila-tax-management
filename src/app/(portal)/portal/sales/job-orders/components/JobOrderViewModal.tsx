@@ -1,13 +1,14 @@
 // src/app/(portal)/portal/sales/job-orders/components/JobOrderViewModal.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X, Pencil, Loader2, CheckCircle2, Clock, AlertCircle,
-  FileCheck, XCircle, Printer, Ban,
+  FileCheck, XCircle, Printer, Ban, ShieldAlert,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import type { JobOrderRecord, JobOrderStatus } from './JobOrders';
+import type { PortalRole } from '@/generated/prisma/client';
 
 interface Props {
   isOpen: boolean;
@@ -55,6 +56,41 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
   const { success, error } = useToast();
   const [isActing, setIsActing] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [userSession, setUserSession] = useState<{
+    userId: string;
+    userRole: 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE';
+    salesPortalRole: PortalRole | null;
+  } | null>(null);
+  const [_loadingSession, setLoadingSession] = useState(true);
+
+  // Fetch user session with portal access
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchSession = async () => {
+      setLoadingSession(true);
+      try {
+        const res = await fetch('/api/auth/portal-access');
+        if (res.ok) {
+          const data = await res.json() as {
+            userRole: string;
+            userId?: string;
+            portals: Array<{ portal: string; role: PortalRole }>;
+          };
+          const salesAccess = data.portals.find((p) => p.portal === 'SALES');
+          setUserSession({
+            userId: data.userId ?? '',
+            userRole: data.userRole as 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE',
+            salesPortalRole: salesAccess?.role ?? null,
+          });
+        }
+      } catch {
+        // Session fetch failed — default to no access
+      } finally {
+        setLoadingSession(false);
+      }
+    };
+    void fetchSession();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -71,12 +107,25 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
     ?? jo.lead.businessName
     ?? `${jo.lead.firstName} ${jo.lead.lastName}`;
 
+  // ── Access control ───────────────────────────────────────────────
+  const isViewer = userSession?.salesPortalRole === 'VIEWER';
+  const isAdmin = userSession?.salesPortalRole === 'ADMIN' || userSession?.userRole === 'SUPER_ADMIN';
+  const isPreparer = userSession?.userId === jo.preparedById;
+  const isAssignedOps = userSession?.userId === jo.assignedOperationsManagerId;
+  const isAssignedAccount = userSession?.userId === jo.assignedAccountManagerId;
+  const isAssignedExec = userSession?.userId === jo.assignedExecutiveId;
+
   // ── Workflow state helpers ───────────────────────────────────────
-  const canSubmit           = jo.status === 'DRAFT';
-  const canApproveOps       = jo.status === 'PENDING_OPERATIONS_ACK' && !jo.actualOperationsManagerId;
-  const canApproveAccount   = jo.status === 'PENDING_ACCOUNT_ACK' && !jo.actualAccountManagerId;
-  const canApproveExec      = jo.status === 'PENDING_EXECUTIVE_ACK' && !jo.actualExecutiveId;
-  const canCancel           = !['COMPLETED', 'CANCELLED', 'APPROVED'].includes(jo.status);
+  const canSubmit           = jo.status === 'DRAFT' && isPreparer && !isViewer;
+  const canApproveOps       = jo.status === 'PENDING_OPERATIONS_ACK' && !jo.actualOperationsManagerId && !isViewer && (isAssignedOps || isAdmin);
+  const canApproveAccount   = jo.status === 'PENDING_ACCOUNT_ACK' && !jo.actualAccountManagerId && !isViewer && (isAssignedAccount || isAdmin);
+  const canApproveExec      = jo.status === 'PENDING_EXECUTIVE_ACK' && !jo.actualExecutiveId && !isViewer && (isAssignedExec || isAdmin);
+  const canCancel           = !['COMPLETED', 'CANCELLED', 'APPROVED'].includes(jo.status) && !isViewer;
+
+  // Override detection (admin approving when not assigned)
+  const isOverrideOps = canApproveOps && isAdmin && !isAssignedOps;
+  const isOverrideAccount = canApproveAccount && isAdmin && !isAssignedAccount;
+  const isOverrideExec = canApproveExec && isAdmin && !isAssignedExec;
 
   // ── Action handler ───────────────────────────────────────────────
   const doAction = async (action: string, label: string) => {
@@ -164,14 +213,20 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
         <button
           onClick={() => void doAction(actionKey, actionLabel)}
           disabled={!!isActing}
-          className="mt-2.5 flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-[10px] font-bold rounded-lg transition-colors"
+          className={`mt-2.5 flex items-center gap-1 px-3 py-1.5 disabled:opacity-60 text-white text-[10px] font-bold rounded-lg transition-colors ${
+            isOverride
+              ? 'bg-orange-600 hover:bg-orange-700'
+              : 'bg-indigo-600 hover:bg-indigo-700'
+          }`}
         >
           {isActing === actionKey ? (
             <Loader2 size={10} className="animate-spin" />
+          ) : isOverride ? (
+            <ShieldAlert size={10} />
           ) : (
             <CheckCircle2 size={10} />
           )}
-          {actionLabel}
+          {isOverride ? `Override ${actionLabel}` : actionLabel}
         </button>
       )}
       {!canAck && pending && jo.status !== 'CANCELLED' && (
@@ -382,7 +437,7 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
                 actionKey="approve_operations"
                 actionLabel="Approve (Ops)"
                 canAck={canApproveOps}
-                isOverride={!!jo.actualOperationsManagerId && jo.actualOperationsManagerId !== jo.assignedOperationsManagerId}
+                isOverride={isOverrideOps || (!!jo.actualOperationsManagerId && jo.actualOperationsManagerId !== jo.assignedOperationsManagerId)}
               />
               {/* Account Manager (approves second) */}
               <SignatureBlock
@@ -393,7 +448,7 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
                 actionKey="approve_account"
                 actionLabel="Approve (Account)"
                 canAck={canApproveAccount}
-                isOverride={!!jo.actualAccountManagerId && jo.actualAccountManagerId !== jo.assignedAccountManagerId}
+                isOverride={isOverrideAccount || (!!jo.actualAccountManagerId && jo.actualAccountManagerId !== jo.assignedAccountManagerId)}
               />
               {/* Executive */}
               <SignatureBlock
@@ -404,7 +459,7 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
                 actionKey="approve_executive"
                 actionLabel="Approve (Exec)"
                 canAck={canApproveExec}
-                isOverride={!!jo.actualExecutiveId && jo.actualExecutiveId !== jo.assignedExecutiveId}
+                isOverride={isOverrideExec || (!!jo.actualExecutiveId && jo.actualExecutiveId !== jo.assignedExecutiveId)}
               />
             </div>
           </div>

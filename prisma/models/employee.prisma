@@ -1,373 +1,373 @@
 enum EmploymentType {
-    REGULAR
-    PROBATIONARY
-    CONTRACTUAL
-    PROJECT_BASED
-    PART_TIME
-    INTERN
+  REGULAR
+  PROBATIONARY
+  CONTRACTUAL
+  PROJECT_BASED
+  PART_TIME
+  INTERN
 }
 
 enum EmploymentStatus {
-    ACTIVE
-    RESIGNED
-    TERMINATED
-    ON_LEAVE
-    SUSPENDED
-    RETIRED
+  ACTIVE
+  RESIGNED
+  TERMINATED
+  ON_LEAVE
+  SUSPENDED
+  RETIRED
 }
 
 enum DisbursedMethod {
-    CASH_SALARY
-    FUND_TRANSFER
+  CASH_SALARY
+  FUND_TRANSFER
 }
 
 enum ContractType {
-    PROBATIONARY
-    REGULAR
-    CONTRACTUAL
-    PROJECT_BASED
-    CONSULTANT
-    INTERN
+  PROBATIONARY
+  REGULAR
+  CONTRACTUAL
+  PROJECT_BASED
+  CONSULTANT
+  INTERN
 }
 
 enum ContractStatus {
-    DRAFT
-    ACTIVE
-    EXPIRED
-    TERMINATED
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
 }
 
 // ─── Core Identity ───────────────────────────────────────────────
 // Personal info + auth link only. Job details live in EmployeeEmployment.
 model Employee {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    // ─── Dual Auth Links ───
-    userId String? @unique
-    user   User?   @relation(fields: [userId], references: [id])
+  // ─── Dual Auth Links ───
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
 
-    clientUserId String?     @unique
-    clientUser   ClientUser? @relation(fields: [clientUserId], references: [id])
+  clientUserId String?     @unique
+  clientUser   ClientUser? @relation(fields: [clientUserId], references: [id])
 
-    // ─── Personal Info ───
-    firstName     String
-    middleName    String?
-    lastName      String
-    nameExtension String?
+  // ─── Personal Info ───
+  firstName     String
+  middleName    String?
+  lastName      String
+  nameExtension String?
 
-    username   String?
-    employeeNo String? @unique
+  username   String?
+  employeeNo String? @unique
 
-    email         String?
-    personalEmail String?
-    birthDate     DateTime
-    placeOfBirth  String?
-    gender        String
-    civilStatus   String?
-    citizenship   String?
-    phone         String
+  email         String?
+  personalEmail String?
+  birthDate     DateTime
+  placeOfBirth  String?
+  gender        String
+  civilStatus   String?
+  citizenship   String?
+  phone         String
 
-    // ─── Current Address ───
-    currentStreet   String?
-    currentBarangay String?
-    currentCity     String?
-    currentProvince String?
-    currentZip      String?
+  // ─── Current Address ───
+  currentStreet   String?
+  currentBarangay String?
+  currentCity     String?
+  currentProvince String?
+  currentZip      String?
 
-    // ─── Permanent Address ───
-    permanentStreet   String?
-    permanentBarangay String?
-    permanentCity     String?
-    permanentProvince String?
-    permanentZip      String?
+  // ─── Permanent Address ───
+  permanentStreet   String?
+  permanentBarangay String?
+  permanentCity     String?
+  permanentProvince String?
+  permanentZip      String?
 
-    // ─── Education & Qualifications ───
-    educationalBackground String?
-    school                String?
-    course                String?
-    yearGraduated         String?
-    certifications        String?
+  // ─── Education & Qualifications ───
+  educationalBackground String?
+  school                String?
+  course                String?
+  yearGraduated         String?
+  certifications        String?
 
-    active     Boolean @default(true)
-    softDelete Boolean @default(false)
+  active     Boolean @default(true)
+  softDelete Boolean @default(false)
 
-    // ─── Existing Relations ───
-    governmentIds EmployeeGovernmentIds?
-    employments   EmployeeEmployment[]
-    requirements  EmployeeRequirement[]
-    appAccess     EmployeeAppAccess[]
+  // ─── Existing Relations ───
+  governmentIds EmployeeGovernmentIds?
+  employments   EmployeeEmployment[]
+  requirements  EmployeeRequirement[]
+  appAccess     EmployeeAppAccess[]
 
-    ledTeams       EmployeeTeam[]       @relation("TeamLeader")
-    managedReports EmployeeEmployment[] @relation("ReportingManager")
+  ledTeams       EmployeeTeam[]       @relation("TeamLeader")
+  managedReports EmployeeEmployment[] @relation("ReportingManager")
 
-    assignedTasks    Task[]        @relation("TaskAssignee")
-    assignedSubtasks TaskSubtask[] @relation("SubtaskAssignee")
+  assignedTasks    Task[]        @relation("TaskAssignee")
+  assignedSubtasks TaskSubtask[] @relation("SubtaskAssignee")
 
-    // ─── Timekeeping & Payroll Relations (From our recent updates) ───
-    scheduleOverrides ScheduleOverride[]
-    timesheets        Timesheet[]
-    // Allows the employee to bypass the strict overtime rule
-    autoOvertimeSettings   HrSetting[] @relation("AutoOvertimeEmployees")
-    
-    // Allows the employee to bypass late/undertime deductions
-    exemptLateSettings     HrSetting[] @relation("ExemptLateUndertimeEmployees")
-    // ─── HR Request Ledgers ───
-    overtimeRequests  OvertimeRequest[]
-    leaveRequests     LeaveRequest[]
-    coaRequests       CoaRequest[]
-    leaveCredits      EmployeeLeaveCredit[]
-    payslips          Payslip[]
-    cashAdvances      CashAdvance[]
-    governmentLoans   GovernmentLoan[]
+  // ─── Timekeeping & Payroll Relations (From our recent updates) ───
+  scheduleOverrides    ScheduleOverride[]
+  timesheets           Timesheet[]
+  // Allows the employee to bypass the strict overtime rule
+  autoOvertimeSettings HrSetting[]        @relation("AutoOvertimeEmployees")
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  // Allows the employee to bypass late/undertime deductions
+  exemptLateSettings HrSetting[]           @relation("ExemptLateUndertimeEmployees")
+  // ─── HR Request Ledgers ───
+  overtimeRequests   OvertimeRequest[]
+  leaveRequests      LeaveRequest[]
+  coaRequests        CoaRequest[]
+  leaveCredits       EmployeeLeaveCredit[]
+  payslips           Payslip[]
+  cashAdvances       CashAdvance[]
+  governmentLoans    GovernmentLoan[]
 
-    @@map("employee")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("employee")
 }
 
 // ─── Government IDs (PH Compliance) ─────────────────────────────
 model EmployeeGovernmentIds {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    employeeId Int      @unique
-    employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int      @unique
+  employee   Employee @relation(fields: [employeeId], references: [id])
 
-    sss        String?
-    pagibig    String?
-    philhealth String?
-    tin        String?
+  sss        String?
+  pagibig    String?
+  philhealth String?
+  tin        String?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@map("employee_government_ids")
+  @@map("employee_government_ids")
 }
 
 // ─── Employment Record (Job History) ─────────────────────────────
 // One record per role / promotion / client assignment.
 // Current job = the record where employmentStatus = ACTIVE.
 model EmployeeEmployment {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    employeeId Int
-    employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
 
-    // ─── Contact Info ───
-    workEmail String?
-    workPhone String?
+  // ─── Contact Info ───
+  workEmail String?
+  workPhone String?
 
-    // ─── Organizational Hierarchy ───
-    departmentId Int?
-    department   Department? @relation(fields: [departmentId], references: [id])
+  // ─── Organizational Hierarchy ───
+  departmentId Int?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-    positionId Int?
-    position   Position? @relation(fields: [positionId], references: [id])
+  positionId Int?
+  position   Position? @relation(fields: [positionId], references: [id])
 
-    teamId Int?
-    team   EmployeeTeam? @relation(fields: [teamId], references: [id])
+  teamId Int?
+  team   EmployeeTeam? @relation(fields: [teamId], references: [id])
 
-    reportingManagerId Int?
-    reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  reportingManagerId Int?
+  reportingManager   Employee? @relation("ReportingManager", fields: [reportingManagerId], references: [id])
 
-    // ─── Job Status & Dates ───
-    employmentType   EmploymentType?
-    employmentStatus EmploymentStatus @default(ACTIVE)
-    employeeLevelId  Int?
-    employeeLevel    EmployeeLevel?   @relation(fields: [employeeLevelId], references: [id])
+  // ─── Job Status & Dates ───
+  employmentType   EmploymentType?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  employeeLevelId  Int?
+  employeeLevel    EmployeeLevel?   @relation(fields: [employeeLevelId], references: [id])
 
-    hireDate           DateTime?
-    regularizationDate DateTime?
-    endDate            DateTime? // Maps to inactive_date
+  hireDate           DateTime?
+  regularizationDate DateTime?
+  endDate            DateTime? // Maps to inactive_date
 
-    // Replaces past_role boolean. If true, this is a historical record.
-    isPastRole Boolean @default(false)
+  // Replaces past_role boolean. If true, this is a historical record.
+  isPastRole Boolean @default(false)
 
-    contracts EmployeeContract[]
+  contracts EmployeeContract[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([employeeId, employmentStatus])
-    @@index([clientId])
-    @@map("employee_employment")
+  @@index([employeeId, employmentStatus])
+  @@index([clientId])
+  @@map("employee_employment")
 }
 
 // ─── Updated EmployeeContract ─────────────────────────────────────
 // Replace your existing EmployeeContract with this to hold salary/tax configs
 model EmployeeContract {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    employmentId Int
-    employment   EmployeeEmployment @relation(fields: [employmentId], references: [id])
+  employmentId Int
+  employment   EmployeeEmployment @relation(fields: [employmentId], references: [id])
 
-    // ─── HR & Legal Details ───
-    contractType ContractType
-    status       ContractStatus
+  // ─── HR & Legal Details ───
+  contractType ContractType
+  status       ContractStatus
 
-    contractStart DateTime
-    contractEnd   DateTime?
+  contractStart DateTime
+  contractEnd   DateTime?
 
-    scheduleId Int?
-    schedule   WorkSchedule? @relation(fields: [scheduleId], references: [id])
+  scheduleId Int?
+  schedule   WorkSchedule? @relation(fields: [scheduleId], references: [id])
 
-    workingHoursPerWeek Int?
-    signedDate          DateTime?
-    notes               String?   @db.Text
+  workingHoursPerWeek Int?
+  signedDate          DateTime?
+  notes               String?   @db.Text
 
-    // ─── THE CONNECTION TO PAYROLL MATH ───
-    compensations EmployeeCompensation[]
+  // ─── THE CONNECTION TO PAYROLL MATH ───
+  compensations EmployeeCompensation[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([employmentId])
-    @@map("employee_contract")
+  @@index([employmentId])
+  @@map("employee_contract")
 }
 
 // ─── Work Schedule Templates ──────────────────────────────────────
 // Reusable schedule definitions (e.g. Office Hours, Night Shift).
 model WorkSchedule {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
 
-    name     String
-    timezone String @default("Asia/Manila")
+  name     String
+  timezone String @default("Asia/Manila")
 
-    days      WorkScheduleDay[]
-    contracts EmployeeContract[]
+  days      WorkScheduleDay[]
+  contracts EmployeeContract[]
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@unique([clientId, name])
-    @@index([clientId])
-    @@map("work_schedule")
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("work_schedule")
 }
 
 // ─── Work Schedule Days ───────────────────────────────────────────
 // Per-day configuration for a WorkSchedule template.
 model WorkScheduleDay {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    scheduleId Int
-    schedule   WorkSchedule @relation(fields: [scheduleId], references: [id])
+  scheduleId Int
+  schedule   WorkSchedule @relation(fields: [scheduleId], references: [id])
 
-    // 0 = Sunday … 6 = Saturday (ISO: 1 = Monday)
-    dayOfWeek Int
+  // 0 = Sunday … 6 = Saturday (ISO: 1 = Monday)
+  dayOfWeek Int
 
-    startTime String
-    endTime   String
+  startTime String
+  endTime   String
 
-    breakStart String?
-    breakEnd   String?
+  breakStart String?
+  breakEnd   String?
 
-    isWorkingDay Boolean @default(true)
+  isWorkingDay Boolean @default(true)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@map("work_schedule_day")
+  @@map("work_schedule_day")
 }
 
 // ─── Document Requirements ───────────────────────────────────────
 model EmployeeRequirement {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    employeeId Int
-    employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id])
 
-    resume            String?
-    birthCertificate  String?
-    validId           String?
-    nbiClearance      String?
-    barangayClearance String?
-    medicalResults    String?
-    bankQr            String?
+  resume            String?
+  birthCertificate  String?
+  validId           String?
+  nbiClearance      String?
+  barangayClearance String?
+  medicalResults    String?
+  bankQr            String?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@map("atms_submitted_documents")
+  @@map("atms_submitted_documents")
 }
 
 // ─── Departments (Client-Scoped) ─────────────────────────────────
 model Department {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
 
-    name        String
-    description String?
+  name        String
+  description String?
 
-    positions   Position[]
-    employments EmployeeEmployment[]
+  positions   Position[]
+  employments EmployeeEmployment[]
 
-    // ─── NEW: Task & Workflow Relations ───
-    statuses       DepartmentTaskStatus[] @relation("DepartmentStatuses")
-    templateRoutes TaskTemplateRoute[]    @relation("DepartmentTemplateRoutes")
-    tasks          Task[]                 @relation("TaskDepartment")
+  // ─── NEW: Task & Workflow Relations ───
+  statuses       DepartmentTaskStatus[] @relation("DepartmentStatuses")
+  templateRoutes TaskTemplateRoute[]    @relation("DepartmentTemplateRoutes")
+  tasks          Task[]                 @relation("TaskDepartment")
 
-    createdAt    DateTime      @default(now())
-    taskSubtasks TaskSubtask[]
+  createdAt    DateTime      @default(now())
+  taskSubtasks TaskSubtask[]
 
-    @@unique([clientId, name])
+  @@unique([clientId, name])
 }
 
 // ─── Positions ───────────────────────────────────────────────────
 model Position {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    title       String
-    description String?
+  title       String
+  description String?
 
-    departmentId Int
-    department   Department @relation(fields: [departmentId], references: [id])
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
 
-    employments EmployeeEmployment[]
+  employments EmployeeEmployment[]
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 // ─── Employee Teams (Client-Scoped) ──────────────────────────────
 model EmployeeTeam {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
 
-    name String
+  name String
 
-    leaderId Int?
-    leader   Employee? @relation("TeamLeader", fields: [leaderId], references: [id])
+  leaderId Int?
+  leader   Employee? @relation("TeamLeader", fields: [leaderId], references: [id])
 
-    employments EmployeeEmployment[]
+  employments EmployeeEmployment[]
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@unique([clientId, name])
+  @@unique([clientId, name])
 }
 
 // ─── Employee Levels (Dynamic — position 1 = highest) ────────────
 model EmployeeLevel {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    clientId Int
-    client   Client @relation(fields: [clientId], references: [id])
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
 
-    name        String
-    position    Int // 1 = highest seniority (Executive = 1, Staff = 9)
-    description String?
+  name        String
+  position    Int // 1 = highest seniority (Executive = 1, Staff = 9)
+  description String?
 
-    employments EmployeeEmployment[]
+  employments EmployeeEmployment[]
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    @@unique([clientId, name])
-    @@unique([clientId, position])
-    @@index([clientId])
-    @@map("employee_level")
+  @@unique([clientId, name])
+  @@unique([clientId, position])
+  @@index([clientId])
+  @@map("employee_level")
 }

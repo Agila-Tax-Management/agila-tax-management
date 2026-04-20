@@ -1,65 +1,65 @@
 // prisma/accounting-models/journal-entries.prisma
 
 enum JournalTransactionType {
-    JOURNAL_ENTRY
-    INVOICE
-    PAYMENT
-    EXPENSE
-    RECEIPT
+  JOURNAL_ENTRY
+  INVOICE
+  PAYMENT
+  EXPENSE
+  RECEIPT
 }
 
 enum JournalEntryStatus {
-    DRAFT
-    POSTED
+  DRAFT
+  POSTED
 }
 
 // ─── Journal Entry (Header) ───────────────────────────────────────
 model JournalEntry {
-    id              String                 @id @default(cuid())
-    referenceNo     String                 @unique
-    transactionDate DateTime               @db.Date
-    transactionType JournalTransactionType @default(JOURNAL_ENTRY)
-    status          JournalEntryStatus     @default(DRAFT)
-    notes           String?                @db.Text
-    attachments     String[]               @default([])
+  id              String                 @id @default(cuid())
+  referenceNo     String                 @unique
+  transactionDate DateTime               @db.Date
+  transactionType JournalTransactionType @default(JOURNAL_ENTRY)
+  status          JournalEntryStatus     @default(DRAFT)
+  notes           String?                @db.Text
+  attachments     String[]               @default([])
 
-    // Optional client linkage (not enforced as a Prisma FK to avoid schema coupling)
-    clientId Int?
+  // Optional client linkage (not enforced as a Prisma FK to avoid schema coupling)
+  clientId Int?
 
-    // Tracks who created the entry (stored as string, not enforced FK)
-    createdById String?
+  // Tracks who created the entry (stored as string, not enforced FK)
+  createdById String?
 
-    lines JournalLine[]
+  lines JournalLine[]
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([transactionDate])
-    @@index([clientId])
-    @@index([status])
-    @@map("journal_entry")
+  @@index([transactionDate])
+  @@index([clientId])
+  @@index([status])
+  @@map("journal_entry")
 }
 
 // ─── Journal Line (Each debit/credit row) ────────────────────────
 model JournalLine {
-    id String @id @default(cuid())
+  id String @id @default(cuid())
 
-    journalEntryId String
-    journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
 
-    glAccountId String
-    glAccount   GlAccount @relation(fields: [glAccountId], references: [id], onDelete: Restrict)
+  glAccountId String
+  glAccount   GlAccount @relation(fields: [glAccountId], references: [id], onDelete: Restrict)
 
-    debit       Decimal? @db.Decimal(15, 2)
-    credit      Decimal? @db.Decimal(15, 2)
-    description String?
-    name        String?
-    sortOrder   Int      @default(0)
+  debit       Decimal? @db.Decimal(15, 2)
+  credit      Decimal? @db.Decimal(15, 2)
+  description String?
+  name        String?
+  sortOrder   Int      @default(0)
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([journalEntryId])
-    @@index([glAccountId])
-    @@map("journal_line")
+  @@index([journalEntryId])
+  @@index([glAccountId])
+  @@map("journal_line")
 }

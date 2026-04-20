@@ -19,7 +19,7 @@ const JO_INCLUDE = {
       businessType: true,
     },
   },
-  client: { select: { id: true, businessName: true, companyName: true } },
+  client: { select: { id: true, businessName: true } },
   preparedBy: { select: { id: true, name: true, email: true, image: true } },
   // Assigned approvers (default from sales settings)
   assignedOperationsManager: { select: { id: true, name: true, email: true, image: true } },
@@ -138,8 +138,16 @@ export async function PATCH(
   }
 
   // Check portal access for admin override
+  // Allow override if:
+  // 1. User is SUPER_ADMIN (full system access)
+  // 2. User is ADMIN (all portals access)
+  // 3. User has ADMIN role for SALES portal
+  // 4. User has SETTINGS role for SALES portal
   const hasAdminOverride =
-    session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+    session.user.role === "ADMIN" ||
+    session.user.role === "SUPER_ADMIN" ||
+    session.portalRoles?.SALES === "ADMIN" ||
+    session.portalRoles?.SALES === "SETTINGS";
 
   const { action } = parsed.data;
   const now = new Date();

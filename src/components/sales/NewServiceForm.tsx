@@ -155,6 +155,19 @@ const FREQUENCY_OPTIONS = [
   { value: 'DAILY', label: 'Daily' },
 ] as const;
 
+const COMPLIANCE_TYPE_OPTIONS = [
+  { value: 'NONE', label: 'None (No Compliance)' },
+  { value: 'EWT', label: 'EWT - Expanded Withholding Tax' },
+  { value: 'COMPENSATION', label: 'Compensation (1601-C)' },
+  { value: 'PERCENTAGE', label: 'Percentage Tax (2551Q)' },
+  { value: 'VAT', label: 'VAT (2550M / 2550Q)' },
+  { value: 'INCOME_TAX', label: 'Income Tax (1701 / 1702)' },
+  { value: 'SSS', label: 'SSS - Social Security System' },
+  { value: 'PHILHEALTH', label: 'PhilHealth' },
+  { value: 'PAGIBIG', label: 'Pag-IBIG' },
+  { value: 'LGU_RENEWAL', label: 'LGU / Mayor\'s Permit Renewal' },
+] as const;
+
 const INITIAL_FORM = {
   code: '',
   name: '',
@@ -163,6 +176,7 @@ const INITIAL_FORM = {
   serviceRate: '',
   isVatable: false,
   status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'ARCHIVED',
+  complianceType: 'NONE' as typeof COMPLIANCE_TYPE_OPTIONS[number]['value'],
   taskTemplateIds: [] as number[],
 };
 
@@ -226,6 +240,7 @@ export function NewServiceForm({ billingType }: NewServiceFormProps): React.Reac
           serviceRate: parseFloat(form.serviceRate),
           isVatable: form.isVatable,
           status: form.status,
+          complianceType: billingType === 'RECURRING' ? form.complianceType : 'NONE',
           taskTemplateIds: form.taskTemplateIds,
         }),
       });
@@ -367,6 +382,26 @@ export function NewServiceForm({ billingType }: NewServiceFormProps): React.Reac
                   className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
                 >
                   {FREQUENCY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Compliance Type — only for RECURRING */}
+            {isRecurring && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Compliance Type</label>
+                <select
+                  value={form.complianceType}
+                  onChange={(e) =>
+                    setForm({ ...form, complianceType: e.target.value as typeof form.complianceType })
+                  }
+                  className="w-full h-10 bg-white border border-slate-200 rounded-lg px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                >
+                  {COMPLIANCE_TYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>

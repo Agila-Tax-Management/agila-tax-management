@@ -71,7 +71,9 @@ export type TsaListItem = {
   quoteNumber: string | null;
   packageName: string | null;
   recurringServiceNames: string[];
-  oneTimeServiceNames: string[];
+  oneTimeServiceNames: string[];  // Deprecated: use freeOneTimeServiceNames + oneTimeServicesWithPricing
+  freeOneTimeServiceNames: string[];  // Free one-time services (rate = 0)
+  oneTimeServicesWithPricing: string[];  // Paid one-time services formatted with price
 };
 
 /**
@@ -127,6 +129,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const recurringServiceNames = lineItems
       .filter((li) => li.service.billingType === "RECURRING")
       .map((li) => li.service.name);
+    
+    // Separate free vs paid one-time services
+    const freeOneTimeServiceNames = lineItems
+      .filter((li) => li.service.billingType === "ONE_TIME" && Number(li.negotiatedRate) === 0)
+      .map((li) => li.service.name);
+    
+    const oneTimeServicesWithPricing = lineItems
+      .filter((li) => li.service.billingType === "ONE_TIME" && Number(li.negotiatedRate) > 0)
+      .map((li) => {
+        const rate = Number(li.negotiatedRate);
+        return `${li.service.name} - P${rate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+      });
+    
+    // Deprecated: Keep for backward compatibility
     const oneTimeServiceNames = lineItems
       .filter((li) => li.service.billingType === "ONE_TIME")
       .map((li) => li.service.name);
@@ -163,6 +179,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       packageName,
       recurringServiceNames,
       oneTimeServiceNames,
+      freeOneTimeServiceNames,
+      oneTimeServicesWithPricing,
     };
   });
 

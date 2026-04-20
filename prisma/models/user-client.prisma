@@ -30,8 +30,8 @@ model ClientSession {
 // ─── Client Accounts (credential + OAuth) ─────────────────────────
 // BetterAuth stores the hashed password here — never on ClientUser directly.
 model ClientAccount {
-  id        String @id
-  accountId String
+  id         String @id
+  accountId  String
   providerId String
 
   userId String
@@ -85,16 +85,16 @@ model ClientUser {
   sessions    ClientSession[]
   accounts    ClientAccount[]
 
-  activityLogs    ActivityLog[]  @relation("ClientUserLogs")
-  notifications   Notification[] @relation("ClientUserNotifications")
-  
+  activityLogs  ActivityLog[]  @relation("ClientUserLogs")
+  notifications Notification[] @relation("ClientUserNotifications")
+
   approvedOvertimes OvertimeRequest[] @relation("ClientOvertimeApprover")
   approvedLeaves    LeaveRequest[]    @relation("ClientLeaveApprover")
   approvedCoas      CoaRequest[]      @relation("ClientCoaApprover")
-  
-  payslipsApproved     Payslip[]         @relation("ClientPayslipApprover")
-  payslipsAcknowledged Payslip[]         @relation("ClientPayslipAcknowledger")
-  cashAdvancesApproved  CashAdvance[] @relation("ClientCashAdvanceApprover")
+
+  payslipsApproved     Payslip[]     @relation("ClientPayslipApprover")
+  payslipsAcknowledged Payslip[]     @relation("ClientPayslipAcknowledger")
+  cashAdvancesApproved CashAdvance[] @relation("ClientCashAdvanceApprover")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -119,4 +119,3 @@ model ClientUserAssignment {
   @@unique([clientUserId, clientId])
   @@map("client_user_assignment")
 }
-

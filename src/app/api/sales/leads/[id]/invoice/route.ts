@@ -134,6 +134,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
           unitPrice,
           total: lineTotal,
           isVatable: li.isVatable,
+          category: "SERVICE_FEE" as const,
         };
       });
 

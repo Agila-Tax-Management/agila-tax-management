@@ -1,117 +1,68 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRole } from '@/lib/role-context';
 import { ROLE_PERMISSIONS } from '@/lib/constants';
 import {
   Bell, Clock, Wallet, FileCheck, Globe, Settings,
-  CheckCheck, Trash2, ArrowLeft,
+  CheckCheck, Trash2, ArrowLeft, Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Badge } from '@/components/UI/Badge';
+import type { NotificationType } from '@/generated/prisma/client';
 
 type NotifCategory = 'timesheet' | 'payroll' | 'leave' | 'portal' | 'system';
 type FilterTab = 'all' | 'unread' | NotifCategory;
 
 interface Notification {
   id: string;
-  category: NotifCategory;
+  type: NotificationType;
   title: string;
   message: string;
-  time: string;
-  read: boolean;
-  requiredPermission?: string;
-  hrManagerOnly?: boolean;
-  href?: string;
+  linkUrl: string | null;
+  isRead: boolean;
+  createdAt: string;
+  priority: string;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'ts1', category: 'timesheet',
-    title: 'Time In Reminder',
-    message: "Don't forget to clock in! Office hours start at 8:00 AM.",
-    time: '8 mins ago', read: false,
-    requiredPermission: 'timesheet', href: '/dashboard/timesheet',
-  },
-  {
-    id: 'ts2', category: 'timesheet',
-    title: 'Cut-Off Day Reminder',
-    message: 'Today is Friday — submit all pending timesheets by 12:00 NN.',
-    time: '1 hr ago', read: false,
-    requiredPermission: 'timesheet', href: '/dashboard/timesheet',
-  },
-  {
-    id: 'pr1', category: 'payroll',
-    title: 'Payroll Released',
-    message: 'Your payslip for Feb 16–28, 2026 is now available.',
-    time: '2 days ago', read: false,
-    requiredPermission: 'payslips', href: '/dashboard/payslips',
-  },
-  {
-    id: 'pr2', category: 'payroll',
-    title: 'Upcoming Payroll: Mar 20',
-    message: 'Next payroll release is on March 20, 2026.',
-    time: '3 days ago', read: true,
-    requiredPermission: 'payslips', href: '/dashboard/payslips',
-  },
-  {
-    id: 'lv1', category: 'leave',
-    title: 'Leave Approved',
-    message: 'Your leave request for Mar 10–11 has been approved by HR.',
-    time: '5 hrs ago', read: false,
-    requiredPermission: 'hr-apps', href: '/dashboard/hr-apps',
-  },
-  {
-    id: 'lv2', category: 'leave',
-    title: '3 Leave Requests Pending',
-    message: '3 leave requests are awaiting your approval in the HR portal.',
-    time: '1 hr ago', read: false,
-    hrManagerOnly: true, href: '/portals/hr/leaves',
-  },
-  {
-    id: 'p1', category: 'portal',
-    title: 'Sales Portal — New Leads',
-    message: '5 new leads have been assigned to you today.',
-    time: '30 mins ago', read: false,
-    requiredPermission: 'asp', href: '/portals/sales',
-  },
-  {
-    id: 'p2', category: 'portal',
-    title: 'Compliance Portal — Due Soon',
-    message: '2 filings are due within the next 3 days.',
-    time: '2 hrs ago', read: false,
-    requiredPermission: 'compliance', href: '/portals/compliance',
-  },
-  {
-    id: 'p3', category: 'portal',
-    title: 'Liaison Portal',
-    message: 'A new client inquiry has been received from Cebu.',
-    time: '4 hrs ago', read: true,
-    requiredPermission: 'liaison', href: '/portals/liaison',
-  },
-  {
-    id: 'p4', category: 'portal',
-    title: 'PCF Portal',
-    message: 'February budget report is ready for your review.',
-    time: '1 day ago', read: true,
-    requiredPermission: 'pcf', href: '/portals/pcf',
-  },
-  {
-    id: 'p5', category: 'portal',
-    title: 'HR Portal — Recruitment',
-    message: '2 new applicants submitted their requirements for review.',
-    time: '3 hrs ago', read: false,
-    requiredPermission: 'teams', href: '/portals/hr/recruitment',
-  },
-  {
-    id: 'sy1', category: 'system',
-    title: 'System Update',
-    message: "ATMS Hub v2.1 is live — new dashboard features and fixes.",
-    time: '2 days ago', read: true,
-  },
-];
+// Map database NotificationType to UI category for icon/color selection
+function mapTypeToCategory(type: NotificationType): NotifCategory {
+  switch (type) {
+    case 'HR':
+      return 'leave';
+    case 'PAYROLL':
+      return 'payroll';
+    case 'TASK':
+      return 'portal';
+    case 'DOCUMENT':
+      return 'portal';
+    case 'ANNOUNCEMENT':
+      return 'system';
+    case 'SYSTEM':
+    default:
+      return 'system';
+  }
+}
+
+// Format relative time
+function formatRelativeTime(isoDate: string): string {
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins === 1) return '1 min ago';
+  if (diffMins < 60) return `${diffMins} mins ago`;
+  if (diffHours === 1) return '1 hr ago';
+  if (diffHours < 24) return `${diffHours} hrs ago`;
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
+}
 
 const CATEGORY_META: Record<
   NotifCategory,
@@ -138,44 +89,90 @@ export function NotificationsView() {
   const { role } = useRole();
   const router = useRouter();
   const [filter, setFilter] = useState<FilterTab>('all');
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch notifications from API
+  const fetchNotifications = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/notifications?limit=50');
+      if (res.ok) {
+        const json = (await res.json()) as { data: Notification[]; unreadCount: number };
+        setNotifications(json.data);
+        setUnreadCount(json.unreadCount);
+      }
+    } catch (err) {
+      console.error('[NotificationsView] fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    void fetchNotifications();
+  }, []);
 
   const perms = ROLE_PERMISSIONS[role] ?? [];
-  const isAdmin = perms.includes('*');
-  const isHRManager = role === 'HR' || isAdmin;
-
-  const visible = notifications.filter(n => {
-    if (n.hrManagerOnly) return isHRManager;
-    if (!n.requiredPermission) return true;
-    return isAdmin || perms.includes(n.requiredPermission);
-  });
+  const _isAdmin = perms.includes('*');
 
   const displayed = (() => {
-    if (filter === 'all') return visible;
-    if (filter === 'unread') return visible.filter(n => !n.read);
-    return visible.filter(n => n.category === filter);
+    if (filter === 'all') return notifications;
+    if (filter === 'unread') return notifications.filter(n => !n.isRead);
+    return notifications.filter(n => mapTypeToCategory(n.type) === filter);
   })();
 
-  const unreadCount = visible.filter(n => !n.read).length;
+  const markRead = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'PATCH' });
+      setNotifications(prev => prev.map(n => (n.id === id ? { ...n, isRead: true } : n)));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('[NotificationsView] mark read error:', err);
+    }
+  };
 
-  const markRead = (id: string) =>
-    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+  const markAllRead = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('[NotificationsView] mark all read error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const markAllRead = () =>
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-
-  const clearRead = () =>
-    setNotifications(prev => prev.filter(n => !n.read));
+  const clearRead = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/notifications/clear-all', { method: 'DELETE' });
+      setNotifications(prev => prev.filter(n => !n.isRead));
+      void fetchNotifications(); // Refresh to get accurate state
+    } catch (err) {
+      console.error('[NotificationsView] clear read error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleClick = (n: Notification) => {
-    markRead(n.id);
-    if (n.href) router.push(n.href);
+    void markRead(n.id);
+    if (n.linkUrl) router.push(n.linkUrl);
   };
 
   const getCategoryCount = (cat: FilterTab) => {
-    if (cat === 'all') return visible.length;
+    if (cat === 'all') return notifications.length;
     if (cat === 'unread') return unreadCount;
-    return visible.filter(n => n.category === cat).length;
+    return notifications.filter(n => mapTypeToCategory(n.type) === cat).length;
   };
 
   return (
@@ -204,19 +201,21 @@ export function NotificationsView() {
             <Button
               variant="outline"
               className="text-xs h-9 gap-1.5"
-              onClick={markAllRead}
+              onClick={() => { void markAllRead(); }}
+              disabled={loading}
             >
-              <CheckCheck size={14} />
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
               Mark all as read
             </Button>
           )}
-          {visible.some(n => n.read) && (
+          {notifications.some(n => n.isRead) && (
             <Button
               variant="outline"
               className="text-xs h-9 gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-              onClick={clearRead}
+              onClick={() => { void clearRead(); }}
+              disabled={loading}
             >
-              <Trash2 size={14} />
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
               Clear read
             </Button>
           )}
@@ -257,25 +256,32 @@ export function NotificationsView() {
       <Card className="border-border overflow-hidden divide-y divide-border">
         {displayed.length === 0 ? (
           <div className="py-20 text-center">
-            <Bell size={40} className="mx-auto mb-3 text-muted-foreground/30" />
+            {loading ? (
+              <Loader2 size={40} className="mx-auto mb-3 text-muted-foreground/30 animate-spin" />
+            ) : (
+              <Bell size={40} className="mx-auto mb-3 text-muted-foreground/30" />
+            )}
             <p className="text-sm font-medium text-muted-foreground">
-              No {filter === 'unread' ? 'unread ' : filter !== 'all' ? `${filter} ` : ''}notifications
+              {loading ? 'Loading notifications...' : `No ${filter === 'unread' ? 'unread ' : filter !== 'all' ? `${filter} ` : ''}notifications`}
             </p>
-            <p className="text-xs text-muted-foreground/60 mt-1">
-              {filter !== 'all'
-                ? 'Try selecting a different filter.'
-                : "You're all caught up!"}
-            </p>
+            {!loading && (
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                {filter !== 'all'
+                  ? 'Try selecting a different filter.'
+                  : "You're all caught up!"}
+              </p>
+            )}
           </div>
         ) : (
           displayed.map(n => {
-            const meta = CATEGORY_META[n.category];
+            const category = mapTypeToCategory(n.type);
+            const meta = CATEGORY_META[category];
             return (
               <button
                 key={n.id}
                 onClick={() => handleClick(n)}
                 className={`w-full text-left px-5 py-4 flex gap-4 items-start transition-colors group ${
-                  !n.read
+                  !n.isRead
                     ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
                     : 'hover:bg-muted/50'
                 }`}
@@ -300,11 +306,11 @@ export function NotificationsView() {
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {n.message}
                   </p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-1.5">{n.time}</p>
+                  <p className="text-[11px] text-muted-foreground/60 mt-1.5">{formatRelativeTime(n.createdAt)}</p>
                 </div>
 
                 {/* Unread dot */}
-                {!n.read && (
+                {!n.isRead && (
                   <span className="mt-3 shrink-0 w-2.5 h-2.5 rounded-full bg-indigo-500" />
                 )}
               </button>

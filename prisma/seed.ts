@@ -11,6 +11,48 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
+/* ─── Helper: Generate Next Invoice Number ────────────────────────── */
+async function getNextInvoiceNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  
+  const latest = await prisma.invoice.findFirst({
+    where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: "desc" },
+    select: { invoiceNumber: true },
+  });
+  
+  let nextSeq = 1;
+  if (latest?.invoiceNumber) {
+    const parts = latest.invoiceNumber.split("-");
+    const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+    if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+  }
+  
+  return `${prefix}${String(nextSeq).padStart(4, "0")}`;
+}
+
+/* ─── Helper: Generate Next Payment Number ────────────────────────── */
+async function getNextPaymentNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `PAY-${year}-`;
+  
+  const latest = await prisma.payment.findFirst({
+    where: { paymentNumber: { startsWith: prefix } },
+    orderBy: { paymentNumber: "desc" },
+    select: { paymentNumber: true },
+  });
+  
+  let nextSeq = 1;
+  if (latest?.paymentNumber) {
+    const parts = latest.paymentNumber.split("-");
+    const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+    if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+  }
+  
+  return `${prefix}${String(nextSeq).padStart(4, "0")}`;
+}
+
 /* ─── Portal App definitions ──────────────────────────────────────── */
 
 const PORTAL_APPS = [
@@ -1085,6 +1127,7 @@ async function main(): Promise<void> {
       serviceRate: 3500,
       isVatable: true,
       status: "ACTIVE",
+      complianceType: "EWT",
       taskTemplates: vatTemplate ? { create: [{ taskTemplateId: vatTemplate.id }] } : undefined,
       governmentOffices: birOffice ? { connect: [{ id: birOffice.id }] } : undefined,
       cities: cebuCity ? { connect: [{ id: cebuCity.id }] } : undefined,
@@ -1160,6 +1203,282 @@ async function main(): Promise<void> {
     },
   });
   console.log("  ✓ Service Package 'Business Starter Kit' seeded");
+
+  // ── 10.7b. Seed Compliance Records with EWT Items & Invoices ─────
+
+  // Find the Santos General Merchandise client
+  const santosClient = await prisma.client.findFirst({
+    where: { companyCode: "comp-001" },
+  });
+
+  const accountantUser = await prisma.user.findFirst({ where: { email: "employee@agila.com" } });
+  const superAdminUser = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
+
+  if (santosClient && ewtService && accountantUser) {
+    // Create ClientCompliance subscription
+    const clientCompliance = await prisma.clientCompliance.upsert({
+      where: {
+        clientId_serviceId: {
+          clientId: santosClient.id,
+          serviceId: ewtService.id,
+        },
+      },
+      update: {},
+      create: {
+        clientId: santosClient.id,
+        serviceId: ewtService.id,
+        status: "ACTIVE",
+        processorId: accountantUser.id,
+        verifierId: superAdminUser?.id,
+        paymentProcessorId: accountantUser.id,
+        paymentApproverId: superAdminUser?.id,
+        finalApproverId: superAdminUser?.id,
+      },
+    });
+
+    console.log(`  ✓ ClientCompliance subscription created for Santos General Merchandise`);
+
+    // Define the 4 months of compliance records
+    const COMPLIANCE_MONTHS = [
+      {
+        month: "January 2026",
+        coverageDate: new Date("2026-01-01"),
+        deadline: new Date("2026-02-10"),
+        invoiceIssueDate: new Date("2026-01-05"),
+        invoiceDueDate: new Date("2026-01-20"),
+        status: "PAID" as const,
+        filingStatus: "FILED" as const,
+        processStatus: "COMPLETED" as const,
+      },
+      {
+        month: "February 2026",
+        coverageDate: new Date("2026-02-01"),
+        deadline: new Date("2026-03-10"),
+        invoiceIssueDate: new Date("2026-02-05"),
+        invoiceDueDate: new Date("2026-02-20"),
+        status: "PAID" as const,
+        filingStatus: "FILED" as const,
+        processStatus: "COMPLETED" as const,
+      },
+      {
+        month: "March 2026",
+        coverageDate: new Date("2026-03-01"),
+        deadline: new Date("2026-04-10"),
+        invoiceIssueDate: new Date("2026-03-05"),
+        invoiceDueDate: new Date("2026-03-20"),
+        status: "PAID" as const,
+        filingStatus: "FILED" as const,
+        processStatus: "COMPLETED" as const,
+      },
+      {
+        month: "April 2026",
+        coverageDate: new Date("2026-04-01"),
+        deadline: new Date("2026-05-10"),
+        invoiceIssueDate: new Date("2026-04-05"),
+        invoiceDueDate: new Date("2026-04-20"),
+        status: "UNPAID" as const,
+        filingStatus: "PREPARING" as const,
+        processStatus: "PENDING" as const,
+      },
+    ];
+
+    for (const monthData of COMPLIANCE_MONTHS) {
+      // Create ComplianceRecord
+      const existingRecord = await prisma.complianceRecord.findFirst({
+        where: {
+          clientComplianceId: clientCompliance.id,
+          coverageDate: monthData.coverageDate,
+          amendmentVersion: 0,
+        },
+      });
+
+      let complianceRecord;
+      if (!existingRecord) {
+        complianceRecord = await prisma.complianceRecord.create({
+          data: {
+            clientComplianceId: clientCompliance.id,
+            coverageDate: monthData.coverageDate,
+            deadline: monthData.deadline,
+            isZeroFiling: "NONE",
+            amendmentVersion: 0,
+            status: "ACTIVE",
+            filingStatus: monthData.filingStatus,
+            processStatus: monthData.processStatus,
+            completionRate: monthData.processStatus === "COMPLETED" ? 100 : 25,
+          },
+        });
+      } else {
+        complianceRecord = existingRecord;
+      }
+
+      // Create 3 EWT items per month
+      const EWT_ITEMS = [
+        {
+          name: "Basic Rent",
+          grossAmount: 15000.00,
+          vatAmount: 0.00,
+          netOfVat: 15000.00,
+          expandedTaxAmount: 750.00, // 5%
+        },
+        {
+          name: "CUSA (Common Use Service Area)",
+          grossAmount: 3000.00,
+          vatAmount: 0.00,
+          netOfVat: 3000.00,
+          expandedTaxAmount: 150.00, // 5%
+        },
+        {
+          name: "Parking",
+          grossAmount: 2000.00,
+          vatAmount: 0.00,
+          netOfVat: 2000.00,
+          expandedTaxAmount: 100.00, // 5%
+        },
+      ];
+
+      // Check if EWT items already exist
+      const existingEwtItems = await prisma.ewtItem.findMany({
+        where: { complianceRecordId: complianceRecord.id },
+      });
+
+      if (existingEwtItems.length === 0) {
+        for (const item of EWT_ITEMS) {
+          await prisma.ewtItem.create({
+            data: {
+              complianceRecordId: complianceRecord.id,
+              name: item.name,
+              isVatable: false,
+              grossAmount: item.grossAmount,
+              vatAmount: item.vatAmount,
+              netOfVat: item.netOfVat,
+              expandedTaxAmount: item.expandedTaxAmount,
+              effectiveMonth: monthData.month,
+              fileUrls: [],
+            },
+          });
+        }
+      }
+
+      // Calculate totals
+      const serviceFee = 2500.00; // Monthly service fee
+      const totalEwtTax = EWT_ITEMS.reduce((sum, item) => sum + item.expandedTaxAmount, 0); // 1000.00
+      const subTotal = serviceFee + totalEwtTax; // 3500.00
+      const taxAmount = serviceFee * 0.12; // 300.00 (VAT on service fee only)
+      const totalAmount = serviceFee + taxAmount + totalEwtTax; // 3800.00
+
+      // Create Invoice — check if invoice exists for this compliance record
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: {
+          clientId: santosClient.id,
+          issueDate: monthData.invoiceIssueDate,
+          totalAmount: totalAmount,
+        },
+      });
+
+      let invoice;
+      if (!existingInvoice) {
+        const invoiceNumber = await getNextInvoiceNumber();
+        invoice = await prisma.invoice.create({
+          data: {
+            invoiceNumber,
+            clientId: santosClient.id,
+            status: monthData.status,
+            issueDate: monthData.invoiceIssueDate,
+            dueDate: monthData.invoiceDueDate,
+            subTotal: subTotal,
+            taxAmount: taxAmount,
+            discountAmount: 0.00,
+            totalAmount: totalAmount,
+            balanceDue: monthData.status === "PAID" ? 0.00 : totalAmount,
+            terms: "Net 15",
+            notes: `EWT Filing for ${monthData.month}`,
+          },
+        });
+
+        // Create Invoice Items
+        // 1. Service fee line item
+        await prisma.invoiceItem.create({
+          data: {
+            invoiceId: invoice.id,
+            description: `EWT Filing Service - ${monthData.month}`,
+            quantity: 1,
+            unitPrice: serviceFee,
+            total: serviceFee,
+            category: "SERVICE_FEE",
+            isVatable: true,
+          },
+        });
+
+        // 2. Tax reimbursement line items (one per EWT item)
+        for (const item of EWT_ITEMS) {
+          await prisma.invoiceItem.create({
+            data: {
+              invoiceId: invoice.id,
+              description: `EWT - ${item.name} - ${monthData.month}`,
+              quantity: 1,
+              unitPrice: item.expandedTaxAmount,
+              total: item.expandedTaxAmount,
+              category: "TAX_REIMBURSEMENT",
+              isVatable: false,
+            },
+          });
+        }
+      } else {
+        invoice = existingInvoice;
+      }
+
+      // Create Payment for PAID invoices (Jan, Feb, Mar)
+      if (monthData.status === "PAID") {
+        const existingPayment = await prisma.payment.findFirst({
+          where: {
+            clientId: santosClient.id,
+            invoiceId: invoice.id,
+          },
+        });
+
+        if (!existingPayment) {
+          const paymentNumber = await getNextPaymentNumber();
+          const payment = await prisma.payment.create({
+            data: {
+              paymentNumber,
+              clientId: santosClient.id,
+              invoiceId: invoice.id,
+              recordedById: accountantUser.id,
+              amount: totalAmount,
+              paymentDate: new Date(monthData.invoiceDueDate.getTime() - 2 * 24 * 60 * 60 * 1000), // 2 days before due
+              method: "BANK_TRANSFER",
+              unusedAmount: 0.00,
+              referenceNumber: `BT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+              notes: `Payment for ${monthData.month} EWT Filing`,
+            },
+          });
+
+          // Create Payment Allocation
+          await prisma.paymentAllocation.create({
+            data: {
+              paymentId: payment.id,
+              invoiceId: invoice.id,
+              amountApplied: totalAmount,
+            },
+          });
+        }
+      }
+
+      // Link invoice to compliance record
+      if (!complianceRecord.invoiceId) {
+        await prisma.complianceRecord.update({
+          where: { id: complianceRecord.id },
+          data: { invoiceId: invoice.id },
+        });
+      }
+    }
+
+    console.log(`  ✓ 4 ComplianceRecords (Jan-Apr 2026) with 3 EWT items each seeded`);
+    console.log(`  ✓ 4 Invoices created (Jan-Mar PAID, Apr UNPAID)`);
+    console.log(`  ✓ 3 Payment records created for paid invoices`);
+  } else {
+    console.warn("  ⚠ Skipping compliance records — client or service not found");
+  }
 
   // ── 10.8. Seed Sample Leads (Pipeline Demo) ──────────────────────
   {
@@ -1373,11 +1692,18 @@ async function main(): Promise<void> {
           },
         });
       }
-      const existsINV1 = await prisma.invoice.findFirst({ where: { invoiceNumber: "INV-2026-0001" } });
+      // Create invoice for Lead 5 — check by leadId and total amount instead of hardcoded number
+      const existsINV1 = await prisma.invoice.findFirst({
+        where: {
+          leadId: lead5.id,
+          totalAmount: 3920,
+        },
+      });
       if (!existsINV1) {
+        const invoiceNumber = await getNextInvoiceNumber();
         await prisma.invoice.create({
           data: {
-            invoiceNumber: "INV-2026-0001",
+            invoiceNumber,
             leadId: lead5.id,
             status: "UNPAID",
             dueDate: new Date("2026-04-18"),
@@ -1394,6 +1720,7 @@ async function main(): Promise<void> {
                 unitPrice: 3500,
                 total: 3500,
                 isVatable: true,
+                category: "SERVICE_FEE",
               }],
             },
           },
@@ -1455,11 +1782,18 @@ async function main(): Promise<void> {
           },
         });
       }
-      const existsINV2 = await prisma.invoice.findFirst({ where: { invoiceNumber: "INV-2026-0002" } });
+      // Create invoice for Lead 6 — check by leadId and total amount instead of hardcoded number
+      const existsINV2 = await prisma.invoice.findFirst({
+        where: {
+          leadId: lead6.id,
+          totalAmount: 5600,
+        },
+      });
       if (!existsINV2) {
+        const invoiceNumber = await getNextInvoiceNumber();
         await prisma.invoice.create({
           data: {
-            invoiceNumber: "INV-2026-0002",
+            invoiceNumber,
             leadId: lead6.id,
             status: "PAID",
             dueDate: new Date("2026-04-10"),
@@ -1471,8 +1805,22 @@ async function main(): Promise<void> {
             terms: "Net 7",
             items: {
               create: [
-                { description: "BIR TIN Registration (New Business)",          quantity: 1, unitPrice: 1500, total: 1500, isVatable: true },
-                { description: "Expanded Withholding Tax & VAT Filing", quantity: 1, unitPrice: 3500, total: 3500, isVatable: true },
+                {
+                  description: "BIR TIN Registration (New Business)",
+                  quantity: 1,
+                  unitPrice: 1500,
+                  total: 1500,
+                  isVatable: true,
+                  category: "SERVICE_FEE",
+                },
+                {
+                  description: "Expanded Withholding Tax & VAT Filing",
+                  quantity: 1,
+                  unitPrice: 3500,
+                  total: 3500,
+                  isVatable: true,
+                  category: "SERVICE_FEE",
+                },
               ],
             },
           },
@@ -1484,7 +1832,6 @@ async function main(): Promise<void> {
   }
 
   // ── 11. Seed Sample Tasks ─────────────────────────────────────────
-  const superAdminUser = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } });
   const superAdminEmployee = superAdminUser
     ? await prisma.employee.findFirst({ where: { userId: superAdminUser.id } })
     : null;
@@ -1819,25 +2166,25 @@ async function main(): Promise<void> {
       ],
     },
     {
-      referenceNo: 'INV-2026-0001',
+      referenceNo: 'JE-2026-0002',
       transactionDate: new Date('2026-03-02'),
       transactionType: 'INVOICE',
       status: 'POSTED',
       notes: 'Tax consultation services billed.',
       lines: [
-        { code: '1010', debit: 15000, description: 'Invoice #INV-2026-0001', name: 'Santos & Co.',       sortOrder: 0 },
+        { code: '1010', debit: 15000, description: 'Santos & Co. invoice', name: 'Santos & Co.',       sortOrder: 0 },
         { code: '4001', credit: 15000, description: 'Tax consultation — Q1', name: 'Santos & Co.',       sortOrder: 1 },
       ],
     },
     {
-      referenceNo: 'PMT-2026-0001',
+      referenceNo: 'JE-2026-0003',
       transactionDate: new Date('2026-03-05'),
       transactionType: 'PAYMENT',
       status: 'POSTED',
       notes: 'Partial payment received — GCash.',
       lines: [
         { code: '1001', debit: 7500, description: 'Partial payment received',    name: 'Santos & Co.', sortOrder: 0 },
-        { code: '1010', credit: 7500, description: 'Applied to INV-2026-0001',   name: 'Santos & Co.', sortOrder: 1 },
+        { code: '1010', credit: 7500, description: 'Applied to invoice',   name: 'Santos & Co.', sortOrder: 1 },
       ],
     },
     {

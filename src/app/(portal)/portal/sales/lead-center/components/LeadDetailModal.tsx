@@ -260,6 +260,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const invoicePaid = primaryInvoice?.status === 'PAID';
   const acceptedQuote: LeadQuote | null = appliedLead.quotes.find((q) => q.status === 'ACCEPTED') ?? null;
   const activeTsa: LeadTsaInfo | null = appliedLead.tsaContracts?.[0] ?? null;
+  const hasActiveNonVoidedTSA = activeTsa && activeTsa.status !== 'VOID';
 
   return (
     <Modal
@@ -540,14 +541,16 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                       >
                         View
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleDeleteQuote(q.id); }}
-                        className="text-rose-400 hover:text-rose-600 shrink-0"
-                        title="Delete quotation"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {!hasActiveNonVoidedTSA && (
+                        <button
+                          type="button"
+                          onClick={() => { void handleDeleteQuote(q.id); }}
+                          className="text-rose-400 hover:text-rose-600 shrink-0"
+                          title="Delete quotation"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -594,10 +597,10 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                   <Button
                     variant="outline"
                     onClick={() => setIsTsaOpen(true)}
-                    disabled={!acceptedQuote && !activeTsa}
+                    disabled={!acceptedQuote && (!activeTsa || activeTsa.status !== 'VOID')}
                     className="text-xs py-1 px-2.5 h-auto"
                   >
-                    {activeTsa ? 'Manage TSA' : 'Create TSA'}
+                    {activeTsa && activeTsa.status !== 'VOID' ? 'Manage TSA' : 'Create TSA'}
                   </Button>
                 </div>
               </div>
@@ -630,7 +633,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
 
           {/* Footer actions */}
           <div className="flex items-center gap-2 pt-3 border-t border-border">
-            {!(activeTsa?.status === 'SIGNED' && invoicePaid) && (
+            {!hasActiveNonVoidedTSA && (
               <Button
                 variant="outline"
                 onClick={() => { void handleDelete(); }}

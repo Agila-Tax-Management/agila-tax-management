@@ -201,7 +201,7 @@ export async function provisionLeadAccountAction(
       });
 
       // ── Step 1e: Migrate lead invoices to the new client ─────
-      await tx.invoice.updateMany({
+      const migratedCount = await tx.invoice.updateMany({
         where: { leadId },
         data: { clientId: newClient.id, leadId: null },
       });
@@ -212,6 +212,8 @@ export async function provisionLeadAccountAction(
         data: {
           isAccountCreated: true,
           convertedClientId: newClient.id,
+          // Set isCreatedInvoice if any invoices were migrated
+          isCreatedInvoice: migratedCount.count > 0 ? true : undefined,
         },
       });
 
