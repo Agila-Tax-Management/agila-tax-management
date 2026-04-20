@@ -45,7 +45,7 @@ interface DashboardData {
 
 /**
  * GET /api/task-management/dashboard
- * Returns aggregated task statistics for the dashboard
+ * Returns aggregated task statistics for the dashboard (optimized with database aggregation)
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -56,132 +56,189 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Fetch all tasks with necessary relations
-  const allTasks = await prisma.task.findMany({
-    select: {
-      id: true,
-      name: true,
-      priority: true,
-      dueDate: true,
-      createdAt: true,
-      client: { select: { id: true, businessName: true } },
-      department: { select: { id: true, name: true } },
-      status: { select: { id: true, name: true, color: true, isExitStep: true } },
-      assignedTo: { select: { id: true, firstName: true, lastName: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  // Parallel database queries for optimal performance
+  const [
+    total,
+    statusGroups,
+    departmentGroups,
+    urgentCount,
+    overdueTasksRaw,
+    upcomingTasksRaw,
+    exitStepStatuses,
+  ] = await Promise.all([
+    // Total task count
+    prisma.task.count(),
 
-  // Helper: check if task is done based on status name or isExitStep flag
-  const isDone = (task: typeof allTasks[0]) => {
-    if (!task.status) return false;
-    return task.status.isExitStep || /done|complet|finish/i.test(task.status.name);
-  };
+    // Group by status for breakdown
+    prisma.task.groupBy({
+      by: ['statusId'],
+      _count: { id: true },
+    }),
 
-  // Helper: check if task is overdue
-  const isOverdue = (task: typeof allTasks[0]) => {
-    if (!task.dueDate || isDone(task)) return false;
-    return new Date(task.dueDate) < today;
-  };
+    // Group by department
+    prisma.task.groupBy({
+      by: ['departmentId'],
+      _count: { id: true },
+    }),
 
-  // Calculate overall stats
-  const total = allTasks.length;
-  const doneTasks = allTasks.filter(isDone);
-  const done = doneTasks.length;
+    // Urgent active tasks count
+    prisma.task.count({
+      where: {
+        priority: 'URGENT',
+        status: { isExitStep: false },
+      },
+    }),
+
+    // Overdue tasks (top 8)
+    prisma.task.findMany({
+      where: {
+        dueDate: { lt: today },
+        status: { isExitStep: false },
+      },
+      select: {
+        id: true,
+        name: true,
+        priority: true,
+        dueDate: true,
+        client: { select: { id: true, businessName: true } },
+        department: { select: { id: true, name: true } },
+        status: { select: { id: true, name: true, color: true, isExitStep: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { dueDate: 'asc' },
+      take: 8,
+    }),
+
+    // Upcoming tasks (top 8)
+    prisma.task.findMany({
+      where: {
+        dueDate: { gte: today },
+        status: { isExitStep: false },
+      },
+      select: {
+        id: true,
+        name: true,
+        priority: true,
+        dueDate: true,
+        client: { select: { id: true, businessName: true } },
+        department: { select: { id: true, name: true } },
+        status: { select: { id: true, name: true, color: true, isExitStep: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { dueDate: 'asc' },
+      take: 8,
+    }),
+
+    // Get all exit step statuses
+    prisma.taskStatus.findMany({
+      where: { isExitStep: true },
+      select: { id: true },
+    }),
+  ]);
+
+  const exitStepStatusIds = new Set(exitStepStatuses.map((s) => s.id));
+
+  // Calculate done count from status groups
+  let done = 0;
+  for (const group of statusGroups) {
+    if (group.statusId && exitStepStatusIds.has(group.statusId)) {
+      done += group._count.id;
+    }
+  }
+
   const active = total - done;
-  const overdue = allTasks.filter(isOverdue).length;
-  const urgent = allTasks.filter(
-    (t) => t.priority === "URGENT" && !isDone(t)
-  ).length;
+  const overdue = overdueTasksRaw.length; // Already filtered by database
 
-  // Department-wise breakdown
-  const deptMap = new Map<number, DepartmentStats>();
-  for (const task of allTasks) {
-    if (!task.department) continue;
-    const deptId = task.department.id;
-    if (!deptMap.has(deptId)) {
-      deptMap.set(deptId, {
+  // Build department stats - fetch department names
+  const departmentIds = departmentGroups.map((g) => g.departmentId).filter(Boolean) as number[];
+  const departments = await prisma.department.findMany({
+    where: { id: { in: departmentIds } },
+    select: { id: true, name: true },
+  });
+  const deptNameMap = new Map(departments.map((d) => [d.id, d.name]));
+
+  // Get per-department done/overdue counts
+  const [deptDoneGroups, deptOverdueGroups] = await Promise.all([
+    prisma.task.groupBy({
+      by: ['departmentId'],
+      where: { status: { isExitStep: true } },
+      _count: { id: true },
+    }),
+    prisma.task.groupBy({
+      by: ['departmentId'],
+      where: {
+        dueDate: { lt: today },
+        status: { isExitStep: false },
+      },
+      _count: { id: true },
+    }),
+  ]);
+
+  const deptDoneMap = new Map(deptDoneGroups.map((g) => [g.departmentId, g._count.id]));
+  const deptOverdueMap = new Map(deptOverdueGroups.map((g) => [g.departmentId, g._count.id]));
+
+  const departmentStats: DepartmentStats[] = departmentGroups
+    .filter((g) => g.departmentId !== null)
+    .map((g) => {
+      const deptId = g.departmentId!;
+      const totalCount = g._count.id;
+      const doneCount = deptDoneMap.get(deptId) ?? 0;
+      return {
         departmentId: deptId,
-        departmentName: task.department.name,
-        total: 0,
-        active: 0,
-        done: 0,
-        overdue: 0,
-      });
-    }
-    const stats = deptMap.get(deptId)!;
-    stats.total++;
-    if (isDone(task)) {
-      stats.done++;
-    } else {
-      stats.active++;
-      if (isOverdue(task)) stats.overdue++;
-    }
-  }
-  const departmentStats = Array.from(deptMap.values()).sort((a, b) =>
-    a.departmentName.localeCompare(b.departmentName)
-  );
+        departmentName: deptNameMap.get(deptId) ?? 'Unknown',
+        total: totalCount,
+        active: totalCount - doneCount,
+        done: doneCount,
+        overdue: deptOverdueMap.get(deptId) ?? 0,
+      };
+    })
+    .sort((a, b) => a.departmentName.localeCompare(b.departmentName));
 
-  // Status breakdown
-  const statusMap = new Map<string, { name: string; color: string | null; count: number }>();
-  for (const task of allTasks) {
-    if (!task.status) continue;
-    const statusName = task.status.name;
-    if (!statusMap.has(statusName)) {
-      statusMap.set(statusName, {
-        name: statusName,
-        color: task.status.color,
-        count: 0,
-      });
-    }
-    statusMap.get(statusName)!.count++;
-  }
-  const statusBreakdown = Array.from(statusMap.values()).map((s) => ({
-    statusName: s.name,
-    statusColor: s.color,
-    count: s.count,
+  // Build status breakdown - fetch status details
+  const statusIds = statusGroups.map((g) => g.statusId).filter(Boolean) as number[];
+  const statuses = await prisma.taskStatus.findMany({
+    where: { id: { in: statusIds } },
+    select: { id: true, name: true, color: true },
+  });
+  const statusMap = new Map(statuses.map((s) => [s.id, { name: s.name, color: s.color }]));
+
+  const statusBreakdown: StatusBreakdown[] = statusGroups
+    .filter((g) => g.statusId !== null)
+    .map((g) => {
+      const statusId = g.statusId!;
+      const status = statusMap.get(statusId);
+      return {
+        statusName: status?.name ?? 'Unknown',
+        statusColor: status?.color ?? null,
+        count: g._count.id,
+      };
+    });
+
+  // Format overdue and upcoming tasks
+  const overdueTasks: TaskSummary[] = overdueTasksRaw.map((t) => ({
+    id: t.id,
+    name: t.name,
+    priority: t.priority,
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+    client: t.client,
+    assignedTo: t.assignedTo,
+    department: t.department,
+    status: t.status,
   }));
 
-  // Overdue tasks (top 8, sorted by due date ascending)
-  const overdueTasks = allTasks
-    .filter(isOverdue)
-    .sort((a, b) => {
-      if (!a.dueDate || !b.dueDate) return 0;
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    })
-    .slice(0, 8)
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      priority: t.priority,
-      dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-      client: t.client,
-      assignedTo: t.assignedTo,
-      department: t.department,
-      status: t.status,
-    }));
-
-  // Upcoming tasks (not done, due date >= today, top 8, sorted by due date ascending)
-  const upcomingTasks = allTasks
-    .filter((t) => !isDone(t) && t.dueDate && new Date(t.dueDate) >= today)
-    .sort((a, b) => {
-      if (!a.dueDate || !b.dueDate) return 0;
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    })
-    .slice(0, 8)
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      priority: t.priority,
-      dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-      client: t.client,
-      assignedTo: t.assignedTo,
-      department: t.department,
-      status: t.status,
-    }));
+  const upcomingTasks: TaskSummary[] = upcomingTasksRaw.map((t) => ({
+    id: t.id,
+    name: t.name,
+    priority: t.priority,
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+    client: t.client,
+    assignedTo: t.assignedTo,
+    department: t.department,
+    status: t.status,
+  }));
 
   const data: DashboardData = {
-    stats: { total, active, done, overdue, urgent },
+    stats: { total, active, done, overdue, urgent: urgentCount },
     departmentStats,
     statusBreakdown,
     overdueTasks,

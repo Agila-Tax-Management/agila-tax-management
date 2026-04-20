@@ -43,7 +43,7 @@ const createTaskSchema = z.object({
 
 /**
  * GET /api/tasks
- * Query params: departmentId, statusId, priority, clientId, assignedToId, search
+ * Query params: departmentId, statusId, priority, clientId, assignedToId, search, page, limit
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -56,28 +56,46 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const clientId = searchParams.get("clientId");
   const assignedToId = searchParams.get("assignedToId");
   const search = searchParams.get("search");
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 50));
+  const skip = (page - 1) * limit;
 
-  const tasks = await prisma.task.findMany({
-    where: {
-      ...(departmentId ? { departmentId: Number(departmentId) } : {}),
-      ...(statusId ? { statusId: Number(statusId) } : {}),
-      ...(priority ? { priority: priority as "LOW" | "NORMAL" | "HIGH" | "URGENT" } : {}),
-      ...(clientId ? { clientId: Number(clientId) } : {}),
-      ...(assignedToId ? { assignedToId: Number(assignedToId) } : {}),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { description: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+  const where = {
+    ...(departmentId ? { departmentId: Number(departmentId) } : {}),
+    ...(statusId ? { statusId: Number(statusId) } : {}),
+    ...(priority ? { priority: priority as "LOW" | "NORMAL" | "HIGH" | "URGENT" } : {}),
+    ...(clientId ? { clientId: Number(clientId) } : {}),
+    ...(assignedToId ? { assignedToId: Number(assignedToId) } : {}),
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({
+      where,
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      include: taskInclude,
+      skip,
+      take: limit,
+    }),
+    prisma.task.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    data: tasks,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-    include: taskInclude,
   });
-
-  return NextResponse.json({ data: tasks });
 }
 
 /**

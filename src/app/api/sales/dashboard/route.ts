@@ -21,50 +21,61 @@ export async function GET() {
       select: { id: true, name: true, sequence: true, isConverted: true },
     });
 
-    // Fetch all leads with their status and accepted quotes
-    const leads = await prisma.lead.findMany({
-      include: {
-        status: { select: { id: true, name: true, isConverted: true } },
-        quotes: {
-          where: { status: "ACCEPTED" },
-          include: {
-            lineItems: { select: { negotiatedRate: true } },
-          },
+    // Parallel database queries for optimal performance
+    const [
+      totalLeads,
+      statusGroups,
+      totalValue,
+      convertedCount,
+      convertedLeadsWithDates,
+    ] = await Promise.all([
+      // Total lead count
+      prisma.lead.count(),
+
+      // Group by status for stage counts
+      prisma.lead.groupBy({
+        by: ['statusId'],
+        _count: { id: true },
+      }),
+
+      // Total pipeline value (sum of all accepted quote line items)
+      prisma.quoteLineItem.aggregate({
+        _sum: { negotiatedRate: true },
+        where: { quote: { status: 'ACCEPTED' } },
+      }),
+
+      // Converted leads count
+      prisma.lead.count({
+        where: { status: { isConverted: true } },
+      }),
+
+      // Converted leads with dates for average close time
+      prisma.lead.findMany({
+        where: {
+          status: { isConverted: true },
+          isSignedTSA: true,
+          isCreatedJobOrder: true,
         },
-      },
-    });
+        select: {
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
 
-    // Calculate stage counts (leads per status)
-    const stageCounts = leadStatuses.map((status) => {
-      return leads.filter((lead) => lead.statusId === status.id).length;
-    });
+    // Build stage counts map
+    const statusCountMap = new Map(statusGroups.map((g) => [g.statusId, g._count.id]));
+    const stageCounts = leadStatuses.map((status) => statusCountMap.get(status.id) ?? 0);
 
-    // Calculate total pipeline value (sum of all accepted quote line items)
-    let totalValue = 0;
-    for (const lead of leads) {
-      for (const quote of lead.quotes) {
-        for (const lineItem of quote.lineItems) {
-          totalValue += Number(lineItem.negotiatedRate);
-        }
-      }
-    }
-
-    // Active opportunities (leads not in converted status)
-    const activeOpportunities = leads.filter(
-      (lead) => !lead.status.isConverted
-    ).length;
+    // Active opportunities (total leads - converted leads)
+    const activeOpportunities = totalLeads - convertedCount;
 
     // Conversion rate (converted leads / total leads)
-    const convertedLeads = leads.filter((lead) => lead.status.isConverted).length;
     const conversionRate =
-      leads.length > 0 ? ((convertedLeads / leads.length) * 100).toFixed(1) : "0.0";
+      totalLeads > 0 ? ((convertedCount / totalLeads) * 100).toFixed(1) : "0.0";
 
     // Average close time - calculated from converted leads with signed TSA and approved job orders
     let avgCloseTime = "Coming Soon";
-    const convertedLeadsWithDates = leads.filter(
-      (lead) => lead.status.isConverted && lead.isSignedTSA && lead.isCreatedJobOrder
-    );
-
     if (convertedLeadsWithDates.length > 0) {
       const totalDays = convertedLeadsWithDates.reduce((sum, lead) => {
         const created = new Date(lead.createdAt);
@@ -91,10 +102,12 @@ export async function GET() {
       value: stageCounts[index] ?? 0,
     }));
 
+    const totalValueNum = Number(totalValue._sum.negotiatedRate ?? 0);
+
     return NextResponse.json({
       data: {
         stageCounts,
-        totalValue: `₱${totalValue.toLocaleString("en-PH", {
+        totalValue: `₱${totalValueNum.toLocaleString("en-PH", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         })}`,
@@ -103,7 +116,7 @@ export async function GET() {
         avgCloseTime,
         trends,
         pipelineData,
-        hasData: leads.length > 0,
+        hasData: totalLeads > 0,
         timestamp: new Date().toISOString(),
       },
     });
