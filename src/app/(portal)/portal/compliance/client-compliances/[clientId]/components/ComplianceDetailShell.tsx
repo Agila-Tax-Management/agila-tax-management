@@ -11,6 +11,8 @@ import { EWTDetail } from '@/components/compliance/EWTDetail';
 import { CWTDetail } from '@/components/compliance/CWTDetail';
 import { SalesBookDetail } from '@/components/compliance/SalesBookDetail';
 import { ExpensesBookDetail } from '@/components/compliance/ExpensesBookDetail';
+import { VATDetail } from '@/components/compliance/VATDetail';
+import { PercentageTaxDetail } from '@/components/compliance/PercentageTaxDetail';
 
 // ─── Slug → compliance id map ─────────────────────────────────────────────────
 
@@ -139,6 +141,26 @@ export function ComplianceDetailShell({ clientId, complianceSlug, yearParam }: P
   if (complianceId === 'expense-book') {
     return (
       <ExpensesBookDetail
+        client={client}
+        year={selectedYear}
+        onYearChange={handleYearChange}
+      />
+    );
+  }
+
+  if (complianceId === 'vat') {
+    return (
+      <VATDetail
+        client={client}
+        year={selectedYear}
+        onYearChange={handleYearChange}
+      />
+    );
+  }
+
+  if (complianceId === 'percentage-tax') {
+    return (
+      <PercentageTaxDetail
         client={client}
         year={selectedYear}
         onYearChange={handleYearChange}
