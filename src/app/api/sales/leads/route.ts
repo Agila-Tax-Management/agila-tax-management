@@ -48,7 +48,8 @@ const LEAD_INCLUDE = {
 
 /**
  * GET /api/sales/leads
- * Returns all leads. Optionally filtered by ?statusId=
+ * Returns all leads. Optionally filtered by ?statusId=, with pagination
+ * Query params: statusId, page, limit
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -57,14 +58,32 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const statusIdParam = searchParams.get("statusId");
   const statusId = statusIdParam ? parseInt(statusIdParam, 10) : undefined;
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 50));
+  const skip = (page - 1) * limit;
 
-  const leads = await prisma.lead.findMany({
-    where: statusId && !isNaN(statusId) ? { statusId } : undefined,
-    orderBy: { createdAt: "desc" },
-    include: LEAD_INCLUDE,
+  const where = statusId && !isNaN(statusId) ? { statusId } : undefined;
+
+  const [leads, total] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: LEAD_INCLUDE,
+      skip,
+      take: limit,
+    }),
+    prisma.lead.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    data: leads,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
   });
-
-  return NextResponse.json({ data: leads });
 }
 
 /**

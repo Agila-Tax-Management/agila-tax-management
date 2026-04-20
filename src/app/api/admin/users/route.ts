@@ -13,8 +13,9 @@ import type { UserRecord } from "@/lib/schemas/user-management";
  * Returns all users (excluding CLIENT role) with their employee
  * profile, employment details, and portal access entries.
  * Restricted to SUPER_ADMIN and ADMIN.
+ * Query params: page, limit
  */
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,42 +25,52 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      employee: {
-        select: {
-          id: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-          employeeNo: true,
-          phone: true,
-          birthDate: true,
-          gender: true,
-          appAccess: {
-            select: {
-              role: true,
-              app: { select: { name: true } },
+  const { searchParams } = request.nextUrl;
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 50));
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            employeeNo: true,
+            phone: true,
+            birthDate: true,
+            gender: true,
+            appAccess: {
+              select: {
+                role: true,
+                app: { select: { name: true } },
+              },
             },
-          },
-          employments: {
-            where: { employmentStatus: "ACTIVE" },
-            take: 1,
-            orderBy: { createdAt: "desc" },
-            select: {
-              employmentType: true,
-              employmentStatus: true,
-              employeeLevel: { select: { id: true, name: true, position: true } },
-              hireDate: true,
-              department: { select: { name: true } },
-              position: { select: { title: true } },
+            employments: {
+              where: { employmentStatus: "ACTIVE" },
+              take: 1,
+              orderBy: { createdAt: "desc" },
+              select: {
+                employmentType: true,
+                employmentStatus: true,
+                employeeLevel: { select: { id: true, name: true, position: true } },
+                hireDate: true,
+                department: { select: { name: true } },
+                position: { select: { title: true } },
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.user.count(),
+  ]);
 
   const data: UserRecord[] = users.map((u) => {
     const emp = u.employee;
@@ -106,7 +117,15 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     };
   });
 
-  return NextResponse.json({ data });
+  return NextResponse.json({
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  });
 }
 
 /**

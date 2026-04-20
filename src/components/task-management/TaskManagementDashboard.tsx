@@ -222,7 +222,7 @@ export function TaskManagementDashboard() {
       <Card className="p-5 border-none shadow-sm">
         <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">Task Pipeline</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {statusBreakdown.map((status) => {
+          {statusBreakdown.map((status, index) => {
             const pct = stats.total > 0 ? Math.round((status.count / stats.total) * 100) : 0;
             const bgColor = statusVariant(status.statusName);
             const bgMap: Record<typeof bgColor, string> = {
@@ -233,7 +233,7 @@ export function TaskManagementDashboard() {
               danger: 'bg-rose-50',
             };
             return (
-              <div key={status.statusName} className={`${bgMap[bgColor]} rounded-xl p-4`}>
+              <div key={`status-${index}-${status.statusName}`} className={`${bgMap[bgColor]} rounded-xl p-4`}>
                 <div className="flex items-center gap-2 mb-3">
                   <div
                     className="w-2.5 h-2.5 rounded-full"
