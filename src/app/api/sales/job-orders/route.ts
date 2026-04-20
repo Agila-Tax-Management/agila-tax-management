@@ -87,6 +87,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true } });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
+  // Load default approvers from SalesSetting (keyed to the ATMS internal firm client)
+  const salesSettings = await prisma.salesSetting.findFirst({
+    where: { client: { companyCode: "ATMS-001" } },
+    select: {
+      defaultJoOperationsApproverId: true,
+      defaultJoAccountApproverId: true,
+      defaultJoGeneralApproverId: true,
+    },
+  });
+
   const jobOrder = await prisma.$transaction(async (tx) => {
     const year = new Date().getFullYear();
     const prefix = `JO-${year}-`;
@@ -113,6 +123,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         notes: notes ?? null,
         preparedById: session.user.id,
         datePrepared: new Date(),
+        // Auto-assign default approvers from Sales Settings
+        assignedOperationsManagerId: salesSettings?.defaultJoOperationsApproverId ?? null,
+        assignedAccountManagerId: salesSettings?.defaultJoAccountApproverId ?? null,
+        assignedExecutiveId: salesSettings?.defaultJoGeneralApproverId ?? null,
         items:
           items.length > 0
             ? {

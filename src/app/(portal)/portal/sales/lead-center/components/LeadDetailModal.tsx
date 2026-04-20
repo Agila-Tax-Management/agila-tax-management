@@ -68,6 +68,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const [isQuotationOpen, setIsQuotationOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<LeadQuote | null>(null);
   const [isTsaOpen, setIsTsaOpen] = useState(false);
+  const [selectedTsa, setSelectedTsa] = useState<LeadTsaInfo | null>(null);
   const [viewingJobOrder, setViewingJobOrder] = useState<JobOrderRecord | null>(null);
   const [isJobOrderViewOpen, setIsJobOrderViewOpen] = useState(false);
   const [agents, setAgents] = useState<{ id: string; name: string | null; email: string; image: string | null }[]>([]);
@@ -259,8 +260,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
   const primaryInvoice = appliedLead.invoices?.[0] ?? null;
   const invoicePaid = primaryInvoice?.status === 'PAID';
   const acceptedQuote: LeadQuote | null = appliedLead.quotes.find((q) => q.status === 'ACCEPTED') ?? null;
-  const activeTsa: LeadTsaInfo | null = appliedLead.tsaContracts?.[0] ?? null;
-  const hasActiveNonVoidedTSA = activeTsa && activeTsa.status !== 'VOID';
+  const hasActiveNonVoidedTSA = appliedLead.tsaContracts?.some((t) => t.status !== 'VOID') ?? false;
 
   return (
     <Modal
@@ -564,47 +564,61 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
                 Pipeline Documents
               </h4>
+              {!hasActiveNonVoidedTSA && acceptedQuote && (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedTsa(null); setIsTsaOpen(true); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-[#25238e] hover:opacity-75 transition-opacity"
+                >
+                  <Plus size={13} /> New TSA
+                </button>
+              )}
             </div>
 
-            {/* TSA row */}
-            <div className="rounded-xl border border-border bg-card px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <FileText size={14} className="text-muted-foreground shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Tax Service Agreement</p>
-                    {activeTsa ? (
-                      <p className="text-xs text-muted-foreground">{activeTsa.referenceNumber}</p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground italic">
-                        {acceptedQuote ? 'No TSA yet — click to create' : 'Requires an accepted quotation'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {activeTsa && (
-                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
-                      activeTsa.status === 'SIGNED'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : activeTsa.status === 'VOID'
-                        ? 'bg-red-100 text-red-600'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {activeTsa.status.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsTsaOpen(true)}
-                    disabled={!acceptedQuote && (!activeTsa || activeTsa.status !== 'VOID')}
-                    className="text-xs py-1 px-2.5 h-auto"
-                  >
-                    {activeTsa && activeTsa.status !== 'VOID' ? 'Manage TSA' : 'Create TSA'}
-                  </Button>
-                </div>
+            {appliedLead.tsaContracts?.length === 0 || !appliedLead.tsaContracts ? (
+              <p className="text-xs text-muted-foreground italic">
+                {acceptedQuote ? 'No TSA yet. Click "New TSA" to create one.' : 'Requires an accepted quotation before creating a TSA.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {appliedLead.tsaContracts.map((tsa) => {
+                  const statusCls =
+                    tsa.status === 'SIGNED' ? 'bg-emerald-100 text-emerald-700'
+                    : tsa.status === 'VOID' ? 'bg-red-100 text-red-600'
+                    : tsa.status === 'DRAFT' ? 'bg-slate-100 text-slate-700'
+                    : 'bg-amber-100 text-amber-700';
+                  return (
+                    <div key={tsa.id} className="rounded-xl border border-border bg-card px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <FileText size={14} className="text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{tsa.referenceNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(tsa.documentDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${statusCls}`}>
+                            {tsa.status.replace(/_/g, ' ')}
+                          </span>
+                          {tsa.status !== 'VOID' && (
+                            <Button
+                              variant="outline"
+                              onClick={() => { setSelectedTsa(tsa); setIsTsaOpen(true); }}
+                              className="text-xs py-1 px-2.5 h-auto"
+                            >
+                              Manage
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
 
             {/* Invoice status row — visible when invoice was already created */}
             {lead.isCreatedInvoice && primaryInvoice && (
@@ -767,7 +781,7 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
       {isTsaOpen && (
         <TsaModal
           lead={appliedLead}
-          tsa={activeTsa}
+          tsa={selectedTsa}
           acceptedQuote={acceptedQuote}
           isOpen={isTsaOpen}
           onClose={() => setIsTsaOpen(false)}

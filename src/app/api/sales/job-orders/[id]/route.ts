@@ -162,6 +162,16 @@ export async function PATCH(
 
     const { items, leadId, clientId, notes } = parsed.data;
 
+    // Fetch latest default approvers from Sales Settings (keyed to ATMS internal firm)
+    const salesSettings = await prisma.salesSetting.findFirst({
+      where: { client: { companyCode: "ATMS-001" } },
+      select: {
+        defaultJoOperationsApproverId: true,
+        defaultJoAccountApproverId: true,
+        defaultJoGeneralApproverId: true,
+      },
+    });
+
     const jobOrder = await prisma.$transaction(async (tx) => {
       if (items !== undefined) {
         await tx.jobOrderItem.deleteMany({ where: { jobOrderId: id } });
@@ -173,6 +183,10 @@ export async function PATCH(
           ...(leadId !== undefined && { leadId }),
           ...(clientId !== undefined && { clientId: clientId ?? null }),
           ...(notes !== undefined && { notes: notes ?? null }),
+          // Re-sync assigned approvers to current Sales Settings defaults
+          assignedOperationsManagerId: salesSettings?.defaultJoOperationsApproverId ?? null,
+          assignedAccountManagerId: salesSettings?.defaultJoAccountApproverId ?? null,
+          assignedExecutiveId: salesSettings?.defaultJoGeneralApproverId ?? null,
           ...(items !== undefined && items.length > 0
             ? {
                 items: {

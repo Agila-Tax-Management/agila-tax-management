@@ -253,7 +253,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     if (existing.status === "SIGNED") {
       return NextResponse.json({ error: "Signed TSAs cannot be voided" }, { status: 409 });
     }
-    updateData = { status: "VOID" };
+    // Clear quoteId so the @unique constraint is freed, allowing a new TSA to be created for the same quote
+    updateData = { status: "VOID", quoteId: null };
     historyValue = `TSA ${existing.referenceNumber} voided`;
   }
 
