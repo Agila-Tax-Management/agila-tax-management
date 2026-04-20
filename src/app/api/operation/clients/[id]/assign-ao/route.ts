@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { notify } from "@/lib/notification";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -77,9 +78,25 @@ export async function PATCH(
     data: { clientRelationOfficerId: userId },
     select: {
       id: true,
+      active: true,
+      clientNo: true,
       clientRelationOfficer: { select: { id: true, name: true } },
     },
   });
+
+  if (userId && updated.clientRelationOfficer?.id) {
+    const isNewClient = !updated.active || !updated.clientNo;
+    void notify({
+      userId: updated.clientRelationOfficer.id,
+      type: "SYSTEM",
+      priority: isNewClient ? "HIGH" : "NORMAL",
+      title: isNewClient ? "Complete Client Information" : "New Client Assignment",
+      message: isNewClient
+        ? `You have been assigned as Account Officer for ${existing.businessName}. Please complete the client information.`
+        : `You have been assigned as Account Officer for ${existing.businessName}.`,
+      linkUrl: "/portal/operation/client-list",
+    });
+  }
 
   void logActivity({
     userId: session.user.id,

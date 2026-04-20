@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { notify } from "@/lib/notification";
 
 const bodySchema = z.object({
   userId: z.string().nullable(),
@@ -51,8 +52,28 @@ export async function PATCH(
   const updated = await prisma.client.update({
     where: { id: clientId },
     data: { operationsManagerId: userId },
-    select: { id: true, businessName: true, operationsManager: { select: { id: true, name: true } } },
+    select: {
+      id: true,
+      businessName: true,
+      active: true,
+      clientNo: true,
+      operationsManager: { select: { id: true, name: true } },
+    },
   });
+
+  if (userId && updated.operationsManager?.id) {
+    const isNewClient = !updated.active || !updated.clientNo;
+    void notify({
+      userId: updated.operationsManager.id,
+      type: "SYSTEM",
+      priority: isNewClient ? "HIGH" : "NORMAL",
+      title: isNewClient ? "Complete Client Information" : "New Client Assignment",
+      message: isNewClient
+        ? `You have been assigned as Operations Manager for ${updated.businessName}. Please complete the client information.`
+        : `You have been assigned as Operations Manager for ${updated.businessName}.`,
+      linkUrl: "/portal/operation/client-list",
+    });
+  }
 
   void logActivity({
     userId: session.user.id,

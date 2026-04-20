@@ -8,6 +8,7 @@ import { hashPassword } from 'better-auth/crypto';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
+import { notifyMany } from '@/lib/notification';
 
 // ─── Input Schema ────────────────────────────────────────────────
 const provisionSchema = z.object({
@@ -64,7 +65,7 @@ export async function provisionLeadAccountAction(
   const hashedPw = await hashPassword(password);
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const newClientId = await prisma.$transaction(async (tx) => {
       // ── Fetch the lead inside the transaction ──────────────────
       const lead = await tx.lead.findUnique({
         where: { id: leadId },
@@ -226,6 +227,8 @@ export async function provisionLeadAccountAction(
           newValue: `Provisioned Client "${businessName}" and portal user for ${email}`,
         },
       });
+
+      return newClient.id;
     });
 
     void logActivity({
@@ -235,6 +238,31 @@ export async function provisionLeadAccountAction(
       entityId: String(leadId),
       description: `Provisioned client account for lead #${leadId} — "${businessName}" (${email})`,
     });
+
+    // ── Notify SETTINGS users on Operations Management portal ──
+    void (async () => {
+      const settingsUsers = await prisma.employeeAppAccess.findMany({
+        where: {
+          role: 'SETTINGS',
+          app: { name: 'OPERATIONS_MANAGEMENT' },
+          employee: { userId: { not: null } },
+        },
+        select: { employee: { select: { userId: true } } },
+      });
+      const userIds = settingsUsers
+        .map((a) => a.employee.userId)
+        .filter((id): id is string => id !== null);
+      if (userIds.length > 0) {
+        void notifyMany({
+          userIds,
+          type: 'SYSTEM',
+          priority: 'HIGH',
+          title: 'New Client Created',
+          message: `A new client account has been created for "${businessName}" (Client #${newClientId}). Please assign an Operations Manager and Account Officer and complete the client information.`,
+          linkUrl: '/portal/operation/client-list',
+        });
+      }
+    })();
 
     revalidatePath('/portal/sales/lead-center');
 
