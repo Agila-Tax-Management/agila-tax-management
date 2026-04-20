@@ -130,7 +130,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     }),
 
     // Get all exit step statuses
-    prisma.taskStatus.findMany({
+    prisma.departmentTaskStatus.findMany({
       where: { isExitStep: true },
       select: { id: true },
     }),
@@ -196,7 +196,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 
   // Build status breakdown - fetch status details
   const statusIds = statusGroups.map((g) => g.statusId).filter(Boolean) as number[];
-  const statuses = await prisma.taskStatus.findMany({
+  const statuses = await prisma.departmentTaskStatus.findMany({
     where: { id: { in: statusIds } },
     select: { id: true, name: true, color: true },
   });
