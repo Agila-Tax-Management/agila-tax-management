@@ -576,18 +576,6 @@ export function PercentageTaxDetail({ client, year, onYearChange }: PercentageTa
                       <td colSpan={3} />
                     </tr>
 
-                    {/* Total Payable Tax row */}
-                    <tr className="border-b-2 border-slate-300 bg-slate-800">
-                      <td className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-200">
-                        Total Payable Tax
-                      </td>
-                      <td />
-                      <td className="px-5 py-3 text-right font-mono text-sm font-black text-white">
-                        {fmtPHP(qTaxDue)}
-                      </td>
-                      <td colSpan={3} />
-                    </tr>
-
                     {/* Spacer between quarters */}
                     {qi < quarters.length - 1 && quarters[qi + 1]!.months.length > 0 && (
                       <tr className="bg-slate-50 border-b border-slate-100">
