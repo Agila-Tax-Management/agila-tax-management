@@ -87,10 +87,12 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       take: 5,
     }),
 
-    // Today's timesheets for attendance stats
-    prisma.timesheet.findMany({
+    // Today's timesheets for attendance stats (aggregated by status)
+    prisma.timesheet.groupBy({
+      by: ['status'],
       where: { clientId, date: todayUtc },
-      select: { status: true, lateMinutes: true },
+      _count: { status: true },
+      _sum: { lateMinutes: true },
     }),
 
     // Latest payroll period (most recent, non-CLOSED)
@@ -155,20 +157,26 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  // ── Today's attendance ──────────────────────────────────────────────────────
+  // ── Today's attendance (aggregated from groupBy results) ────────────────────
   let present = 0, late = 0, absent = 0, onLeave = 0;
-  for (const ts of todayTimesheets) {
-    switch (ts.status) {
+  for (const group of todayTimesheets) {
+    const count = group._count.status;
+    switch (group.status) {
       case 'PRESENT':
-        if (ts.lateMinutes > 0) late++; else present++;
+        // Split PRESENT into late vs on-time based on sum of lateMinutes
+        if ((group._sum.lateMinutes ?? 0) > 0) {
+          late += count;
+        } else {
+          present += count;
+        }
         break;
       case 'ABSENT':
       case 'INCOMPLETE':
-        absent++;
+        absent += count;
         break;
       case 'PAID_LEAVE':
       case 'UNPAID_LEAVE':
-        onLeave++;
+        onLeave += count;
         break;
       default:
         break;
@@ -218,7 +226,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
         late,
         absent,
         onLeave,
-        total: todayTimesheets.length,
+        total: present + late + absent + onLeave,
       },
       latestPayrollPeriod,
     },
