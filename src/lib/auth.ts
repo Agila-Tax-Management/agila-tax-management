@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "./db";
 
@@ -7,6 +7,12 @@ export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60, // 5 minutes - balances freshness with performance
+        },
+    },
     emailAndPassword: {
         enabled: true,
     },
