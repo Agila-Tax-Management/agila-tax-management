@@ -4,17 +4,24 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createEmployeeSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getClientIdFromSession } from "@/lib/session";
 
 /**
  * GET /api/hr/employees
- * Returns all non-deleted employees with their current employment snapshot.
+ * Returns all non-deleted employees linked to the session user's client.
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const clientId = await getClientIdFromSession();
+  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+
   const employees = await prisma.employee.findMany({
-    where: { softDelete: false },
+    where: {
+      softDelete: false,
+      employments: { some: { clientId, employmentStatus: "ACTIVE" } },
+    },
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, email: true, role: true, active: true } },

@@ -37,14 +37,14 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
   if (!existing) return NextResponse.json({ error: "Employee level not found." }, { status: 404 });
 
   const duplicateName = await prisma.employeeLevel.findFirst({
-    where: { name, NOT: { id: levelId } },
+    where: { clientId: existing.clientId, name, NOT: { id: levelId } },
   });
   if (duplicateName) {
     return NextResponse.json({ error: "Level name already exists." }, { status: 409 });
   }
 
   const duplicatePosition = await prisma.employeeLevel.findFirst({
-    where: { position, NOT: { id: levelId } },
+    where: { clientId: existing.clientId, position, NOT: { id: levelId } },
   });
   if (duplicatePosition) {
     return NextResponse.json({ error: "Position number already taken." }, { status: 409 });

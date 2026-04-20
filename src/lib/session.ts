@@ -211,6 +211,33 @@ export async function getSessionWithAccess(): Promise<SessionWithAccess | null> 
 }
 
 /**
+ * Resolves the `clientId` that the currently authenticated user belongs to.
+ *
+ * - For internal users (User → Employee → EmployeeEmployment), returns the
+ *   `clientId` of their active employment record.
+ * - Returns `null` when the session or employee link is missing, or when no
+ *   active employment record exists.
+ *
+ * Usage in HR API routes:
+ * ```ts
+ * const clientId = await getClientIdFromSession();
+ * if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+ * ```
+ */
+export async function getClientIdFromSession(): Promise<number | null> {
+  const session = await getSessionWithAccess();
+  if (!session?.employee) return null;
+
+  const employment = await prisma.employeeEmployment.findFirst({
+    where: { employeeId: session.employee.id, employmentStatus: "ACTIVE" },
+    select: { clientId: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return employment?.clientId ?? null;
+}
+
+/**
  * Quick helper — checks whether the current session has a specific
  * permission on a given portal.
  *
