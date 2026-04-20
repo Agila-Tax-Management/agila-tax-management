@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { notify, notifyMany } from "@/lib/notification";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -261,6 +262,72 @@ export async function PATCH(
     where: { id: clientId },
     data: { active: parsed.data.active },
   });
+
+  // ── Notify on activation ───────────────────────────────────────────────────────────────────────────
+  if (parsed.data.active) {
+    void (async () => {
+      // Fetch SETTINGS users on Operations Management portal + assigned OM/AO
+      const [settingsAccesses, fullClient] = await Promise.all([
+        prisma.employeeAppAccess.findMany({
+          where: {
+            role: 'SETTINGS',
+            app: { name: 'OPERATIONS_MANAGEMENT' },
+            employee: { userId: { not: null } },
+          },
+          select: { employee: { select: { userId: true } } },
+        }),
+        prisma.client.findUnique({
+          where: { id: clientId },
+          select: {
+            operationsManagerId: true,
+            clientRelationOfficerId: true,
+          },
+        }),
+      ]);
+
+      const settingsUserIds = settingsAccesses
+        .map((a) => a.employee.userId)
+        .filter((id): id is string => id !== null);
+
+      if (settingsUserIds.length > 0) {
+        void notifyMany({
+          userIds: settingsUserIds,
+          type: 'SYSTEM',
+          priority: 'NORMAL',
+          title: 'Client Activated',
+          message: `Client "${existing.businessName}" has been activated and is now live.`,
+          linkUrl: '/portal/operation/client-list',
+        });
+      }
+
+      // Notify assigned OM if present
+      if (fullClient?.operationsManagerId) {
+        void notify({
+          userId: fullClient.operationsManagerId,
+          type: 'SYSTEM',
+          priority: 'NORMAL',
+          title: 'Client Activated',
+          message: `Client "${existing.businessName}" has been activated. Your client is now live.`,
+          linkUrl: '/portal/operation/client-list',
+        });
+      }
+
+      // Notify assigned AO if present (and different from OM)
+      if (
+        fullClient?.clientRelationOfficerId &&
+        fullClient.clientRelationOfficerId !== fullClient?.operationsManagerId
+      ) {
+        void notify({
+          userId: fullClient.clientRelationOfficerId,
+          type: 'SYSTEM',
+          priority: 'NORMAL',
+          title: 'Client Activated',
+          message: `Client "${existing.businessName}" has been activated. Your client is now live.`,
+          linkUrl: '/portal/operation/client-list',
+        });
+      }
+    })();
+  }
 
   void logActivity({
     userId: session.user.id,
