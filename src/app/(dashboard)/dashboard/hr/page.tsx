@@ -1,9 +1,6 @@
-import React from 'react'
+﻿import { connection } from 'next/server';
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
+export default async function HRPage() {
+  await connection();
+  return <div>page</div>;
 }
-
-export default page

@@ -1,4 +1,5 @@
 // src/app/(portal)/portal/task-management/tasks/[id]/page.tsx
+import { connection } from 'next/server';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/db';
 import { TaskDetailPage } from '@/components/task-management/TaskDetailPage';
@@ -31,6 +32,7 @@ export default async function TaskDetailRoute({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await connection();
   const { id } = await params;
   const taskId = Number(id);
   if (isNaN(taskId)) notFound();

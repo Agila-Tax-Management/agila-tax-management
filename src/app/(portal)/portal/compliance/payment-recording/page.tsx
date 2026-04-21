@@ -1,5 +1,7 @@
+﻿import { connection } from 'next/server';
 import { PaymentRecording } from '@/components/compliance/PaymentRecording';
 
-export default function PaymentRecordingPage() {
+export default async function PaymentRecordingPage() {
+  await connection();
   return <PaymentRecording />;
 }

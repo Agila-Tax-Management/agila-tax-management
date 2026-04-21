@@ -1,5 +1,5 @@
 // src/app/api/cron/data-retention/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import prisma from "@/lib/db";
 
 /**
@@ -19,6 +19,7 @@ import prisma from "@/lib/db";
  * - Notification: Delete read notifications after 90 days, unread after 180 days
  */
 export async function GET(request: Request) {
+  await connection();
   try {
     // Verify cron secret (Vercel Cron provides this header)
     const authHeader = request.headers.get('authorization');

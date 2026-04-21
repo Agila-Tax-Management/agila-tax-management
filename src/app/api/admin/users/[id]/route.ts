@@ -5,6 +5,7 @@ import { getSessionWithAccess } from "@/lib/session";
 import { updateUserSchema } from "@/lib/schemas/user-management";
 import { hashPassword } from "better-auth/crypto";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { updateTag } from "next/cache";
 import type { UserRecord } from "@/lib/schemas/user-management";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -294,6 +295,10 @@ export async function PUT(
       ...getRequestMeta(request),
     });
 
+    updateTag("admin-users-list");
+    // Invalidate portal-access cache for this user (permissions may have changed)
+    updateTag(`portal-access-${id}`);
+
     return NextResponse.json({ data: { id } });
   } catch (err: unknown) {
     console.error("[PUT /api/admin/users/[id]] Error:", err);
@@ -350,6 +355,9 @@ export async function DELETE(
       description: `Deactivated user ${user.name} (${user.email})`,
       ...getRequestMeta(request),
     });
+
+    updateTag("admin-users-list");
+    updateTag(`portal-access-${id}`);
 
     return NextResponse.json({ data: { id } });
   } catch (err: unknown) {

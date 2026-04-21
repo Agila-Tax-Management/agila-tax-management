@@ -1,4 +1,5 @@
-// src/app/(portal)/portal/compliance/client-compliances/[clientId]/expanded-withholding-tax/page.tsx
+﻿// src/app/(portal)/portal/compliance/client-compliances/[clientId]/expanded-withholding-tax/page.tsx
+import { connection } from 'next/server';
 import { ComplianceDetailShell } from '../components/ComplianceDetailShell';
 
 interface Props {
@@ -6,7 +7,9 @@ interface Props {
   searchParams: Promise<{ year?: string }>;
 }
 
-export default async function Page({ params, searchParams }: Props) {
+export default async function Page({
+  params, searchParams }: Props) {
+  await connection();
   const { clientId } = await params;
   const { year } = await searchParams;
   return <ComplianceDetailShell clientId={clientId} complianceSlug="expanded-withholding-tax" yearParam={year} />;

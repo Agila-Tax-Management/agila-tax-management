@@ -5,6 +5,8 @@ import { hashPassword } from "better-auth/crypto";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getAdminClientUsers } from "@/lib/data/admin/client-users";
+import { updateTag } from "next/cache";
 
 const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -91,20 +93,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const role = request.nextUrl.searchParams.get("role");
 
   const validRoles = ["OWNER", "ADMIN", "EMPLOYEE", "VIEWER"] as const;
-  type PortalRole = typeof validRoles[number];
-  const roleFilter: PortalRole | undefined = role && (validRoles as readonly string[]).includes(role)
-    ? (role as PortalRole)
+  type RoleFilter = typeof validRoles[number];
+  const roleFilter: RoleFilter | undefined = role && (validRoles as readonly string[]).includes(role)
+    ? (role as RoleFilter)
     : undefined;
 
-  const users = await prisma.clientUser.findMany({
-    where: roleFilter
-      ? { assignments: { some: { role: roleFilter } } }
-      : undefined,
-    orderBy: { createdAt: "desc" },
-    include: CLIENT_USER_INCLUDE,
-  });
-
-  return NextResponse.json({ data: users.map(mapUser) });
+  const data = await getAdminClientUsers(roleFilter);
+  return NextResponse.json({ data });
 }
 
 /**
@@ -176,6 +171,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created client portal user ${name} (${email}) with ${clientIds.length} client assignment(s)`,
     ...getRequestMeta(request),
   });
+
+  updateTag("admin-client-users-list");
 
   return NextResponse.json({ data: mapUser(clientUser) }, { status: 201 });
 }

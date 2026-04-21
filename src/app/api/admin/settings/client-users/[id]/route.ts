@@ -5,6 +5,7 @@ import { hashPassword } from "better-auth/crypto";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { updateTag } from "next/cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -176,6 +177,8 @@ export async function PUT(
     ...getRequestMeta(request),
   });
 
+  updateTag("admin-client-users-list");
+
   return NextResponse.json({ data: mapUser(updated) });
 }
 
@@ -233,6 +236,8 @@ export async function PATCH(
     ...getRequestMeta(request),
   });
 
+  updateTag("admin-client-users-list");
+
   return NextResponse.json({ data: { id: updated.id, status: updated.status, active: updated.active } });
 }
 
@@ -268,6 +273,8 @@ export async function DELETE(
     description: `Deleted client portal user ${existing.email}`,
     ...getRequestMeta(request),
   });
+
+  updateTag("admin-client-users-list");
 
   return NextResponse.json({ data: { id } });
 }

@@ -1,6 +1,8 @@
-// src/app/(portal)/portal/compliance/settings/page.tsx
+﻿// src/app/(portal)/portal/compliance/settings/page.tsx
+import { connection } from 'next/server';
 import { ComplianceSettings } from './components/ComplianceSettings';
 
-export default function ComplianceSettingsPage() {
+export default async function ComplianceSettingsPage() {
+  await connection();
   return <ComplianceSettings />;
 }
