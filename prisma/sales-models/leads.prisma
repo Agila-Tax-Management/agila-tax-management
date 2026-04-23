@@ -120,6 +120,8 @@ model Lead {
   updatedAt DateTime @updatedAt
 
   @@index([statusId])
+  @@index([assignedAgentId])
+  @@index([createdAt(sort: Desc)])
   @@map("lead")
 }
 

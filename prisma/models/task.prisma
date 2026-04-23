@@ -149,6 +149,7 @@ model Task {
   @@index([clientId])
   @@index([jobOrderId])
   @@index([departmentId, statusId])
+  @@index([assignedToId])
   @@map("task")
 }
 

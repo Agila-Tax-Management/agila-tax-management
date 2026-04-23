@@ -122,6 +122,7 @@ model LeaveRequest {
 
   @@index([employeeId])
   @@index([clientId])
+  @@index([clientId, status])
   @@map("leave_request")
 }
 
@@ -159,6 +160,7 @@ model OvertimeRequest {
 
   @@index([employeeId])
   @@index([clientId])
+  @@index([clientId, status])
   @@map("overtime_request")
 }
 
@@ -196,5 +198,6 @@ model CoaRequest {
 
   @@index([employeeId])
   @@index([clientId])
+  @@index([clientId, status])
   @@map("coa_request")
 }

@@ -170,6 +170,9 @@ model ComplianceRecord {
   updatedAt DateTime @updatedAt
 
   @@unique([clientComplianceId, coverageDate, amendmentVersion]) // Ensures unique versions per month
+  @@index([clientComplianceId])
+  @@index([filingStatus, processStatus])
+  @@index([coverageDate])
   @@map("compliance_record")
 }
 
