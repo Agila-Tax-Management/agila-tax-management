@@ -364,6 +364,12 @@ async function openInvoicePDF(invoice: InvoiceRecord) {
 - Generated client output: `src/generated/prisma/` — **never edit generated files**
 - Always use `prisma` (the default export from `src/lib/db.ts`) for database operations
 
+### Database Connection SSL Convention
+
+`src/lib/db.ts` strips `sslmode` from `DATABASE_URL` before passing it to the `pg` Pool constructor. This suppresses the pg-connection-string deprecation warning ("SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'"). SSL is controlled entirely by the explicit `ssl` option on the Pool (`{ rejectUnauthorized: true }` in production, `false` in development) — so the `sslmode` query param is redundant.
+
+**Rule:** Never add `sslmode` handling back into the URL path — keep it in the Pool `ssl` option only.
+
 ### Prisma Conventions
 
 - Run `npx prisma migrate dev` after schema changes
