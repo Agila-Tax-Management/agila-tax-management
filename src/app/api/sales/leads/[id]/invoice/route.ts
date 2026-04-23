@@ -1,5 +1,6 @@
 // src/app/api/sales/leads/[id]/invoice/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag, revalidatePath } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -148,6 +149,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
         data: {
           invoiceNumber,
           leadId,
+          quoteId: acceptedQuote.id,
           status: "UNPAID",
           dueDate,
           subTotal,
@@ -156,7 +158,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
           totalAmount,
           balanceDue: totalAmount,
           terms: "Net 30",
-              notes: `Initial invoice for ${lead.businessName ?? `${lead.firstName} ${lead.lastName}`}`,
+          notes: `Initial invoice for ${lead.businessName ?? `${lead.firstName} ${lead.lastName}`}`,
           items: { create: invoiceItems },
         },
       });
@@ -189,6 +191,9 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       description: `Created initial invoice for lead #${leadId} (${lead.firstName} ${lead.lastName})`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag('sales-quotes', 'max');
+    revalidatePath('/portal/sales/quotations');
 
     return NextResponse.json({ data: updatedLead });
   } catch (err) {

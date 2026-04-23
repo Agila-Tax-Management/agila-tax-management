@@ -1,6 +1,5 @@
 // src/lib/notification.ts
-import { updateTag } from 'next/cache';
-import { revalidatePath } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import prisma from "./db";
 import type {
   NotificationType,
@@ -69,8 +68,8 @@ export function notify(input: NotifyInput): Promise<void> {
     .then(() => {
       // Invalidate notification cache for recipient
       if (input.userId) {
-        updateTag(`notifications-user-${input.userId}`);
-        updateTag(`notifications-unread-user-${input.userId}`);
+        revalidateTag(`notifications-user-${input.userId}`, 'max');
+        revalidateTag(`notifications-unread-user-${input.userId}`, 'max');
         revalidatePath('/dashboard/notifications');
       }
       // Note: clientUserId notifications would need separate cache tags if implemented
@@ -113,8 +112,8 @@ export function notifyMany(
     .then(() => {
       // Invalidate notification caches for all recipients
       userIds.forEach((userId) => {
-        updateTag(`notifications-user-${userId}`);
-        updateTag(`notifications-unread-user-${userId}`);
+        revalidateTag(`notifications-user-${userId}`, 'max');
+        revalidateTag(`notifications-unread-user-${userId}`, 'max');
       });
       revalidatePath('/dashboard/notifications');
     })

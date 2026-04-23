@@ -1,0 +1,849 @@
+// src/app/(portal)/portal/sales/quotations/components/ClientTsaModal.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
+import {
+  Loader2,
+  CheckCircle2,
+  Clock,
+  Send,
+  UserCheck,
+  FileSignature,
+  Ban,
+  Eye,
+  Download,
+  Pencil,
+  Save,
+  X,
+} from 'lucide-react';
+import { Modal } from '@/components/UI/Modal';
+import { Button } from '@/components/UI/button';
+import { useToast } from '@/context/ToastContext';
+import type { ContractData } from '@/components/UI/TSAContractPDF';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ClientTsaInfo {
+  id: string;
+  referenceNumber: string;
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT_TO_CLIENT' | 'SIGNED' | 'VOID';
+  documentDate: string;
+  businessName: string;
+  quoteId: string | null;
+  pdfUrl: string | null;
+  clientSignedAt: string | null;
+  assignedApproverId: string | null;
+  assignedApprover: { id: string; name: string; email: string; image: string | null } | null;
+  actualApproverId: string | null;
+  actualApprover: { id: string; name: string; email: string; image: string | null } | null;
+  approvedAt: string | null;
+}
+
+interface FullTsaLineItem {
+  negotiatedRate: string | number;
+  service: { name: string; billingType: string };
+  sourcePackage: { name: string } | null;
+}
+
+interface FullTsaDetail {
+  id: string;
+  referenceNumber: string;
+  businessName: string;
+  authorizedRep: string;
+  email: string | null;
+  phone: string | null;
+  tin: string | null;
+  civilStatus: string | null;
+  businessAddress: string | null;
+  residenceAddress: string | null;
+  isBusinessRegistered: boolean;
+  documentDate: string;
+  lockInMonths: number;
+  billingCycleStart: number;
+  quote: { lineItems: FullTsaLineItem[] } | null;
+}
+
+interface ClientTsaModalProps {
+  quoteId: string;
+  quoteNumber: string;
+  client: { id: number; businessName: string; clientNo: string | null };
+  tsa: ClientTsaInfo | null;
+  isOpen: boolean;
+  onClose: () => void;
+  /** Called after any TSA mutation so the parent can refetch quote details. */
+  onUpdated: () => void;
+}
+
+type TsaStatus = ClientTsaInfo['status'];
+
+const STATUS_LABEL: Record<TsaStatus, string> = {
+  DRAFT: 'Draft',
+  PENDING_APPROVAL: 'Pending Approval',
+  APPROVED: 'Approved',
+  SENT_TO_CLIENT: 'Sent to Client',
+  SIGNED: 'Signed',
+  VOID: 'Void',
+};
+
+const STATUS_COLOR: Record<TsaStatus, string> = {
+  DRAFT: 'bg-slate-100 text-slate-700',
+  PENDING_APPROVAL: 'bg-amber-100 text-amber-700',
+  APPROVED: 'bg-blue-100 text-blue-700',
+  SENT_TO_CLIENT: 'bg-indigo-100 text-indigo-700',
+  SIGNED: 'bg-emerald-100 text-emerald-700',
+  VOID: 'bg-red-100 text-red-600',
+};
+
+const inputClass =
+  'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30';
+
+// ─── Service-flag helper (mirrors TsaModal) ───────────────────────────────────
+
+function buildFlagsFromNames(names: string[]): Omit<ContractData,
+  'clientNo' | 'businessName' | 'authorizedRep' | 'email' | 'phone' | 'tin' |
+  'businessAddress' | 'residenceAddress' | 'civilStatus' | 'isBusinessRegistered' |
+  'tosDate' | 'planName' | 'planPrice' | 'actualMonthlySubscription' | 'headerSrc' |
+  'planServices' | 'additionalServices'
+> {
+  const has = (...kw: string[]) =>
+    names.some((n) => kw.some((k) => n.toLowerCase().includes(k.toLowerCase())));
+  return {
+    isDTI: has('DTI', 'Department of Trade', 'Business Name'),
+    isDTIReg: has('DTI Registration', 'DTI Certificate'),
+    isDTIClosure: has('DTI Closure', 'Business Name Closure'),
+    isBMBE: has('BMBE'),
+    isSEC: has('SEC', 'Securities', 'Corporation'),
+    isSECReg: has('SEC Registration', 'Corporate Registration', 'Incorporation'),
+    isEfast: has('eFast', 'Efast'),
+    isStockTransfer: has('Stock Transfer'),
+    isSECAmendments: has('SEC Amendment', 'Amendment'),
+    isAppointment: has('Appointment of Officers', 'One-Person Corporation'),
+    isGIS: has('GIS', 'General Information Sheet'),
+    isAFS: has('AFS', 'Audited Financial', 'Financial Statement'),
+    isLGU: has('Mayor', 'Permit', 'LGU', 'Business Permit'),
+    isMayorReg: has("Mayor's Permit Registration", 'Mayor Permit Processing'),
+    isMayorRenewal: has("Mayor's Permit Renewal", 'Permit Renewal'),
+    isMayorClosure: has('Mayor', 'Closure', 'Retirement'),
+    isTempPermit: has('Temporary Permit'),
+    isSanitary: has('Sanitary Permit'),
+    isFire: has('Fire', 'Fire Safety', 'FSIC'),
+    isCCENRO: has('CCENRO', 'Environmental Certificate'),
+    isProfessionalTax: has('Professional Tax', 'Occupational Tax', 'Cedula'),
+    isBIR: has('BIR', 'Bureau of Internal Revenue'),
+    isBIRReg: has('BIR Registration', 'BIR Business Registration', 'Certificate of Registration', '2303'),
+    isBIRBranch: has('Add Branch', 'Branch Registration'),
+    isBIRClosure: has('BIR Closure'),
+    isORUS: has('ORUS'),
+    isBooksReg: has('Books Registration', 'Register Books'),
+    isInvoicePrint: has('Invoice Printing', 'Official Receipt', 'Sales Invoice'),
+    isAddTaxType: has('Add Tax Type', 'Tax Type'),
+    isRentalDocStamp: has('Rental', 'Doc Stamp', 'Documentary Stamp'),
+    isStocksDocStamp: has('Stocks', 'Doc Stamp'),
+    isAuditorsReport: has("Auditor's Report", 'Auditors Report'),
+    isOpenCase: has('Open Case', 'Case Report'),
+    isBIRCompliance: has('Tax Return', 'ITR', 'VAT', 'Withholding', 'BIR Compliance', 'Filing'),
+    isEWT: has('Expanded Withholding', 'EWT'),
+    isFWT: has('Final Withholding', 'FWT'),
+    isCWT: has('Compensation Withholding', 'CWT'),
+    isPercentageTax: has('Percentage Tax'),
+    isVATReturn: has('VAT Return', 'Value-Added Tax'),
+    isITR: has('Income Tax Return', 'ITR'),
+    isEmployerReg: has('Employer Registration', 'SSS', 'PhilHealth', 'PAGIBIG', 'Pag-IBIG', 'DOLE'),
+    isSSS: has('SSS', 'Social Security'),
+    isPhilHealth: has('PhilHealth', 'PHIC'),
+    isPagibig: has('PAGIBIG', 'Pag-IBIG', 'HDMF'),
+    isBIREmployer: has('BIR Employer'),
+    isDOLE: has('DOLE', 'Department of Labor'),
+    isRemittances: has('Remittance', 'Contribution', 'Government Remittance'),
+  };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function ClientTsaModal({
+  quoteId,
+  quoteNumber,
+  client,
+  tsa,
+  isOpen,
+  onClose,
+  onUpdated,
+}: ClientTsaModalProps): React.ReactNode {
+  const { success, error } = useToast();
+
+  // ─── Create form state ──────────────────────────────────────────────────────
+  const [businessName, setBusinessName] = useState('');
+  const [authorizedRep, setAuthorizedRep] = useState('');
+  const [documentDate, setDocumentDate] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [tin, setTin] = useState('');
+  const [civilStatus, setCivilStatus] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [residenceAddress, setResidenceAddress] = useState('');
+  const [isBusinessRegistered, setIsBusinessRegistered] = useState(true);
+  const [lockInMonths, setLockInMonths] = useState(6);
+  const [billingCycleStart, setBillingCycleStart] = useState(1);
+
+  // ─── Workflow state ─────────────────────────────────────────────────────────
+  const [clientSignerName, setClientSignerName] = useState('');
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<'view' | 'download' | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentTsa, setCurrentTsa] = useState<ClientTsaInfo | null>(tsa);
+
+  /* eslint-disable react-hooks/exhaustive-deps -- open-time initialisation only */
+  useEffect(() => {
+    if (!isOpen) return;
+    setBusinessName(client.businessName);
+    setAuthorizedRep('');
+    setDocumentDate(new Date().toISOString().slice(0, 10));
+    setEmail('');
+    setPhone('');
+    setTin('');
+    setCivilStatus('');
+    setBusinessAddress('');
+    setResidenceAddress('');
+    setIsBusinessRegistered(true);
+    setLockInMonths(6);
+    setBillingCycleStart(1);
+    setClientSignerName('');
+    setPdfUrl(tsa?.pdfUrl ?? '');
+    setCurrentTsa(tsa);
+    setIsEditing(false);
+  }, [isOpen]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  // ─── Pre-fill edit form from full TSA ─────────────────────────────────────
+  const handleStartEdit = async () => {
+    if (!currentTsa) return;
+    setActionLoading('loading_edit');
+    try {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`);
+      const json = (await res.json()) as { data?: FullTsaDetail; error?: string };
+      if (!res.ok || !json.data) {
+        error('Failed to load TSA', json.error ?? 'Could not fetch contract details.');
+        return;
+      }
+      const d = json.data;
+      setBusinessName(d.businessName);
+      setAuthorizedRep(d.authorizedRep);
+      setDocumentDate(d.documentDate.slice(0, 10));
+      setEmail(d.email ?? '');
+      setPhone(d.phone ?? '');
+      setTin(d.tin ?? '');
+      setCivilStatus(d.civilStatus ?? '');
+      setBusinessAddress(d.businessAddress ?? '');
+      setResidenceAddress(d.residenceAddress ?? '');
+      setIsBusinessRegistered(d.isBusinessRegistered);
+      setLockInMonths(d.lockInMonths);
+      setBillingCycleStart(d.billingCycleStart);
+      setIsEditing(true);
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ─── Save TSA edits (DRAFT only) ──────────────────────────────────────────
+  const handleUpdate = async () => {
+    if (!currentTsa || !businessName.trim() || !authorizedRep.trim()) {
+      error('Required fields', 'Business name and authorized representative are required.');
+      return;
+    }
+    setActionLoading('update');
+    try {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          documentDate: new Date(documentDate).toISOString(),
+          businessName: businessName.trim(),
+          authorizedRep: authorizedRep.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          tin: tin.trim() || null,
+          civilStatus: civilStatus.trim() || null,
+          businessAddress: businessAddress.trim() || null,
+          residenceAddress: residenceAddress.trim() || null,
+          isBusinessRegistered,
+          lockInMonths,
+          billingCycleStart,
+        }),
+      });
+      const json = (await res.json()) as { data?: ClientTsaInfo; error?: string };
+      if (!res.ok) { error('Failed to save', json.error ?? 'Please try again.'); return; }
+      success('TSA updated', 'Contract details have been saved.');
+      if (json.data) setCurrentTsa(json.data);
+      setIsEditing(false);
+      onUpdated();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ─── Create TSA ────────────────────────────────────────────────────────────
+  const handleCreate = async () => {
+    if (!businessName.trim() || !authorizedRep.trim()) {
+      error('Required fields', 'Business name and authorized representative are required.');
+      return;
+    }
+    setActionLoading('create');
+    try {
+      const res = await fetch(`/api/sales/quotes/${quoteId}/tsa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentDate: new Date(documentDate).toISOString(),
+          businessName: businessName.trim(),
+          authorizedRep: authorizedRep.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          tin: tin.trim() || null,
+          civilStatus: civilStatus.trim() || null,
+          businessAddress: businessAddress.trim() || null,
+          residenceAddress: residenceAddress.trim() || null,
+          isBusinessRegistered,
+          lockInMonths,
+          billingCycleStart,
+        }),
+      });
+      const json = (await res.json()) as { data?: unknown; error?: string };
+      if (!res.ok) { error('Failed to create TSA', json.error ?? 'Please try again.'); return; }
+      success('TSA created', 'Contract has been created and is in Draft status.');
+      onUpdated();
+      onClose();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ─── Generic workflow action ────────────────────────────────────────────────
+  const handleAction = async (action: string, extra?: Record<string, unknown>) => {
+    if (!currentTsa) return;
+    setActionLoading(action);
+    try {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const json = (await res.json()) as { data?: ClientTsaInfo; error?: string };
+      if (!res.ok) { error('Action failed', json.error ?? 'Please try again.'); return; }
+
+      const actionLabels: Record<string, string> = {
+        submit_for_approval: 'TSA submitted for approval.',
+        approve: 'TSA approved.',
+        send_to_client: 'TSA sent to client.',
+        mark_signed: 'TSA marked as signed. An invoice has been auto-generated.',
+        void: 'TSA has been voided.',
+      };
+      success('TSA updated', actionLabels[action] ?? 'TSA has been updated.');
+
+      if (json.data) setCurrentTsa(json.data);
+      onUpdated();
+      if (action === 'mark_signed') onClose();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ─── Generate PDF ──────────────────────────────────────────────────────────
+  const handleGeneratePdf = async (mode: 'view' | 'download') => {
+    if (!currentTsa) return;
+    setGeneratingPdf(mode);
+    try {
+      const res = await fetch(`/api/sales/tsa/${currentTsa.id}`);
+      const json = (await res.json()) as { data?: FullTsaDetail; error?: string };
+      if (!res.ok || !json.data) {
+        error('Failed to load TSA', json.error ?? 'Could not fetch contract details.');
+        return;
+      }
+      const fullTsa = json.data;
+
+      const lineItems = fullTsa.quote?.lineItems ?? [];
+      const serviceNames = lineItems.map((li) => li.service.name);
+      const recurringTotal = lineItems
+        .filter((li) => li.service.billingType === 'RECURRING')
+        .reduce((sum, li) => sum + Number(li.negotiatedRate), 0);
+
+      const recurringServices = lineItems
+        .filter((li) => li.service.billingType === 'RECURRING')
+        .map((li) => li.service.name);
+      const freeOneTime = lineItems
+        .filter((li) => li.service.billingType === 'ONE_TIME' && Number(li.negotiatedRate) === 0)
+        .map((li) => li.service.name);
+      const paidOneTime = lineItems
+        .filter((li) => li.service.billingType === 'ONE_TIME' && Number(li.negotiatedRate) > 0)
+        .map((li) => {
+          const rate = Number(li.negotiatedRate);
+          return `${li.service.name} - P${rate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+        });
+
+      const contractData: ContractData = {
+        clientNo: fullTsa.referenceNumber,
+        businessName: fullTsa.businessName,
+        authorizedRep: fullTsa.authorizedRep,
+        email: fullTsa.email ?? '',
+        phone: fullTsa.phone ?? '',
+        tin: fullTsa.tin ?? '',
+        businessAddress: fullTsa.businessAddress ?? '',
+        residenceAddress: fullTsa.residenceAddress ?? '',
+        civilStatus: fullTsa.civilStatus ?? 'single',
+        isBusinessRegistered: fullTsa.isBusinessRegistered,
+        tosDate: new Date(fullTsa.documentDate).toISOString().slice(0, 10),
+        planName: lineItems.find((li) => li.sourcePackage)?.sourcePackage?.name ?? '',
+        planPrice: '',
+        actualMonthlySubscription: recurringTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 }),
+        planServices: [...recurringServices, ...freeOneTime],
+        additionalServices: paidOneTime,
+        headerSrc: '',
+        ...buildFlagsFromNames(serviceNames),
+      };
+
+      let headerSrc = '';
+      try {
+        const imgBlob = await fetch('/images/header.webp').then((r) => r.blob());
+        const bitmapUrl = URL.createObjectURL(imgBlob);
+        headerSrc = await new Promise<string>((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { reject(new Error('No 2d context')); return; }
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+            URL.revokeObjectURL(bitmapUrl);
+          };
+          img.onerror = () => { URL.revokeObjectURL(bitmapUrl); reject(new Error('Image load failed')); };
+          img.src = bitmapUrl;
+        });
+      } catch { /* proceed without header */ }
+
+      const [{ pdf }, { TSAContractPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/UI/TSAContractPDF'),
+      ]);
+      const el = React.createElement(
+        TSAContractPDF,
+        { data: { ...contractData, headerSrc } },
+      ) as Parameters<typeof pdf>[0];
+      const blob = await pdf(el).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      if (mode === 'view') {
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        success('Contract ready', 'Opened in the browser PDF viewer.');
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `TSA-${currentTsa.referenceNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        success('Contract downloaded', `Saved as "TSA-${currentTsa.referenceNumber}.pdf".`);
+      }
+    } catch {
+      error('PDF Error', 'Failed to generate contract PDF. Please try again.');
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
+
+  const isLoading = actionLoading !== null;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={currentTsa ? `TSA Contract — ${currentTsa.referenceNumber}` : 'Create TSA Contract'}
+      size="3xl"
+    >
+      <div className="overflow-y-auto max-h-[80vh] px-6 py-5 space-y-5">
+        {/* Client / Quote Info Banner */}
+        <div className="rounded-xl bg-muted/30 border border-border px-4 py-3 text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">{client.businessName}</span>
+          {client.clientNo && <> &mdash; {client.clientNo}</>}
+          <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+            Quote: {quoteNumber}
+          </span>
+        </div>
+
+        {/* ── Edit form (DRAFT only) ── */}
+        {currentTsa && isEditing ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Business Name <span className="text-red-500">*</span></label>
+                <input type="text" className={inputClass} value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Authorized Representative <span className="text-red-500">*</span></label>
+                <input type="text" className={inputClass} value={authorizedRep} onChange={(e) => setAuthorizedRep(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Document Date <span className="text-red-500">*</span></label>
+                <input type="date" className={inputClass} value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">TIN</label>
+                <input type="text" className={inputClass} placeholder="e.g. 123-456-789" value={tin} onChange={(e) => setTin(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+                <input type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+                <input type="text" className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Civil Status</label>
+                <select className={inputClass} value={civilStatus} onChange={(e) => setCivilStatus(e.target.value)}>
+                  <option value="">— Select —</option>
+                  <option>Single</option>
+                  <option>Married</option>
+                  <option>Widowed</option>
+                  <option>Legally Separated</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Lock-in Period (months)</label>
+                <input type="number" min={1} max={36} className={inputClass} value={lockInMonths} onChange={(e) => setLockInMonths(Math.max(1, parseInt(e.target.value, 10) || 6))} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Business Address</label>
+                <input type="text" className={inputClass} value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Residence Address</label>
+                <input type="text" className={inputClass} value={residenceAddress} onChange={(e) => setResidenceAddress(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" className="rounded border-border accent-blue-600" checked={isBusinessRegistered} onChange={(e) => setIsBusinessRegistered(e.target.checked)} />
+                  <span className="text-sm text-foreground">Business is registered (DTI / SEC)</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
+              <Button variant="outline" onClick={() => setIsEditing(false)} disabled={actionLoading === 'update'}>
+                <X size={14} className="mr-1.5" /> Cancel
+              </Button>
+              <Button
+                className="bg-[#25238e] text-white hover:bg-[#1e1c7a]"
+                disabled={actionLoading === 'update' || !businessName.trim() || !authorizedRep.trim()}
+                onClick={() => { void handleUpdate(); }}
+              >
+                {actionLoading === 'update'
+                  ? <Loader2 size={14} className="animate-spin mr-2" />
+                  : <Save size={14} className="mr-2" />}
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        ) : currentTsa ? (
+          <div className="space-y-4">
+            {/* Status + PDF actions */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${STATUS_COLOR[currentTsa.status]}`}>
+                  {currentTsa.status === 'SIGNED' && <CheckCircle2 size={14} />}
+                  {currentTsa.status === 'PENDING_APPROVAL' && <Clock size={14} />}
+                  {STATUS_LABEL[currentTsa.status]}
+                </span>
+                {currentTsa.status === 'DRAFT' && (
+                  <Button
+                    variant="outline"
+                    className="gap-1.5 text-xs h-auto py-1.5 px-2.5"
+                    disabled={actionLoading !== null}
+                    onClick={() => { void handleStartEdit(); }}
+                  >
+                    {actionLoading === 'loading_edit'
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <Pencil size={12} />}
+                    Edit
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-xs h-auto py-1.5 px-2.5"
+                  disabled={generatingPdf !== null}
+                  onClick={() => { void handleGeneratePdf('view'); }}
+                >
+                  {generatingPdf === 'view'
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Eye size={12} />}
+                  Preview Contract
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-xs h-auto py-1.5 px-2.5"
+                  disabled={generatingPdf !== null}
+                  onClick={() => { void handleGeneratePdf('download'); }}
+                >
+                  {generatingPdf === 'download'
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Download size={12} />}
+                  Download PDF
+                </Button>
+              </div>
+            </div>
+
+            {/* Workflow panel */}
+            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                Workflow Actions
+              </p>
+
+              {currentTsa.status === 'PENDING_APPROVAL' && !currentTsa.assignedApproverId && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                  <p className="text-xs text-amber-800">
+                    ⚠️ No default TSA approver configured. Any admin can approve.
+                  </p>
+                </div>
+              )}
+
+              {currentTsa.status === 'PENDING_APPROVAL' && currentTsa.assignedApprover && (
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <p className="text-xs font-semibold text-blue-900 mb-1">Assigned Approver</p>
+                  <div className="flex items-center gap-2">
+                    {currentTsa.assignedApprover.image ? (
+                      <Image src={currentTsa.assignedApprover.image} alt={currentTsa.assignedApprover.name} width={24} height={24} className="rounded-full object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-blue-300 flex items-center justify-center text-xs font-bold text-blue-900">
+                        {currentTsa.assignedApprover.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm text-blue-900 font-medium">{currentTsa.assignedApprover.name}</span>
+                  </div>
+                </div>
+              )}
+
+              {currentTsa.status !== 'DRAFT' && currentTsa.actualApprover && (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <p className="text-xs font-semibold text-emerald-900 mb-1">Approved By</p>
+                  <div className="flex items-center gap-2">
+                    {currentTsa.actualApprover.image ? (
+                      <Image src={currentTsa.actualApprover.image} alt={currentTsa.actualApprover.name} width={24} height={24} className="rounded-full object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-emerald-300 flex items-center justify-center text-xs font-bold text-emerald-900">
+                        {currentTsa.actualApprover.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm text-emerald-900 font-medium">{currentTsa.actualApprover.name}</span>
+                    {currentTsa.assignedApproverId && currentTsa.actualApproverId !== currentTsa.assignedApproverId && (
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">Override</span>
+                    )}
+                  </div>
+                  {currentTsa.approvedAt && (
+                    <p className="text-xs text-emerald-700 mt-1">
+                      {new Date(currentTsa.approvedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {currentTsa.status === 'DRAFT' && (
+                <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white" disabled={isLoading} onClick={() => { void handleAction('submit_for_approval'); }}>
+                  {actionLoading === 'submit_for_approval' ? <Loader2 size={14} className="animate-spin mr-2" /> : <Send size={14} className="mr-2" />}
+                  Submit for Approval
+                </Button>
+              )}
+
+              {currentTsa.status === 'PENDING_APPROVAL' && (
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading} onClick={() => { void handleAction('approve'); }}>
+                  {actionLoading === 'approve' ? <Loader2 size={14} className="animate-spin mr-2" /> : <UserCheck size={14} className="mr-2" />}
+                  Approve TSA
+                </Button>
+              )}
+
+              {currentTsa.status === 'APPROVED' && (
+                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" disabled={isLoading} onClick={() => { void handleAction('send_to_client'); }}>
+                  {actionLoading === 'send_to_client' ? <Loader2 size={14} className="animate-spin mr-2" /> : <Send size={14} className="mr-2" />}
+                  Send to Client
+                </Button>
+              )}
+
+              {currentTsa.status === 'SENT_TO_CLIENT' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                      Client Signer Name <span className="text-red-500">*</span>
+                    </label>
+                    <input type="text" className={inputClass} placeholder="Full name as signed" value={clientSignerName} onChange={(e) => setClientSignerName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                      PDF URL <span className="font-normal">(optional)</span>
+                    </label>
+                    <input type="url" className={inputClass} placeholder="https://drive.google.com/…" value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} />
+                  </div>
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    disabled={isLoading || !clientSignerName.trim()}
+                    onClick={() => {
+                      void handleAction('mark_signed', {
+                        clientSignerName: clientSignerName.trim(),
+                        pdfUrl: pdfUrl.trim() || undefined,
+                      });
+                    }}
+                  >
+                    {actionLoading === 'mark_signed' ? <Loader2 size={14} className="animate-spin mr-2" /> : <FileSignature size={14} className="mr-2" />}
+                    Mark as Signed & Generate Invoice
+                  </Button>
+                </div>
+              )}
+
+              {currentTsa.status === 'SIGNED' && (
+                <div className="flex items-center gap-2 text-sm text-emerald-700">
+                  <CheckCircle2 size={16} />
+                  <span>
+                    Signed {currentTsa.clientSignedAt ? `on ${new Date(currentTsa.clientSignedAt).toLocaleDateString('en-PH')}` : ''}
+                  </span>
+                </div>
+              )}
+
+              {currentTsa.status !== 'SIGNED' && currentTsa.status !== 'VOID' && (
+                <Button
+                  variant="outline"
+                  className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                  disabled={isLoading}
+                  onClick={() => {
+                    if (!confirm('Are you sure you want to void this TSA? This cannot be undone.')) return;
+                    void handleAction('void');
+                  }}
+                >
+                  {actionLoading === 'void' ? <Loader2 size={14} className="animate-spin mr-2" /> : <Ban size={14} className="mr-2" />}
+                  Void TSA
+                </Button>
+              )}
+            </div>
+
+            {/* Read-only contract details */}
+            <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2 text-sm">
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-2">
+                Contract Details
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div>
+                  <span className="text-xs text-muted-foreground">Business Name</span>
+                  <p className="font-medium text-foreground">{currentTsa.businessName}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Document Date</span>
+                  <p className="font-medium text-foreground">
+                    {new Date(currentTsa.documentDate).toLocaleDateString('en-PH')}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Reference No.</span>
+                  <p className="font-medium text-foreground">{currentTsa.referenceNumber}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Linked Quote</span>
+                  <p className="font-medium text-foreground">{quoteNumber}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ── Create form ── */
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  Business Name <span className="text-red-500">*</span>
+                </label>
+                <input type="text" className={inputClass} value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  Authorized Representative <span className="text-red-500">*</span>
+                </label>
+                <input type="text" className={inputClass} value={authorizedRep} onChange={(e) => setAuthorizedRep(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Document Date <span className="text-red-500">*</span></label>
+                <input type="date" className={inputClass} value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">TIN</label>
+                <input type="text" className={inputClass} placeholder="e.g. 123-456-789" value={tin} onChange={(e) => setTin(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
+                <input type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Phone</label>
+                <input type="text" className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Civil Status</label>
+                <select className={inputClass} value={civilStatus} onChange={(e) => setCivilStatus(e.target.value)}>
+                  <option value="">— Select —</option>
+                  <option>Single</option>
+                  <option>Married</option>
+                  <option>Widowed</option>
+                  <option>Legally Separated</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Lock-in Period (months)</label>
+                <input
+                  type="number" min={1} max={36} className={inputClass} value={lockInMonths}
+                  onChange={(e) => setLockInMonths(Math.max(1, parseInt(e.target.value, 10) || 6))}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Business Address</label>
+                <input type="text" className={inputClass} value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Residence Address</label>
+                <input type="text" className={inputClass} value={residenceAddress} onChange={(e) => setResidenceAddress(e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" className="rounded border-border accent-blue-600" checked={isBusinessRegistered} onChange={(e) => setIsBusinessRegistered(e.target.checked)} />
+                  <span className="text-sm text-foreground">Business is registered (DTI / SEC)</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
+              <Button variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
+              <Button
+                className="bg-[#25238e] text-white hover:bg-[#1e1c7a]"
+                disabled={isLoading || !businessName.trim() || !authorizedRep.trim()}
+                onClick={() => { void handleCreate(); }}
+              >
+                {actionLoading === 'create'
+                  ? <Loader2 size={14} className="animate-spin mr-2" />
+                  : <FileSignature size={14} className="mr-2" />}
+                Create TSA
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}

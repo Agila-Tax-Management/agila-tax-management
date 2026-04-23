@@ -12,6 +12,18 @@ const QUOTE_LIST_INCLUDE = {
   lineItems: {
     select: { id: true },
   },
+  // ─── Lifecycle indicators (for list-level badges) ─────────────────────────
+  tsaContract: {
+    select: { id: true, status: true },
+  },
+  invoice: {
+    select: { id: true, status: true },
+  },
+  jobOrders: {
+    select: { id: true, status: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+  },
 } as const;
 
 /**
@@ -57,6 +69,17 @@ export async function getSalesQuotes() {
           clientNo: q.client.clientNo,
         }
       : null,
+    // ─── Lifecycle indicators ─────────────────────────────────────────────
+    tsaStatus: (q.tsaContract?.status ?? null) as
+      | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT_TO_CLIENT' | 'SIGNED' | 'VOID'
+      | null,
+    invoiceStatus: (q.invoice?.status ?? null) as
+      | 'DRAFT' | 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'VOID'
+      | null,
+    jobOrderStatus: (q.jobOrders[0]?.status ?? null) as
+      | 'DRAFT' | 'PENDING_ACCOUNT_ACK' | 'PENDING_OPERATIONS_ACK' | 'PENDING_EXECUTIVE_ACK'
+      | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+      | null,
     createdAt: q.createdAt.toISOString(),
     updatedAt: q.updatedAt.toISOString(),
   }));

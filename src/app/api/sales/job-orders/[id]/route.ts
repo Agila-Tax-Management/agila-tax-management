@@ -242,14 +242,15 @@ export async function PATCH(
 
     // Notify operations manager
     if (existing.assignedOperationsManagerId) {
+      const entityName = existing.lead
+        ? (existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`)
+        : 'client';
       void notify({
         userId: existing.assignedOperationsManagerId,
         type: "TASK",
         priority: "NORMAL",
         title: "New Job Order Ready for Approval",
-        message: `Job Order ${existing.jobOrderNumber} for ${
-          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
-        } is ready for your approval.`,
+        message: `Job Order ${existing.jobOrderNumber} for ${entityName} is ready for your approval.`,
         linkUrl: `/portal/sales/job-orders/${id}`,
       });
     }
@@ -305,14 +306,15 @@ export async function PATCH(
 
     // Notify account manager (next approver)
     if (existing.assignedAccountManagerId) {
+      const entityName = existing.lead
+        ? (existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`)
+        : 'client';
       void notify({
         userId: existing.assignedAccountManagerId,
         type: "TASK",
         priority: "NORMAL",
         title: "Job Order Ready for Account Manager Approval",
-        message: `Job Order ${existing.jobOrderNumber} for ${
-          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
-        } is ready for your approval.`,
+        message: `Job Order ${existing.jobOrderNumber} for ${entityName} is ready for your approval.`,
         linkUrl: `/portal/sales/job-orders/${id}`,
       });
     }
@@ -375,14 +377,15 @@ export async function PATCH(
 
     // Notify executive (final approver)
     if (existing.assignedExecutiveId) {
+      const entityName = existing.lead
+        ? (existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`)
+        : 'client';
       void notify({
         userId: existing.assignedExecutiveId,
         type: "TASK",
         priority: "NORMAL",
         title: "Job Order Ready for Executive Approval",
-        message: `Job Order ${existing.jobOrderNumber} for ${
-          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
-        } is ready for your final approval.`,
+        message: `Job Order ${existing.jobOrderNumber} for ${entityName} is ready for your final approval.`,
         linkUrl: `/portal/sales/job-orders/${id}`,
       });
     }
@@ -446,24 +449,27 @@ export async function PATCH(
       });
 
       // ─── Spawn tasks from linked task templates ───────────────────
-      // Fetch the lead with service task templates
-      const lead = await tx.lead.findUnique({
-        where: { id: existing.leadId },
-        include: {
-          quotes: {
-            where: { status: "ACCEPTED" },
+      // Only lead-based job orders spawn tasks from lead's accepted quote
+      const lead = existing.leadId !== null
+        ? await tx.lead.findUnique({
+            where: { id: existing.leadId },
             include: {
-              lineItems: {
+              quotes: {
+                where: { status: "ACCEPTED" },
                 include: {
-                  service: {
+                  lineItems: {
                     include: {
-                      taskTemplates: {
+                      service: {
                         include: {
-                          taskTemplate: {
+                          taskTemplates: {
                             include: {
-                              departmentRoutes: {
-                                orderBy: { routeOrder: "asc" },
-                                include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
+                              taskTemplate: {
+                                include: {
+                                  departmentRoutes: {
+                                    orderBy: { routeOrder: "asc" },
+                                    include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
+                                  },
+                                },
                               },
                             },
                           },
@@ -472,13 +478,12 @@ export async function PATCH(
                     },
                   },
                 },
+                orderBy: { createdAt: "desc" },
+                take: 1,
               },
             },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-          },
-        },
-      });
+          })
+        : null;
 
       if (lead) {
         const clientId = existing.clientId ?? lead.convertedClientId ?? null;

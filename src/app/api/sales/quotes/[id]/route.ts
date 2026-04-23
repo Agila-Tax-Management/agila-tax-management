@@ -32,6 +32,46 @@ const QUOTE_INCLUDE = {
       sourcePackage: { select: { id: true, name: true } },
     },
   },
+  // ─── Lifecycle relations ─────────────────────────────────────────────────
+  tsaContract: {
+    select: {
+      id: true,
+      referenceNumber: true,
+      status: true,
+      businessName: true,
+      documentDate: true,
+      pdfUrl: true,
+      clientSignedAt: true,
+      approvedAt: true,
+      assignedApproverId: true,
+      assignedApprover: { select: { id: true, name: true, email: true, image: true } },
+      actualApproverId: true,
+      actualApprover: { select: { id: true, name: true, email: true, image: true } },
+      preparedById: true,
+    },
+  },
+  invoice: {
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      totalAmount: true,
+      balanceDue: true,
+      dueDate: true,
+      issueDate: true,
+    },
+  },
+  jobOrders: {
+    select: {
+      id: true,
+      jobOrderNumber: true,
+      status: true,
+    },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+  },
+  lead: { select: { id: true, firstName: true, lastName: true, businessName: true } },
+  client: { select: { id: true, businessName: true, clientNo: true } },
 } as const;
 
 /**

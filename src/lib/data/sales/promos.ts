@@ -17,9 +17,15 @@ export async function getSalesPromos(activeOnly?: boolean) {
   cacheLife("hours");
   cacheTag("sales-promos");
 
-  return prisma.promo.findMany({
+  const promos = await prisma.promo.findMany({
     where: activeOnly ? { isActive: true } : undefined,
     orderBy: { createdAt: "desc" },
     include: PROMO_INCLUDE,
   });
+
+  // Serialize Decimal → number
+  return promos.map((promo) => ({
+    ...promo,
+    services: promo.services.map((s) => ({ ...s, serviceRate: Number(s.serviceRate) })),
+  }));
 }

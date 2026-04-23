@@ -318,6 +318,9 @@ export function NewQuotationModal({ isOpen, onClose, onSuccess, existingQuote }:
         lead: (raw.lead as SalesQuoteListItem['lead']) ?? (isEditing ? existingQuote!.lead : null),
         clientId: (raw.clientId as number | null) ?? null,
         client: (raw.client as SalesQuoteListItem['client']) ?? (isEditing ? existingQuote!.client : null),
+        tsaStatus: isEditing ? (existingQuote!.tsaStatus ?? null) : null,
+        invoiceStatus: isEditing ? (existingQuote!.invoiceStatus ?? null) : null,
+        jobOrderStatus: isEditing ? (existingQuote!.jobOrderStatus ?? null) : null,
         createdAt: String(raw.createdAt),
         updatedAt: String(raw.updatedAt),
       };

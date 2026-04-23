@@ -57,6 +57,7 @@ function ServiceSearchInput({
   search,
   open,
   disabled,
+  isLoadingServices,
   onSearchChange,
   onSelect,
   onOpenChange,
@@ -67,6 +68,7 @@ function ServiceSearchInput({
   search: string;
   open: boolean;
   disabled: boolean;
+  isLoadingServices: boolean;
   onSearchChange: (val: string) => void;
   onSelect: (svc: ServiceOption) => void;
   onOpenChange: (open: boolean) => void;
@@ -116,7 +118,12 @@ function ServiceSearchInput({
       {open && (
         <div className="absolute z-30 top-[calc(100%-2px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
           <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
-            {services.length === 0 ? (
+            {isLoadingServices ? (
+              <div className="flex items-center justify-center gap-2 px-3 py-4">
+                <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-slate-400">Loading services…</span>
+              </div>
+            ) : services.length === 0 ? (
               <p className="px-3 py-3 text-xs text-slate-400 text-center">
                 {allServices.length === 0 ? 'No active services found' : 'No matches'}
               </p>
@@ -158,6 +165,7 @@ export function ServicePackageFormModal({
 }: ServicePackageFormModalProps): React.ReactNode {
   const { success, error } = useToast();
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const [code, setCode] = useState('');
@@ -198,17 +206,20 @@ export function ServicePackageFormModal({
         setStatus('ACTIVE');
         setItems([]);
       }
+    } else {
+      // Clear stale services list on close so next open always fetches fresh data
+      setServices([]);
     }
   }
 
   useEffect(() => {
-    if (isOpen && services.length === 0) {
-      fetch('/api/sales/services?status=ACTIVE')
-        .then((r) => r.json())
-        .then((d: { data?: ServiceOption[] }) => setServices(d.data ?? []))
-        .catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!isOpen) return;
+    setIsLoadingServices(true);
+    fetch('/api/sales/services?status=ACTIVE')
+      .then((r) => r.json())
+      .then((d: { data?: ServiceOption[] }) => setServices(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setIsLoadingServices(false));
   }, [isOpen]);
 
   function addItem() {
@@ -424,6 +435,7 @@ export function ServicePackageFormModal({
                       search={item.search}
                       open={item.open}
                       disabled={isSaving}
+                      isLoadingServices={isLoadingServices}
                       onSearchChange={(val) =>
                         setItems((prev) =>
                           prev.map((it, i) =>

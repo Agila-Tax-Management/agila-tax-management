@@ -32,7 +32,7 @@ export async function getSalesServices(
   cacheLife("hours");
   cacheTag("sales-services");
 
-  return prisma.service.findMany({
+  const services = await prisma.service.findMany({
     where: {
       ...(billingType ? { billingType } : {}),
       ...(!archived ? { status: { not: "ARCHIVED" } } : {}),
@@ -40,6 +40,9 @@ export async function getSalesServices(
     orderBy: { name: "asc" },
     include: SERVICE_INCLUDE,
   });
+
+  // Serialize Decimal → number so the cache can pass plain objects to Client Components
+  return services.map((s) => ({ ...s, serviceRate: Number(s.serviceRate) }));
 }
 
 const SERVICE_PACKAGES_INCLUDE = {
@@ -67,10 +70,21 @@ export async function getSalesServicePackages() {
   cacheLife("hours");
   cacheTag("sales-service-packages");
 
-  return prisma.servicePackage.findMany({
+  const packages = await prisma.servicePackage.findMany({
     orderBy: { name: "asc" },
     include: SERVICE_PACKAGES_INCLUDE,
   });
+
+  // Serialize Decimal → number
+  return packages.map((pkg) => ({
+    ...pkg,
+    packageRate: Number(pkg.packageRate),
+    items: pkg.items.map((item) => ({
+      ...item,
+      overrideRate: item.overrideRate !== null ? Number(item.overrideRate) : null,
+      service: { ...item.service, serviceRate: Number(item.service.serviceRate) },
+    })),
+  }));
 }
 
 /**
@@ -82,7 +96,7 @@ export async function getSalesActivePackages() {
   cacheLife("hours");
   cacheTag("sales-packages");
 
-  return prisma.servicePackage.findMany({
+  const packages = await prisma.servicePackage.findMany({
     where: { status: "ACTIVE" },
     orderBy: { name: "asc" },
     include: {
@@ -103,4 +117,15 @@ export async function getSalesActivePackages() {
       },
     },
   });
+
+  // Serialize Decimal → number
+  return packages.map((pkg) => ({
+    ...pkg,
+    packageRate: Number(pkg.packageRate),
+    items: pkg.items.map((item) => ({
+      ...item,
+      overrideRate: item.overrideRate !== null ? Number(item.overrideRate) : null,
+      service: { ...item.service, serviceRate: Number(item.service.serviceRate) },
+    })),
+  }));
 }

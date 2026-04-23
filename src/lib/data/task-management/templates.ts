@@ -45,10 +45,10 @@ export async function getTaskTemplates() {
     ...tpl,
     servicePlans: services
       .filter((l) => l.service.billingType === 'RECURRING')
-      .map((l) => l.service),
+      .map((l) => ({ ...l.service, serviceRate: Number(l.service.serviceRate) })),
     serviceOneTimePlans: services
       .filter((l) => l.service.billingType === 'ONE_TIME')
-      .map((l) => l.service),
+      .map((l) => ({ ...l.service, serviceRate: Number(l.service.serviceRate) })),
   }));
 }
 
@@ -74,9 +74,9 @@ export async function getTaskTemplateById(templateId: number) {
     ...rest,
     servicePlans: services
       .filter((l) => l.service.billingType === 'RECURRING')
-      .map((l) => l.service),
+      .map((l) => ({ ...l.service, serviceRate: Number(l.service.serviceRate) })),
     serviceOneTimePlans: services
       .filter((l) => l.service.billingType === 'ONE_TIME')
-      .map((l) => l.service),
+      .map((l) => ({ ...l.service, serviceRate: Number(l.service.serviceRate) })),
   };
 }

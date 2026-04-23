@@ -1,6 +1,7 @@
 // src/app/api/sales/leads/[id]/job-order/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revalidateTag, revalidatePath } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -160,6 +161,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
           jobOrderNumber,
           leadId,
           clientId: lead.convertedClientId ?? undefined,
+          quoteId: acceptedQuote?.id ?? null,
           status: "DRAFT",
           notes: parsed.data.notes ?? null,
           preparedById: session.user.id,
@@ -239,6 +241,9 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
       changeType: "JOB_ORDER_GENERATED",
       newValue: `Job order generated for ${lead.businessName ?? `${lead.firstName} ${lead.lastName}`}`,
     });
+
+    revalidateTag('sales-quotes', 'max');
+    revalidatePath('/portal/sales/quotations');
 
     return NextResponse.json({
       data: updatedLead,

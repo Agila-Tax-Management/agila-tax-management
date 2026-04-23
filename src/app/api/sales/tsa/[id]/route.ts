@@ -1,6 +1,6 @@
 // src/app/api/sales/tsa/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
@@ -116,7 +116,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
 
   const existing = await prisma.tsaContract.findUnique({
     where: { id },
-    select: { id: true, status: true, referenceNumber: true, leadId: true },
+    select: { id: true, status: true, referenceNumber: true, leadId: true, clientId: true, quoteId: true },
   });
   if (!existing) return NextResponse.json({ error: "TSA not found" }, { status: 404 });
 
@@ -137,6 +137,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
 
   const { action } = parsed.data;
   const leadId = existing.leadId;
+  const clientId = existing.clientId;
+  const tsaQuoteId = existing.quoteId;
 
   let updateData: Record<string, unknown> = {};
   let historyValue = "";
@@ -263,7 +265,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
   let autoCreatedInvoiceNumber: string | null = null;
 
   if (action === "mark_signed" && leadId) {
-    // Run in a transaction: update TSA + update lead flags + auto-create invoice
+    // ─── Lead path: update TSA + lead flags + auto-create invoice ────────────
     const txResult = await prisma.$transaction(async (tx) => {
       const updatedTsa = await tx.tsaContract.update({
         where: { id },
@@ -349,6 +351,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
             data: {
               invoiceNumber,
               leadId,
+              quoteId: acceptedQuote.id,
               status: "UNPAID",
               dueDate,
               subTotal,
@@ -391,6 +394,105 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
         newValue: `Generated initial onboarding invoice ${autoCreatedInvoiceNumber} — auto-created on TSA signing`,
       });
       revalidatePath("/portal/accounting-and-finance/billing");
+      revalidateTag('sales-quotes', 'max');
+      revalidatePath('/portal/sales/quotations');
+    }
+  } else if (action === "mark_signed" && clientId && !leadId) {
+    // ─── Client path: update TSA + auto-create invoice linked to client quote ─
+    const txResult = await prisma.$transaction(async (tx) => {
+      const updatedTsa = await tx.tsaContract.update({
+        where: { id },
+        data: updateData,
+        select: TSA_SELECT,
+      });
+
+      let createdInvoiceNumber: string | null = null;
+
+      if (tsaQuoteId) {
+        // Check no invoice already exists for this quote
+        const existingInvoice = await tx.invoice.findFirst({
+          where: { quoteId: tsaQuoteId },
+          select: { invoiceNumber: true },
+        });
+
+        if (!existingInvoice) {
+          const quote = await tx.quote.findUnique({
+            where: { id: tsaQuoteId },
+            include: {
+              lineItems: {
+                include: { service: { select: { id: true, name: true, isVatable: true } } },
+              },
+            },
+          });
+
+          if (quote && quote.lineItems.length > 0) {
+            const year = new Date().getFullYear();
+            const prefix = `INV-${year}-`;
+            const latest = await tx.invoice.findFirst({
+              where: { invoiceNumber: { startsWith: prefix } },
+              orderBy: { invoiceNumber: "desc" },
+              select: { invoiceNumber: true },
+            });
+            let nextSeq = 1;
+            if (latest) {
+              const parts = latest.invoiceNumber.split("-");
+              const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+              if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+            }
+            const invoiceNumber = `${prefix}${String(nextSeq).padStart(4, "0")}`;
+            createdInvoiceNumber = invoiceNumber;
+
+            let subTotal = 0;
+            let taxAmount = 0;
+            const invoiceItems = quote.lineItems.map((li) => {
+              const unitPrice = Number(li.negotiatedRate);
+              const qty = typeof li.quantity === "number" ? li.quantity : 1;
+              const lineTotal = unitPrice * qty;
+              const lineTax = li.isVatable ? lineTotal * 0.12 : 0;
+              subTotal += lineTotal;
+              taxAmount += lineTax;
+              return {
+                description: li.customName ?? li.service.name,
+                quantity: qty,
+                unitPrice,
+                total: lineTotal,
+                isVatable: li.isVatable,
+                category: "SERVICE_FEE" as const,
+              };
+            });
+            const totalAmount = subTotal + taxAmount;
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 30);
+
+            await tx.invoice.create({
+              data: {
+                invoiceNumber,
+                clientId,
+                quoteId: tsaQuoteId,
+                status: "UNPAID",
+                dueDate,
+                subTotal,
+                taxAmount,
+                discountAmount: 0,
+                totalAmount,
+                balanceDue: totalAmount,
+                terms: "Net 30",
+                notes: `Invoice for ${updatedTsa.businessName} — ${updatedTsa.referenceNumber}`,
+                items: { create: invoiceItems },
+              },
+            });
+          }
+        }
+      }
+
+      return { updatedTsa, createdInvoiceNumber };
+    });
+
+    tsa = txResult.updatedTsa;
+    autoCreatedInvoiceNumber = txResult.createdInvoiceNumber;
+
+    if (autoCreatedInvoiceNumber) {
+      revalidatePath("/portal/accounting-and-finance/billing");
     }
   } else {
     tsa = await prisma.tsaContract.update({
@@ -408,6 +510,10 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       });
     }
   }
+
+  // Invalidate quote-related caches so QuotationViewModal reflects latest TSA status
+  revalidateTag('sales-quotes', 'max');
+  revalidatePath('/portal/sales/quotations');
 
   void logActivity({
     userId: session.user.id,
