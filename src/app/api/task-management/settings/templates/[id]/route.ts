@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 const patchSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),
@@ -83,6 +84,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     ...getRequestMeta(request),
   });
 
+  revalidateTag('task-templates', 'max');
+
   return NextResponse.json({ data: template });
 }
 
@@ -117,6 +120,8 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
     description: `Deleted task template "${existing.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: { id: templateId } });
 }

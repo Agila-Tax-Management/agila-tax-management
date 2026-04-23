@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string; routeId: string }>;
@@ -66,6 +67,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     ...getRequestMeta(request),
   });
 
+  revalidateTag('task-templates', 'max');
+
   return NextResponse.json({ data: updated });
 }
 
@@ -122,6 +125,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Removed department "${route.department.name}" from template "${route.template.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: { success: true } });
 }

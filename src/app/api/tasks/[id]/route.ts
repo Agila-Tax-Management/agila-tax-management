@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { notifyMany } from "@/lib/notification";
+import { revalidateTag } from "next/cache";
 
 const taskInclude = {
   client: { select: { id: true, businessName: true } },
@@ -313,6 +314,9 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     })();
   }
 
+  revalidateTag('tasks-list', 'max');
+  revalidateTag('task-management-dashboard', 'max');
+
   return NextResponse.json({ data: { ...updated, historyLogs: freshHistory } });
 }
 
@@ -340,6 +344,9 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
     description: `Deleted task "${existing.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('tasks-list', 'max');
+  revalidateTag('task-management-dashboard', 'max');
 
   return NextResponse.json({ data: { id: taskId } });
 }

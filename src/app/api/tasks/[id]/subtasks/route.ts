@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 const createSubtaskSchema = z.object({
   name: z.string().min(1, "Subtask name is required"),
@@ -69,6 +70,9 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     description: `Added subtask "${subtask.name}" to task #${taskId}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('tasks-list', 'max');
+  revalidateTag('task-management-dashboard', 'max');
 
   return NextResponse.json({ data: subtask }, { status: 201 });
 }

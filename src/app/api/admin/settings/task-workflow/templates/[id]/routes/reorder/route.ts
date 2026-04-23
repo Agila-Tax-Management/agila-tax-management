@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -65,6 +66,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     description: `Reordered department route steps for template #${templateId}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: { success: true } });
 }
