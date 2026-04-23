@@ -316,6 +316,9 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
 
   revalidateTag('tasks-list', 'max');
   revalidateTag('task-management-dashboard', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
 
   return NextResponse.json({ data: { ...updated, historyLogs: freshHistory } });
 }
@@ -347,6 +350,9 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
 
   revalidateTag('tasks-list', 'max');
   revalidateTag('task-management-dashboard', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
 
   return NextResponse.json({ data: { id: taskId } });
 }

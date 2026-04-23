@@ -73,6 +73,9 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
 
   revalidateTag('tasks-list', 'max');
   revalidateTag('task-management-dashboard', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
 
   return NextResponse.json({ data: subtask }, { status: 201 });
 }

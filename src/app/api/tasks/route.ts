@@ -173,6 +173,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   revalidateTag('tasks-list', 'max');
   revalidateTag('task-management-dashboard', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
 
   return NextResponse.json({ data: taskWithSubtasks ?? task }, { status: 201 });
 }
