@@ -1,11 +1,11 @@
-// src/app/api/admin/settings/client-users/[id]/route.ts
+﻿// src/app/api/admin/settings/client-users/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { hashPassword } from "better-auth/crypto";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -177,7 +177,7 @@ export async function PUT(
     ...getRequestMeta(request),
   });
 
-  updateTag("admin-client-users-list");
+  revalidateTag("admin-client-users-list", "max");
 
   return NextResponse.json({ data: mapUser(updated) });
 }
@@ -236,7 +236,7 @@ export async function PATCH(
     ...getRequestMeta(request),
   });
 
-  updateTag("admin-client-users-list");
+  revalidateTag("admin-client-users-list", "max");
 
   return NextResponse.json({ data: { id: updated.id, status: updated.status, active: updated.active } });
 }
@@ -274,7 +274,7 @@ export async function DELETE(
     ...getRequestMeta(request),
   });
 
-  updateTag("admin-client-users-list");
+  revalidateTag("admin-client-users-list", "max");
 
   return NextResponse.json({ data: { id } });
 }

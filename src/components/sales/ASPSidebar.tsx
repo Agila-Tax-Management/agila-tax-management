@@ -27,6 +27,7 @@ const ASP_NAV_ITEMS: NavItem[] = [
     isSection: true,
   },
   { id: 'leads', label: 'Leads Center', icon: Users, href: '/portal/sales/lead-center' },
+  { id: 'quotations', label: 'Quotations', icon: FileText, href: '/portal/sales/quotations' },
   {
     id: 'services',
     label: 'Services',

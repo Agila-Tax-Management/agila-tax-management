@@ -1,7 +1,7 @@
 // src/app/api/sales/task-templates/route.ts
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/db';
 import { getSessionWithAccess } from '@/lib/session';
+import { getSalesTaskTemplates } from '@/lib/data/sales/reference';
 
 /**
  * GET /api/sales/task-templates
@@ -11,10 +11,7 @@ export async function GET(): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const templates = await prisma.taskTemplate.findMany({
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true, description: true },
-  });
+  const templates = await getSalesTaskTemplates();
 
   return NextResponse.json({ data: templates });
 }

@@ -1,4 +1,4 @@
-// src/app/api/admin/settings/client-users/route.ts
+﻿// src/app/api/admin/settings/client-users/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { hashPassword } from "better-auth/crypto";
@@ -6,7 +6,7 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { getAdminClientUsers } from "@/lib/data/admin/client-users";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 
 const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ...getRequestMeta(request),
   });
 
-  updateTag("admin-client-users-list");
+  revalidateTag("admin-client-users-list", "max");
 
   return NextResponse.json({ data: mapUser(clientUser) }, { status: 201 });
 }

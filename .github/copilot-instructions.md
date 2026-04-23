@@ -596,8 +596,7 @@ After mutations (create/update/delete), invalidate relevant cache tags:
 
 ```typescript
 // src/app/api/sales/services/route.ts
-import { updateTag } from 'next/cache';
-import { revalidatePath } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -608,8 +607,8 @@ export async function POST(request: NextRequest) {
   const service = await prisma.service.create({ data: body });
   
   // Invalidate caches
-  updateTag('services-list');           // Invalidate cached services list
-  updateTag('sales-dashboard');          // Invalidate sales dashboard
+  revalidateTag('services-list', 'max');    // Invalidate cached services list
+  revalidateTag('sales-dashboard', 'max');  // Invalidate sales dashboard
   revalidatePath('/portal/sales/services'); // Revalidate page
   
   // Fire-and-forget logging
@@ -620,7 +619,33 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-**CRITICAL:** Always call `updateTag()` **after** the database transaction completes, never inside it.
+**CRITICAL:** Always call `revalidateTag()` **after** the database transaction completes, never inside it.
+
+#### `revalidateTag` vs `updateTag` — Critical Distinction
+
+> **This is one of the most common mistakes in this codebase. Read carefully.**
+
+| Function | Where to use | Behavior |
+|----------|-------------|----------|
+| `revalidateTag(tag, 'max')` | **Route Handlers** (`route.ts`) | Purges the cache for `tag` on next request |
+| `updateTag(tag)` | **Server Actions only** | Read-your-writes: immediately reflects the new data for the triggering request |
+
+- **Always use `revalidateTag(tag, 'max')` in Route Handlers.** Using `updateTag` in a Route Handler throws a runtime error: `updateTag can only be called from within a Server Action`.
+- The second argument `'max'` is **required** in Next.js 16 with `cacheComponents: true`. Omitting it causes a TypeScript type error and a deprecation warning at runtime.
+- `updateTag` (no second arg) is reserved for Server Actions and read-your-writes patterns. Do not use it in `route.ts` files.
+
+```typescript
+// ✅ Correct — Route Handler
+import { revalidateTag } from 'next/cache';
+revalidateTag('services-list', 'max');
+
+// ❌ Wrong — throws runtime error in Route Handlers
+import { updateTag } from 'next/cache';
+updateTag('services-list');
+
+// ❌ Wrong — deprecated, TypeScript error with cacheComponents: true
+revalidateTag('services-list'); // missing second arg
+```
 
 ### Cache Duration Guidelines
 
@@ -657,10 +682,10 @@ Use **consistent tag naming** for easier invalidation:
 
 **Multi-tag invalidation:**
 ```typescript
-// After creating a client
-updateTag('clients-list');
-updateTag('sales-dashboard');
-updateTag('operation-stats');
+// After creating a client (in a Route Handler)
+revalidateTag('clients-list', 'max');
+revalidateTag('sales-dashboard', 'max');
+revalidateTag('operation-stats', 'max');
 ```
 
 ### Caching Rules
@@ -669,9 +694,10 @@ updateTag('operation-stats');
 2. **Cache dashboard metrics** with short durations (`cacheLife('minutes')`) — acceptable 5-15 min staleness
 3. **Never cache real-time data** — attendance clock-in/out, live notifications, active status indicators
 4. **User-specific data requires cache key isolation** — pass user ID as function parameter
-5. **Always invalidate related caches** after mutations — use `updateTag()` for all affected tags
-6. **Combine `updateTag()` with `revalidatePath()`** — ensures both data cache and page cache are cleared
+5. **Always invalidate related caches** after mutations — use `revalidateTag(tag, 'max')` in Route Handlers
+6. **Combine `revalidateTag()` with `revalidatePath()`** — ensures both data cache and page cache are cleared
 7. **Document cache tags** in function JSDoc comments — helps maintainability
+8. **Never use `updateTag()` in Route Handlers** — it is Server Actions only; use `revalidateTag(tag, 'max')` instead
 
 ### Directory Structure for Data Fetching
 
@@ -720,8 +746,7 @@ export async function getDepartments() {
 // src/app/api/hr/departments/route.ts
 // ──────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server';
-import { updateTag } from 'next/cache';
-import { revalidatePath } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
@@ -762,8 +787,8 @@ export async function POST(request: NextRequest) {
   });
   
   // Invalidate related caches (AFTER transaction)
-  updateTag('departments-list');
-  updateTag('hr-dashboard');
+  revalidateTag('departments-list', 'max');
+  revalidateTag('hr-dashboard', 'max');
   revalidatePath('/portal/hr/departments');
   
   // Fire-and-forget logging/notifications

@@ -1,6 +1,5 @@
 // src/app/(portal)/portal/accounting/payments/[id]/page.tsx
 import { connection } from 'next/server';
-import { use } from 'react';
 import { PaymentDetailView } from './components/PaymentDetailView';
 
 interface Props {
@@ -9,6 +8,6 @@ interface Props {
 
 export default async function PaymentDetailPage({ params }: Props) {
   await connection();
-  const { id } = use(params);
+  const { id } = await params;
   return <PaymentDetailView id={id} />;
 }

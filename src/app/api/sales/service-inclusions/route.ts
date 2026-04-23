@@ -1,8 +1,10 @@
-// src/app/api/sales/service-inclusions/route.ts
+﻿// src/app/api/sales/service-inclusions/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createServiceInclusionSchema } from "@/lib/schemas/sales";
+import { getSalesServiceInclusions } from "@/lib/data/sales/reference";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/sales/service-inclusions
@@ -12,11 +14,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const inclusions = await prisma.serviceInclusion.findMany({
-    where: { isActive: true },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, description: true, category: true },
-  });
+  const inclusions = await getSalesServiceInclusions();
 
   return NextResponse.json({ data: inclusions });
 }
@@ -56,5 +54,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const inclusion = await prisma.serviceInclusion.create({ data: parsed.data });
+  revalidateTag("sales-service-inclusions", "max");
   return NextResponse.json({ data: inclusion }, { status: 201 });
 }

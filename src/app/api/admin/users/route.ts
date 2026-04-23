@@ -1,4 +1,4 @@
-// src/app/api/admin/users/route.ts
+﻿// src/app/api/admin/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
@@ -6,7 +6,7 @@ import { createUserSchema } from "@/lib/schemas/user-management";
 import { hashPassword } from "better-auth/crypto";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { getAdminUsers } from "@/lib/data/admin/users";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/admin/users
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...getRequestMeta(request),
     });
 
-    updateTag("admin-users-list");
+    revalidateTag("admin-users-list", "max");
 
     return NextResponse.json({ data: { id: user.id } }, { status: 201 });
   } catch (err: unknown) {

@@ -459,7 +459,7 @@ export default function ClientManagement(): React.ReactNode {
           setFormOpen(false);
           setEditingClient(null);
         }}
-        onSave={(values) => void saveClient(values)}
+        onSave={saveClient}
         editingClient={editingClient}
       />
 

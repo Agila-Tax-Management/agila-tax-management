@@ -42,7 +42,7 @@ const USER_INCLUDE = {
  * Cached for 5 minutes.
  * @tag admin-users-list
  */
-export async function getAdminUsers(page: number = 1, limit: number = 50): Promise<{
+export async function getAdminUsers(page = 1, limit = 50): Promise<{
   data: UserRecord[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }> {

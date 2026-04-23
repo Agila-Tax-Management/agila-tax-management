@@ -1,9 +1,10 @@
-// src/app/api/sales/services/[id]/route.ts
+﻿// src/app/api/sales/services/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { updateServiceSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 const SERVICE_INCLUDE = {
   governmentOffices: {
@@ -131,6 +132,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     ...getRequestMeta(request),
   });
 
+  revalidateTag("sales-services", "max");
+
   return NextResponse.json({ data: service });
 }
 
@@ -162,6 +165,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Deleted service: ${existing.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-services", "max");
 
   return NextResponse.json({ success: true });
 }

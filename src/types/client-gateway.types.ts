@@ -19,6 +19,8 @@ export interface ClientListItem {
   portalName: string;
   businessEntity: BusinessEntity;
   branchType: BranchType;
+  mainBranchId: number | null;
+  mainBranchName: string | null;
   active: boolean;
   createdAt: string;
   ownerName: string | null;

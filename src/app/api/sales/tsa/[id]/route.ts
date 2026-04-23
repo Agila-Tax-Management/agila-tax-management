@@ -1,5 +1,6 @@
 // src/app/api/sales/tsa/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
@@ -289,6 +290,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       const leadUpdateData: Record<string, unknown> = {
         isSignedTSA: true,
         signedTsaUrl: updatedTsa.pdfUrl ?? null,
+        // Sync the TSA's authoritative business name back to the lead
+        businessName: updatedTsa.businessName,
       };
 
       let createdInvoiceNumber: string | null = null;
@@ -354,7 +357,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
               totalAmount,
               balanceDue: totalAmount,
               terms: "Net 30",
-              notes: `Initial invoice for ${lead.firstName} ${lead.lastName}${lead.businessName ? ` / ${lead.businessName}` : ""}`,
+              notes: `Initial invoice for ${updatedTsa.businessName}`,
               items: { create: invoiceItems },
             },
           });
@@ -387,6 +390,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
         changeType: "INVOICE_GENERATED",
         newValue: `Generated initial onboarding invoice ${autoCreatedInvoiceNumber} — auto-created on TSA signing`,
       });
+      revalidatePath("/portal/accounting-and-finance/billing");
     }
   } else {
     tsa = await prisma.tsaContract.update({

@@ -1,11 +1,11 @@
-// src/app/api/admin/users/[id]/route.ts
+﻿// src/app/api/admin/users/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { updateUserSchema } from "@/lib/schemas/user-management";
 import { hashPassword } from "better-auth/crypto";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 import type { UserRecord } from "@/lib/schemas/user-management";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -295,9 +295,9 @@ export async function PUT(
       ...getRequestMeta(request),
     });
 
-    updateTag("admin-users-list");
+    revalidateTag("admin-users-list", "max");
     // Invalidate portal-access cache for this user (permissions may have changed)
-    updateTag(`portal-access-${id}`);
+    revalidateTag(`portal-access-${id}`, "max");
 
     return NextResponse.json({ data: { id } });
   } catch (err: unknown) {
@@ -356,8 +356,8 @@ export async function DELETE(
       ...getRequestMeta(request),
     });
 
-    updateTag("admin-users-list");
-    updateTag(`portal-access-${id}`);
+    revalidateTag("admin-users-list", "max");
+    revalidateTag(`portal-access-${id}`, "max");
 
     return NextResponse.json({ data: { id } });
   } catch (err: unknown) {

@@ -1,9 +1,8 @@
-// src/app/api/notifications/route.ts
+﻿// src/app/api/notifications/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionWithAccess } from "@/lib/session";
 import { z } from "zod";
-import { updateTag } from 'next/cache';
-import { revalidatePath } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import type { NotificationType, NotificationPriority } from "@/generated/prisma/client";
 import { getNotifications } from '@/lib/data/users/notifications';
 import prisma from "@/lib/db";
@@ -102,8 +101,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   // Invalidate notification caches
-  updateTag(`notifications-user-${session.user.id}`);
-  updateTag(`notifications-unread-user-${session.user.id}`);
+  revalidateTag(`notifications-user-${session.user.id}`, "max");
+  revalidateTag(`notifications-unread-user-${session.user.id}`, "max");
   revalidatePath('/dashboard/notifications');
 
   return NextResponse.json({ data: { success: true } });

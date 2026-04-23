@@ -1,11 +1,11 @@
-// src/app/api/admin/settings/clients/route.ts
+﻿// src/app/api/admin/settings/clients/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { getAdminSettingsClients } from "@/lib/data/admin/clients-settings";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 
 const createSchema = z.object({
   companyCode: z.string().min(1, "Company code is required"),
@@ -98,8 +98,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ...getRequestMeta(request),
   });
 
-  updateTag("admin-clients-settings-list");
-  updateTag("hr-clients-list");
+  revalidateTag("admin-clients-settings-list", "max");
+  revalidateTag("hr-clients-list", "max");
 
   return NextResponse.json(
     {

@@ -1,6 +1,7 @@
 // src/app/api/sales/quotes/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revalidateTag } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -142,6 +143,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       });
     });
 
+    revalidateTag('sales-quotes', 'max');
+
     if (parsed.data.status && existing.leadId != null) {
       void logLeadHistory({
         leadId: existing.leadId,
@@ -187,6 +190,8 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
   if (!existing) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
 
   await prisma.quote.delete({ where: { id } });
+
+  revalidateTag('sales-quotes', 'max');
 
   void logActivity({
     userId: session.user.id,

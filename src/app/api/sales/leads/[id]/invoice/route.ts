@@ -156,7 +156,7 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
           totalAmount,
           balanceDue: totalAmount,
           terms: "Net 30",
-          notes: `Initial invoice for ${lead.firstName} ${lead.lastName}${lead.businessName ? ` / ${lead.businessName}` : ""}`,
+              notes: `Initial invoice for ${lead.businessName ?? `${lead.firstName} ${lead.lastName}`}`,
           items: { create: invoiceItems },
         },
       });
