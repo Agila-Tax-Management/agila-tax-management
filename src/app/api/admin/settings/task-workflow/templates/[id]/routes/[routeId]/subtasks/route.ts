@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string; routeId: string }>;
@@ -109,6 +110,8 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     description: `Added subtask "${subtask.name}" to route step #${routeIdInt} of template "${route.template.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: subtask }, { status: 201 });
 }

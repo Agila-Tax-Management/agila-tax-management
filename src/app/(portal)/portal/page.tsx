@@ -1,9 +1,6 @@
-import React from 'react'
+﻿import { connection } from 'next/server';
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
+export default async function PortalRootPage() {
+  await connection();
+  return <div>page</div>;
 }
-
-export default page

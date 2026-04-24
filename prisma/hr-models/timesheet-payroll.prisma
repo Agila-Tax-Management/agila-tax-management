@@ -154,6 +154,7 @@ model Timesheet {
 
   @@unique([employeeId, date])
   @@index([clientId])
+  @@index([clientId, date(sort: Desc)])
   @@map("timesheet")
 }
 

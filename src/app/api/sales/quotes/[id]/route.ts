@@ -1,6 +1,7 @@
 // src/app/api/sales/quotes/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revalidateTag } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -31,6 +32,46 @@ const QUOTE_INCLUDE = {
       sourcePackage: { select: { id: true, name: true } },
     },
   },
+  // ─── Lifecycle relations ─────────────────────────────────────────────────
+  tsaContract: {
+    select: {
+      id: true,
+      referenceNumber: true,
+      status: true,
+      businessName: true,
+      documentDate: true,
+      pdfUrl: true,
+      clientSignedAt: true,
+      approvedAt: true,
+      assignedApproverId: true,
+      assignedApprover: { select: { id: true, name: true, email: true, image: true } },
+      actualApproverId: true,
+      actualApprover: { select: { id: true, name: true, email: true, image: true } },
+      preparedById: true,
+    },
+  },
+  invoice: {
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      totalAmount: true,
+      balanceDue: true,
+      dueDate: true,
+      issueDate: true,
+    },
+  },
+  jobOrders: {
+    select: {
+      id: true,
+      jobOrderNumber: true,
+      status: true,
+    },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+  },
+  lead: { select: { id: true, firstName: true, lastName: true, businessName: true } },
+  client: { select: { id: true, businessName: true, clientNo: true } },
 } as const;
 
 /**
@@ -142,6 +183,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
       });
     });
 
+    revalidateTag('sales-quotes', 'max');
+
     if (parsed.data.status && existing.leadId != null) {
       void logLeadHistory({
         leadId: existing.leadId,
@@ -187,6 +230,8 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
   if (!existing) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
 
   await prisma.quote.delete({ where: { id } });
+
+  revalidateTag('sales-quotes', 'max');
 
   void logActivity({
     userId: session.user.id,

@@ -4,6 +4,8 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
+import { getTaskTemplateById } from "@/lib/data/task-management/templates";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -18,6 +20,7 @@ const updateSchema = z.object({
 /**
  * GET /api/admin/settings/task-workflow/templates/[id]
  * Returns a single template with all route steps and subtasks.
+ * Data is cached for 1 hour via getTaskTemplateById().
  */
 export async function GET(_request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -27,34 +30,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
   const templateId = parseInt(id, 10);
   if (isNaN(templateId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-  const raw = await prisma.taskTemplate.findUnique({
-    where: { id: templateId },
-    include: {
-      departmentRoutes: {
-        orderBy: { routeOrder: "asc" },
-        include: {
-          department: { select: { id: true, name: true } },
-          subtasks: { orderBy: { subtaskOrder: "asc" } },
-        },
-      },
-      services: {
-        include: { service: { select: { id: true, name: true, serviceRate: true, billingType: true, frequency: true, status: true } } },
-      },
-    },
-  });
-
-  if (!raw) return NextResponse.json({ error: "Template not found" }, { status: 404 });
-
-  const { services, ...rest } = raw;
-  const template = {
-    ...rest,
-    servicePlans: services
-      .filter((l) => l.service.billingType === 'RECURRING')
-      .map((l) => l.service),
-    serviceOneTimePlans: services
-      .filter((l) => l.service.billingType === 'ONE_TIME')
-      .map((l) => l.service),
-  };
+  const template = await getTaskTemplateById(templateId);
+  if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });
 
   return NextResponse.json({ data: template });
 }
@@ -108,6 +85,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     ...getRequestMeta(request),
   });
 
+  revalidateTag('task-templates', 'max');
+
   return NextResponse.json({ data: updated });
 }
 
@@ -151,6 +130,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Deleted task template "${existing.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: { success: true } });
 }

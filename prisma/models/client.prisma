@@ -117,6 +117,9 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([active])
+  @@index([mainBranchId])
+  @@index([businessName])
   @@map("atms_clients")
 }
 

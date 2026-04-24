@@ -1,12 +1,13 @@
 // src/app/(portal)/portal/accounting/billing/[id]/page.tsx
-import { use } from 'react';
+import { connection } from 'next/server';
 import { SubscriptionDetailView } from './components/SubscriptionDetailView';
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-export default function SubscriptionDetailPage({ params }: Props) {
-  const { id } = use(params);
+export default async function SubscriptionDetailPage({ params }: Props) {
+  await connection();
+  const { id } = await params;
   return <SubscriptionDetailView id={id} />;
 }

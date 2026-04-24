@@ -1,9 +1,11 @@
-// src/app/api/sales/cities/route.ts
+﻿// src/app/api/sales/cities/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createCitySchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getSalesCities } from "@/lib/data/sales/reference";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/sales/cities
@@ -16,11 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const includeInactive = searchParams.get('includeInactive') === 'true';
 
-  const cities = await prisma.city.findMany({
-    where: includeInactive ? undefined : { isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, province: true, region: true, zipCode: true, isActive: true },
-  });
+  const cities = await getSalesCities(includeInactive);
 
   return NextResponse.json({ data: cities });
 }
@@ -62,6 +60,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created city ${city.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-cities", "max");
 
   return NextResponse.json({ data: city }, { status: 201 });
 }

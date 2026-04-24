@@ -364,6 +364,12 @@ async function openInvoicePDF(invoice: InvoiceRecord) {
 - Generated client output: `src/generated/prisma/` — **never edit generated files**
 - Always use `prisma` (the default export from `src/lib/db.ts`) for database operations
 
+### Database Connection SSL Convention
+
+`src/lib/db.ts` strips `sslmode` from `DATABASE_URL` before passing it to the `pg` Pool constructor. This suppresses the pg-connection-string deprecation warning ("SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'"). SSL is controlled entirely by the explicit `ssl` option on the Pool (`{ rejectUnauthorized: true }` in production, `false` in development) — so the `sslmode` query param is redundant.
+
+**Rule:** Never add `sslmode` handling back into the URL path — keep it in the Pool `ssl` option only.
+
 ### Prisma Conventions
 
 - Run `npx prisma migrate dev` after schema changes
@@ -500,6 +506,331 @@ const payment = await prisma.payment.create({
   },
 });
 ```
+
+---
+
+## Caching Strategy (Next.js 16)
+
+### Configuration
+
+Cache Components is **ready but temporarily disabled** in `next.config.ts` until caching patterns are implemented:
+
+```typescript
+const nextConfig: NextConfig = {
+  // TODO: Enable after implementing caching patterns (Phases 1-4)
+  // Enable Partial Prerendering (PPR) + 'use cache' directive
+  // cacheComponents: true,
+};
+```
+
+**Enablement Plan:**
+- Phase 0 (Foundation): ✅ Complete — Infrastructure ready, documentation added
+- Phase 1-2 (Dashboard): Implement basic caching patterns
+- Phase 3-4 (HR Apps): Add cache invalidation flows
+- **Phase 5+**: Uncomment `cacheComponents: true` and migrate portal modules
+
+When enabled, this provides:
+- `'use cache'` directive for data-level and UI-level caching
+- Partial Prerendering (PPR) for optimal performance
+- `cacheLife()`, `cacheTag()`, and `updateTag()` APIs
+
+### Caching Patterns
+
+#### Data-Level Caching
+
+For shared data-fetching functions reused across components, create utility functions in `src/lib/data/`:
+
+```typescript
+// src/lib/data/reference/services.ts
+import { cacheLife, cacheTag } from 'next/cache';
+import prisma from '@/lib/db';
+
+/**
+ * Fetch all active services (cached for 1 day)
+ * @returns Active services list
+ */
+export async function getServices() {
+  'use cache'
+  cacheLife('days')
+  cacheTag('services-list')
+  
+  return prisma.service.findMany({
+    where: { status: { not: 'ARCHIVED' } },
+    orderBy: { name: 'asc' },
+  });
+}
+```
+
+**Usage in components:**
+```typescript
+// src/app/(portal)/portal/sales/services/page.tsx
+import { getServices } from '@/lib/data/reference/services';
+
+export default async function ServicesPage() {
+  const services = await getServices(); // Cached automatically
+  return <ServicesList services={services} />;
+}
+```
+
+#### API Route Caching
+
+For GET endpoints that return data, add caching directly in the route handler:
+
+```typescript
+// src/app/api/hr/dashboard/route.ts
+import { cacheLife, cacheTag } from 'next/cache';
+
+export async function GET(request: NextRequest) {
+  'use cache'
+  cacheLife('minutes') // Cache for 5 minutes
+  cacheTag('hr-dashboard')
+  
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  
+  // ... fetch and aggregate dashboard data ...
+  
+  return NextResponse.json({ data: dashboardData });
+}
+```
+
+**Important:** User-specific data must include user ID in cache key by passing it as a parameter to a cached function.
+
+#### Cache Invalidation
+
+After mutations (create/update/delete), invalidate relevant cache tags:
+
+```typescript
+// src/app/api/sales/services/route.ts
+import { revalidateTag, revalidatePath } from 'next/cache';
+
+export async function POST(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  
+  // Validate and create service
+  const body = await request.json();
+  const service = await prisma.service.create({ data: body });
+  
+  // Invalidate caches
+  revalidateTag('services-list', 'max');    // Invalidate cached services list
+  revalidateTag('sales-dashboard', 'max');  // Invalidate sales dashboard
+  revalidatePath('/portal/sales/services'); // Revalidate page
+  
+  // Fire-and-forget logging
+  void logActivity({ /* ... */ });
+  void notify({ /* ... */ });
+  
+  return NextResponse.json({ data: service });
+}
+```
+
+**CRITICAL:** Always call `revalidateTag()` **after** the database transaction completes, never inside it.
+
+#### `revalidateTag` vs `updateTag` — Critical Distinction
+
+> **This is one of the most common mistakes in this codebase. Read carefully.**
+
+| Function | Where to use | Behavior |
+|----------|-------------|----------|
+| `revalidateTag(tag, 'max')` | **Route Handlers** (`route.ts`) | Purges the cache for `tag` on next request |
+| `updateTag(tag)` | **Server Actions only** | Read-your-writes: immediately reflects the new data for the triggering request |
+
+- **Always use `revalidateTag(tag, 'max')` in Route Handlers.** Using `updateTag` in a Route Handler throws a runtime error: `updateTag can only be called from within a Server Action`.
+- The second argument `'max'` is **required** in Next.js 16 with `cacheComponents: true`. Omitting it causes a TypeScript type error and a deprecation warning at runtime.
+- `updateTag` (no second arg) is reserved for Server Actions and read-your-writes patterns. Do not use it in `route.ts` files.
+
+```typescript
+// ✅ Correct — Route Handler
+import { revalidateTag } from 'next/cache';
+revalidateTag('services-list', 'max');
+
+// ❌ Wrong — throws runtime error in Route Handlers
+import { updateTag } from 'next/cache';
+updateTag('services-list');
+
+// ❌ Wrong — deprecated, TypeScript error with cacheComponents: true
+revalidateTag('services-list'); // missing second arg
+```
+
+### Cache Duration Guidelines
+
+Use these guidelines to determine appropriate cache durations:
+
+| Data Type | Cache Duration | `cacheLife()` | Rationale |
+|-----------|---------------|---------------|-----------|
+| **Real-time** (attendance, notifications, live status) | No cache | n/a | Must be fresh on every request |
+| **Frequently changing** (tasks, leads, active workflows) | 5-15 minutes | `cacheLife('minutes')` | Acceptable short staleness |
+| **Semi-static** (departments, employees, clients) | 1-2 hours | `cacheLife('hours')` | Changes infrequently |
+| **Reference data** (services, configs, templates) | 1 day | `cacheLife('days')` | Very stable |
+| **User-specific historical** (payslips, timesheets) | 1 hour | `cacheLife('hours')` | Historical, rarely changes |
+
+**Examples:**
+
+```typescript
+cacheLife('minutes')  // Default: 5 minutes
+cacheLife('hours')    // Default: 1 hour  
+cacheLife('days')     // Default: 1 day
+cacheLife('weeks')    // Default: 1 week
+cacheLife('max')      // Maximum allowed duration
+```
+
+### Cache Tags Convention
+
+Use **consistent tag naming** for easier invalidation:
+
+| Pattern | Example | Purpose |
+|---------|---------|---------|
+| `[entity]-list` | `clients-list`, `services-list`, `employees-list` | List/collection queries |
+| `[entity]-detail-{id}` | `client-detail-123`, `task-detail-456` | Single-record detail views |
+| `[module]-dashboard` | `hr-dashboard`, `sales-dashboard`, `ao-dashboard` | Dashboard aggregations |
+| `[entity]-user-{userId}` | `payslips-user-abc123` | User-specific data |
+
+**Multi-tag invalidation:**
+```typescript
+// After creating a client (in a Route Handler)
+revalidateTag('clients-list', 'max');
+revalidateTag('sales-dashboard', 'max');
+revalidateTag('operation-stats', 'max');
+```
+
+### Caching Rules
+
+1. **Always cache reference data** — departments, positions, services, government offices, service inclusions, task templates
+2. **Cache dashboard metrics** with short durations (`cacheLife('minutes')`) — acceptable 5-15 min staleness
+3. **Never cache real-time data** — attendance clock-in/out, live notifications, active status indicators
+4. **User-specific data requires cache key isolation** — pass user ID as function parameter
+5. **Always invalidate related caches** after mutations — use `revalidateTag(tag, 'max')` in Route Handlers
+6. **Combine `revalidateTag()` with `revalidatePath()`** — ensures both data cache and page cache are cleared
+7. **Document cache tags** in function JSDoc comments — helps maintainability
+8. **Never use `updateTag()` in Route Handlers** — it is Server Actions only; use `revalidateTag(tag, 'max')` instead
+
+### Directory Structure for Data Fetching
+
+Organize shared data-fetching utilities in `src/lib/data/`:
+
+```
+src/lib/data/
+  reference/         # Long-lived reference data
+    services.ts
+    departments.ts
+    employees.ts
+  dashboards/        # Dashboard aggregation queries
+    hr-dashboard.ts
+    sales-dashboard.ts
+  users/             # User-specific data
+    payslips.ts
+    leave-credits.ts
+  README.md          # Documentation and guidelines
+```
+
+### Complete CRUD Example with Caching
+
+```typescript
+// ──────────────────────────────────────────────────────────────────
+// src/lib/data/reference/departments.ts
+// ──────────────────────────────────────────────────────────────────
+import { cacheLife, cacheTag } from 'next/cache';
+import prisma from '@/lib/db';
+
+/**
+ * Fetch all departments (cached for 2 hours)
+ * @tag departments-list
+ */
+export async function getDepartments() {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('departments-list')
+  
+  return prisma.department.findMany({
+    orderBy: { name: 'asc' },
+    include: { _count: { select: { employments: true } } },
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// src/app/api/hr/departments/route.ts
+// ──────────────────────────────────────────────────────────────────
+import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag, revalidatePath } from 'next/cache';
+import { auth } from '@/lib/auth';
+import prisma from '@/lib/db';
+import { logActivity, getRequestMeta } from '@/lib/activity-log';
+import { notify } from '@/lib/notification';
+
+/**
+ * GET /api/hr/departments
+ * Returns cached departments list
+ */
+export async function GET(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  
+  // Use the cached data-fetching function
+  const { getDepartments } = await import('@/lib/data/reference/departments');
+  const departments = await getDepartments();
+  
+  return NextResponse.json({ data: departments });
+}
+
+/**
+ * POST /api/hr/departments
+ * Creates a new department and invalidates cache
+ */
+export async function POST(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  
+  const body = await request.json();
+  
+  // Create department
+  const dept = await prisma.department.create({
+    data: {
+      name: body.name,
+      code: body.code,
+      clientId: body.clientId,
+    },
+  });
+  
+  // Invalidate related caches (AFTER transaction)
+  revalidateTag('departments-list', 'max');
+  revalidateTag('hr-dashboard', 'max');
+  revalidatePath('/portal/hr/departments');
+  
+  // Fire-and-forget logging/notifications
+  void logActivity({
+    userId: session.user.id,
+    action: 'CREATED',
+    entity: 'Department',
+    entityId: dept.id,
+    description: `Created department ${dept.name}`,
+    ...getRequestMeta(request),
+  });
+  
+  void notify({
+    recipientId: session.user.id,
+    actorId: session.user.id,
+    type: 'SUCCESS',
+    title: 'Department created',
+    message: `${dept.name} has been added.`,
+    entity: 'Department',
+    entityId: dept.id,
+  });
+  
+  return NextResponse.json({ data: dept });
+}
+```
+
+### Migration from Mock Data
+
+When refactoring pages that use mock data:
+
+1. **Create the data-fetching function** in `src/lib/data/[category]/`
+2. **Add appropriate caching directives** (`'use cache'`, `cacheLife()`, `cacheTag()`)
+3. **Update the page/component** to call the real function instead of mock data
+4. **Add cache invalidation** to related mutation endpoints
+5. **Test** that cache invalidation works correctly
+6. **Remove** the mock data file (or mark it as deprecated)
 
 ---
 

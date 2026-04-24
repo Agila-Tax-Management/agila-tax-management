@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -62,6 +63,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     description: `Reordered statuses for department #${deptId}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-departments', 'max');
 
   return NextResponse.json({ data: { success: true } });
 }

@@ -4,6 +4,8 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
+import { getTaskTemplates } from "@/lib/data/task-management/templates";
 
 const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -14,33 +16,13 @@ const createSchema = z.object({
 /**
  * GET /api/admin/settings/task-workflow/templates
  * Returns all task templates with their department routes and subtasks.
+ * Data is cached for 1 hour via getTaskTemplates().
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const raw = await prisma.taskTemplate.findMany({
-    orderBy: { id: "asc" },
-    include: {
-      departmentRoutes: {
-        orderBy: { routeOrder: "asc" },
-        include: {
-          department: { select: { id: true, name: true } },
-          subtasks: { orderBy: { subtaskOrder: "asc" } },
-        },
-      },
-      services: {
-        include: { service: { select: { id: true, name: true, serviceRate: true, billingType: true, frequency: true, status: true } } },
-      },
-    },
-  });
-
-  const templates = raw.map(({ services, ...tpl }) => ({
-    ...tpl,
-    servicePlans: services.filter((l) => l.service.billingType === 'RECURRING').map((l) => l.service),
-    serviceOneTimePlans: services.filter((l) => l.service.billingType === 'ONE_TIME').map((l) => l.service),
-  }));
-
+  const templates = await getTaskTemplates();
   return NextResponse.json({ data: templates });
 }
 
@@ -102,6 +84,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created task template "${template.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: template }, { status: 201 });
 }

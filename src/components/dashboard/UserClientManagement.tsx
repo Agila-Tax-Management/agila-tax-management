@@ -429,7 +429,7 @@ export default function UserClientManagement(): React.ReactNode {
       <UserClientFormModal
         isOpen={formOpen}
         onClose={closeForm}
-        onSave={(values) => void saveUserClient(values)}
+        onSave={saveUserClient}
         editingUser={editingUser}
         clients={clients}
       />

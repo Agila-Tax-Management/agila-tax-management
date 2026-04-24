@@ -1,27 +1,11 @@
-// src/app/api/sales/services/route.ts
+﻿// src/app/api/sales/services/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createServiceSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-
-const SERVICE_INCLUDE = {
-  governmentOffices: {
-    select: { id: true, code: true, name: true },
-  },
-  cities: {
-    select: { id: true, name: true, province: true },
-  },
-  inclusions: {
-    select: { id: true, name: true, category: true },
-  },
-  taskTemplates: {
-    select: { taskTemplate: { select: { id: true, name: true } } },
-  },
-  promos: {
-    select: { id: true, name: true },
-  },
-} as const;
+import { getSalesServices } from "@/lib/data/sales/services";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/sales/services
@@ -38,14 +22,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const billingType = searchParams.get("billingType") as "RECURRING" | "ONE_TIME" | null;
   const archived = searchParams.get("archived") === "true";
 
-  const services = await prisma.service.findMany({
-    where: {
-      ...(billingType ? { billingType } : {}),
-      ...(!archived ? { status: { not: "ARCHIVED" } } : {}),
-    },
-    orderBy: { name: "asc" },
-    include: SERVICE_INCLUDE,
-  });
+  const services = await getSalesServices(billingType, archived);
 
   return NextResponse.json({ data: services });
 }
@@ -118,7 +95,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ? { connect: promoIds.map((id) => ({ id })) }
           : undefined,
     },
-    include: SERVICE_INCLUDE,
+    include: {
+      governmentOffices: { select: { id: true, code: true, name: true } },
+      cities: { select: { id: true, name: true, province: true } },
+      inclusions: { select: { id: true, name: true, category: true } },
+      taskTemplates: { select: { taskTemplate: { select: { id: true, name: true } } } },
+      promos: { select: { id: true, name: true } },
+    },
   });
 
   void logActivity({
@@ -129,6 +112,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created service: ${service.name} (${service.billingType})`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-services", "max");
 
   return NextResponse.json({ data: service }, { status: 201 });
 }

@@ -1,7 +1,8 @@
 // src/app/api/auth/portal-access/route.ts
 import { NextResponse } from "next/server";
 import { getSessionWithAccess } from "@/lib/session";
-import type { AppPortal, PortalRole } from "@/generated/prisma/client";
+import { getPortalAccessForUser } from "@/lib/data/auth/portal-access";
+import type { AppPortal } from "@/generated/prisma/client";
 
 /**
  * GET /api/auth/portal-access
@@ -34,30 +35,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { user, portalRoles } = session;
+  const { user } = session;
   const { searchParams } = new URL(request.url);
   const portalParam = searchParams.get('portal') as AppPortal | null;
 
+  // Use the cached function for all DB lookups
+  const cached = await getPortalAccessForUser(user.id, user.role);
+
   // If portal param is provided, return role for that specific portal
   if (portalParam) {
+    const match = cached.portals.find((p) => p.portal === portalParam);
     return NextResponse.json({
-      role: portalRoles[portalParam] ?? null,
+      role: match?.role ?? null,
       userRole: user.role,
     });
-  }
-
-  // Otherwise, return all accessible portals
-  const portals: Array<{ portal: AppPortal; role: PortalRole }> = [];
-
-  for (const [portal, role] of Object.entries(portalRoles) as Array<[AppPortal, PortalRole | null]>) {
-    if (role !== null) {
-      portals.push({ portal, role });
-    }
   }
 
   return NextResponse.json({
     userId: user.id,
     userRole: user.role,
-    portals,
+    portals: cached.portals,
   });
 }

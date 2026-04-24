@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -99,6 +100,8 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     description: `Created status "${status.name}" in department "${dept.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-departments', 'max');
 
   return NextResponse.json({ data: status }, { status: 201 });
 }

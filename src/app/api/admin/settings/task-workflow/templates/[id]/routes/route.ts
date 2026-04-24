@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -82,6 +83,8 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     description: `Added department "${department.name}" to template "${template.name}" at step ${nextOrder}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: route }, { status: 201 });
 }

@@ -1,9 +1,11 @@
-// src/app/api/sales/government-offices/route.ts
+﻿// src/app/api/sales/government-offices/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createGovernmentOfficeSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { getSalesGovernmentOffices } from "@/lib/data/sales/reference";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/sales/government-offices
@@ -16,11 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const includeInactive = searchParams.get('includeInactive') === 'true';
 
-  const offices = await prisma.governmentOffice.findMany({
-    where: includeInactive ? undefined : { isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, code: true, name: true, description: true, isActive: true },
-  });
+  const offices = await getSalesGovernmentOffices(includeInactive);
 
   return NextResponse.json({ data: offices });
 }
@@ -69,6 +67,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created government office ${office.name} (${office.code})`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-government-offices", "max");
 
   return NextResponse.json({ data: office }, { status: 201 });
 }

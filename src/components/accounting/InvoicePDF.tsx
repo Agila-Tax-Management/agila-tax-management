@@ -180,9 +180,12 @@ function getBilledTo(invoice: InvoiceRecord) {
   }
   if (invoice.lead) {
     const { firstName, middleName, lastName, businessName, businessType } = invoice.lead;
+    const personName = [firstName, middleName, lastName].filter(Boolean).join(' ');
     return {
-      fullName: [firstName, middleName, lastName].filter(Boolean).join(' '),
-      businessName: businessName ?? null,
+      // Prefer business name as the primary display; fall back to person name
+      fullName: businessName ?? personName,
+      // Show person name as subtitle only when business name is the primary
+      businessName: businessName ? personName : null,
       businessType: businessType !== 'Not Specified' ? businessType : null,
       clientNo: null,
     };

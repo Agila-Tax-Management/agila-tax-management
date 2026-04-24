@@ -1,6 +1,8 @@
-// src/app/(dashboard)/dashboard/sop/gis/page.tsx
+﻿// src/app/(dashboard)/dashboard/sop/gis/page.tsx
+import { connection } from 'next/server';
 import { ComplianceGIS } from '@/components/quick-links/ComplianceGIS';
 
-export default function ComplianceGISPage() {
+export default async function ComplianceGISPage() {
+  await connection();
   return <ComplianceGIS />;
 }

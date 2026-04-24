@@ -75,7 +75,7 @@ export function JobOrderDeleteModal({ isOpen, onClose, jobOrder, onSuccess }: Pr
             <span className="font-mono font-bold text-slate-800">{jobOrder.jobOrderNumber}</span>
             {' '}for{' '}
             <span className="font-semibold text-slate-800">
-              {jobOrder.lead.businessName ?? `${jobOrder.lead.firstName} ${jobOrder.lead.lastName}`}
+              {jobOrder.lead?.businessName ?? (jobOrder.lead ? `${jobOrder.lead.firstName} ${jobOrder.lead.lastName}` : jobOrder.jobOrderNumber)}
             </span>?
           </p>
         </div>
