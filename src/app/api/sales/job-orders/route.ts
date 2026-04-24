@@ -1,6 +1,7 @@
 // src/app/api/sales/job-orders/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revalidateTag, revalidatePath } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -28,6 +29,7 @@ const JO_INCLUDE = {
 } as const;
 
 const jobOrderItemSchema = z.object({
+  serviceId: z.number().int().positive().optional().nullable(),
   itemType: z.enum(["SUBSCRIPTION", "ONE_TIME"]),
   serviceName: z.string().min(1, "Service name is required"),
   rate: z.number().nonnegative(),
@@ -132,6 +134,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             ? {
                 create: items.map((item) => ({
                   itemType: item.itemType,
+                  serviceId: item.serviceId ?? null,
                   serviceName: item.serviceName,
                   rate: item.rate,
                   discount: item.discount,
@@ -153,6 +156,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created job order ${jobOrder.jobOrderNumber}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('sales-job-orders', 'max');
+  revalidatePath('/portal/sales/job-orders');
 
   return NextResponse.json({ data: jobOrder }, { status: 201 });
 }

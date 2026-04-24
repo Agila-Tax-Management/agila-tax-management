@@ -34,6 +34,7 @@ interface ServiceOneTimeOption {
 interface LineItem {
   _key: string;
   itemType: 'SUBSCRIPTION' | 'ONE_TIME';
+  serviceId: number | null;
   serviceName: string;
   rate: number;
   discount: number;
@@ -93,15 +94,20 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
     if (isOpen) {
       if (editData) {
         // Populate from edit data
-        setSelectedLead({
-          id: editData.lead.id,
-          firstName: editData.lead.firstName,
-          lastName: editData.lead.lastName,
-          businessName: editData.lead.businessName,
-          businessType: editData.lead.businessType,
-          contactNumber: editData.lead.contactNumber,
-        });
-        setLeadSearch(`${editData.lead.firstName} ${editData.lead.lastName}`);
+        if (editData.lead) {
+          setSelectedLead({
+            id: editData.lead.id,
+            firstName: editData.lead.firstName,
+            lastName: editData.lead.lastName,
+            businessName: editData.lead.businessName,
+            businessType: editData.lead.businessType,
+            contactNumber: editData.lead.contactNumber,
+          });
+          setLeadSearch(`${editData.lead.firstName} ${editData.lead.lastName}`);
+        } else {
+          setSelectedLead(null);
+          setLeadSearch('');
+        }
         setNotes(editData.notes ?? '');
 
         const subItems = editData.items
@@ -109,6 +115,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
           .map((i): LineItem => ({
             _key: nextKey(),
             itemType: 'SUBSCRIPTION',
+            serviceId: i.serviceId ?? null,
             serviceName: i.serviceName,
             rate: parseFloat(i.rate),
             discount: parseFloat(i.discount),
@@ -121,6 +128,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
           .map((i): LineItem => ({
             _key: nextKey(),
             itemType: 'ONE_TIME',
+            serviceId: i.serviceId ?? null,
             serviceName: i.serviceName,
             rate: parseFloat(i.rate),
             discount: parseFloat(i.discount),
@@ -139,6 +147,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
         setOneTimeItems([]);
         setSelectedPlanId(null);
       }
+
       setOneTimeSearch('');
       setShowLeadDropdown(false);
       setShowOneTimeDropdown(false);
@@ -217,6 +226,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
       {
         _key: nextKey(),
         itemType: 'SUBSCRIPTION',
+        serviceId: plan.id,
         serviceName: plan.name,
         rate,
         discount: 0,
@@ -235,6 +245,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
       {
         _key: nextKey(),
         itemType: 'ONE_TIME',
+        serviceId: svc.id,
         serviceName: svc.name,
         rate,
         discount: 0,
@@ -250,7 +261,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
   const handleAddBlankOneTime = () => {
     setOneTimeItems((prev) => [
       ...prev,
-      { _key: nextKey(), itemType: 'ONE_TIME', serviceName: '', rate: 0, discount: 0, total: 0, remarks: '' },
+      { _key: nextKey(), itemType: 'ONE_TIME', serviceId: null, serviceName: '', rate: 0, discount: 0, total: 0, remarks: '' },
     ]);
   };
 
@@ -306,6 +317,7 @@ export function JobOrderFormModal({ isOpen, onClose, editData, onSuccess }: Prop
 
     const allItems = [...subscriptionItems, ...oneTimeItems].map((item) => ({
       itemType: item.itemType,
+      serviceId: item.serviceId ?? null,
       serviceName: item.serviceName,
       rate: item.rate,
       discount: item.discount,

@@ -252,8 +252,8 @@ interface JobOrderPDFProps {
 export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
   const clientName =
     jo.client?.businessName ??
-    jo.lead.businessName ??
-    `${jo.lead.firstName} ${jo.lead.lastName}`;
+    jo.lead?.businessName ??
+    (jo.lead ? `${jo.lead.firstName} ${jo.lead.lastName}` : jo.jobOrderNumber);
 
   const subscriptionItems = jo.items.filter((i) => i.itemType === 'SUBSCRIPTION');
   const oneTimeItems       = jo.items.filter((i) => i.itemType === 'ONE_TIME');
@@ -300,17 +300,17 @@ export function JobOrderPDF({ jobOrder: jo }: JobOrderPDFProps) {
             </View>
             <View style={s.infoRow}>
               <Text style={s.infoLabel}>Contact Person:</Text>
-              <Text style={s.infoValue}>{jo.lead.firstName} {jo.lead.lastName}</Text>
+              <Text style={s.infoValue}>{jo.lead ? `${jo.lead.firstName} ${jo.lead.lastName}` : '—'}</Text>
             </View>
             <View style={s.infoRow}>
               <Text style={s.infoLabel}>Business Type:</Text>
-              <Text style={s.infoValue}>{jo.lead.businessType}</Text>
+              <Text style={s.infoValue}>{jo.lead?.businessType ?? '—'}</Text>
             </View>
           </View>
           <View style={s.clientCol}>
             <View style={s.infoRow}>
               <Text style={s.infoLabel}>Contact Number:</Text>
-              <Text style={s.infoValue}>{jo.lead.contactNumber ?? '—'}</Text>
+              <Text style={s.infoValue}>{jo.lead?.contactNumber ?? '—'}</Text>
             </View>
             <View style={s.infoRow}>
               <Text style={s.infoLabel}>Date Prepared:</Text>

@@ -18,6 +18,7 @@ export type JobOrderStatus = 'DRAFT' | 'PENDING_OPERATIONS_ACK' | 'PENDING_ACCOU
 export interface JobOrderItem {
   id: string;
   itemType: 'SUBSCRIPTION' | 'ONE_TIME';
+  serviceId: number | null;
   serviceName: string;
   rate: string;        // Decimal serialized as string
   discount: string;
@@ -31,7 +32,7 @@ export interface JobOrderRecord {
   date: string;
   status: JobOrderStatus;
   notes: string | null;
-  leadId: number;
+  leadId: number | null;
   lead: {
     id: number;
     firstName: string;
@@ -39,7 +40,7 @@ export interface JobOrderRecord {
     businessName: string | null;
     contactNumber: string | null;
     businessType: string;
-  };
+  } | null;
   clientId: number | null;
   client: { id: number; businessName: string } | null;
   preparedById: string | null;
@@ -198,9 +199,9 @@ export function JobOrders(): React.ReactNode {
     const matchesSearch =
       !q ||
       jo.jobOrderNumber.toLowerCase().includes(q) ||
-      jo.lead.firstName.toLowerCase().includes(q) ||
-      jo.lead.lastName.toLowerCase().includes(q) ||
-      (jo.lead.businessName ?? '').toLowerCase().includes(q) ||
+      (jo.lead?.firstName ?? '').toLowerCase().includes(q) ||
+      (jo.lead?.lastName ?? '').toLowerCase().includes(q) ||
+      (jo.lead?.businessName ?? '').toLowerCase().includes(q) ||
       (jo.client?.businessName ?? '').toLowerCase().includes(q);
 
     const matchesStatus = statusFilter === 'ALL' || jo.status === statusFilter;
@@ -417,8 +418,8 @@ export function JobOrders(): React.ReactNode {
                   {paginated.map((jo) => {
                     const cfg = STATUS_CONFIG[jo.status];
                     const clientName = jo.client?.businessName;
-                    const leadName = `${jo.lead.firstName} ${jo.lead.lastName}`;
-                    const displayName = clientName ?? jo.lead.businessName ?? leadName;
+                    const leadName = jo.lead ? `${jo.lead.firstName} ${jo.lead.lastName}` : '';
+                    const displayName = clientName ?? jo.lead?.businessName ?? leadName;
 
                     return (
                       <tr key={jo.id} className="hover:bg-slate-50 transition-colors">
@@ -434,7 +435,9 @@ export function JobOrders(): React.ReactNode {
                           {clientName && (
                             <p className="text-xs text-slate-400">{leadName}</p>
                           )}
-                          <p className="text-xs text-slate-400">{jo.lead.businessType}</p>
+                          {jo.lead?.businessType && (
+                            <p className="text-xs text-slate-400">{jo.lead.businessType}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-500">
                           {new Date(jo.date).toLocaleDateString('en-PH', {
