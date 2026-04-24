@@ -1,6 +1,8 @@
-// src/app/(portal)/portal/operation/client-list/page.tsx
+﻿// src/app/(portal)/portal/operation/client-list/page.tsx
+import { connection } from 'next/server';
 import { OperationClientList } from '@/components/operation/OperationClientList';
 
-export default function OperationClientListPage() {
+export default async function OperationClientListPage() {
+  await connection();
   return <OperationClientList />;
 }

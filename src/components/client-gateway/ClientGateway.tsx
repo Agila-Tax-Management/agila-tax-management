@@ -5,12 +5,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users, Search, Filter,
-  ExternalLink, Eye, Trash2, ChevronUp, ChevronDown, AlertCircle, Loader2,
+  ExternalLink, Eye, EyeOff, Trash2, GitBranch, ChevronUp, ChevronDown, AlertCircle, Loader2,
 } from 'lucide-react';
 import type { ClientListItem } from '@/types/client-gateway.types';
 import { useToast } from '@/context/ToastContext';
+import { AddBranchModal } from './AddBranchModal';
 
-type SortField = 'clientNo' | 'businessName' | 'companyCode' | 'active' | 'createdAt';
+type SortField = 'clientNo' | 'businessName' | 'companyCode' | 'branchType' | 'active' | 'createdAt';
 type SortDir   = 'asc' | 'desc';
 type StatusFilter = 'All' | 'Active' | 'Inactive';
 
@@ -25,6 +26,10 @@ export function ClientGateway(): React.ReactNode {
   const [sortDir, setSortDir]           = useState<SortDir>('asc');
   const [deleteTarget, setDeleteTarget] = useState<ClientListItem | null>(null);
   const [deleting, setDeleting]         = useState(false);
+  const [deleteText, setDeleteText]     = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [branchTarget, setBranchTarget] = useState<ClientListItem | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -79,14 +84,35 @@ export function ClientGateway(): React.ReactNode {
       : <ChevronDown size={12} className="text-[#25238e]" />;
   }
 
+  async function refreshClients() {
+    try {
+      const res = await fetch('/api/client-gateway/clients');
+      if (!res.ok) throw new Error();
+      const json = await res.json() as { data: ClientListItem[] };
+      setClients(json.data);
+    } catch {
+      // silently ignore — user can refresh the page
+    }
+  }
+
   async function handleDeleteConfirm() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/settings/clients/${deleteTarget.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
+      const res = await fetch(`/api/client-gateway/clients/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Delete failed', json.error ?? 'Could not delete this client.');
+        return;
+      }
       setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
       setDeleteTarget(null);
+      setDeleteText('');
+      setDeletePassword('');
     } catch {
       toastError('Delete failed', 'Could not delete this client.');
     } finally {
@@ -162,6 +188,7 @@ export function ClientGateway(): React.ReactNode {
                           { label: 'Client #',      field: 'clientNo'     },
                           { label: 'Business Name', field: 'businessName' },
                           { label: 'Company Code',  field: 'companyCode'  },
+                          { label: 'Branch Type',   field: 'branchType'   },
                           { label: 'Status',        field: 'active'       },
                         ] as { label: string; field: SortField }[]
                       ).map(({ label, field }) => (
@@ -186,7 +213,7 @@ export function ClientGateway(): React.ReactNode {
                   <tbody className="divide-y divide-border">
                     {filteredClients.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                        <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
                           No clients found.
                         </td>
                       </tr>
@@ -204,8 +231,18 @@ export function ClientGateway(): React.ReactNode {
                             {client.companyCode ?? '—'}
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
-                              client.active
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${                              client.branchType === 'MAIN'
+                                ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                                : 'bg-amber-100 text-amber-700 border-amber-200'
+                            }`}>
+                              {client.branchType === 'MAIN' ? 'Main Branch' : 'Branch'}
+                            </span>
+                            {client.branchType === 'BRANCH' && client.mainBranchName && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{client.mainBranchName}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${                              client.active
                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
                                 : 'bg-slate-100 text-slate-600 border-slate-200'
                             }`}>
@@ -224,6 +261,15 @@ export function ClientGateway(): React.ReactNode {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">
+                              {client.branchType === 'MAIN' && (
+                                <button
+                                  onClick={() => setBranchTarget(client)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 transition-all"
+                                  title="Add branch"
+                                >
+                                  <GitBranch size={12} /> Branch
+                                </button>
+                              )}
                               <button
                                 onClick={() => router.push(`/portal/client-gateway/clients/${client.id}`)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all"
@@ -231,7 +277,12 @@ export function ClientGateway(): React.ReactNode {
                                 <Eye size={12} /> View
                               </button>
                               <button
-                                onClick={() => setDeleteTarget(client)}
+                                onClick={() => {
+                                  setDeleteTarget(client);
+                                  setDeleteText('');
+                                  setDeletePassword('');
+                                  setShowDeletePassword(false);
+                                }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all"
                               >
                                 <Trash2 size={12} /> Delete
@@ -261,32 +312,91 @@ export function ClientGateway(): React.ReactNode {
               </div>
               <div>
                 <h3 className="font-black text-slate-900">Delete Client</h3>
-                <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone.</p>
+                <p className="text-xs text-slate-500 mt-0.5">This action is permanent and cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-slate-700 mb-6">
-              Are you sure you want to delete{' '}
-              <strong>{deleteTarget.businessName}</strong>{deleteTarget.clientNo ? ` (${deleteTarget.clientNo})` : ''}?
+
+            <p className="text-sm text-slate-700 mb-4">
+              You are about to permanently delete{' '}
+              <strong className="text-red-700">{deleteTarget.businessName}</strong>
+              {deleteTarget.clientNo ? ` (${deleteTarget.clientNo})` : ''}
+              {' '}and all associated records.
             </p>
-            <div className="flex gap-3 justify-end">
+
+            <div className="flex flex-col gap-3">
+              {/* Type DELETE */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Type <span className="font-mono font-black text-red-600">DELETE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteText}
+                  onChange={(e) => setDeleteText(e.target.value)}
+                  placeholder="DELETE"
+                  autoComplete="off"
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-300"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Your password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showDeletePassword ? 'text' : 'password'}
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    className="w-full px-3 py-2 pr-9 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDeletePassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {showDeletePassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-5">
               <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteText('');
+                  setDeletePassword('');
+                }}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                disabled={deleting}
+                disabled={deleting || deleteText.toUpperCase() !== 'DELETE' || !deletePassword.trim()}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
               >
-                {deleting ? <Loader2 size={14} className="animate-spin" /> : null}
-                Yes, Delete
+                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {deleting ? 'Deleting…' : 'Delete Client'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Add Branch Modal */}
+      <AddBranchModal
+        isOpen={branchTarget !== null}
+        onClose={() => setBranchTarget(null)}
+        onSuccess={() => { void refreshClients(); }}
+        parentClient={branchTarget}
+      />
     </div>
   );
 }

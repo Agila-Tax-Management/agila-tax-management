@@ -4,6 +4,8 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
+import { getTasks } from "@/lib/data/task-management/tasks";
 
 const taskInclude = {
   client: { select: { id: true, businessName: true } },
@@ -44,6 +46,7 @@ const createTaskSchema = z.object({
 /**
  * GET /api/tasks
  * Query params: departmentId, statusId, priority, clientId, assignedToId, search, page, limit
+ * Data is cached for 5 minutes via getTasks().
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -58,44 +61,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const search = searchParams.get("search");
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 50));
-  const skip = (page - 1) * limit;
 
-  const where = {
+  const { tasks, pagination } = await getTasks({
     ...(departmentId ? { departmentId: Number(departmentId) } : {}),
     ...(statusId ? { statusId: Number(statusId) } : {}),
     ...(priority ? { priority: priority as "LOW" | "NORMAL" | "HIGH" | "URGENT" } : {}),
     ...(clientId ? { clientId: Number(clientId) } : {}),
     ...(assignedToId ? { assignedToId: Number(assignedToId) } : {}),
-    ...(search
-      ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" as const } },
-            { description: { contains: search, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
-  };
-
-  const [tasks, total] = await Promise.all([
-    prisma.task.findMany({
-      where,
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-      include: taskInclude,
-      skip,
-      take: limit,
-    }),
-    prisma.task.count({ where }),
-  ]);
-
-  return NextResponse.json({
-    data: tasks,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    ...(search ? { search } : {}),
+    page,
+    limit,
   });
+
+  return NextResponse.json({ data: tasks, pagination });
 }
 
 /**
@@ -192,6 +170,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       newValue: task.name,
     },
   });
+
+  revalidateTag('tasks-list', 'max');
+  revalidateTag('task-management-dashboard', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
 
   return NextResponse.json({ data: taskWithSubtasks ?? task }, { status: 201 });
 }

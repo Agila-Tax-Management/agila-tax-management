@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,9 +36,14 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <ToastProvider>
-            {children}
+            <Suspense fallback={null}>
+              {children}
+            </Suspense>
           </ToastProvider>
         </ThemeProvider>
+        <Suspense fallback={null}>
+          <SpeedInsights />
+        </Suspense>
       </body>
     </html>
   );

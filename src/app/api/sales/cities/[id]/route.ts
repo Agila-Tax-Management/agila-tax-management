@@ -1,9 +1,10 @@
-// src/app/api/sales/cities/[id]/route.ts
+﻿// src/app/api/sales/cities/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { updateCitySchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -83,6 +84,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     ...getRequestMeta(request),
   });
 
+  revalidateTag("sales-cities", "max");
+
   return NextResponse.json({ data: updated });
 }
 
@@ -118,6 +121,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Deactivated city ${existing.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-cities", "max");
 
   return NextResponse.json({ data: { success: true } });
 }

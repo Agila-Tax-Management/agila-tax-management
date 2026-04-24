@@ -1,9 +1,10 @@
-// src/app/api/sales/government-offices/[id]/route.ts
+﻿// src/app/api/sales/government-offices/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { updateGovernmentOfficeSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -83,6 +84,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     ...getRequestMeta(request),
   });
 
+  revalidateTag("sales-government-offices", "max");
+
   return NextResponse.json({ data: updated });
 }
 
@@ -118,6 +121,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Deactivated government office ${existing.name} (${existing.code})`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-government-offices", "max");
 
   return NextResponse.json({ data: { success: true } });
 }

@@ -1,19 +1,11 @@
-// src/app/api/sales/services/packages/route.ts
+﻿// src/app/api/sales/services/packages/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createServicePackageSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-
-const PACKAGE_INCLUDE = {
-  items: {
-    include: {
-      service: {
-        select: { id: true, code: true, name: true, billingType: true, serviceRate: true },
-      },
-    },
-  },
-} as const;
+import { getSalesServicePackages } from "@/lib/data/sales/services";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/sales/services/packages
@@ -22,10 +14,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const packages = await prisma.servicePackage.findMany({
-    orderBy: { name: "asc" },
-    include: PACKAGE_INCLUDE,
-  });
+  const packages = await getSalesServicePackages();
 
   return NextResponse.json({ data: packages });
 }
@@ -72,7 +61,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             }
           : undefined,
     },
-    include: PACKAGE_INCLUDE,
+    include: {
+      items: {
+        include: {
+          service: {
+            select: { id: true, code: true, name: true, billingType: true, serviceRate: true },
+          },
+        },
+      },
+    },
   });
 
   void logActivity({
@@ -83,6 +80,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created service package: ${pkg.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-service-packages", "max");
+  revalidateTag("sales-packages", "max");
 
   return NextResponse.json({ data: pkg }, { status: 201 });
 }

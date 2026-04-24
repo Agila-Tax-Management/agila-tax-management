@@ -5,9 +5,29 @@ import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
+/**
+ * Strip `sslmode` from the connection string so that pg-connection-string does
+ * not emit a deprecation warning about 'require'/'prefer'/'verify-ca' being
+ * treated as 'verify-full'.  SSL is controlled exclusively by the explicit
+ * `ssl` option passed to the Pool constructor below, which already enforces
+ * the correct behavior (`rejectUnauthorized: true` in production).
+ */
+function stripSslMode(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("sslmode");
+    return parsed.toString();
+  } catch {
+    // If the URL can't be parsed (e.g. non-standard format), return as-is
+    return url;
+  }
+}
+
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL environment variable is not set.");
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl) throw new Error("DATABASE_URL environment variable is not set.");
+
+  const connectionString = stripSslMode(rawUrl);
 
   const pool = new Pool({
     connectionString,

@@ -1,15 +1,11 @@
-// src/app/api/sales/promos/route.ts
+﻿// src/app/api/sales/promos/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createPromoSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-
-const PROMO_INCLUDE = {
-  services: {
-    select: { id: true, name: true, serviceRate: true, billingType: true },
-  },
-} as const;
+import { getSalesPromos } from "@/lib/data/sales/promos";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/sales/promos
@@ -22,11 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const activeOnly = searchParams.get("active") === "true";
 
-  const promos = await prisma.promo.findMany({
-    where: activeOnly ? { isActive: true } : undefined,
-    orderBy: { createdAt: "desc" },
-    include: PROMO_INCLUDE,
-  });
+  const promos = await getSalesPromos(activeOnly);
 
   return NextResponse.json({ data: promos });
 }
@@ -78,7 +70,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ? { connect: serviceIds.map((id) => ({ id })) }
           : undefined,
     },
-    include: PROMO_INCLUDE,
+    include: {
+      services: {
+        select: { id: true, name: true, serviceRate: true, billingType: true },
+      },
+    },
   });
 
   void logActivity({
@@ -89,6 +85,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created promo: ${promo.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-promos", "max");
 
   return NextResponse.json({ data: promo }, { status: 201 });
 }

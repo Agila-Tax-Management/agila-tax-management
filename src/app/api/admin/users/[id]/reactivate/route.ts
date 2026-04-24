@@ -1,8 +1,9 @@
-// src/app/api/admin/users/[id]/reactivate/route.ts
+﻿// src/app/api/admin/users/[id]/reactivate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,6 +52,8 @@ export async function PATCH(
       description: `Reactivated user ${user.name} (${user.email})`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag("admin-users-list", "max");
 
     return NextResponse.json({ data: { id } });
   } catch (err: unknown) {

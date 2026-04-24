@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -124,6 +125,8 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     ...getRequestMeta(request),
   });
 
+  revalidateTag('task-templates', 'max');
+
   return NextResponse.json({ data: { success: true } });
 }
 
@@ -181,6 +184,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Unlinked service "${service.name}" from template`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: { success: true } });
 }

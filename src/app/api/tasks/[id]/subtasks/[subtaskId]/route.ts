@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 const postActivitySchema = z.object({
   kind: z.enum(['comment', 'change']),
@@ -179,6 +180,11 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
     ...getRequestMeta(request),
   });
 
+  revalidateTag('tasks-list', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
+
   return NextResponse.json({ data: subtask });
 }
 
@@ -212,6 +218,12 @@ export async function DELETE(request: NextRequest, { params }: Params): Promise<
     description: `Deleted subtask "${existing.name}" from task #${taskId}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('tasks-list', 'max');
+  revalidateTag('task-management-dashboard', 'max');
+  revalidateTag('liaison-dashboard', 'max');
+  revalidateTag('ao-dashboard', 'max');
+  revalidateTag('operation-dashboard', 'max');
 
   return NextResponse.json({ data: { id: stId } });
 }

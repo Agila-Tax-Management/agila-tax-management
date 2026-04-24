@@ -1,6 +1,8 @@
 // src/app/api/client-gateway/clients/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { revalidateTag } from 'next/cache';
+import { verifyPassword } from 'better-auth/crypto';
 import prisma from '@/lib/db';
 import { getSessionWithAccess } from '@/lib/session';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
@@ -818,4 +820,65 @@ export async function PATCH(
   });
 
   return NextResponse.json({ data: { id: client.id, active: client.active } });
+}
+
+/**
+ * DELETE /api/client-gateway/clients/[id]
+ * Permanently deletes a client. Requires the caller's password for confirmation.
+ */
+export async function DELETE(request: NextRequest, { params }: RouteContext): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await params;
+  const clientId = parseInt(id, 10);
+  if (isNaN(clientId)) return NextResponse.json({ error: 'Invalid client ID' }, { status: 400 });
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const parsed = z.object({ password: z.string().min(1, 'Password is required') }).safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Validation failed' }, { status: 400 });
+  }
+
+  // Verify the caller's credential account password
+  const account = await prisma.account.findFirst({
+    where: { userId: session.user.id, providerId: 'credential' },
+    select: { password: true },
+  });
+  if (!account?.password) {
+    return NextResponse.json({ error: 'Cannot verify password for this account type' }, { status: 400 });
+  }
+  const isValid = await verifyPassword({ password: parsed.data.password, hash: account.password });
+  if (!isValid) {
+    return NextResponse.json({ error: 'Incorrect password' }, { status: 403 });
+  }
+
+  const target = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, businessName: true, companyCode: true },
+  });
+  if (!target) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+
+  await prisma.client.delete({ where: { id: clientId } });
+
+  revalidateTag('client-gateway-clients', 'max');
+  revalidateTag('admin-clients-settings-list', 'max');
+  revalidateTag('hr-clients-list', 'max');
+
+  void logActivity({
+    userId: session.user.id,
+    action: 'DELETED',
+    entity: 'Client',
+    entityId: String(clientId),
+    description: `Deleted client ${target.businessName} (${target.companyCode ?? 'no code'})`,
+    ...getRequestMeta(request),
+  });
+
+  return NextResponse.json({ data: { id: clientId } });
 }

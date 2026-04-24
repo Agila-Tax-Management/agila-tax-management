@@ -11,7 +11,7 @@ import type { ClientRecord, ClientFormValues } from '@/types/client-management.t
 interface ClientFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (values: ClientFormValues) => void;
+  onSave: (values: ClientFormValues) => Promise<void>;
   editingClient?: ClientRecord | null;
 }
 
@@ -46,11 +46,13 @@ export default function ClientFormModal({
   const [prevSyncKey, setPrevSyncKey] = useState(syncKey);
   const [form, setForm] = useState<ClientFormValues>(getInitialForm(editingClient));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   if (syncKey !== prevSyncKey) {
     setPrevSyncKey(syncKey);
     setForm(getInitialForm(editingClient));
     setFieldErrors({});
+    setSaving(false);
   }
 
   function set(key: keyof ClientFormValues, value: string): void {
@@ -71,9 +73,14 @@ export default function ClientFormModal({
     return true;
   }
 
-  function handleSubmit(): void {
+  async function handleSubmit(): Promise<void> {
     if (!validate()) return;
-    onSave(form);
+    setSaving(true);
+    try {
+      await onSave(form);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -181,9 +188,9 @@ export default function ClientFormModal({
         </div>
 
         <div className="flex justify-end gap-3 pt-2 border-t border-border">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSubmit}>
-            {editingClient ? 'Save Changes' : 'Create Client'}
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={() => void handleSubmit()} disabled={saving}>
+            {saving ? 'Saving...' : editingClient ? 'Save Changes' : 'Create Client'}
           </Button>
         </div>
       </div>

@@ -111,6 +111,8 @@ model User {
   complianceNotes  ComplianceNote[]
   ewtItemHistories EwtItemHistory[]
 
+  @@index([role])
+  @@index([active])
   @@unique([email])
   @@map("user")
 }

@@ -1,6 +1,7 @@
-// src/app/api/notifications/clear-all/route.ts
+﻿// src/app/api/notifications/clear-all/route.ts
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 
@@ -23,6 +24,11 @@ export async function DELETE() {
         isRead: true,
       },
     });
+
+    // Invalidate notification caches
+    revalidateTag(`notifications-user-${session.user.id}`, "max");
+    revalidateTag(`notifications-unread-user-${session.user.id}`, "max");
+    revalidatePath('/dashboard/notifications');
 
     return NextResponse.json({ data: { count: result.count } });
   } catch (err) {

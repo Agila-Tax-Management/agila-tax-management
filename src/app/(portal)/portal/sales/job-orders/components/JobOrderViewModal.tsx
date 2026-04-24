@@ -104,8 +104,8 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
   const grandTotal = subTotal + otTotal;
 
   const clientName = jo.client?.businessName
-    ?? jo.lead.businessName
-    ?? `${jo.lead.firstName} ${jo.lead.lastName}`;
+    ?? jo.lead?.businessName
+    ?? (jo.lead ? `${jo.lead.firstName} ${jo.lead.lastName}` : '—');
 
   // ── Access control ───────────────────────────────────────────────
   const isViewer = userSession?.salesPortalRole === 'VIEWER';
@@ -335,12 +335,12 @@ export function JobOrderViewModal({ isOpen, onClose, jobOrder: jo, onUpdate, onE
               <InfoRow label="Business / Client Name" value={clientName} />
               <InfoRow
                 label="Contact Person"
-                value={`${jo.lead.firstName} ${jo.lead.lastName}`}
+                value={jo.lead ? `${jo.lead.firstName} ${jo.lead.lastName}` : '—'}
               />
-              <InfoRow label="Business Type" value={jo.lead.businessType} />
+              <InfoRow label="Business Type" value={jo.lead?.businessType ?? '—'} />
             </div>
             <div className="space-y-2">
-              <InfoRow label="Contact Number" value={jo.lead.contactNumber ?? '—'} />
+              <InfoRow label="Contact Number" value={jo.lead?.contactNumber ?? '—'} />
               <InfoRow label="Date Prepared" value={fmtDate(jo.datePrepared)} />
             </div>
           </div>

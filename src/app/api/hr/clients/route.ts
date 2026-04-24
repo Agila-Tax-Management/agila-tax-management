@@ -1,7 +1,7 @@
 // src/app/api/hr/clients/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
+import { getHrClients } from "@/lib/data/reference/hr-clients";
 
 /**
  * GET /api/hr/clients
@@ -11,11 +11,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clients = await prisma.client.findMany({
-    where: { active: true },
-    orderBy: { businessName: "asc" },
-    select: { id: true, businessName: true, portalName: true, companyCode: true },
-  });
+  const clients = await getHrClients();
 
   return NextResponse.json({ data: clients });
 }

@@ -1,6 +1,7 @@
 // src/app/api/sales/job-orders/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revalidateTag, revalidatePath } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -36,6 +37,7 @@ const JO_INCLUDE = {
 } as const;
 
 const jobOrderItemSchema = z.object({
+  serviceId: z.number().int().positive().optional().nullable(),
   itemType: z.enum(["SUBSCRIPTION", "ONE_TIME"]),
   serviceName: z.string().min(1, "Service name is required"),
   rate: z.number().nonnegative(),
@@ -192,6 +194,7 @@ export async function PATCH(
                 items: {
                   create: items.map((item) => ({
                     itemType: item.itemType,
+                    serviceId: item.serviceId ?? null,
                     serviceName: item.serviceName,
                     rate: item.rate,
                     discount: item.discount,
@@ -214,6 +217,9 @@ export async function PATCH(
       description: `Updated job order ${existing.jobOrderNumber}`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag('sales-job-orders', 'max');
+    revalidatePath('/portal/sales/job-orders');
 
     return NextResponse.json({ data: jobOrder });
   }
@@ -242,14 +248,15 @@ export async function PATCH(
 
     // Notify operations manager
     if (existing.assignedOperationsManagerId) {
+      const entityName = existing.lead
+        ? (existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`)
+        : 'client';
       void notify({
         userId: existing.assignedOperationsManagerId,
         type: "TASK",
         priority: "NORMAL",
         title: "New Job Order Ready for Approval",
-        message: `Job Order ${existing.jobOrderNumber} for ${
-          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
-        } is ready for your approval.`,
+        message: `Job Order ${existing.jobOrderNumber} for ${entityName} is ready for your approval.`,
         linkUrl: `/portal/sales/job-orders/${id}`,
       });
     }
@@ -262,6 +269,9 @@ export async function PATCH(
       description: `Submitted job order ${existing.jobOrderNumber} for approval`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag('sales-job-orders', 'max');
+    revalidatePath('/portal/sales/job-orders');
 
     return NextResponse.json({ data: jobOrder });
   }
@@ -305,14 +315,15 @@ export async function PATCH(
 
     // Notify account manager (next approver)
     if (existing.assignedAccountManagerId) {
+      const entityName = existing.lead
+        ? (existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`)
+        : 'client';
       void notify({
         userId: existing.assignedAccountManagerId,
         type: "TASK",
         priority: "NORMAL",
         title: "Job Order Ready for Account Manager Approval",
-        message: `Job Order ${existing.jobOrderNumber} for ${
-          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
-        } is ready for your approval.`,
+        message: `Job Order ${existing.jobOrderNumber} for ${entityName} is ready for your approval.`,
         linkUrl: `/portal/sales/job-orders/${id}`,
       });
     }
@@ -325,6 +336,9 @@ export async function PATCH(
       description: `Operations Manager approved job order ${existing.jobOrderNumber}`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag('sales-job-orders', 'max');
+    revalidatePath('/portal/sales/job-orders');
 
     return NextResponse.json({ data: jobOrder });
   }
@@ -375,14 +389,15 @@ export async function PATCH(
 
     // Notify executive (final approver)
     if (existing.assignedExecutiveId) {
+      const entityName = existing.lead
+        ? (existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`)
+        : 'client';
       void notify({
         userId: existing.assignedExecutiveId,
         type: "TASK",
         priority: "NORMAL",
         title: "Job Order Ready for Executive Approval",
-        message: `Job Order ${existing.jobOrderNumber} for ${
-          existing.lead.businessName ?? `${existing.lead.firstName} ${existing.lead.lastName}`
-        } is ready for your final approval.`,
+        message: `Job Order ${existing.jobOrderNumber} for ${entityName} is ready for your final approval.`,
         linkUrl: `/portal/sales/job-orders/${id}`,
       });
     }
@@ -395,6 +410,9 @@ export async function PATCH(
       description: `Account Manager approved job order ${existing.jobOrderNumber}`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag('sales-job-orders', 'max');
+    revalidatePath('/portal/sales/job-orders');
 
     return NextResponse.json({ data: jobOrder });
   }
@@ -446,49 +464,64 @@ export async function PATCH(
       });
 
       // ─── Spawn tasks from linked task templates ───────────────────
-      // Fetch the lead with service task templates
-      const lead = await tx.lead.findUnique({
-        where: { id: existing.leadId },
-        include: {
-          quotes: {
-            where: { status: "ACCEPTED" },
-            include: {
-              lineItems: {
-                include: {
-                  service: {
-                    include: {
-                      taskTemplates: {
-                        include: {
-                          taskTemplate: {
-                            include: {
-                              departmentRoutes: {
-                                orderBy: { routeOrder: "asc" },
-                                include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
-                              },
-                            },
-                          },
-                        },
-                      },
+      // Primary path: collect serviceIds directly from JO items (populated since fix)
+      const itemServiceIds = [
+        ...new Set(
+          updatedJO.items
+            .map((item) => item.serviceId)
+            .filter((sid): sid is number => sid !== null),
+        ),
+      ];
+
+      // Fallback path: for legacy JOs where serviceId wasn't stored on items,
+      // pull services from the lead's most recent accepted quote instead.
+      let fallbackServiceIds: number[] = [];
+      if (itemServiceIds.length === 0 && existing.leadId !== null) {
+        const leadWithQuote = await tx.lead.findUnique({
+          where: { id: existing.leadId },
+          select: {
+            quotes: {
+              where: { status: "ACCEPTED" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { lineItems: { select: { serviceId: true } } },
+            },
+          },
+        });
+        fallbackServiceIds = [
+          ...new Set(
+            (leadWithQuote?.quotes[0]?.lineItems ?? []).map((li) => li.serviceId),
+          ),
+        ];
+      }
+
+      const allServiceIds = [...new Set([...itemServiceIds, ...fallbackServiceIds])];
+      const clientId = existing.clientId ?? existing.lead?.convertedClientId ?? null;
+
+      if (allServiceIds.length > 0) {
+        const services = await tx.service.findMany({
+          where: { id: { in: allServiceIds } },
+          include: {
+            taskTemplates: {
+              include: {
+                taskTemplate: {
+                  include: {
+                    departmentRoutes: {
+                      orderBy: { routeOrder: "asc" },
+                      include: { subtasks: { orderBy: { subtaskOrder: "asc" } } },
                     },
                   },
                 },
               },
             },
-            orderBy: { createdAt: "desc" },
-            take: 1,
           },
-        },
-      });
-
-      if (lead) {
-        const clientId = existing.clientId ?? lead.convertedClientId ?? null;
-        const lineItems = lead.quotes[0]?.lineItems ?? [];
+        });
 
         // Deduplicate templates across all attached services
-        type TplEntry = typeof lineItems[0]["service"]["taskTemplates"][0]["taskTemplate"];
+        type TplEntry = typeof services[0]["taskTemplates"][0]["taskTemplate"];
         const templateMap = new Map<number, TplEntry>();
-        for (const li of lineItems) {
-          for (const link of li.service.taskTemplates) {
+        for (const svc of services) {
+          for (const link of svc.taskTemplates) {
             if (!templateMap.has(link.taskTemplate.id)) {
               templateMap.set(link.taskTemplate.id, link.taskTemplate);
             }
@@ -579,6 +612,10 @@ export async function PATCH(
       ...getRequestMeta(request),
     });
 
+    revalidateTag('sales-job-orders', 'max');
+    revalidateTag('tasks-list', 'max');
+    revalidatePath('/portal/sales/job-orders');
+
     return NextResponse.json({ data: jobOrder });
   }
 
@@ -602,6 +639,10 @@ export async function PATCH(
       description: `Cancelled job order ${existing.jobOrderNumber}`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag('sales-job-orders', 'max');
+    revalidatePath('/portal/sales/job-orders');
+
     return NextResponse.json({ data: jobOrder });
   }
 
@@ -644,6 +685,9 @@ export async function DELETE(
     description: `Deleted job order ${existing.jobOrderNumber}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('sales-job-orders', 'max');
+  revalidatePath('/portal/sales/job-orders');
 
   return new NextResponse(null, { status: 204 });
 }

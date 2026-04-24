@@ -1,7 +1,7 @@
 // src/app/api/admin/employee-levels/route.ts
 import { NextResponse } from "next/server";
-import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
+import { getEmployeeLevels } from "@/lib/data/reference/employee-levels";
 
 /**
  * GET /api/admin/employee-levels
@@ -16,10 +16,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const levels = await prisma.employeeLevel.findMany({
-    orderBy: { position: "asc" },
-    select: { id: true, name: true, position: true, description: true },
-  });
+  const levels = await getEmployeeLevels();
 
   return NextResponse.json({ data: levels });
 }

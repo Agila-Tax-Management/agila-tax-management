@@ -1,9 +1,10 @@
-// src/app/api/hr/employees/[id]/access/route.ts
+﻿// src/app/api/hr/employees/[id]/access/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { upsertAccessSchema } from "@/lib/schemas/hr";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -91,6 +92,15 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     description: `Updated portal access for employee #${empId}`,
     ...getRequestMeta(request),
   });
+
+  // Invalidate portal-access cache for the affected user
+  const empForCache = await prisma.employee.findUnique({
+    where: { id: empId },
+    select: { userId: true },
+  });
+  if (empForCache?.userId) {
+    revalidateTag(`portal-access-${empForCache.userId}`, "max");
+  }
 
   return NextResponse.json({ data: { updated: parsed.data.entries.length } });
 }

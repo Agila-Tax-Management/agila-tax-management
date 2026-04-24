@@ -1,5 +1,5 @@
 // src/app/api/cron/data-retention/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import prisma from "@/lib/db";
 
 /**
@@ -19,6 +19,7 @@ import prisma from "@/lib/db";
  * - Notification: Delete read notifications after 90 days, unread after 180 days
  */
 export async function GET(request: Request) {
+  await connection();
   try {
     // Verify cron secret (Vercel Cron provides this header)
     const authHeader = request.headers.get('authorization');
@@ -136,6 +137,5 @@ export async function GET(request: Request) {
   }
 }
 
-// Prevent this route from being cached
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Note: With cacheComponents enabled, this route is naturally dynamic (uncached)
+// No 'use cache' directive = route remains dynamic

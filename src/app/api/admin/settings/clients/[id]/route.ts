@@ -1,10 +1,11 @@
-// src/app/api/admin/settings/clients/[id]/route.ts
+﻿// src/app/api/admin/settings/clients/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { notify, notifyMany } from "@/lib/notification";
+import { revalidateTag } from "next/cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -214,6 +215,9 @@ export async function PUT(
     ...getRequestMeta(request),
   });
 
+  revalidateTag("admin-clients-settings-list", "max");
+  revalidateTag("hr-clients-list", "max");
+
   return NextResponse.json({ data: { id: updated.id, businessName: updated.businessName } });
 }
 
@@ -337,6 +341,9 @@ export async function PATCH(
     description: `${parsed.data.active ? "Activated" : "Deactivated"} client ${existing.businessName}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("admin-clients-settings-list", "max");
+  revalidateTag("hr-clients-list", "max");
 
   return NextResponse.json({ data: { id: updated.id, active: updated.active } });
 }

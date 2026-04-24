@@ -19,11 +19,15 @@ model JobOrder {
   id             String @id @default(cuid())
   jobOrderNumber String @unique
 
-  leadId Int
-  lead   Lead @relation(fields: [leadId], references: [id])
+  leadId Int?
+  lead   Lead? @relation(fields: [leadId], references: [id])
 
   clientId Int?
   client   Client? @relation(fields: [clientId], references: [id])
+
+  // ─── NEW: Links back to the source quote ───
+  quoteId String?
+  quote   Quote?  @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   date   DateTime       @default(now()) @db.Date
   status JobOrderStatus @default(DRAFT)
@@ -63,6 +67,7 @@ model JobOrder {
 
   @@index([leadId])
   @@index([clientId])
+  @@index([quoteId])
   @@map("job_order")
 }
 

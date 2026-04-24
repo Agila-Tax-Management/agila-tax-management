@@ -113,6 +113,10 @@ model Invoice {
   leadId   Int?
   lead     Lead?   @relation(fields: [leadId], references: [id])
 
+  // ─── NEW: Links back to the source quote (one invoice per quote) ───
+  quoteId String? @unique
+  quote   Quote?  @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+
   status InvoiceStatus @default(UNPAID)
 
   issueDate DateTime @default(now())
@@ -141,6 +145,8 @@ model Invoice {
   @@index([clientId])
   @@index([leadId])
   @@index([status])
+  @@index([clientId, status])
+  @@index([issueDate(sort: Desc)])
   @@map("invoice")
 }
 
@@ -215,6 +221,7 @@ model Payment {
   historyLogs PaymentHistory[]
 
   @@index([clientId])
+  @@index([paymentDate(sort: Desc)])
   @@map("payment")
 }
 

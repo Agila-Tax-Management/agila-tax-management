@@ -1,9 +1,10 @@
-// src/app/api/sales/services/packages/[id]/route.ts
+﻿// src/app/api/sales/services/packages/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { updateServicePackageSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 const PACKAGE_INCLUDE = {
   items: {
@@ -101,6 +102,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     ...getRequestMeta(request),
   });
 
+  revalidateTag("sales-service-packages", "max");
+  revalidateTag("sales-packages", "max");
+
   return NextResponse.json({ data: pkg });
 }
 
@@ -132,6 +136,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     description: `Deleted service package: ${existing.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-service-packages", "max");
+  revalidateTag("sales-packages", "max");
 
   return NextResponse.json({ success: true });
 }

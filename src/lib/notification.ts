@@ -1,4 +1,5 @@
 // src/lib/notification.ts
+import { revalidateTag, revalidatePath } from 'next/cache';
 import prisma from "./db";
 import type {
   NotificationType,
@@ -65,7 +66,13 @@ export function notify(input: NotifyInput): Promise<void> {
       },
     })
     .then(() => {
-      // Intentionally empty — insert succeeded silently
+      // Invalidate notification cache for recipient
+      if (input.userId) {
+        revalidateTag(`notifications-user-${input.userId}`, 'max');
+        revalidateTag(`notifications-unread-user-${input.userId}`, 'max');
+        revalidatePath('/dashboard/notifications');
+      }
+      // Note: clientUserId notifications would need separate cache tags if implemented
     })
     .catch((err: unknown) => {
       console.error("[Notification] Failed to create notification:", err);
@@ -103,7 +110,12 @@ export function notifyMany(
       })),
     })
     .then(() => {
-      // Intentionally empty
+      // Invalidate notification caches for all recipients
+      userIds.forEach((userId) => {
+        revalidateTag(`notifications-user-${userId}`, 'max');
+        revalidateTag(`notifications-unread-user-${userId}`, 'max');
+      });
+      revalidatePath('/dashboard/notifications');
     })
     .catch((err: unknown) => {
       console.error("[Notification] Failed to create bulk notifications:", err);

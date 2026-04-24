@@ -1,11 +1,12 @@
-// src/app/api/admin/users/route.ts
+﻿// src/app/api/admin/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { createUserSchema } from "@/lib/schemas/user-management";
 import { hashPassword } from "better-auth/crypto";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import type { UserRecord } from "@/lib/schemas/user-management";
+import { getAdminUsers } from "@/lib/data/admin/users";
+import { revalidateTag } from "next/cache";
 
 /**
  * GET /api/admin/users
@@ -28,104 +29,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 50));
-  const skip = (page - 1) * limit;
 
-  const [users, total] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: limit,
-      include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            employeeNo: true,
-            phone: true,
-            birthDate: true,
-            gender: true,
-            appAccess: {
-              select: {
-                role: true,
-                app: { select: { name: true } },
-              },
-            },
-            employments: {
-              where: { employmentStatus: "ACTIVE" },
-              take: 1,
-              orderBy: { createdAt: "desc" },
-              select: {
-                employmentType: true,
-                employmentStatus: true,
-                employeeLevel: { select: { id: true, name: true, position: true } },
-                hireDate: true,
-                department: { select: { name: true } },
-                position: { select: { title: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-    prisma.user.count(),
-  ]);
-
-  const data: UserRecord[] = users.map((u) => {
-    const emp = u.employee;
-    const employment = emp?.employments?.[0] ?? null;
-
-    return {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      active: u.active,
-      emailVerified: u.emailVerified,
-      createdAt: u.createdAt.toISOString(),
-      updatedAt: u.updatedAt.toISOString(),
-      employee: emp
-        ? {
-            id: emp.id,
-            firstName: emp.firstName,
-            middleName: emp.middleName,
-            lastName: emp.lastName,
-            employeeNo: emp.employeeNo,
-            phone: emp.phone,
-            birthDate: emp.birthDate.toISOString(),
-            gender: emp.gender,
-            employment: employment
-              ? {
-                  department: employment.department?.name ?? null,
-                  position: employment.position?.title ?? null,
-                  employmentType: employment.employmentType,
-                  employmentStatus: employment.employmentStatus,
-                  employeeLevel: employment.employeeLevel?.name ?? null,
-                  employeeLevelId: employment.employeeLevel?.id ?? null,
-                  hireDate: employment.hireDate?.toISOString() ?? null,
-                }
-              : null,
-          }
-        : null,
-      portalAccess: emp
-        ? emp.appAccess.map((a) => ({
-            portal: a.app.name,
-            role: a.role,
-          }))
-        : [],
-    };
-  });
-
-  return NextResponse.json({
-    data,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  });
+  const result = await getAdminUsers(page, limit);
+  return NextResponse.json(result);
 }
 
 /**
@@ -282,6 +188,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       description: `Created user ${name} (${email}) with role ${role}`,
       ...getRequestMeta(request),
     });
+
+    revalidateTag("admin-users-list", "max");
 
     return NextResponse.json({ data: { id: user.id } }, { status: 201 });
   } catch (err: unknown) {

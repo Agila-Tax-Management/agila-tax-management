@@ -1,4 +1,5 @@
 // src/app/(portal)/portal/sales/contracts/page.tsx
+import { connection } from 'next/server';
 import React from 'react';
 import { ContractsPageClient } from './components/ContractsPageClient';
 
@@ -6,7 +7,8 @@ export const metadata = {
   title: 'Contracts | Sales Portal',
 };
 
-export default function ContractsPage() {
+export default async function ContractsPage() {
+  await connection();
   return (
     <div className="space-y-6">
       <div>

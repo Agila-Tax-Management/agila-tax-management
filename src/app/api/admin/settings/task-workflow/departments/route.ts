@@ -4,6 +4,8 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
+import { getTaskDepartments } from "@/lib/data/task-management/departments";
 
 // ── Default task management departments & statuses ──────────────────────────
 // Covers all 8 operational departments. Auto-created on first access if
@@ -82,7 +84,8 @@ async function ensureDefaultDepartments(clientId: number) {
  * GET /api/admin/settings/task-workflow/departments
  * Returns all departments scoped to the current user's client,
  * including their statuses ordered by statusOrder.
- * Auto-creates the 4 default task departments on first access.
+ * Auto-creates the default task departments on first access.
+ * Data is cached for 1 hour via getTaskDepartments().
  */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -93,14 +96,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 
   await ensureDefaultDepartments(clientId);
 
-  const departments = await prisma.department.findMany({
-    where: { clientId },
-    orderBy: { name: "asc" },
-    include: {
-      statuses: { orderBy: { statusOrder: "asc" } },
-    },
-  });
-
+  const departments = await getTaskDepartments(clientId);
   return NextResponse.json({ data: departments });
 }
 
@@ -159,6 +155,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     description: `Created department "${dept.name}"`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-departments', 'max');
 
   return NextResponse.json({ data: dept }, { status: 201 });
 }

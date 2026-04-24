@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string; routeId: string }>;
@@ -68,6 +69,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     description: `Reordered subtasks for route step #${routeIdInt} in template #${templateId}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag('task-templates', 'max');
 
   return NextResponse.json({ data: { success: true } });
 }

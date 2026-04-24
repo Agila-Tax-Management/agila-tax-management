@@ -17,7 +17,7 @@ import { STATUS_UI_MAP } from '@/types/client-user-management.types';
 interface UserClientFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (values: ClientUserFormValues) => void;
+  onSave: (values: ClientUserFormValues) => Promise<void>;
   editingUser?: ClientUserRecord | null;
   clients: ClientOption[];
 }
@@ -46,6 +46,7 @@ export default function UserClientFormModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [clientQuery, setClientQuery] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   if (syncKey !== prevSyncKey) {
     setPrevSyncKey(syncKey);
@@ -53,6 +54,7 @@ export default function UserClientFormModal({
     setFieldErrors({});
     setClientQuery('');
     setShowPassword(false);
+    setSaving(false);
   }
 
   function toggleClient(clientId: number): void {
@@ -64,7 +66,7 @@ export default function UserClientFormModal({
     }));
   }
 
-  function submitForm(event: React.FormEvent<HTMLFormElement>): void {
+  async function submitForm(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
     const nextErrors: Record<string, string> = {};
@@ -103,12 +105,17 @@ export default function UserClientFormModal({
     }
 
     setFieldErrors({});
-    onSave({
-      ...form,
-      name: form.name.trim(),
-      email: form.email.trim().toLowerCase(),
-      password: form.password?.trim() || undefined,
-    });
+    setSaving(true);
+    try {
+      await onSave({
+        ...form,
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password?.trim() || undefined,
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const filteredClients = clientQuery
@@ -288,11 +295,11 @@ export default function UserClientFormModal({
         </div>
 
         <div className="flex justify-end gap-3 border-t border-border pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit">
-            {editingUser ? 'Save Changes' : 'Create User Client'}
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Saving...' : editingUser ? 'Save Changes' : 'Create User Client'}
           </Button>
         </div>
       </form>

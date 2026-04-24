@@ -1,9 +1,10 @@
-// src/app/api/sales/promos/[id]/route.ts
+﻿// src/app/api/sales/promos/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { updatePromoSchema } from "@/lib/schemas/sales";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
+import { revalidateTag } from "next/cache";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -105,6 +106,8 @@ export async function PATCH(
     ...getRequestMeta(request),
   });
 
+  revalidateTag("sales-promos", "max");
+
   return NextResponse.json({ data: promo });
 }
 
@@ -140,6 +143,8 @@ export async function DELETE(
     description: `Deleted promo: ${existing.name}`,
     ...getRequestMeta(request),
   });
+
+  revalidateTag("sales-promos", "max");
 
   return new NextResponse(null, { status: 204 });
 }
