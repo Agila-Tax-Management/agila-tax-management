@@ -9,6 +9,7 @@ import {
   Calculator, CalendarDays
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { authClient } from '@/lib/auth-client';
 import { getPortalFromRoute } from '@/lib/portal-mapping';
 import type { AppPortal } from '@/generated/prisma/client';
 
@@ -53,6 +54,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { data: session } = authClient.useSession();
   const [currentTime, setCurrentTime] = useState(new Date());
   
   // Portal access state
@@ -60,8 +62,7 @@ export default function DashboardPage() {
   const [accessiblePortals, setAccessiblePortals] = useState<Set<AppPortal>>(new Set());
   const [loadingAccess, setLoadingAccess] = useState(true);
 
-  // Demo user data
-  const displayName = 'User';
+  const displayName = session?.user?.name?.split(' ')[0] ?? 'there';
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60_000);
