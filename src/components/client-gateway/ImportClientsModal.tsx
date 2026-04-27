@@ -159,7 +159,7 @@ export function ImportClientsModal({
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Clients');
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }) as Buffer;
-      const blob = new Blob([buffer], {
+      const blob = new Blob([new Uint8Array(buffer)], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
       const url = URL.createObjectURL(blob);
