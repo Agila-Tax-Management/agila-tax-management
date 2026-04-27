@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Users, Search, Filter,
+  Users, Search, Filter, Plus,
   ExternalLink, Eye, EyeOff, Trash2, GitBranch, ChevronUp, ChevronDown, AlertCircle, Loader2,
   Download, Upload,
 } from 'lucide-react';
@@ -13,6 +13,8 @@ import { useToast } from '@/context/ToastContext';
 import { AddBranchModal } from './AddBranchModal';
 import { ExportClientsModal } from './ExportClientsModal';
 import { ImportClientsModal } from './ImportClientsModal';
+import ClientFormModal from '@/components/dashboard/ClientFormModal';
+import type { ClientFormValues } from '@/types/client-management.types';
 
 type SortField = 'clientNo' | 'businessName' | 'companyCode' | 'branchType' | 'active' | 'createdAt';
 type SortDir   = 'asc' | 'desc';
@@ -20,7 +22,7 @@ type StatusFilter = 'All' | 'Active' | 'Inactive';
 
 export function ClientGateway(): React.ReactNode {
   const router = useRouter();
-  const { error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const [clients, setClients]           = useState<ClientListItem[]>([]);
   const [loading, setLoading]           = useState(true);
   const [searchTerm, setSearchTerm]     = useState('');
@@ -35,6 +37,7 @@ export function ClientGateway(): React.ReactNode {
   const [branchTarget, setBranchTarget] = useState<ClientListItem | null>(null);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -87,6 +90,26 @@ export function ClientGateway(): React.ReactNode {
     return sortDir === 'asc'
       ? <ChevronUp size={12} className="text-[#25238e]" />
       : <ChevronDown size={12} className="text-[#25238e]" />;
+  }
+
+  async function saveClient(values: ClientFormValues): Promise<void> {
+    try {
+      const res = await fetch('/api/admin/settings/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        toastError('Failed to create client', json.error ?? 'Could not create client.');
+        return;
+      }
+      success('Client created', `${values.businessName} has been added successfully.`);
+      setShowAddClient(false);
+      void refreshClients();
+    } catch {
+      toastError('Failed to create client', 'An unexpected error occurred.');
+    }
   }
 
   async function refreshClients() {
@@ -145,6 +168,13 @@ export function ClientGateway(): React.ReactNode {
                 {clients.length} Total
               </div>
             )}
+            <button
+              onClick={() => setShowAddClient(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#25238e] rounded-xl hover:bg-[#1e1c7a] transition-all"
+            >
+              <Plus size={13} />
+              <span className="hidden sm:inline">Add Client</span>
+            </button>
             <button
               onClick={() => setShowImport(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-600 border border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 transition-all"
@@ -430,6 +460,13 @@ export function ClientGateway(): React.ReactNode {
         isOpen={showImport}
         onClose={() => setShowImport(false)}
         onSuccess={() => { void refreshClients(); }}
+      />
+
+      {/* Add Client Modal */}
+      <ClientFormModal
+        isOpen={showAddClient}
+        onClose={() => setShowAddClient(false)}
+        onSave={saveClient}
       />
     </div>
   );
