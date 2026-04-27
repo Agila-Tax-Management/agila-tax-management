@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Filter, Eye, Users, UserPlus, Building2, Network, Briefcase, Loader2 } from 'lucide-react';
+import { Search, Filter, Eye, Trash2, Users, UserPlus, Building2, Network, Briefcase, Loader2 } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -10,6 +11,7 @@ import { useToast } from '@/context/ToastContext';
 import { DepartmentsTab } from './management/DepartmentsTab';
 import { TeamsTab } from './management/TeamsTab';
 import { PositionsTab } from './management/PositionsTab';
+import { DeleteEmployeeModal } from './management/DeleteEmployeeModal';
 
 type EmploymentStatus = 'ACTIVE' | 'RESIGNED' | 'TERMINATED' | 'ON_LEAVE' | 'SUSPENDED' | 'RETIRED';
 
@@ -38,6 +40,7 @@ interface EmployeeRecord {
   firstName: string;
   lastName: string;
   email: string | null;
+  user: { id: string; email: string; role: string; active: boolean } | null;
   employment: {
     employmentStatus: EmploymentStatus;
     department: { name: string } | null;
@@ -63,6 +66,10 @@ const TABS: { key: ManagementTab; label: string; icon: typeof Users }[] = [
 export function EmployeeManagement() {
   const router = useRouter();
   const { error: showError } = useToast();
+  const { data: session } = authClient.useSession();
+  const sessionUser = session?.user as { role?: string } | undefined;
+  const isAdmin = sessionUser?.role === 'SUPER_ADMIN' || sessionUser?.role === 'ADMIN';
+
   const [activeTab, setActiveTab] = useState<ManagementTab>('employees');
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
@@ -71,6 +78,9 @@ export function EmployeeManagement() {
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeRecord | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -281,9 +291,22 @@ export function EmployeeManagement() {
                             : <Badge variant="neutral">No Employment</Badge>}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <Button variant="ghost" onClick={() => router.push(`/portal/hr/employee-management/${emp.id}`)}>
-                            <Eye size={16} />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button variant="ghost" onClick={() => router.push(`/portal/hr/employee-management/${emp.id}`)}>                              <Eye size={16} />
+                            </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => {
+                                  setDeleteTarget(emp);
+                                  setDeleteModalOpen(true);
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -299,6 +322,22 @@ export function EmployeeManagement() {
           </Card>
         </>
       )}
+
+      {/* Delete confirmation modal */}
+      <DeleteEmployeeModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        employee={deleteTarget ? {
+          id: deleteTarget.id,
+          fullName: deleteTarget.fullName,
+          employeeNo: deleteTarget.employeeNo,
+          user: deleteTarget.user ? { email: deleteTarget.user.email, active: deleteTarget.user.active } : null,
+        } : null}
+        onDeleted={(deletedId) => {
+          setEmployees(prev => prev.filter(e => e.id !== deletedId));
+          setDeleteTarget(null);
+        }}
+      />
 
       {/* ── Departments Tab ────────────────────────────────────── */}
       {activeTab === 'departments' && <DepartmentsTab />}
