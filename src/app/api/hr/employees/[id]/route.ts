@@ -167,12 +167,25 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
   const empId = parseInt(id, 10);
   if (isNaN(empId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-  const existing = await prisma.employee.findFirst({ where: { id: empId, softDelete: false } });
+  const existing = await prisma.employee.findFirst({
+    where: { id: empId, softDelete: false },
+    select: { id: true, firstName: true, lastName: true, userId: true },
+  });
   if (!existing) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
-  await prisma.employee.update({
-    where: { id: empId },
-    data: { softDelete: true, active: false },
+  await prisma.$transaction(async (tx) => {
+    await tx.employee.update({
+      where: { id: empId },
+      data: { softDelete: true, active: false },
+    });
+
+    // Deactivate the linked user account if one exists
+    if (existing.userId) {
+      await tx.user.update({
+        where: { id: existing.userId },
+        data: { active: false },
+      });
+    }
   });
 
   void logActivity({
@@ -180,9 +193,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     action: "DELETED",
     entity: "Employee",
     entityId: String(empId),
-    description: `Soft-deleted employee ${existing.firstName} ${existing.lastName}`,
+    description: `Soft-deleted employee ${existing.firstName} ${existing.lastName}${existing.userId ? " and deactivated linked user account" : ""}`,
     ...getRequestMeta(request),
   });
 
-  return NextResponse.json({ data: { id: empId } });
+  return NextResponse.json({ data: { id: empId, userDeactivated: !!existing.userId } });
 }
