@@ -45,7 +45,7 @@ export default function UserDeleteModal({
         return;
       }
 
-      success('User deactivated', `${user.name} has been deactivated.`);
+      success('User deactivated', `${user.name} has been deactivated and logged out.`);
       onDeleted();
       onClose();
     } catch {
@@ -56,12 +56,12 @@ export default function UserDeleteModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Delete User" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title="Deactivate User" size="sm">
       <div className="p-6 space-y-4">
         <p className="text-sm text-muted-foreground">
           Are you sure you want to deactivate{' '}
           <span className="font-semibold text-foreground">{user.name}</span>?
-          This will disable their account and revoke access.
+          This will disable their account, revoke portal access, and sign them out immediately.
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onClose} disabled={deleting}>
@@ -72,7 +72,7 @@ export default function UserDeleteModal({
             onClick={handleDelete}
             disabled={deleting}
           >
-            {deleting ? 'Deleting...' : 'Delete'}
+            {deleting ? 'Deactivating...' : 'Deactivate'}
           </Button>
         </div>
       </div>
