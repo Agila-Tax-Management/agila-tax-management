@@ -6,10 +6,13 @@ import { useRouter } from 'next/navigation';
 import {
   Users, Search, Filter,
   ExternalLink, Eye, EyeOff, Trash2, GitBranch, ChevronUp, ChevronDown, AlertCircle, Loader2,
+  Download, Upload,
 } from 'lucide-react';
 import type { ClientListItem } from '@/types/client-gateway.types';
 import { useToast } from '@/context/ToastContext';
 import { AddBranchModal } from './AddBranchModal';
+import { ExportClientsModal } from './ExportClientsModal';
+import { ImportClientsModal } from './ImportClientsModal';
 
 type SortField = 'clientNo' | 'businessName' | 'companyCode' | 'branchType' | 'active' | 'createdAt';
 type SortDir   = 'asc' | 'desc';
@@ -30,6 +33,8 @@ export function ClientGateway(): React.ReactNode {
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [branchTarget, setBranchTarget] = useState<ClientListItem | null>(null);
+  const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -140,6 +145,21 @@ export function ClientGateway(): React.ReactNode {
                 {clients.length} Total
               </div>
             )}
+            <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-600 border border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 transition-all"
+            >
+              <Upload size={13} />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+            <button
+              onClick={() => setShowExport(true)}
+              disabled={loading || clients.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 transition-all disabled:opacity-50"
+            >
+              <Download size={13} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
           </div>
         </div>
       </div>
@@ -396,6 +416,20 @@ export function ClientGateway(): React.ReactNode {
         onClose={() => setBranchTarget(null)}
         onSuccess={() => { void refreshClients(); }}
         parentClient={branchTarget}
+      />
+
+      {/* Export Modal */}
+      <ExportClientsModal
+        isOpen={showExport}
+        onClose={() => setShowExport(false)}
+        totalClients={filteredClients.length}
+      />
+
+      {/* Import Modal */}
+      <ImportClientsModal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onSuccess={() => { void refreshClients(); }}
       />
     </div>
   );
