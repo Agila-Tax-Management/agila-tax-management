@@ -12,6 +12,8 @@ import UserFormModal from './UserFormModal';
 import UserViewModal from './UserViewModal';
 import UserDeleteModal from './UserDeleteModal';
 import UserReactivateModal from './UserReactivateModal';
+import UserAddEmployeeModal from './UserAddEmployeeModal';
+import UserHardDeleteModal from './UserHardDeleteModal';
 import {
   Search,
   Plus,
@@ -25,6 +27,8 @@ import {
   Trash2,
   UserX,
   RotateCcw,
+  UserPlus,
+  Skull,
 } from 'lucide-react';
 
 /* ─── Constants ───────────────────────────────────────────────────── */
@@ -63,6 +67,8 @@ export default function UserManagement(): React.ReactNode {
   const [viewingUser, setViewingUser] = useState<UserRecord | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserRecord | null>(null);
   const [reactivatingUser, setReactivatingUser] = useState<UserRecord | null>(null);
+  const [addingEmployeeFor, setAddingEmployeeFor] = useState<UserRecord | null>(null);
+  const [hardDeletingUser, setHardDeletingUser] = useState<UserRecord | null>(null);
 
   /* ─── Fetch users ────────────────────────────────────────── */
 
@@ -297,6 +303,15 @@ export default function UserManagement(): React.ReactNode {
                           >
                             <Pencil size={15} />
                           </button>
+                          {!user.employee && (
+                            <button
+                              onClick={() => setAddingEmployeeFor(user)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-violet-600 hover:bg-violet-50 transition"
+                              title="Add employee record"
+                            >
+                              <UserPlus size={15} />
+                            </button>
+                          )}
                           {user.active ? (
                             <button
                               onClick={() => setDeletingUser(user)}
@@ -314,6 +329,13 @@ export default function UserManagement(): React.ReactNode {
                               <RotateCcw size={15} />
                             </button>
                           )}
+                          <button
+                            onClick={() => setHardDeletingUser(user)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-700 hover:bg-red-50 transition"
+                            title="Permanently delete user"
+                          >
+                            <Skull size={15} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -393,6 +415,20 @@ export default function UserManagement(): React.ReactNode {
         onClose={() => setReactivatingUser(null)}
         onReactivated={fetchUsers}
         user={reactivatingUser}
+      />
+
+      <UserAddEmployeeModal
+        isOpen={!!addingEmployeeFor}
+        onClose={() => setAddingEmployeeFor(null)}
+        onSaved={fetchUsers}
+        user={addingEmployeeFor}
+      />
+
+      <UserHardDeleteModal
+        isOpen={!!hardDeletingUser}
+        onClose={() => setHardDeletingUser(null)}
+        onDeleted={fetchUsers}
+        user={hardDeletingUser}
       />
     </div>
   );

@@ -67,6 +67,8 @@ export const updateUserSchema = z.object({
   // Portal access
   portalAccess: z.array(portalAccessEntrySchema).optional(),
   employeeLevelId: z.number().int().positive().optional().nullable(),
+  // Employee record status
+  employeeActive: z.boolean().optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
@@ -96,6 +98,8 @@ export interface UserRecord {
     phone: string;
     birthDate: string;
     gender: string;
+    active: boolean;
+    softDelete: boolean;
     employment: {
       department: string | null;
       position: string | null;

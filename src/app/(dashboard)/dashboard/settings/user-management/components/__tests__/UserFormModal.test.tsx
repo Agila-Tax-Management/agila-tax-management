@@ -243,6 +243,8 @@ describe('UserFormModal — Portal Role Selection', () => {
         phone: '09171234567',
         birthDate: '1990-01-01T00:00:00.000Z',
         gender: 'Male',
+        active: true,
+        softDelete: false,
         employment: null,
       },
       portalAccess: [

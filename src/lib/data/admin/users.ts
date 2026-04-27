@@ -14,6 +14,8 @@ const USER_INCLUDE = {
       phone: true,
       birthDate: true,
       gender: true,
+      active: true,
+      softDelete: true,
       appAccess: {
         select: {
           role: true,
@@ -85,6 +87,8 @@ export async function getAdminUsers(page = 1, limit = 50): Promise<{
             phone: emp.phone,
             birthDate: emp.birthDate.toISOString(),
             gender: emp.gender,
+            active: emp.active,
+            softDelete: emp.softDelete,
             employment: employment
               ? {
                   department: employment.department?.name ?? null,

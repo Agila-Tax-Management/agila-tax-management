@@ -10,8 +10,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "deploy:development": "dotenv -e .env.development -- prisma migrate deploy && dotenv -e .env.development -- prisma db seed",
-    "deploy:production": "dotenv -e .env.production -- prisma migrate deploy && dotenv -e .env.production -- prisma db seed"
+    "deploy:development": "dotenv -e .env.development -- prisma migrate deploy",
+    "deploy:production": "dotenv -e .env.production -- prisma migrate deploy",
+    "seed:development": "dotenv -e .env.development -- tsx prisma/seed.ts",
+    "seed:production": "dotenv -e .env.production -- tsx prisma/seed.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

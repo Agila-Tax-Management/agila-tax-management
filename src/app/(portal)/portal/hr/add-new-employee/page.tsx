@@ -304,28 +304,32 @@ export default function AddNewEmployeePage(): React.ReactNode {
     try {
       let resolvedUserId: string | null = null;
 
-      if (!s1.newUserEmail || !s1.newUserPassword || !s1.newUserName) {
-        error('Missing fields', 'Name, email, and password are required to create a portal account.');
-        setLoading(false);
-        return;
+      // Portal account creation is optional — only attempt if any field is filled
+      const wantsPortalAccount = s1.newUserEmail.trim() || s1.newUserPassword.trim() || s1.newUserName.trim();
+      if (wantsPortalAccount) {
+        if (!s1.newUserEmail.trim() || !s1.newUserPassword.trim() || !s1.newUserName.trim()) {
+          error('Missing fields', 'Name, email, and password are all required to create a portal account.');
+          setLoading(false);
+          return;
+        }
+        const userRes = await fetch('/api/hr/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: s1.newUserName,
+            email: s1.newUserEmail,
+            password: s1.newUserPassword,
+            role: s1.newUserRole,
+          }),
+        });
+        const userData = (await userRes.json()) as { data?: { id: string }; error?: string };
+        if (!userRes.ok) {
+          error('Failed to create user', userData.error ?? 'An error occurred.');
+          setLoading(false);
+          return;
+        }
+        resolvedUserId = userData.data!.id;
       }
-      const userRes = await fetch('/api/hr/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: s1.newUserName,
-          email: s1.newUserEmail,
-          password: s1.newUserPassword,
-          role: s1.newUserRole,
-        }),
-      });
-      const userData = (await userRes.json()) as { data?: { id: string }; error?: string };
-      if (!userRes.ok) {
-        error('Failed to create user', userData.error ?? 'An error occurred.');
-        setLoading(false);
-        return;
-      }
-      resolvedUserId = userData.data!.id;
 
       const res = await fetch('/api/hr/employees', {
         method: 'POST',
