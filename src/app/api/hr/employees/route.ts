@@ -20,7 +20,12 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const employees = await prisma.employee.findMany({
     where: {
       softDelete: false,
-      employments: { some: { clientId, employmentStatus: "ACTIVE" } },
+      OR: [
+        // Employees with any employment at this client (any status)
+        { employments: { some: { clientId } } },
+        // Employees with no employment yet (e.g. created at step 1 of onboarding)
+        { employments: { none: {} } },
+      ],
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -100,8 +105,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // clientId is used only for looking up the employee-number prefix.
+  // Admins without an active employment record are still authorised to create employees.
   const clientId = await getClientIdFromSession();
-  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   let body: unknown;
   try {
@@ -146,12 +152,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Auto-generate employee number if not provided
   let resolvedEmployeeNo = employeeNo ?? null;
   if (!resolvedEmployeeNo) {
-    // Use the client's configured prefix (fall back to "EMP" if no setting exists)
-    const hrSetting = await prisma.hrSetting.findUnique({
-      where: { clientId },
-      select: { employeeNumberPrefix: true },
-    });
-    const prefix = hrSetting?.employeeNumberPrefix ?? 'EMP';
+    // Use the client's configured prefix (fall back to "EMP" if no setting exists or no clientId)
+    const prefix = clientId
+      ? (await prisma.hrSetting.findUnique({
+          where: { clientId },
+          select: { employeeNumberPrefix: true },
+        }))?.employeeNumberPrefix ?? 'EMP'
+      : 'EMP';
 
     // Find the highest existing number for this prefix to increment safely
     const lastWithPrefix = await prisma.employee.findFirst({

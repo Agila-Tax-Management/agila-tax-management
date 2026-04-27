@@ -127,6 +127,8 @@ export default function UserFormModal({
 
   // Employee level
   const [employeeLevelId, setEmployeeLevelId] = useState<number | null>(null);
+  // Employee record active status (edit only)
+  const [employeeActive, setEmployeeActive] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -151,6 +153,7 @@ export default function UserFormModal({
         );
         setGender(editingUser.employee?.gender ?? 'Male');
         setEmployeeLevelId(editingUser.employee?.employment?.employeeLevelId ?? null);
+        setEmployeeActive(editingUser.employee?.active ?? true);
         setPortalAccess(buildInitialPortals(editingUser.portalAccess));
       } else {
         setName('');
@@ -165,6 +168,7 @@ export default function UserFormModal({
         setBirthDate('');
         setGender('Male');
         setEmployeeLevelId(null);
+        setEmployeeActive(true);
         setPortalAccess(buildInitialPortals());
       }
       setFieldErrors({});
@@ -226,6 +230,7 @@ export default function UserFormModal({
       birthDate,
       gender,
       employeeLevelId,
+      ...(isEdit ? { employeeActive } : {}),
       portalAccess: accessPayload,
     };
 
@@ -414,10 +419,47 @@ export default function UserFormModal({
           </div>
         </div>
 
+        {/* ─── Employee Record Status (edit only) ──────────── */}
+        {isEdit && editingUser?.employee && (
+          <div>
+            <p className="text-sm font-semibold text-foreground mb-3">Employee Record Status</p>
+            <div
+              className={`rounded-xl border p-4 transition ${
+                employeeActive
+                  ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-600/40 dark:bg-emerald-950/20'
+                  : 'border-rose-300 bg-rose-50/50 dark:border-rose-600/40 dark:bg-rose-950/20'
+              }`}
+            >
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={employeeActive}
+                  onChange={(e) => setEmployeeActive(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-foreground">
+                    Employee record is {employeeActive ? 'active' : 'inactive'}
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {employeeActive
+                      ? 'This employee appears in HR management and compliance lists.'
+                      : 'Inactive employees are hidden from HR lists. Re-activate to restore visibility.'}
+                  </p>
+                </div>
+              </label>
+              {editingUser.employee.softDelete && !employeeActive && (
+                <p className="text-xs text-rose-600 dark:text-rose-400 mt-2 pl-7">
+                  This record was soft-deleted (e.g. via account deactivation). Check the box above to restore it.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ─── Account Info ─────────────────────────────────── */}
         <div>
-          <p className="text-sm font-semibold text-foreground mb-3">Account Information</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <p className="text-sm font-semibold text-foreground mb-3">Account Information</p>          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
                 Email <span className="text-rose-500">*</span>

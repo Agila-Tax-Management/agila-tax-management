@@ -22,6 +22,8 @@ const USER_INCLUDE = {
       phone: true,
       birthDate: true,
       gender: true,
+      active: true,
+      softDelete: true,
       appAccess: {
         select: {
           role: true,
@@ -64,6 +66,8 @@ function toUserRecord(u: {
     phone: string;
     birthDate: Date;
     gender: string;
+    active: boolean;
+    softDelete: boolean;
     appAccess: {
       role: string;
       app: { name: string };
@@ -100,6 +104,8 @@ function toUserRecord(u: {
           phone: emp.phone,
           birthDate: emp.birthDate.toISOString(),
           gender: emp.gender,
+          active: emp.active,
+          softDelete: emp.softDelete,
           employment: employment
             ? {
                 department: employment.department?.name ?? null,
@@ -189,7 +195,7 @@ export async function PUT(
   const {
     name, email, password, role, active,
     firstName, middleName, lastName, phone, birthDate, gender,
-    portalAccess, employeeLevelId,
+    portalAccess, employeeLevelId, employeeActive,
   } = parsed.data;
 
   const existingUser = await prisma.user.findUnique({ where: { id } });
@@ -247,6 +253,13 @@ export async function PUT(
             phone,
             birthDate: new Date(birthDate),
             gender,
+            // If admin explicitly sets employeeActive, honour it; also clear softDelete when re-activating
+            ...(employeeActive !== undefined
+              ? {
+                  active: employeeActive,
+                  softDelete: employeeActive ? false : undefined,
+                }
+              : {}),
           },
         });
 
@@ -342,9 +355,21 @@ export async function DELETE(
   }
 
   try {
-    await prisma.user.update({
-      where: { id },
-      data: { active: false },
+    await prisma.$transaction(async (tx) => {
+      // 1. Deactivate the user account
+      await tx.user.update({
+        where: { id },
+        data: { active: false },
+      });
+
+      // 2. Delete all active sessions (forces logout immediately)
+      await tx.session.deleteMany({ where: { userId: id } });
+
+      // 3. Deactivate linked employee record (if any)
+      await tx.employee.updateMany({
+        where: { userId: id },
+        data: { active: false, softDelete: true },
+      });
     });
 
     void logActivity({
@@ -352,7 +377,7 @@ export async function DELETE(
       action: "DELETED",
       entity: "User",
       entityId: id,
-      description: `Deactivated user ${user.name} (${user.email})`,
+      description: `Deactivated user ${user.name} (${user.email}) and all linked records`,
       ...getRequestMeta(request),
     });
 
@@ -363,7 +388,7 @@ export async function DELETE(
   } catch (err: unknown) {
     console.error("[DELETE /api/admin/users/[id]] Error:", err);
     return NextResponse.json(
-      { error: "Failed to delete user" },
+      { error: "Failed to deactivate user" },
       { status: 500 }
     );
   }
