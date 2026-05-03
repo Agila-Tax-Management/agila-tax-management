@@ -38,6 +38,12 @@ enum ComplianceType {
   LGU_RENEWAL
 }
 
+enum FilingFrequency {
+  MONTHLY   // Monthly remittance e.g. 0619-E (EWT)
+  QUARTERLY // Quarterly return e.g. 1601-EQ (EWT), 2551Q (Percentage Tax)
+  ANNUAL    // Annual return e.g. 1604-E (EWT), 1701/1702 (ITR)
+}
+
 // ==========================================
 // 🦴 THE GENERIC BACKBONE (The Hub)
 // ==========================================
@@ -73,7 +79,10 @@ model ClientCompliance {
   salesOfficerId String?
   salesOfficer   User?   @relation("DefaultSalesOfficer", fields: [salesOfficerId], references: [id])
 
-  filingRecords ComplianceRecord[]
+  filingRecords    ComplianceRecord[]
+  ewtItemTemplates EwtItemTemplate[] // Master EWT items for this subscription
+
+  autoGenerateRecords Boolean @default(true) // If true, scheduler auto-creates next period record
 
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -91,18 +100,37 @@ model ComplianceRecord {
   clientComplianceId String
   clientCompliance   ClientCompliance @relation(fields: [clientComplianceId], references: [id], onDelete: Cascade)
 
+  // ─── Direct Client Link (denormalized for fast queries) ───
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
   coverageDate DateTime @db.Date
   deadline     DateTime @db.Date
 
+  filingFrequency  FilingFrequency @default(MONTHLY) // MONTHLY (0619-E), QUARTERLY (1601-EQ / 2551Q), ANNUAL
+  totalTaxWithheld Decimal         @default(0.00) @db.Decimal(12, 2) // Sum of EWT expandedTaxAmount or PT totalTaxDue — app-maintained
+
+  // ─── VAT Aggregate Fields (app-maintained, recomputed on VatMonth save) ───
+  totalOutputVat             Decimal @default(0.00) @db.Decimal(12, 2)
+  totalInputVat              Decimal @default(0.00) @db.Decimal(12, 2)
+  payableVat                 Decimal @default(0.00) @db.Decimal(12, 2)
+  excessInputTaxCarryForward Decimal @default(0.00) @db.Decimal(12, 2)
+
   isZeroFiling ZeroFilingStatus @default(NONE)
 
-  // ─── NEW: Amendment Versioning ───
+  // ─── Amendment Versioning ───
   amendmentVersion Int                @default(0) // 0 = Original, 1 = First Amendment, etc.
   originalRecordId String?
   originalRecord   ComplianceRecord?  @relation("RecordAmendments", fields: [originalRecordId], references: [id])
   amendments       ComplianceRecord[] @relation("RecordAmendments")
 
-  // ─── NEW: The Financial Bridge ───
+  // ─── Period Rollup (Monthly → Quarterly → Annual hierarchy) ───
+  // Jan & Feb monthly records link to Q1 quarterly as parent; Mar is the quarterly record itself
+  parentRecordId String?
+  parentRecord   ComplianceRecord?  @relation("PeriodRollup", fields: [parentRecordId], references: [id])
+  childRecords   ComplianceRecord[] @relation("PeriodRollup")
+
+  // ─── The Financial Bridge ───
   // Links this operational pipeline directly to the billing engine
   clientSubscriptionId Int?                @unique
   clientSubscription   ClientSubscription? @relation(fields: [clientSubscriptionId], references: [id], onDelete: SetNull)
@@ -159,9 +187,13 @@ model ComplianceRecord {
   completionRate Int           @default(0)
 
   // ─── The Specific Data Spokes ───
-  ewtItems EwtItem[]
+  ewtItems            EwtItem[]
+  percentageTaxMonths PercentageTaxMonth[]
+  vatMonths           VatMonth[]
+  salesRecords        SalesRecord[]
+  expenseRecords      ExpenseRecord[]
 
-  // ─── NEW: Dynamic Documentary Requirements ───
+  // ─── Dynamic Documentary Requirements ───
   documents ComplianceDocument[]
 
   notes ComplianceNote[]
@@ -169,7 +201,8 @@ model ComplianceRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([clientComplianceId, coverageDate, amendmentVersion]) // Ensures unique versions per month
+  @@unique([clientComplianceId, coverageDate, amendmentVersion, filingFrequency]) // Unique per period type per month
+  @@index([clientId])
   @@index([clientComplianceId])
   @@index([filingStatus, processStatus])
   @@index([coverageDate])
@@ -253,58 +286,8 @@ model ComplianceNote {
 // ==========================================
 // 📊 SPECIFIC DATA MODELS (The Spokes)
 // ==========================================
-
-// ─── Expanded Withholding Tax (EWT) Rental Table ──────────────────
-// Maps directly to the table in your 3rd mockup image
-
-// ─── Expanded Withholding Tax (EWT) Items ─────────────────────────
-model EwtItem {
-  id String @id @default(cuid())
-
-  complianceRecordId String
-  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
-
-  // If this tax has been billed to the client, it links to the exact invoice line item.
-  invoiceItemId Int?         @unique
-  invoiceItem   InvoiceItem? @relation(fields: [invoiceItemId], references: [id], onDelete: SetNull)
-
-  name      String // e.g., "Basic Rent", "CUSA"
-  isVatable Boolean @default(true)
-
-  grossAmount       Decimal @default(0.00) @db.Decimal(12, 2)
-  vatAmount         Decimal @default(0.00) @db.Decimal(12, 2)
-  netOfVat          Decimal @default(0.00) @db.Decimal(12, 2)
-  expandedTaxAmount Decimal @default(0.00) @db.Decimal(12, 2)
-
-  effectiveMonth String // e.g., "March 2025"\
-
-  // Multiple documents can be uploaded for a single rental item
-  fileUrls String[]
-
-  historyLogs EwtItemHistory[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([complianceRecordId])
-  @@map("ewt_item")
-}
-
-// ─── NEW: EWT Item History (Audit Trail) ──────────────────────────
-model EwtItemHistory {
-  id String @id @default(cuid())
-
-  ewtItemId String
-  ewtItem   EwtItem @relation(fields: [ewtItemId], references: [id], onDelete: Cascade)
-
-  actorId String
-  actor   User   @relation(fields: [actorId], references: [id])
-
-  // Captures exact text of what changed, e.g., "Updated grossAmount from 15000 to 17500" or "Added new file URL"
-  changeNotes String @db.Text
-
-  createdAt DateTime @default(now())
-
-  @@index([ewtItemId])
-  @@map("ewt_item_history")
-}
+// EWT models are in: prisma/compliance-models/ewt.prisma
+// Percentage Tax models are in: prisma/compliance-models/percentage-tax.prisma
+// Sales Record models are in: prisma/compliance-models/sales-records.prisma
+// Expense Record models are in: prisma/compliance-models/expense-records.prisma
+// Contact models are in: prisma/compliance-models/contacts.prisma

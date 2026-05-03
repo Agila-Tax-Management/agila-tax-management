@@ -1,0 +1,32 @@
+// prisma/compliance-models/contacts.prisma
+
+enum ContactType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+model Contact {
+  id       Int    @id @default(autoincrement())
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  name            String
+  tin             String?
+  isVatRegistered Boolean     @default(false)
+  type            ContactType @default(BOTH)
+  address         String?
+  contactNumber   String?
+  email           String?
+  isActive        Boolean     @default(true)
+
+  salesRecords   SalesRecord[]
+  expenseRecords ExpenseRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, tin])
+  @@index([clientId])
+  @@map("contact")
+}

@@ -1,0 +1,45 @@
+// prisma/compliance-models/expense-records.prisma
+
+enum BirExpenseCategory {
+  CAPITAL_GOODS_EXCEEDING_1M     // ≥₱1M purchase — full input tax immediately (TRAIN Law 2022)
+  CAPITAL_GOODS_NOT_EXCEEDING_1M // <₱1M purchase
+  DOMESTIC_GOODS                 // Local purchases: inventory, raw materials, supplies
+  IMPORTED_GOODS                 // Goods purchased from outside the Philippines
+  DOMESTIC_SERVICES              // Contracted services: security, cleaning, consulting
+  NONRESIDENT_SERVICES           // Services rendered by foreign entities
+  NON_QUALIFIED                  // Exempt or zero-rated — no input VAT claimable
+}
+
+model ExpenseRecord {
+  id                 String           @id @default(cuid())
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  receiptUrls     String[]
+  documentType    BirInvoiceType
+  transactionDate DateTime       @db.Date
+
+  contactId    Int?
+  contact      Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactName  String?
+  contactTin   String?
+  contactIsVat Boolean  @default(false)
+
+  grossAmount Decimal @default(0.00) @db.Decimal(12, 2)
+  inputVat    Decimal @default(0.00) @db.Decimal(12, 2)
+  netOfVat    Decimal @default(0.00) @db.Decimal(12, 2)
+
+  birCategory    BirExpenseCategory
+  isCapitalGoods Boolean            @default(false)
+
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@index([transactionDate])
+  @@index([journalEntryId])
+  @@map("expense_record")
+}

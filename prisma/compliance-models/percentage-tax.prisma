@@ -1,0 +1,27 @@
+// prisma/compliance-models/percentage-tax.prisma
+
+model PercentageTaxMonth {
+  id                 String           @id @default(cuid())
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  coverageMonth DateTime @db.Date
+
+  pt010Sales  Decimal @default(0.00) @db.Decimal(12, 2)
+  pt010TaxDue Decimal @default(0.00) @db.Decimal(12, 2)
+
+  pt150Sales  Decimal @default(0.00) @db.Decimal(12, 2)
+  pt150TaxDue Decimal @default(0.00) @db.Decimal(12, 2)
+
+  totalSales  Decimal @default(0.00) @db.Decimal(12, 2)
+  totalTaxDue Decimal @default(0.00) @db.Decimal(12, 2)
+
+  isFinalized Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([complianceRecordId, coverageMonth])
+  @@index([complianceRecordId])
+  @@map("percentage_tax_month")
+}
