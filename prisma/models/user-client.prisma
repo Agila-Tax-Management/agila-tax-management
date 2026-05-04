@@ -81,6 +81,7 @@ model ClientUser {
   client   Client? @relation(fields: [clientId], references: [id])
 
   assignments ClientUserAssignment[]
+  apiKeys     ClientApiKey[]
   employee    Employee?
   sessions    ClientSession[]
   accounts    ClientAccount[]
@@ -100,6 +101,32 @@ model ClientUser {
   updatedAt DateTime @updatedAt
 
   @@map("client_user")
+}
+
+// ─── Client API Keys (server-to-server from external portal) ─────
+// Used by the external client portal backend to authenticate against /api/v1/.
+// The `key` field stores a SHA-256 hex hash — the plaintext is only shown once
+// at generation time and never stored.
+model ClientApiKey {
+  id String @id @default(cuid())
+
+  name      String  // Human-readable label (e.g. "Client Portal Prod")
+  keyHash   String  @unique // SHA-256(plaintext_key) — never store plaintext
+  keyPrefix String  // First 8 chars of plaintext shown in UI for identification
+
+  clientUserId String?
+  clientUser   ClientUser? @relation(fields: [clientUserId], references: [id], onDelete: SetNull)
+
+  enabled     Boolean   @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientUserId])
+  @@map("client_api_key")
 }
 
 // ─── Client ↔ ClientUser Join Table ──────────────────────────────

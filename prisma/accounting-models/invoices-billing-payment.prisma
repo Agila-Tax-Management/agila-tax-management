@@ -132,6 +132,9 @@ model Invoice {
   notes String? @db.Text
   terms String? @db.Text // "Net 15", "Net 30"
 
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
   items       InvoiceItem[]
   allocations PaymentAllocation[]
   historyLogs InvoiceHistory[]
@@ -147,6 +150,7 @@ model Invoice {
   @@index([status])
   @@index([clientId, status])
   @@index([issueDate(sort: Desc)])
+  @@index([journalEntryId])
   @@map("invoice")
 }
 

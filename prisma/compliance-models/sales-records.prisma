@@ -1,0 +1,68 @@
+// prisma/compliance-models/sales-records.prisma
+
+enum BirInvoiceType {
+  OFFICIAL_RECEIPT
+  SALES_INVOICE
+  CASH_INVOICE
+  CHARGE_INVOICE
+  SERVICE_INVOICE
+  BILLING_INVOICE
+  MISCELLANEOUS_INVOICE
+  CREDIT_MEMO
+  DEBIT_MEMO
+}
+
+model SalesInvoiceCounter {
+  id          Int            @id @default(autoincrement())
+  clientId    Int
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  invoiceType    BirInvoiceType
+  prefix         String         @default("")
+  startingNumber Int            @default(1)
+  currentNumber  Int            @default(1)
+  digitPadding   Int            @default(7)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, invoiceType])
+  @@index([clientId])
+  @@map("sales_invoice_counter")
+}
+
+model SalesRecord {
+  id                 String           @id @default(cuid())
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  serialNo        String
+  documentType    BirInvoiceType
+  transactionDate DateTime       @db.Date
+
+  contactId    Int?
+  contact      Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactName  String?
+  contactTin   String?
+  contactIsVat Boolean  @default(false)
+
+  account     String?
+  grossAmount Decimal  @default(0.00) @db.Decimal(12, 2)
+  outputVat   Decimal  @default(0.00) @db.Decimal(12, 2)
+  netOfVat    Decimal  @default(0.00) @db.Decimal(12, 2)
+
+  isPt010      Boolean @default(false)
+  isPt150      Boolean @default(false)
+  nonVatAmount Decimal @default(0.00) @db.Decimal(12, 2)
+
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([complianceRecordId])
+  @@index([transactionDate])
+  @@index([journalEntryId])
+  @@map("sales_record")
+}
