@@ -1,0 +1,65 @@
+// prisma/compliance-models/ewt.prisma
+
+model EwtItem {
+  id String @id @default(cuid())
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+  templateId String?
+  template   EwtItemTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  invoiceItemId Int?         @unique
+  invoiceItem   InvoiceItem? @relation(fields: [invoiceItemId], references: [id], onDelete: SetNull)
+  name      String
+  isVatable Boolean @default(true)
+  grossAmount       Decimal @default(0.00) @db.Decimal(12, 2)
+  vatAmount         Decimal @default(0.00) @db.Decimal(12, 2)
+  netOfVat          Decimal @default(0.00) @db.Decimal(12, 2)
+  expandedTaxAmount Decimal @default(0.00) @db.Decimal(12, 2)
+  effectiveMonth String
+  fileUrls String[]
+  historyLogs EwtItemHistory[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([complianceRecordId])
+  @@map("ewt_item")
+}
+
+model EwtItemHistory {
+  id String @id @default(cuid())
+  ewtItemId String
+  ewtItem   EwtItem @relation(fields: [ewtItemId], references: [id], onDelete: Cascade)
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+  changeNotes String @db.Text
+  createdAt DateTime @default(now())
+  @@index([ewtItemId])
+  @@map("ewt_item_history")
+}
+
+model EwtItemTemplate {
+  id String @id @default(cuid())
+  clientComplianceId String
+  clientCompliance   ClientCompliance @relation(fields: [clientComplianceId], references: [id], onDelete: Cascade)
+  name               String
+  isVatable          Boolean @default(true)
+  defaultGrossAmount Decimal @default(0.00) @db.Decimal(12, 2)
+  sortOrder          Int     @default(0)
+  isActive           Boolean @default(true)
+  ewtItems    EwtItem[]
+  historyLogs EwtItemTemplateHistory[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([clientComplianceId])
+  @@map("ewt_item_template")
+}
+
+model EwtItemTemplateHistory {
+  id String @id @default(cuid())
+  ewtItemTemplateId String
+  ewtItemTemplate   EwtItemTemplate @relation(fields: [ewtItemTemplateId], references: [id], onDelete: Cascade)
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+  changeNotes String @db.Text
+  createdAt DateTime @default(now())
+  @@index([ewtItemTemplateId])
+  @@map("ewt_item_template_history")
+}

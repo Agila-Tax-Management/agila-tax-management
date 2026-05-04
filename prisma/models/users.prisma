@@ -108,8 +108,9 @@ model User {
   defaultTsaApprovals          SalesSetting[] @relation("DefaultTsaApprover")
 
   // ─── Communication ───
-  complianceNotes  ComplianceNote[]
-  ewtItemHistories EwtItemHistory[]
+  complianceNotes           ComplianceNote[]
+  ewtItemHistories          EwtItemHistory[]
+  ewtItemTemplateHistories  EwtItemTemplateHistory[]
 
   @@index([role])
   @@index([active])

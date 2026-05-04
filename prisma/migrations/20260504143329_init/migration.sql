@@ -44,6 +44,18 @@ CREATE TYPE "ZeroFilingStatus" AS ENUM ('NONE', 'REQUESTED', 'CONFIRMED_ZERO');
 CREATE TYPE "ComplianceType" AS ENUM ('NONE', 'EWT', 'COMPENSATION', 'PERCENTAGE', 'VAT', 'INCOME_TAX', 'SSS', 'PHILHEALTH', 'PAGIBIG', 'LGU_RENEWAL');
 
 -- CreateEnum
+CREATE TYPE "FilingFrequency" AS ENUM ('MONTHLY', 'QUARTERLY', 'ANNUAL');
+
+-- CreateEnum
+CREATE TYPE "ContactType" AS ENUM ('CUSTOMER', 'SUPPLIER', 'BOTH');
+
+-- CreateEnum
+CREATE TYPE "BirExpenseCategory" AS ENUM ('CAPITAL_GOODS_EXCEEDING_1M', 'CAPITAL_GOODS_NOT_EXCEEDING_1M', 'DOMESTIC_GOODS', 'IMPORTED_GOODS', 'DOMESTIC_SERVICES', 'NONRESIDENT_SERVICES', 'NON_QUALIFIED');
+
+-- CreateEnum
+CREATE TYPE "BirInvoiceType" AS ENUM ('OFFICIAL_RECEIPT', 'SALES_INVOICE', 'CASH_INVOICE', 'CHARGE_INVOICE', 'SERVICE_INVOICE', 'BILLING_INVOICE', 'MISCELLANEOUS_INVOICE', 'CREDIT_MEMO', 'DEBIT_MEMO');
+
+-- CreateEnum
 CREATE TYPE "OvertimeStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED');
 
 -- CreateEnum
@@ -244,6 +256,7 @@ CREATE TABLE "invoice" (
     "invoiceNumber" TEXT NOT NULL,
     "clientId" INTEGER,
     "leadId" INTEGER,
+    "quoteId" TEXT,
     "status" "InvoiceStatus" NOT NULL DEFAULT 'UNPAID',
     "issueDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "dueDate" TIMESTAMP(3) NOT NULL,
@@ -254,6 +267,7 @@ CREATE TABLE "invoice" (
     "balanceDue" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "notes" TEXT,
     "terms" TEXT,
+    "journalEntryId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -393,6 +407,7 @@ CREATE TABLE "client_compliance" (
     "paymentApproverId" TEXT,
     "finalApproverId" TEXT,
     "salesOfficerId" TEXT,
+    "autoGenerateRecords" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -403,11 +418,19 @@ CREATE TABLE "client_compliance" (
 CREATE TABLE "compliance_record" (
     "id" TEXT NOT NULL,
     "clientComplianceId" TEXT NOT NULL,
+    "clientId" INTEGER NOT NULL,
     "coverageDate" DATE NOT NULL,
     "deadline" DATE NOT NULL,
+    "filingFrequency" "FilingFrequency" NOT NULL DEFAULT 'MONTHLY',
+    "totalTaxWithheld" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "totalOutputVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "totalInputVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "payableVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "excessInputTaxCarryForward" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     "isZeroFiling" "ZeroFilingStatus" NOT NULL DEFAULT 'NONE',
     "amendmentVersion" INTEGER NOT NULL DEFAULT 0,
     "originalRecordId" TEXT,
+    "parentRecordId" TEXT,
     "clientSubscriptionId" INTEGER,
     "status" "ServiceStatus" NOT NULL DEFAULT 'ACTIVE',
     "invoiceId" TEXT,
@@ -478,9 +501,28 @@ CREATE TABLE "compliance_note" (
 );
 
 -- CreateTable
+CREATE TABLE "contact" (
+    "id" SERIAL NOT NULL,
+    "clientId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "tin" TEXT,
+    "isVatRegistered" BOOLEAN NOT NULL DEFAULT false,
+    "type" "ContactType" NOT NULL DEFAULT 'BOTH',
+    "address" TEXT,
+    "contactNumber" TEXT,
+    "email" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "contact_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ewt_item" (
     "id" TEXT NOT NULL,
     "complianceRecordId" TEXT NOT NULL,
+    "templateId" TEXT,
     "invoiceItemId" INTEGER,
     "name" TEXT NOT NULL,
     "isVatable" BOOLEAN NOT NULL DEFAULT true,
@@ -505,6 +547,128 @@ CREATE TABLE "ewt_item_history" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ewt_item_history_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ewt_item_template" (
+    "id" TEXT NOT NULL,
+    "clientComplianceId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "isVatable" BOOLEAN NOT NULL DEFAULT true,
+    "defaultGrossAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ewt_item_template_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ewt_item_template_history" (
+    "id" TEXT NOT NULL,
+    "ewtItemTemplateId" TEXT NOT NULL,
+    "actorId" TEXT NOT NULL,
+    "changeNotes" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ewt_item_template_history_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "expense_record" (
+    "id" TEXT NOT NULL,
+    "complianceRecordId" TEXT NOT NULL,
+    "receiptUrls" TEXT[],
+    "documentType" "BirInvoiceType" NOT NULL,
+    "transactionDate" DATE NOT NULL,
+    "contactId" INTEGER,
+    "contactName" TEXT,
+    "contactTin" TEXT,
+    "contactIsVat" BOOLEAN NOT NULL DEFAULT false,
+    "grossAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "inputVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "netOfVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "birCategory" "BirExpenseCategory" NOT NULL,
+    "isCapitalGoods" BOOLEAN NOT NULL DEFAULT false,
+    "journalEntryId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "expense_record_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "percentage_tax_month" (
+    "id" TEXT NOT NULL,
+    "complianceRecordId" TEXT NOT NULL,
+    "coverageMonth" DATE NOT NULL,
+    "pt010Sales" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "pt010TaxDue" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "pt150Sales" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "pt150TaxDue" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "totalSales" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "totalTaxDue" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "isFinalized" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "percentage_tax_month_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "sales_invoice_counter" (
+    "id" SERIAL NOT NULL,
+    "clientId" INTEGER NOT NULL,
+    "invoiceType" "BirInvoiceType" NOT NULL,
+    "prefix" TEXT NOT NULL DEFAULT '',
+    "startingNumber" INTEGER NOT NULL DEFAULT 1,
+    "currentNumber" INTEGER NOT NULL DEFAULT 1,
+    "digitPadding" INTEGER NOT NULL DEFAULT 7,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "sales_invoice_counter_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "sales_record" (
+    "id" TEXT NOT NULL,
+    "complianceRecordId" TEXT NOT NULL,
+    "serialNo" TEXT NOT NULL,
+    "documentType" "BirInvoiceType" NOT NULL,
+    "transactionDate" DATE NOT NULL,
+    "contactId" INTEGER,
+    "contactName" TEXT,
+    "contactTin" TEXT,
+    "contactIsVat" BOOLEAN NOT NULL DEFAULT false,
+    "account" TEXT,
+    "grossAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "outputVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "netOfVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "isPt010" BOOLEAN NOT NULL DEFAULT false,
+    "isPt150" BOOLEAN NOT NULL DEFAULT false,
+    "nonVatAmount" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "journalEntryId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "sales_record_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vat_month" (
+    "id" TEXT NOT NULL,
+    "complianceRecordId" TEXT NOT NULL,
+    "coverageMonth" DATE NOT NULL,
+    "outputVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "inputVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "netVat" DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    "isFinalized" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "vat_month_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1484,6 +1648,23 @@ CREATE TABLE "client_user" (
 );
 
 -- CreateTable
+CREATE TABLE "client_api_key" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "keyHash" TEXT NOT NULL,
+    "keyPrefix" TEXT NOT NULL,
+    "clientUserId" TEXT,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "expiresAt" TIMESTAMP(3),
+    "lastUsedAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "client_api_key_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "client_user_assignment" (
     "id" SERIAL NOT NULL,
     "clientUserId" TEXT NOT NULL,
@@ -1558,8 +1739,9 @@ CREATE TABLE "verification" (
 CREATE TABLE "job_order" (
     "id" TEXT NOT NULL,
     "jobOrderNumber" TEXT NOT NULL,
-    "leadId" INTEGER NOT NULL,
+    "leadId" INTEGER,
     "clientId" INTEGER,
+    "quoteId" TEXT,
     "date" DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "status" "JobOrderStatus" NOT NULL DEFAULT 'DRAFT',
     "notes" TEXT,
@@ -1788,7 +1970,8 @@ CREATE TABLE "service_package_item" (
 CREATE TABLE "quote" (
     "id" TEXT NOT NULL,
     "quoteNumber" TEXT NOT NULL,
-    "leadId" INTEGER NOT NULL,
+    "leadId" INTEGER,
+    "clientId" INTEGER,
     "status" "QuoteStatus" NOT NULL DEFAULT 'DRAFT',
     "subTotal" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "totalDiscount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -1946,6 +2129,9 @@ CREATE INDEX "client_subscription_nextBillingDate_idx" ON "client_subscription"(
 CREATE UNIQUE INDEX "invoice_invoiceNumber_key" ON "invoice"("invoiceNumber");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "invoice_quoteId_key" ON "invoice"("quoteId");
+
+-- CreateIndex
 CREATE INDEX "invoice_clientId_idx" ON "invoice"("clientId");
 
 -- CreateIndex
@@ -1953,6 +2139,15 @@ CREATE INDEX "invoice_leadId_idx" ON "invoice"("leadId");
 
 -- CreateIndex
 CREATE INDEX "invoice_status_idx" ON "invoice"("status");
+
+-- CreateIndex
+CREATE INDEX "invoice_clientId_status_idx" ON "invoice"("clientId", "status");
+
+-- CreateIndex
+CREATE INDEX "invoice_issueDate_idx" ON "invoice"("issueDate" DESC);
+
+-- CreateIndex
+CREATE INDEX "invoice_journalEntryId_idx" ON "invoice"("journalEntryId");
 
 -- CreateIndex
 CREATE INDEX "invoice_item_invoiceId_idx" ON "invoice_item"("invoiceId");
@@ -1965,6 +2160,9 @@ CREATE UNIQUE INDEX "payment_paymentNumber_key" ON "payment"("paymentNumber");
 
 -- CreateIndex
 CREATE INDEX "payment_clientId_idx" ON "payment"("clientId");
+
+-- CreateIndex
+CREATE INDEX "payment_paymentDate_idx" ON "payment"("paymentDate" DESC);
 
 -- CreateIndex
 CREATE INDEX "payment_allocation_paymentId_idx" ON "payment_allocation"("paymentId");
@@ -2018,7 +2216,19 @@ CREATE UNIQUE INDEX "client_compliance_clientId_serviceId_key" ON "client_compli
 CREATE UNIQUE INDEX "compliance_record_clientSubscriptionId_key" ON "compliance_record"("clientSubscriptionId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "compliance_record_clientComplianceId_coverageDate_amendment_key" ON "compliance_record"("clientComplianceId", "coverageDate", "amendmentVersion");
+CREATE INDEX "compliance_record_clientId_idx" ON "compliance_record"("clientId");
+
+-- CreateIndex
+CREATE INDEX "compliance_record_clientComplianceId_idx" ON "compliance_record"("clientComplianceId");
+
+-- CreateIndex
+CREATE INDEX "compliance_record_filingStatus_processStatus_idx" ON "compliance_record"("filingStatus", "processStatus");
+
+-- CreateIndex
+CREATE INDEX "compliance_record_coverageDate_idx" ON "compliance_record"("coverageDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "compliance_record_clientComplianceId_coverageDate_amendment_key" ON "compliance_record"("clientComplianceId", "coverageDate", "amendmentVersion", "filingFrequency");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "compliance_setting_clientId_key" ON "compliance_setting"("clientId");
@@ -2030,6 +2240,12 @@ CREATE INDEX "compliance_document_complianceRecordId_idx" ON "compliance_documen
 CREATE INDEX "compliance_note_complianceRecordId_idx" ON "compliance_note"("complianceRecordId");
 
 -- CreateIndex
+CREATE INDEX "contact_clientId_idx" ON "contact"("clientId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "contact_clientId_tin_key" ON "contact"("clientId", "tin");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ewt_item_invoiceItemId_key" ON "ewt_item"("invoiceItemId");
 
 -- CreateIndex
@@ -2037,6 +2253,48 @@ CREATE INDEX "ewt_item_complianceRecordId_idx" ON "ewt_item"("complianceRecordId
 
 -- CreateIndex
 CREATE INDEX "ewt_item_history_ewtItemId_idx" ON "ewt_item_history"("ewtItemId");
+
+-- CreateIndex
+CREATE INDEX "ewt_item_template_clientComplianceId_idx" ON "ewt_item_template"("clientComplianceId");
+
+-- CreateIndex
+CREATE INDEX "ewt_item_template_history_ewtItemTemplateId_idx" ON "ewt_item_template_history"("ewtItemTemplateId");
+
+-- CreateIndex
+CREATE INDEX "expense_record_complianceRecordId_idx" ON "expense_record"("complianceRecordId");
+
+-- CreateIndex
+CREATE INDEX "expense_record_transactionDate_idx" ON "expense_record"("transactionDate");
+
+-- CreateIndex
+CREATE INDEX "expense_record_journalEntryId_idx" ON "expense_record"("journalEntryId");
+
+-- CreateIndex
+CREATE INDEX "percentage_tax_month_complianceRecordId_idx" ON "percentage_tax_month"("complianceRecordId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "percentage_tax_month_complianceRecordId_coverageMonth_key" ON "percentage_tax_month"("complianceRecordId", "coverageMonth");
+
+-- CreateIndex
+CREATE INDEX "sales_invoice_counter_clientId_idx" ON "sales_invoice_counter"("clientId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "sales_invoice_counter_clientId_invoiceType_key" ON "sales_invoice_counter"("clientId", "invoiceType");
+
+-- CreateIndex
+CREATE INDEX "sales_record_complianceRecordId_idx" ON "sales_record"("complianceRecordId");
+
+-- CreateIndex
+CREATE INDEX "sales_record_transactionDate_idx" ON "sales_record"("transactionDate");
+
+-- CreateIndex
+CREATE INDEX "sales_record_journalEntryId_idx" ON "sales_record"("journalEntryId");
+
+-- CreateIndex
+CREATE INDEX "vat_month_complianceRecordId_idx" ON "vat_month"("complianceRecordId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "vat_month_complianceRecordId_coverageMonth_key" ON "vat_month"("complianceRecordId", "coverageMonth");
 
 -- CreateIndex
 CREATE INDEX "leave_type_clientId_idx" ON "leave_type"("clientId");
@@ -2057,16 +2315,25 @@ CREATE INDEX "leave_request_employeeId_idx" ON "leave_request"("employeeId");
 CREATE INDEX "leave_request_clientId_idx" ON "leave_request"("clientId");
 
 -- CreateIndex
+CREATE INDEX "leave_request_clientId_status_idx" ON "leave_request"("clientId", "status");
+
+-- CreateIndex
 CREATE INDEX "overtime_request_employeeId_idx" ON "overtime_request"("employeeId");
 
 -- CreateIndex
 CREATE INDEX "overtime_request_clientId_idx" ON "overtime_request"("clientId");
 
 -- CreateIndex
+CREATE INDEX "overtime_request_clientId_status_idx" ON "overtime_request"("clientId", "status");
+
+-- CreateIndex
 CREATE INDEX "coa_request_employeeId_idx" ON "coa_request"("employeeId");
 
 -- CreateIndex
 CREATE INDEX "coa_request_clientId_idx" ON "coa_request"("clientId");
+
+-- CreateIndex
+CREATE INDEX "coa_request_clientId_status_idx" ON "coa_request"("clientId", "status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "hr_setting_clientId_key" ON "hr_setting"("clientId");
@@ -2085,6 +2352,9 @@ CREATE UNIQUE INDEX "schedule_override_employeeId_date_key" ON "schedule_overrid
 
 -- CreateIndex
 CREATE INDEX "timesheet_clientId_idx" ON "timesheet"("clientId");
+
+-- CreateIndex
+CREATE INDEX "timesheet_clientId_date_idx" ON "timesheet"("clientId", "date" DESC);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "timesheet_employeeId_date_key" ON "timesheet"("employeeId", "date");
@@ -2150,6 +2420,15 @@ CREATE UNIQUE INDEX "atms_clients_companyCode_key" ON "atms_clients"("companyCod
 CREATE UNIQUE INDEX "atms_clients_clientNo_key" ON "atms_clients"("clientNo");
 
 -- CreateIndex
+CREATE INDEX "atms_clients_active_idx" ON "atms_clients"("active");
+
+-- CreateIndex
+CREATE INDEX "atms_clients_mainBranchId_idx" ON "atms_clients"("mainBranchId");
+
+-- CreateIndex
+CREATE INDEX "atms_clients_businessName_idx" ON "atms_clients"("businessName");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "bir_information_clientId_key" ON "bir_information"("clientId");
 
 -- CreateIndex
@@ -2169,6 +2448,9 @@ CREATE UNIQUE INDEX "employee_clientUserId_key" ON "employee"("clientUserId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "employee_employeeNo_key" ON "employee"("employeeNo");
+
+-- CreateIndex
+CREATE INDEX "employee_active_softDelete_idx" ON "employee"("active", "softDelete");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "employee_government_ids_employeeId_key" ON "employee_government_ids"("employeeId");
@@ -2249,6 +2531,9 @@ CREATE INDEX "task_jobOrderId_idx" ON "task"("jobOrderId");
 CREATE INDEX "task_departmentId_statusId_idx" ON "task"("departmentId", "statusId");
 
 -- CreateIndex
+CREATE INDEX "task_assignedToId_idx" ON "task"("assignedToId");
+
+-- CreateIndex
 CREATE INDEX "task_subtask_parentTaskId_idx" ON "task_subtask"("parentTaskId");
 
 -- CreateIndex
@@ -2282,7 +2567,19 @@ CREATE INDEX "client_verification_identifier_idx" ON "client_verification"("iden
 CREATE UNIQUE INDEX "client_user_email_key" ON "client_user"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "client_api_key_keyHash_key" ON "client_api_key"("keyHash");
+
+-- CreateIndex
+CREATE INDEX "client_api_key_clientUserId_idx" ON "client_api_key"("clientUserId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "client_user_assignment_clientUserId_clientId_key" ON "client_user_assignment"("clientUserId", "clientId");
+
+-- CreateIndex
+CREATE INDEX "user_role_idx" ON "user"("role");
+
+-- CreateIndex
+CREATE INDEX "user_active_idx" ON "user"("active");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
@@ -2309,6 +2606,9 @@ CREATE INDEX "job_order_leadId_idx" ON "job_order"("leadId");
 CREATE INDEX "job_order_clientId_idx" ON "job_order"("clientId");
 
 -- CreateIndex
+CREATE INDEX "job_order_quoteId_idx" ON "job_order"("quoteId");
+
+-- CreateIndex
 CREATE INDEX "job_order_item_jobOrderId_idx" ON "job_order_item"("jobOrderId");
 
 -- CreateIndex
@@ -2316,6 +2616,12 @@ CREATE UNIQUE INDEX "lead_convertedClientId_key" ON "lead"("convertedClientId");
 
 -- CreateIndex
 CREATE INDEX "lead_statusId_idx" ON "lead"("statusId");
+
+-- CreateIndex
+CREATE INDEX "lead_assignedAgentId_idx" ON "lead"("assignedAgentId");
+
+-- CreateIndex
+CREATE INDEX "lead_createdAt_idx" ON "lead"("createdAt" DESC);
 
 -- CreateIndex
 CREATE INDEX "lead_comment_leadId_idx" ON "lead_comment"("leadId");
@@ -2352,6 +2658,12 @@ CREATE UNIQUE INDEX "service_package_item_packageId_serviceId_key" ON "service_p
 
 -- CreateIndex
 CREATE UNIQUE INDEX "quote_quoteNumber_key" ON "quote"("quoteNumber");
+
+-- CreateIndex
+CREATE INDEX "quote_leadId_idx" ON "quote"("leadId");
+
+-- CreateIndex
+CREATE INDEX "quote_clientId_idx" ON "quote"("clientId");
 
 -- CreateIndex
 CREATE INDEX "quote_line_item_quoteId_idx" ON "quote_line_item"("quoteId");
@@ -2421,6 +2733,12 @@ ALTER TABLE "invoice" ADD CONSTRAINT "invoice_clientId_fkey" FOREIGN KEY ("clien
 
 -- AddForeignKey
 ALTER TABLE "invoice" ADD CONSTRAINT "invoice_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoice" ADD CONSTRAINT "invoice_quoteId_fkey" FOREIGN KEY ("quoteId") REFERENCES "quote"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoice" ADD CONSTRAINT "invoice_journalEntryId_fkey" FOREIGN KEY ("journalEntryId") REFERENCES "journal_entry"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "invoice_item" ADD CONSTRAINT "invoice_item_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2495,7 +2813,13 @@ ALTER TABLE "client_compliance" ADD CONSTRAINT "client_compliance_salesOfficerId
 ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_clientComplianceId_fkey" FOREIGN KEY ("clientComplianceId") REFERENCES "client_compliance"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_originalRecordId_fkey" FOREIGN KEY ("originalRecordId") REFERENCES "compliance_record"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_parentRecordId_fkey" FOREIGN KEY ("parentRecordId") REFERENCES "compliance_record"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "compliance_record" ADD CONSTRAINT "compliance_record_clientSubscriptionId_fkey" FOREIGN KEY ("clientSubscriptionId") REFERENCES "client_subscription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -2567,7 +2891,13 @@ ALTER TABLE "compliance_note" ADD CONSTRAINT "compliance_note_complianceRecordId
 ALTER TABLE "compliance_note" ADD CONSTRAINT "compliance_note_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "contact" ADD CONSTRAINT "contact_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "ewt_item" ADD CONSTRAINT "ewt_item_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ewt_item" ADD CONSTRAINT "ewt_item_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "ewt_item_template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ewt_item" ADD CONSTRAINT "ewt_item_invoiceItemId_fkey" FOREIGN KEY ("invoiceItemId") REFERENCES "invoice_item"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -2577,6 +2907,42 @@ ALTER TABLE "ewt_item_history" ADD CONSTRAINT "ewt_item_history_ewtItemId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "ewt_item_history" ADD CONSTRAINT "ewt_item_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ewt_item_template" ADD CONSTRAINT "ewt_item_template_clientComplianceId_fkey" FOREIGN KEY ("clientComplianceId") REFERENCES "client_compliance"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ewt_item_template_history" ADD CONSTRAINT "ewt_item_template_history_ewtItemTemplateId_fkey" FOREIGN KEY ("ewtItemTemplateId") REFERENCES "ewt_item_template"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ewt_item_template_history" ADD CONSTRAINT "ewt_item_template_history_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "expense_record" ADD CONSTRAINT "expense_record_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "expense_record" ADD CONSTRAINT "expense_record_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "expense_record" ADD CONSTRAINT "expense_record_journalEntryId_fkey" FOREIGN KEY ("journalEntryId") REFERENCES "journal_entry"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "percentage_tax_month" ADD CONSTRAINT "percentage_tax_month_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sales_invoice_counter" ADD CONSTRAINT "sales_invoice_counter_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sales_record" ADD CONSTRAINT "sales_record_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sales_record" ADD CONSTRAINT "sales_record_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sales_record" ADD CONSTRAINT "sales_record_journalEntryId_fkey" FOREIGN KEY ("journalEntryId") REFERENCES "journal_entry"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vat_month" ADD CONSTRAINT "vat_month_complianceRecordId_fkey" FOREIGN KEY ("complianceRecordId") REFERENCES "compliance_record"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "leave_type" ADD CONSTRAINT "leave_type_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -2879,6 +3245,9 @@ ALTER TABLE "client_account" ADD CONSTRAINT "client_account_userId_fkey" FOREIGN
 ALTER TABLE "client_user" ADD CONSTRAINT "client_user_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "client_api_key" ADD CONSTRAINT "client_api_key_clientUserId_fkey" FOREIGN KEY ("clientUserId") REFERENCES "client_user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "client_user_assignment" ADD CONSTRAINT "client_user_assignment_clientUserId_fkey" FOREIGN KEY ("clientUserId") REFERENCES "client_user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2891,10 +3260,13 @@ ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId"
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "job_order" ADD CONSTRAINT "job_order_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "job_order" ADD CONSTRAINT "job_order_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "job_order" ADD CONSTRAINT "job_order_quoteId_fkey" FOREIGN KEY ("quoteId") REFERENCES "quote"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "job_order" ADD CONSTRAINT "job_order_preparedById_fkey" FOREIGN KEY ("preparedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -2979,6 +3351,9 @@ ALTER TABLE "service_package_item" ADD CONSTRAINT "service_package_item_serviceI
 
 -- AddForeignKey
 ALTER TABLE "quote" ADD CONSTRAINT "quote_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "lead"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "quote" ADD CONSTRAINT "quote_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "atms_clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "quote_line_item" ADD CONSTRAINT "quote_line_item_quoteId_fkey" FOREIGN KEY ("quoteId") REFERENCES "quote"("id") ON DELETE CASCADE ON UPDATE CASCADE;

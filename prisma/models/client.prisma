@@ -110,7 +110,12 @@ model Client {
   governmentLoans  GovernmentLoan[]
 
   //Compliances
-  compliances ClientCompliance[]
+  compliances       ClientCompliance[]
+  complianceRecords ComplianceRecord[]
+
+  // Compliance Data Master Lists
+  contacts             Contact[]
+  salesInvoiceCounters SalesInvoiceCounter[]
 
   glAccounts GlAccount[]
 

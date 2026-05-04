@@ -1,0 +1,22 @@
+// prisma/compliance-models/vat.prisma
+
+model VatMonth {
+  id                 String           @id @default(cuid())
+  complianceRecordId String
+  complianceRecord   ComplianceRecord @relation(fields: [complianceRecordId], references: [id], onDelete: Cascade)
+
+  coverageMonth DateTime @db.Date // e.g., 2026-01-01 for January 2026
+
+  outputVat Decimal @default(0.00) @db.Decimal(12, 2) // Total output VAT collected this month
+  inputVat  Decimal @default(0.00) @db.Decimal(12, 2) // Total input VAT claimable this month
+  netVat    Decimal @default(0.00) @db.Decimal(12, 2) // outputVat - inputVat (can be negative = excess input)
+
+  isFinalized Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([complianceRecordId, coverageMonth])
+  @@index([complianceRecordId])
+  @@map("vat_month")
+}

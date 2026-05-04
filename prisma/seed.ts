@@ -1289,6 +1289,7 @@ async function main(): Promise<void> {
           clientComplianceId: clientCompliance.id,
           coverageDate: monthData.coverageDate,
           amendmentVersion: 0,
+          filingFrequency: "MONTHLY",
         },
       });
 
@@ -1297,8 +1298,10 @@ async function main(): Promise<void> {
         complianceRecord = await prisma.complianceRecord.create({
           data: {
             clientComplianceId: clientCompliance.id,
+            clientId: santosClient.id,
             coverageDate: monthData.coverageDate,
             deadline: monthData.deadline,
+            filingFrequency: "MONTHLY",
             isZeroFiling: "NONE",
             amendmentVersion: 0,
             status: "ACTIVE",
