@@ -1056,6 +1056,82 @@ Client portal users are external users (typically client business owners) who ac
 
 ---
 
+## Client Portal API (`/api/v1/`)
+
+The external client portal is a **separate repo/project**. It communicates with ATMS over HTTP using two mechanisms:
+
+| Mechanism | Endpoint prefix | Purpose |
+|---|---|---|
+| BetterAuth session (email/password) | `/api/client-auth/` | End-user login — the portal calls this on behalf of the logged-in user |
+| Static API key (Bearer token) | `/api/v1/` | Server-to-server — the portal backend fetches data using a long-lived key |
+
+### API Key Model
+
+- Prisma model: `ClientApiKey` in `prisma/models/user-client.prisma`
+- Keys are **hashed at rest** (SHA-256) — the plaintext is shown only once at generation time
+- Format: `catms_<32 hex chars>` — prefix `catms_` is recognisable in logs
+- Fields: `keyHash` (unique), `keyPrefix` (first 12 chars for UI display), `enabled`, `expiresAt`, `revokedAt`, `lastUsedAt`
+- Each key belongs to a `ClientUser` — the user's `assignments` determine which clients the key can access
+
+### Route Convention
+
+- **All external client portal APIs live under `src/app/api/v1/`**
+- Never add client-portal-facing endpoints under `/api/` without the `/v1/` namespace
+- Never mix internal ATMS staff APIs (e.g. `/api/client-gateway/`) with external portal APIs (`/api/v1/`)
+
+### Auth Guard
+
+Use `verifyClientApiToken(request)` from `src/lib/verify-client-api-token.ts` to protect every `/api/v1/` route:
+
+```typescript
+// src/app/api/v1/some-resource/route.ts
+import { verifyClientApiToken } from "@/lib/verify-client-api-token";
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const apiKey = await verifyClientApiToken(request);
+  if (!apiKey) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // apiKey.clientUser — the authenticated ClientUser
+  // apiKey.clientUser.assignments — their linked clients with roles
+  // ...
+}
+```
+
+- `verifyClientApiToken` returns `null` for missing, malformed, disabled, revoked, or expired keys
+- It updates `lastUsedAt` fire-and-forget — never blocks the response
+- Never use `auth.api.getSession()` (internal) or `clientPortalAuth.api.getSession()` (session cookie) on `/api/v1/` routes — use the API key guard only
+
+### Key Generation
+
+Use `generateApiKey()` and `hashApiKey()` from `src/lib/verify-client-api-token.ts` when issuing new keys via an admin endpoint:
+
+```typescript
+import { generateApiKey } from "@/lib/verify-client-api-token";
+
+const { plaintext, prefix, hash } = generateApiKey();
+
+await prisma.clientApiKey.create({
+  data: {
+    name: "Client Portal Prod",
+    keyHash: hash,
+    keyPrefix: prefix,
+    clientUserId: clientUser.id,
+  },
+});
+
+// Return `plaintext` to the admin ONCE — it is never stored
+return NextResponse.json({ data: { key: plaintext, prefix } });
+```
+
+### Existing `/api/v1/` Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/auth/me` | Returns the authenticated `ClientUser` profile + assigned clients |
+| `GET` | `/api/v1/clients` | Lists all clients assigned to the token owner |
+
+---
+
 ## Portal Apps (AppPortal Enum)
 
 All portal apps are defined in `prisma/models/app-access.prisma` and seeded in `prisma/seed.ts`:
