@@ -49,7 +49,7 @@ export async function GET(
       status: true,
       startDate: true,
       endDate: true,
-      totalDays: true,
+      creditUsed: true,
       reason: true,
       createdAt: true,
       leaveType: { select: { id: true, name: true } },

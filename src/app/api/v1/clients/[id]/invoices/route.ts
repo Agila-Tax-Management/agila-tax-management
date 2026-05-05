@@ -4,20 +4,20 @@
 // Returns invoices for the client (billing history).
 //
 // Query params:
-//   - status: DRAFT | SENT | PAID | OVERDUE | CANCELLED | VOID
+//   - status: DRAFT | UNPAID | PARTIALLY_PAID | PAID | OVERDUE | VOID
 //
 // Auth: Bearer <ATMS_API_KEY> + X-Client-User-Id header
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { verifyClientAccess } from "@/lib/verify-client-access";
+import { InvoiceStatus } from "@/generated/prisma/client";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-const VALID_STATUSES = ["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED", "VOID"] as const;
-type InvoiceStatus = (typeof VALID_STATUSES)[number];
+const VALID_STATUSES: InvoiceStatus[] = ["DRAFT", "UNPAID", "PARTIALLY_PAID", "PAID", "OVERDUE", "VOID"];
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +32,7 @@ export async function GET(
 
   const statusParam = request.nextUrl.searchParams.get("status");
   const statusFilter =
-    statusParam && (VALID_STATUSES as readonly string[]).includes(statusParam)
+    statusParam && (VALID_STATUSES as string[]).includes(statusParam)
       ? (statusParam as InvoiceStatus)
       : undefined;
 

@@ -37,7 +37,6 @@ export async function GET(
       lastName: true,
       nameExtension: true,
       employeeNo: true,
-      image: true,
       active: true,
       employments: {
         where: { employmentStatus: "ACTIVE", clientId },
@@ -63,7 +62,6 @@ export async function GET(
       lastName: e.lastName,
       nameExtension: e.nameExtension,
       employeeNo: e.employeeNo,
-      image: e.image,
       active: e.active,
       employment: e.employments[0] ?? null,
     })),

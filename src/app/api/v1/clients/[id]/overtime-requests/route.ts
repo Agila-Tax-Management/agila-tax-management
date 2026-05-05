@@ -47,10 +47,11 @@ export async function GET(
       id: true,
       status: true,
       date: true,
-      startTime: true,
-      endTime: true,
+      type: true,
+      timeFrom: true,
+      timeTo: true,
       reason: true,
-      totalHours: true,
+      hours: true,
       createdAt: true,
       employee: {
         select: {

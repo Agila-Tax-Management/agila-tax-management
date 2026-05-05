@@ -4,8 +4,8 @@
 // PATCH /api/v1/clients/{id}/payslips/{payslipId} is handled by [payslipId]/route.ts
 //
 // Query params:
-//   - periodId: string  filter by payroll period
-//   - employeeId: string  filter by specific employee
+//   - periodId: number  filter by payroll period
+//   - employeeId: number  filter by specific employee
 //
 // Auth: Bearer <ATMS_API_KEY> + X-Client-User-Id header
 
@@ -28,19 +28,28 @@ export async function GET(
   const access = await verifyClientAccess(request, clientId);
   if (!access) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const periodId = request.nextUrl.searchParams.get("periodId") ?? undefined;
-  const employeeId = request.nextUrl.searchParams.get("employeeId") ?? undefined;
+  const periodIdParam = request.nextUrl.searchParams.get("periodId");
+  const employeeIdParam = request.nextUrl.searchParams.get("employeeId");
+  const periodId = periodIdParam ? parseInt(periodIdParam, 10) : undefined;
+  const employeeId = employeeIdParam ? parseInt(employeeIdParam, 10) : undefined;
+
+  if (periodIdParam && (periodId === undefined || isNaN(periodId))) {
+    return NextResponse.json({ error: "Invalid periodId." }, { status: 400 });
+  }
+  if (employeeIdParam && (employeeId === undefined || isNaN(employeeId))) {
+    return NextResponse.json({ error: "Invalid employeeId." }, { status: 400 });
+  }
 
   const payslips = await prisma.payslip.findMany({
     where: {
       payrollPeriod: { clientId },
-      ...(periodId ? { payrollPeriodId: periodId } : {}),
-      ...(employeeId ? { employeeId } : {}),
+      ...(periodId !== undefined ? { payrollPeriodId: periodId } : {}),
+      ...(employeeId !== undefined ? { employeeId } : {}),
     },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
-      status: true,
+      disbursedStatus: true,
       grossPay: true,
       netPay: true,
       totalDeductions: true,
