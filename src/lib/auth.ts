@@ -8,6 +8,8 @@ export const auth = betterAuth({
 			"localhost:3000",
             "localhost:3001",
 			"localhost:5173",
+            "http://localhost:3001",
+            "https://portal.agilaworkspace.com",
 			"portal.agilaworkspace.com",
 			"*.vercel.app",
 		],
