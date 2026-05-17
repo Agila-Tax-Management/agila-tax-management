@@ -119,6 +119,10 @@ model Client {
 
   glAccounts GlAccount[]
 
+  // ─── Client Funds & Petty Cash ───
+  clientFundTransactions ClientFundTransaction[]
+  pettyCashes            PettyCash[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,0 +1,103 @@
+// prisma/accounting-models/petty-cash.prisma
+
+enum PettyCashStatus {
+  DRAFT      // Being prepared by requestor
+  PENDING    // Submitted; awaiting custodian approval
+  APPROVED   // Custodian approved; awaiting accounting manager
+  DISBURSED  // Manager approved; ClientFundTransaction debit triggered for CLIENT_FUND items
+  LIQUIDATED // Employee submitted receipts and they have been verified
+  REJECTED   // Rejected at any approval stage
+  VOID       // Cancelled before disbursement
+}
+
+enum PettyCashItemCategory {
+  EMPLOYEE_EXPENSE // Lunch, transport — internal cost; does NOT touch client funds
+  CLIENT_FUND      // Document fee, notary fee, etc. — deducted from client fund balance
+}
+
+// ─── Petty Cash Request (Header) ──────────────────────────────────
+model PettyCash {
+  id    String @id @default(cuid())
+  pcfNo String @unique // e.g., "PCF-2026-0001"
+
+  date DateTime @default(now())
+
+  // Which client's fund pool will absorb the CLIENT_FUND items
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  purpose String @db.Text
+
+  // ─── Requestor ───
+  requestedById String
+  requestedBy   User   @relation("PettyCashRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  // ─── Approval Chain ───
+  // Both pre-filled from AccountingSetting defaults; overridable per request
+  custodianId         String?
+  custodian           User?     @relation("PettyCashCustodian", fields: [custodianId], references: [id], onDelete: SetNull)
+  custodianApprovedAt DateTime?
+
+  accountingManagerId         String?
+  accountingManager           User?     @relation("PettyCashAccountingManager", fields: [accountingManagerId], references: [id], onDelete: SetNull)
+  accountingManagerApprovedAt DateTime?
+
+  status PettyCashStatus @default(DRAFT)
+
+  // ─── Computed Totals (denormalized for query performance) ───
+  totalRequestedAmount  Decimal @db.Decimal(10, 2)
+  totalEmployeeExpenses Decimal @default(0) @db.Decimal(10, 2) // Sum of EMPLOYEE_EXPENSE items
+  totalClientFundUsed   Decimal @default(0) @db.Decimal(10, 2) // Sum of CLIENT_FUND items
+
+  // Snapshot of client fund running balance captured at time of submission (PENDING status).
+  // Stored as a plain Decimal — avoids circular FK dependency with ClientFundTransaction.
+  // API validates: clientFundBalanceSnapshot >= totalClientFundUsed before allowing submission.
+  clientFundBalanceSnapshot Decimal? @db.Decimal(10, 2)
+
+  // ─── Approval Notes ───
+  custodianNotes  String? @db.Text
+  managerNotes    String? @db.Text
+  rejectionReason String? @db.Text
+
+  // ─── Journal Entry Linkage (optional) ───
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  isJournalized  Boolean       @default(false)
+
+  items                  PettyCashItem[]
+  clientFundTransactions ClientFundTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+  @@index([requestedById])
+  @@index([isJournalized])
+  @@index([journalEntryId])
+  @@map("petty_cash")
+}
+
+// ─── Petty Cash Item (Line Items) ─────────────────────────────────
+model PettyCashItem {
+  id Int @id @default(autoincrement())
+
+  pettyCashId String
+  pettyCash   PettyCash @relation(fields: [pettyCashId], references: [id], onDelete: Cascade)
+
+  category    PettyCashItemCategory
+  description String // e.g., "Notary Fee - SPA document", "Lunch - BIR filing"
+  amount      Decimal @db.Decimal(10, 2)
+
+  // ─── Liquidation Docs ───
+  receiptNumber String?
+  receiptUrl    String? // Cloudinary URL uploaded during liquidation
+
+  remarks String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pettyCashId])
+  @@map("petty_cash_item")
+}

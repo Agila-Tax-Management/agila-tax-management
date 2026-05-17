@@ -1,0 +1,76 @@
+// prisma/accounting-models/accounting-settings.prisma
+
+// ─── Global Accounting Settings (Firm-wide singleton) ─────────────
+// Only one row is expected. The application always upserts with a fixed ID.
+model AccountingSetting {
+  id String @id @default(cuid())
+
+  // ─── Invoice Branding ───
+  invoiceEmail       String?
+  invoicePhoneNumber String?
+
+  // ─── Petty Cash Workflow Defaults ───
+  // Stored as plain User ID strings — not enforced FKs (settings singleton pattern,
+  // consistent with JournalEntry.createdById). App layer validates user existence.
+  defaultCustodianId         String?
+  defaultAccountingManagerId String?
+
+  // ─── Reference Number Prefixes ───
+  pcfNumberPrefix String @default("PCF") // Petty Cash Fund   → PCF-2026-0001
+  cftNumberPrefix String @default("CFT") // Client Fund Trans → CFT-2026-0001
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("accounting_setting")
+}
+
+// ─── Payment Method: Bank ──────────────────────────────────────────
+model PaymentMethodBank {
+  id Int @id @default(autoincrement())
+
+  bankName      String
+  accountName   String
+  accountNumber String
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payment_method_bank")
+}
+
+// ─── Payment Method: E-Wallet ──────────────────────────────────────
+model PaymentMethodEWallet {
+  id Int @id @default(autoincrement())
+
+  eWalletName   String // e.g., "GCash", "Maya", "ShopeePay"
+  accountName   String
+  accountNumber String
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payment_method_ewallet")
+}
+
+// ─── Payment Method: Cash ──────────────────────────────────────────
+model PaymentMethodCash {
+  id Int @id @default(autoincrement())
+
+  // e.g., "Payable to Agila Tax Management Solutions"
+  payableTo    String
+  instructions String? @db.Text
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payment_method_cash")
+}

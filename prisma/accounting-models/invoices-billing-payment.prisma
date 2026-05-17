@@ -28,6 +28,7 @@ enum InvoiceItemCategory {
   TAX_REIMBURSEMENT // E.g., The ₱781.25 EWT tax (Pass-Through / Non-Revenue)
   GOV_FEE_REIMBURSEMENT // E.g., SEC or LGU penalty fees advanced by the firm
   OUT_OF_POCKET // E.g., Travel/Notary expenses billable to client
+  CLIENT_FUND_DEPOSIT // E.g., Document Processing Advance ─ credited to client's fund pool when invoice is paid
 }
 
 enum InvoiceChangeType {
@@ -141,6 +142,11 @@ model Invoice {
 
   complianceRecords ComplianceRecord[]
 
+  // ─── Journal Entry Linkage ───
+  isJournalized Boolean @default(false)
+
+  clientFundTransactions ClientFundTransaction[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   payments  Payment[]
@@ -216,6 +222,13 @@ model Payment {
 
   // The Bridge connections
   allocations PaymentAllocation[]
+
+  // ─── Journal Entry Linkage (optional) ───
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  isJournalized  Boolean       @default(false)
+
+  clientFundTransactions ClientFundTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

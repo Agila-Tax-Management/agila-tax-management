@@ -1,0 +1,61 @@
+// prisma/accounting-models/client-funds.prisma
+
+enum ClientFundTransactionType {
+  INVOICE_PAYMENT  // Invoice marked PAID; CLIENT_FUND_DEPOSIT items credited (one combined entry)
+  PETTY_CASH_DEBIT // Petty cash DISBURSED; CLIENT_FUND items deducted (one combined entry)
+  MANUAL_CREDIT    // Accountant manually adds funds
+  MANUAL_DEBIT     // Accountant manually removes funds
+  REFUND           // Funds returned to client
+}
+
+// ─── Client Fund Transaction (Running Ledger per Client) ───────────
+// Each row represents one fund movement.
+// Current balance = runningBalance of the most recent row (ORDER BY date DESC LIMIT 1).
+model ClientFundTransaction {
+  id            String @id @default(cuid())
+  transactionNo String @unique // e.g., "CFT-2026-0001"
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  date DateTime                  @default(now())
+  type ClientFundTransactionType
+
+  // ─── Source References (only one will be set per row) ───
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  pettyCashId String?
+  pettyCash   PettyCash? @relation(fields: [pettyCashId], references: [id], onDelete: SetNull)
+
+  // ─── Amounts ───
+  // amount is always positive; debit/credit direction is determined by type
+  amount Decimal @db.Decimal(10, 2)
+
+  // Snapshot of the running balance AFTER this transaction — computed at insert time
+  runningBalance Decimal @db.Decimal(10, 2)
+
+  // Who triggered this entry (accountant for invoice payments, manager for petty cash)
+  processedById String?
+  processedBy   User?   @relation("ClientFundProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  notes String? @db.Text
+
+  // ─── Journal Entry Linkage (optional) ───
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  isJournalized  Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([clientId, date(sort: Desc)])
+  @@index([type])
+  @@index([isJournalized])
+  @@index([journalEntryId])
+  @@map("client_fund_transaction")
+}
