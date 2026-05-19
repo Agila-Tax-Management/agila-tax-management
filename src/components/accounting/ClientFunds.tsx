@@ -1,82 +1,81 @@
 // src/components/accounting/ClientFunds.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ChevronRight } from 'lucide-react';
+import { Search, ChevronRight, Loader2 } from 'lucide-react';
+import type { ClientFundListRecord, ClientFundTransactionType } from '@/types/accounting.types';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-export interface ClientFundRecord {
-  id: string;
-  clientNo: string;
-  clientName: string;
-  lastAction: string;
-  file: string;
-  balanceFund: number;
+const TRANSACTION_TYPE_LABELS: Record<ClientFundTransactionType, string> = {
+  INVOICE_PAYMENT: 'Invoice Payment',
+  PETTY_CASH_DEBIT: 'Petty Cash Debit',
+  MANUAL_CREDIT: 'Manual Credit',
+  MANUAL_DEBIT: 'Manual Debit',
+  REFUND: 'Refund',
+};
+
+const TRANSACTION_TYPE_CLASSES: Record<ClientFundTransactionType, string> = {
+  INVOICE_PAYMENT: 'bg-green-100 text-green-700',
+  PETTY_CASH_DEBIT: 'bg-red-100 text-red-700',
+  MANUAL_CREDIT: 'bg-emerald-100 text-emerald-700',
+  MANUAL_DEBIT: 'bg-red-100 text-red-700',
+  REFUND: 'bg-blue-100 text-blue-700',
+};
+
+function getFileDisplay(record: ClientFundListRecord): { label: string; href: string | null } {
+  if (record.lastInvoiceId) {
+    return {
+      label: record.lastInvoiceId,
+      href: `/portal/accounting-and-finance/invoices/${record.lastInvoiceId}`,
+    };
+  }
+  if (record.lastPaymentId) {
+    return {
+      label: record.lastPaymentId,
+      href: `/portal/accounting-and-finance/payments/${record.lastPaymentId}`,
+    };
+  }
+  if (record.lastPettyCashId) {
+    return { label: record.lastPettyCashId, href: null };
+  }
+  return { label: '—', href: null };
 }
-
-// ── Mock data (TODO: replace with /api/accounting/client-funds) ───────────────
-
-const MOCK_CLIENT_FUNDS: ClientFundRecord[] = [
-  {
-    id: 'CLT-2026-001',
-    clientNo: 'CLT-2026-001',
-    clientName: 'Santos Realty Inc.',
-    lastAction: 'Deposit',
-    file: 'FILE-SRI-001',
-    balanceFund: 125000,
-  },
-  {
-    id: 'CLT-2026-002',
-    clientNo: 'CLT-2026-002',
-    clientName: 'Cruz & Associates',
-    lastAction: 'Withdrawal',
-    file: 'FILE-CA-001',
-    balanceFund: 45500,
-  },
-  {
-    id: 'CLT-2026-003',
-    clientNo: 'CLT-2026-003',
-    clientName: 'Dela Cruz Enterprises',
-    lastAction: 'Transfer',
-    file: 'FILE-DCE-001',
-    balanceFund: 78200,
-  },
-  {
-    id: 'CLT-2026-004',
-    clientNo: 'CLT-2026-004',
-    clientName: 'Mendoza Trading Corp.',
-    lastAction: 'Adjustment',
-    file: 'FILE-MTC-001',
-    balanceFund: 33800,
-  },
-  {
-    id: 'CLT-2026-005',
-    clientNo: 'CLT-2026-005',
-    clientName: 'Reyes Law Office',
-    lastAction: 'Deposit',
-    file: 'FILE-RLO-001',
-    balanceFund: 60000,
-  },
-];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ClientFunds() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [records, setRecords] = useState<ClientFundListRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filtered = MOCK_CLIENT_FUNDS.filter(c =>
-    c.clientNo.toLowerCase().includes(search.toLowerCase()) ||
-    c.clientName.toLowerCase().includes(search.toLowerCase()) ||
-    c.lastAction.toLowerCase().includes(search.toLowerCase()) ||
-    c.file.toLowerCase().includes(search.toLowerCase()),
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/accounting/client-funds');
+        if (res.ok) {
+          const json = (await res.json()) as { data: ClientFundListRecord[] };
+          setRecords(json.data);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void load();
+  }, []);
+
+  const filtered = records.filter(
+    (c) =>
+      (c.clientNo ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      c.businessName.toLowerCase().includes(search.toLowerCase()) ||
+      (c.lastTransactionType
+        ? TRANSACTION_TYPE_LABELS[c.lastTransactionType]
+            .toLowerCase()
+            .includes(search.toLowerCase())
+        : false),
   );
-
-  const handleRowClick = (clientId: string) => {
-    router.push(`/portal/accounting-and-finance/client-funds/${clientId}`);
-  };
 
   return (
     <div className="space-y-6">
@@ -89,7 +88,7 @@ export function ClientFunds() {
             type="text"
             placeholder="Search clients..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 transition w-64"
           />
         </div>
@@ -109,43 +108,72 @@ export function ClientFunds() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.length === 0 ? (
+            {isLoading ? (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
-                  No clients found.
+                  <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+                  Loading...
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                  {search ? 'No matching clients.' : 'No client fund records yet.'}
                 </td>
               </tr>
             ) : (
-              filtered.map(client => (
-                <tr
-                  key={client.id}
-                  onClick={() => handleRowClick(client.id)}
-                  className="bg-white hover:bg-amber-50/60 cursor-pointer transition-colors group"
-                >
-                  <td className="px-4 py-3 font-medium text-slate-700 font-mono text-xs">{client.clientNo}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-900">{client.clientName}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      client.lastAction === 'Deposit'    ? 'bg-green-100 text-green-700' :
-                      client.lastAction === 'Withdrawal' ? 'bg-red-100 text-red-700' :
-                      client.lastAction === 'Transfer'   ? 'bg-blue-100 text-blue-700' :
-                      'bg-slate-100 text-slate-600'
-                    }`}>
-                      {client.lastAction}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 font-mono text-xs">{client.file}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                    ₱{client.balanceFund.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-2 py-3">
-                    <ChevronRight
-                      size={16}
-                      className="text-slate-300 group-hover:text-amber-500 transition"
-                    />
-                  </td>
-                </tr>
-              ))
+              filtered.map((client) => {
+                const file = getFileDisplay(client);
+                return (
+                  <tr
+                    key={client.clientId}
+                    onClick={() =>
+                      router.push(
+                        `/portal/accounting-and-finance/client-funds/${client.clientId}`,
+                      )
+                    }
+                    className="bg-white hover:bg-amber-50/60 cursor-pointer transition-colors group"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-700 font-mono text-xs">
+                      {client.clientNo ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{client.businessName}</td>
+                    <td className="px-4 py-3">
+                      {client.lastTransactionType ? (
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${TRANSACTION_TYPE_CLASSES[client.lastTransactionType]}`}
+                        >
+                          {TRANSACTION_TYPE_LABELS[client.lastTransactionType]}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {file.href ? (
+                        <a
+                          href={file.href}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-amber-600 hover:underline"
+                        >
+                          {file.label.slice(-12)}
+                        </a>
+                      ) : (
+                        <span className="text-slate-400">{file.label}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      ₱{client.currentBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-2 py-3">
+                      <ChevronRight
+                        size={16}
+                        className="text-slate-300 group-hover:text-amber-500 transition"
+                      />
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

@@ -166,11 +166,12 @@ export function InvoiceTemplate({ invoice, settings, printMode = false, classNam
           </thead>
           <tbody className="divide-y divide-slate-50">
             {invoice.items.map((item) => {
-              const categoryConfig = {
+              const categoryConfig: Record<string, { label: string; color: string }> = {
                 SERVICE_FEE: { label: 'Service Fee', color: 'bg-purple-100 text-purple-700' },
                 TAX_REIMBURSEMENT: { label: 'Tax Reimb.', color: 'bg-amber-100 text-amber-700' },
                 GOV_FEE_REIMBURSEMENT: { label: 'Gov Fee Reimb.', color: 'bg-blue-100 text-blue-700' },
                 OUT_OF_POCKET: { label: 'Out of Pocket', color: 'bg-slate-100 text-slate-700' },
+                CLIENT_FUND_DEPOSIT: { label: 'Client Fund', color: 'bg-green-100 text-green-700' },
               };
               const category = item.category ?? 'SERVICE_FEE';
               const cfg = categoryConfig[category] ?? categoryConfig.SERVICE_FEE;

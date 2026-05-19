@@ -11,7 +11,7 @@ import {
   Plus, Trash2, ChevronDown, Search,
   FileText, Users, Loader2,
 } from 'lucide-react';
-import type { ClientOption, ServiceOption, InvoiceItemInput } from '@/types/accounting.types';
+import type { ClientOption, ServiceOption, InvoiceItemInput, InvoiceItemCategory } from '@/types/accounting.types';
 
 /* -- Item row state ------------------------------------------------ */
 interface ItemRow extends InvoiceItemInput {
@@ -26,6 +26,8 @@ function newRow(partial?: Partial<InvoiceItemInput>): ItemRow {
     unitPrice: partial?.unitPrice ?? 0,
     total: partial?.total ?? 0,
     remarks: partial?.remarks ?? '',
+    category: partial?.category ?? 'SERVICE_FEE',
+    isVatable: partial?.isVatable ?? false,
   };
 }
 
@@ -142,7 +144,7 @@ export function CreateInvoiceForm() {
   };
 
   // Item management
-  const updateItem = (key: string, field: keyof ItemRow, value: string | number) => {
+  const updateItem = (key: string, field: keyof ItemRow, value: string | number | boolean) => {
     setItems((prev) =>
       prev.map((row) => {
         if (row._key !== key) return row;
@@ -431,6 +433,7 @@ export function CreateInvoiceForm() {
               <thead>
                 <tr className="border-b border-slate-200">
                   <th className="text-left pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest pr-3">Description</th>
+                  <th className="text-left pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-36 pl-2">Category</th>
                   <th className="text-center pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">Qty</th>
                   <th className="text-right pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28">Unit Price</th>
                   <th className="text-left pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 px-2">Remarks</th>
@@ -450,6 +453,26 @@ export function CreateInvoiceForm() {
                         required
                         className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-amber-500"
                       />
+                    </td>
+                    <td className="py-2 pl-2">
+                      <select
+                        value={row.category}
+                        onChange={(e) =>
+                          updateItem(row._key, 'category', e.target.value as InvoiceItemCategory)
+                        }
+                        className="w-36 h-9 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="SERVICE_FEE">Service Fee</option>
+                        <option value="TAX_REIMBURSEMENT">Tax Reimbursement</option>
+                        <option value="GOV_FEE_REIMBURSEMENT">Gov. Fee Reimb.</option>
+                        <option value="OUT_OF_POCKET">Out of Pocket</option>
+                        <option value="CLIENT_FUND_DEPOSIT">Client Fund Deposit</option>
+                      </select>
+                      {row.category === 'CLIENT_FUND_DEPOSIT' && (
+                        <p className="text-[10px] text-amber-600 mt-1 leading-tight">
+                          ↑ Added to client fund when paid
+                        </p>
+                      )}
                     </td>
                     <td className="py-2 text-center">
                       <input
