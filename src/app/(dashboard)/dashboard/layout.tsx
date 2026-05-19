@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  LayoutDashboard, Clock, FileBadge, SendHorizontal,
+  LayoutDashboard, Clock, FileBadge, SendHorizontal, Wallet,
   Settings, ChevronLeft, ChevronRight, X,
   ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
   HelpCircle, BookOpen, Heart, FileWarning
@@ -20,7 +20,8 @@ const NAV_ITEMS = [
   { href: '/dashboard',                   label: 'Dashboard',   icon: LayoutDashboard },
   { href: '/dashboard/timesheet',         label: 'Timesheet',   icon: Clock },
   { href: '/dashboard/payslips',          label: 'Payslip',     icon: FileBadge },
-  { href: '/dashboard/hr-apps',            label: 'Application', icon: SendHorizontal },
+  { href: '/dashboard/hr-apps',           label: 'Application', icon: SendHorizontal },
+  { href: '/dashboard/petty-cash',        label: 'Petty Cash',  icon: Wallet },
 ];
 
 const HELP_ITEMS = [
@@ -68,6 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       '/dashboard/settings/user-management':               'User Management | Agila Tax Management System',
       '/dashboard/settings/user-client-management':        'Client User Management | Agila Tax Management System',
       '/dashboard/settings/client-management':             'Client Management | Agila Tax Management System',
+      '/dashboard/petty-cash':                             'Petty Cash | Agila Tax Management System',
       '/dashboard/help/incident-report':                   'Incident Report | Agila Tax Management System',
       '/dashboard/help/knowledgebase':                     'Knowledge Base | Agila Tax Management System',
       '/dashboard/help/workplace-careline':                'Workplace Care Line | Agila Tax Management System',

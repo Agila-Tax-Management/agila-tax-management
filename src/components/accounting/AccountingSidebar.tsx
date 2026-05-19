@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CreditCard, FileText, Receipt,
-  BarChart3, Calculator, BookOpen, PenLine, Settings,
+  BarChart3, Calculator, BookOpen, PenLine, Settings, Wallet, Landmark,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
@@ -28,6 +28,8 @@ const ACCOUNTING_NAV_ITEMS = [
   },
   { id: 'journaling', label: 'Journal Entries', icon: PenLine, href: '/portal/accounting-and-finance/journaling' },
   { id: 'chartofaccounts', label: 'Chart of Accounts', icon: BookOpen, href: '/portal/accounting-and-finance/chartofaccounts' },
+  { id: 'pettycash', label: 'Petty Cash Fund', icon: Wallet, href: '/portal/accounting-and-finance/pettycash' },
+  { id: 'clientfunds', label: 'Client Funds', icon: Landmark, href: '/portal/accounting-and-finance/client-funds' },
   {
     id: 'analytics',
     label: 'ANALYTICS',
@@ -90,7 +92,10 @@ export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
               );
             }
 
-            const isActive = pathname === item.href;
+            const href = item.href ?? '';
+            const isActive = href === '/portal/accounting-and-finance'
+              ? pathname === href
+              : pathname.startsWith(href);
             const Icon = item.icon;
 
             return (
