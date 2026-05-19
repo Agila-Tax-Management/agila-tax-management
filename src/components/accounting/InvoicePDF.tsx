@@ -1,7 +1,7 @@
 // src/components/accounting/InvoicePDF.tsx
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
-import type { InvoiceRecord } from '@/types/accounting.types';
+import type { InvoiceRecord, InvoiceBrandingSettings } from '@/types/accounting.types';
 
 /* ── Color palette ─────────────────────────────────────────────── */
 const C = {
@@ -196,11 +196,25 @@ function getBilledTo(invoice: InvoiceRecord) {
 /* ── PDF Document Component ─────────────────────────────────────── */
 interface InvoicePDFProps {
   invoice: InvoiceRecord;
+  /** Branding & payment method settings from the accounting settings API. */
+  settings?: InvoiceBrandingSettings;
+  /**
+   * Pre-converted PNG base64 data URL for the logo.
+   * PDF format does not support WebP natively, so the caller should convert
+   * the logo via canvas and pass the result here.
+   */
+  logoSrc?: string;
 }
 
-export function InvoicePDF({ invoice }: InvoicePDFProps) {
+export function InvoicePDF({ invoice, settings, logoSrc }: InvoicePDFProps) {
   const billed = getBilledTo(invoice);
   const st = STATUS_STYLE[invoice.status] ?? STATUS_STYLE.DRAFT;
+
+  // Use the pre-converted base64 PNG from the caller when available.
+  // Falls back to an absolute URL (works only if react-pdf can handle the format).
+  const src = logoSrc ?? (typeof window !== 'undefined'
+    ? `${window.location.origin}/images/agila_logo.webp`
+    : '/images/agila_logo.webp');
 
   return (
     <Document
@@ -216,13 +230,15 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
           <View>
             <View style={s.logoRow}>
               {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image does not support alt prop */}
-              <Image src="/images/agila_logo.webp" style={s.logoImg} />
+              <Image src={src} style={s.logoImg} />
               <View>
                 <Text style={s.companyName}>AGILA TAX MANAGEMENT</Text>
                 <Text style={s.companyCity}>Cebu City, Philippines</Text>
               </View>
             </View>
-            <Text style={s.companyContact}>accounting@agila.ph  ·  0912 312 313</Text>
+            <Text style={s.companyContact}>
+              {[settings?.invoiceEmail, settings?.invoicePhoneNumber].filter(Boolean).join('  ·  ') || 'accounting@agila.ph  ·  0912 312 313'}
+            </Text>
           </View>
 
           {/* Right: Invoice number + status + dates */}
@@ -332,20 +348,48 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
           {/* Left: Payment Methods */}
           <View style={s.colLeft}>
             <Text style={s.sectionTitle}>Payment Methods</Text>
-            <View style={s.pmBlock}>
-              <Text style={s.pmTitle}>Cash</Text>
-              <Text style={s.pmDesc}>Payable to Agila Tax Management System</Text>
-            </View>
-            <View style={s.pmBlock}>
-              <Text style={s.pmTitle}>Bank Transfer</Text>
-              <Text style={s.pmDesc}>BDO Savings Account</Text>
-              <Text style={s.pmDesc}>Account Name: Agila Tax Management</Text>
-              <Text style={s.pmDesc}>Account No: 0012 3456 7890</Text>
-            </View>
-            <View style={s.pmBlock}>
-              <Text style={s.pmTitle}>GCash / Maya</Text>
-              <Text style={s.pmDesc}>0912 312 313</Text>
-            </View>
+            {settings && (settings.cashMethods.length > 0 || settings.banks.length > 0 || settings.ewallets.length > 0) ? (
+              <>
+                {settings.cashMethods.map((c, i) => (
+                  <View key={i} style={s.pmBlock}>
+                    <Text style={s.pmTitle}>Cash</Text>
+                    <Text style={s.pmDesc}>Payable to {c.payableTo}</Text>
+                    {c.instructions ? <Text style={s.pmDesc}>{c.instructions}</Text> : null}
+                  </View>
+                ))}
+                {settings.banks.map((b, i) => (
+                  <View key={i} style={s.pmBlock}>
+                    <Text style={s.pmTitle}>{b.bankName}</Text>
+                    <Text style={s.pmDesc}>Account Name: {b.accountName}</Text>
+                    <Text style={s.pmDesc}>Account No: {b.accountNumber}</Text>
+                  </View>
+                ))}
+                {settings.ewallets.map((e, i) => (
+                  <View key={i} style={s.pmBlock}>
+                    <Text style={s.pmTitle}>{e.eWalletName}</Text>
+                    <Text style={s.pmDesc}>Account Name: {e.accountName}</Text>
+                    <Text style={s.pmDesc}>{e.accountNumber}</Text>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <>
+                <View style={s.pmBlock}>
+                  <Text style={s.pmTitle}>Cash</Text>
+                  <Text style={s.pmDesc}>Payable to Agila Tax Management System</Text>
+                </View>
+                <View style={s.pmBlock}>
+                  <Text style={s.pmTitle}>Bank Transfer</Text>
+                  <Text style={s.pmDesc}>BDO Savings Account</Text>
+                  <Text style={s.pmDesc}>Account Name: Agila Tax Management</Text>
+                  <Text style={s.pmDesc}>Account No: 0012 3456 7890</Text>
+                </View>
+                <View style={s.pmBlock}>
+                  <Text style={s.pmTitle}>GCash / Maya</Text>
+                  <Text style={s.pmDesc}>0912 312 313</Text>
+                </View>
+              </>
+            )}
             {invoice.payments.length > 0 && (
               <View>
                 <Text style={s.pmRecordedTitle}>Payments Recorded</Text>
@@ -377,7 +421,9 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
         <View style={s.footer}>
           <Text style={s.footerLine}>
             If you have any questions, feel free to contact us at{' '}
-            <Text style={s.footerBold}>0912 312 313</Text>
+            <Text style={s.footerBold}>
+              {settings?.invoicePhoneNumber ?? settings?.invoiceEmail ?? '0912 312 313'}
+            </Text>
           </Text>
           <Text style={s.footerSub}>
             Thank you for your business with Agila Tax Management System

@@ -117,6 +117,33 @@ export interface InvoiceStats {
   overdueCount: number;
 }
 
+// ── Invoice Branding Settings ────────────────────────────────────
+
+export interface InvoiceBrandingBank {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+}
+
+export interface InvoiceBrandingEWallet {
+  eWalletName: string;
+  accountName: string;
+  accountNumber: string;
+}
+
+export interface InvoiceBrandingCash {
+  payableTo: string;
+  instructions: string | null;
+}
+
+export interface InvoiceBrandingSettings {
+  invoiceEmail: string | null;
+  invoicePhoneNumber: string | null;
+  banks: InvoiceBrandingBank[];
+  ewallets: InvoiceBrandingEWallet[];
+  cashMethods: InvoiceBrandingCash[];
+}
+
 export interface ClientOption {
   type: 'client' | 'lead';
   id: number;

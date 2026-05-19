@@ -10,12 +10,39 @@ import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 import { InvoiceTemplate } from '@/components/accounting/InvoiceTemplate';
 
-async function openInvoicePDF(invoice: import('@/types/accounting.types').InvoiceRecord) {
+async function openInvoicePDF(
+  invoice: import('@/types/accounting.types').InvoiceRecord,
+  settings?: import('@/types/accounting.types').InvoiceBrandingSettings,
+) {
+  // Convert WebP logo → PNG via canvas before passing to react-pdf.
+  // PDF format does not support WebP natively, so react-pdf silently drops it
+  // unless we supply a pre-converted PNG base64 data URL.
+  let logoSrc: string | undefined;
+  try {
+    const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Logo load failed'));
+      img.src = `${window.location.origin}/images/agila_logo.webp`;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, 0, 0);
+      logoSrc = canvas.toDataURL('image/png');
+    }
+  } catch {
+    // Logo conversion failed — PDF will render without the logo
+  }
+
   const [{ pdf }, { InvoicePDF }] = await Promise.all([
     import('@react-pdf/renderer'),
     import('@/components/accounting/InvoicePDF'),
   ]);
-  const el = React.createElement(InvoicePDF, { invoice }) as Parameters<typeof pdf>[0];
+  const el = React.createElement(InvoicePDF, { invoice, settings, logoSrc }) as Parameters<typeof pdf>[0];
   const blob = await pdf(el).toBlob();
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
@@ -33,6 +60,7 @@ import type {
   InvoiceItemInput,
   PaymentMethodType,
   InvoiceStatus,
+  InvoiceBrandingSettings,
 } from '@/types/accounting.types';
 
 /* ── Helpers ──────────────────────────────────────────────────── */
@@ -97,6 +125,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
 
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [brandingSettings, setBrandingSettings] = useState<InvoiceBrandingSettings | null>(null);
 
   // Edit mode
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
@@ -132,11 +161,18 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
     const load = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/accounting/invoices/${id}`);
+        const [res, brandingRes] = await Promise.all([
+          fetch(`/api/accounting/invoices/${id}`),
+          fetch('/api/accounting/settings/branding'),
+        ]);
         if (!res.ok) { toastError('Not found', 'Invoice could not be loaded.'); return; }
         const data = await res.json();
         const loadedInvoice = data.data as InvoiceRecord;
         setInvoice(loadedInvoice);
+        if (brandingRes.ok) {
+          const bd = await brandingRes.json();
+          setBrandingSettings(bd.data as InvoiceBrandingSettings);
+        }
         // If page opened directly in edit mode (?edit=true), populate edit fields now
         if (initialEditingRef.current) {
           setEditDueDate(loadedInvoice.dueDate.split('T')[0]);
@@ -349,7 +385,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
                 disabled={isPrinting}
                 onClick={() => {
                   setIsPrinting(true);
-                  openInvoicePDF(invoice).catch(() => toastError('PDF Error', 'Could not generate PDF.')).finally(() => setIsPrinting(false));
+                  openInvoicePDF(invoice, brandingSettings ?? undefined).catch(() => toastError('PDF Error', 'Could not generate PDF.')).finally(() => setIsPrinting(false));
                 }}
               >
                 {isPrinting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={15} />}
@@ -382,7 +418,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
       </div>
 
       {/* ── VIEW MODE: Invoice Template ─────────────────────── */}
-      {!isEditing && <InvoiceTemplate invoice={invoice} />}
+      {!isEditing && <InvoiceTemplate invoice={invoice} settings={brandingSettings ?? undefined} />}
 
       {/* ── EDIT MODE ───────────────────────────────────────── */}
       {isEditing && (
