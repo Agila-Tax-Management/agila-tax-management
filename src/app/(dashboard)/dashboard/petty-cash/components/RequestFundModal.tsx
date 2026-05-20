@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Plus, Trash2, Search, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, Search, Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { authClient } from '@/lib/auth-client';
 import type { ModalMode, PettyCashRecord, PettyCashItemCategory } from './PettyCash';
@@ -541,21 +541,57 @@ export default function RequestFundModal({
             <div className="border-t border-border pt-5 space-y-5">
               <p className="text-sm font-semibold text-foreground">Received and Acknowledged</p>
               <div className="grid grid-cols-3 gap-6">
-                {(['Prepared by', 'Petty Cash Custodian', 'Accounting Manager'] as const).map(
-                  (roleLabel) => (
-                    <div key={roleLabel} className="text-center">
-                      <div className="h-10 border-b border-foreground/30 mb-2" />
-                      <p className="text-xs text-muted-foreground font-medium">{roleLabel}</p>
-                    </div>
-                  ),
-                )}
+
+                {/* Prepared by */}
+                <div className="text-center">
+                  <div className="h-10 flex items-end justify-center pb-1">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+                      <CheckCircle2 size={11} />
+                      Submitted
+                    </span>
+                  </div>
+                  <div className="border-b border-foreground/30 mb-1.5" />
+                  <p className="text-xs font-semibold text-foreground leading-tight">{record!.requestedBy.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Prepared by</p>
+                </div>
+
+                {/* Petty Cash Custodian */}
+                <div className="text-center">
+                  <div className="h-10 flex items-end justify-center pb-1">
+                    {record!.custodianApprovedAt ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+                        <CheckCircle2 size={11} />
+                        Approved
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="border-b border-foreground/30 mb-1.5" />
+                  <p className="text-xs font-semibold text-foreground leading-tight">{record!.custodian?.name ?? '—'}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Petty Cash Custodian</p>
+                </div>
+
+                {/* Accounting Manager */}
+                <div className="text-center">
+                  <div className="h-10 flex items-end justify-center pb-1">
+                    {record!.accountingManagerApprovedAt ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+                        <CheckCircle2 size={11} />
+                        Approved
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="border-b border-foreground/30 mb-1.5" />
+                  <p className="text-xs font-semibold text-foreground leading-tight">{record!.accountingManager?.name ?? '—'}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Accounting Manager</p>
+                </div>
+
               </div>
             </div>
           ) : (
             <div className="flex justify-end pt-2 border-t border-border">
               <button
                 onClick={() => void handleSubmit()}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (hasClientFundItems && balanceAfter < 0)}
                 className="mt-4 flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition"
               >
                 {isSubmitting && <Loader2 size={14} className="animate-spin" />}
