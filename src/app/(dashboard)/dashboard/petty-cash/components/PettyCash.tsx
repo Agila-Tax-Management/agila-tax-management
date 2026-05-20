@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Eye, Pencil, Trash2, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Search, Plus, Eye, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { authClient } from '@/lib/auth-client';
 import RequestFundModal from './RequestFundModal';
@@ -86,8 +86,6 @@ export default function PettyCash() {
   const [modalMode, setModalMode]   = useState<ModalMode>('create');
   const [selectedRecord, setSelectedRecord] = useState<PettyCashRecord | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [rejectState, setRejectState] = useState<{ id: string; reason: string } | null>(null);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   const loadRecords = useCallback(async () => {
@@ -125,51 +123,7 @@ export default function PettyCash() {
 
   const canDelete = (r: PettyCashRecord) => canEdit(r);
 
-  const canApprove = (r: PettyCashRecord) =>
-    r.status === 'PENDING' && (r.custodianId === userId || role === 'SUPER_ADMIN');
-
-  const canDisburse = (r: PettyCashRecord) =>
-    r.status === 'APPROVED' && (r.accountingManagerId === userId || role === 'SUPER_ADMIN');
-
-  const canReject = (r: PettyCashRecord) =>
-    ['PENDING', 'APPROVED'].includes(r.status) &&
-    (r.custodianId === userId ||
-      r.accountingManagerId === userId ||
-      role === 'SUPER_ADMIN');
-
   // ── Action handlers ───────────────────────────────────────────────────────────
-  const handleApprove = async (id: string) => {
-    setApprovingId(id);
-    try {
-      const res = await fetch(`/api/accounting/petty-cash/${id}/approve`, { method: 'POST' });
-      const d = await res.json();
-      if (!res.ok) { toastError('Failed', (d as { error?: string }).error ?? 'Unable to approve.'); return; }
-      success('Approved', `Request has been ${((d as { data?: { status?: string } }).data?.status ?? 'updated').toLowerCase()}.`);
-      void loadRecords();
-    } catch {
-      toastError('Error', 'An unexpected error occurred.');
-    } finally {
-      setApprovingId(null);
-    }
-  };
-
-  const handleReject = async (id: string, reason: string) => {
-    try {
-      const res = await fetch(`/api/accounting/petty-cash/${id}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() || undefined }),
-      });
-      const d = await res.json();
-      if (!res.ok) { toastError('Failed', (d as { error?: string }).error ?? 'Unable to reject.'); return; }
-      success('Rejected', 'Petty cash request has been rejected.');
-      setRejectState(null);
-      void loadRecords();
-    } catch {
-      toastError('Error', 'An unexpected error occurred.');
-    }
-  };
-
   const handleDelete = async (id: string) => {
     try {
       const res = await fetch(`/api/accounting/petty-cash/${id}`, { method: 'DELETE' });
@@ -257,33 +211,7 @@ export default function PettyCash() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {rejectState?.id === record.id ? (
-                      <div className="flex flex-col items-end gap-1.5">
-                        <input
-                          type="text"
-                          value={rejectState.reason}
-                          onChange={(e) => setRejectState({ id: record.id, reason: e.target.value })}
-                          placeholder="Reason (optional)"
-                          autoFocus
-                          className="w-44 px-2 py-1 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-red-500"
-                        />
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">Reject?</span>
-                          <button
-                            onClick={() => void handleReject(record.id, rejectState.reason)}
-                            className="px-2 py-0.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition"
-                          >
-                            Yes
-                          </button>
-                          <button
-                            onClick={() => setRejectState(null)}
-                            className="px-2 py-0.5 rounded-lg border border-border text-muted-foreground hover:text-foreground text-xs transition"
-                          >
-                            No
-                          </button>
-                        </div>
-                      </div>
-                    ) : confirmDeleteId === record.id ? (
+                    {confirmDeleteId === record.id ? (
                       <div className="flex items-center justify-center gap-2">
                         <span className="text-xs text-muted-foreground">Delete?</span>
                         <button
@@ -324,29 +252,6 @@ export default function PettyCash() {
                             title="Delete"
                           >
                             <Trash2 size={15} />
-                          </button>
-                        )}
-                        {(canApprove(record) || canDisburse(record)) && (
-                          <button
-                            onClick={() => void handleApprove(record.id)}
-                            disabled={approvingId === record.id}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition disabled:opacity-50"
-                            title={canDisburse(record) ? 'Disburse' : 'Approve'}
-                          >
-                            {approvingId === record.id ? (
-                              <Loader2 size={15} className="animate-spin" />
-                            ) : (
-                              <CheckCircle2 size={15} />
-                            )}
-                          </button>
-                        )}
-                        {canReject(record) && (
-                          <button
-                            onClick={() => setRejectState({ id: record.id, reason: '' })}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
-                            title="Reject"
-                          >
-                            <XCircle size={15} />
                           </button>
                         )}
                       </div>

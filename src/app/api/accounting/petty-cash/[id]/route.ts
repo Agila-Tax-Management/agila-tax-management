@@ -179,23 +179,32 @@ export async function DELETE(
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const role = session.user.role as string;
-  const isOwner = existing.requestedById === session.user.id;
-  const isSuperAdmin = role === 'SUPER_ADMIN';
+  const userId = session.user.id;
+  const isOwner = existing.requestedById === userId;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
-  if (!isOwner && !isSuperAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-  if (!['DRAFT', 'PENDING'].includes(existing.status)) {
+  // Owners can delete their own DRAFT/PENDING requests.
+  // Admins can also delete VOID records (void-first workflow from the portal).
+  const canDelete =
+    (isOwner && ['DRAFT', 'PENDING'].includes(existing.status)) ||
+    (isAdmin && ['DRAFT', 'PENDING', 'VOID'].includes(existing.status));
+
+  if (!canDelete) {
+    const isForbidden = !isOwner && !isAdmin;
     return NextResponse.json(
-      { error: 'Cannot delete a request that has already been approved.' },
-      { status: 400 },
+      {
+        error: isForbidden
+          ? 'Forbidden'
+          : 'Only VOID, DRAFT, or PENDING requests can be deleted.',
+      },
+      { status: isForbidden ? 403 : 400 },
     );
   }
 
   await prisma.pettyCash.delete({ where: { id } });
 
   void logActivity({
-    userId: session.user.id,
+    userId,
     action: 'DELETED',
     entity: 'PettyCash',
     entityId: id,

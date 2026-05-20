@@ -9,6 +9,8 @@ import type {
   ClientFundTransactionRecord,
   ClientFundTransactionType,
 } from '@/types/accounting.types';
+import type { PettyCashRecord } from './PettyCashFund';
+import { PettyCashViewModal } from './PettyCashViewModal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,9 +56,6 @@ function getFileInfo(txn: ClientFundTransactionRecord): { label: string; href: s
       href: `/portal/accounting-and-finance/payments/${txn.payment.id}`,
     };
   }
-  if (txn.pettyCashId) {
-    return { label: txn.pettyCashId, href: null };
-  }
   return { label: txn.transactionNo, href: null };
 }
 
@@ -74,6 +73,8 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
   const [data, setData] = useState<ClientFundDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [pettyCashRecord, setPettyCashRecord] = useState<PettyCashRecord | null>(null);
+  const [loadingPcfId, setLoadingPcfId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -91,6 +92,19 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
     void load();
   }, [clientId]);
 
+  const openPettyCashModal = async (id: string) => {
+    setLoadingPcfId(id);
+    try {
+      const res = await fetch(`/api/accounting/petty-cash/${id}`);
+      if (res.ok) {
+        const json = (await res.json()) as { data: PettyCashRecord };
+        setPettyCashRecord(json.data);
+      }
+    } finally {
+      setLoadingPcfId(null);
+    }
+  };
+
   const filtered = (data?.transactions ?? []).filter((t) => {
     const q = search.toLowerCase();
     return (
@@ -100,7 +114,7 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
       (t.processedBy?.name.toLowerCase().includes(q) ?? false) ||
       (t.invoice?.invoiceNumber.toLowerCase().includes(q) ?? false) ||
       (t.payment?.paymentNumber.toLowerCase().includes(q) ?? false) ||
-      (t.pettyCashId?.toLowerCase().includes(q) ?? false)
+      (t.pettyCash?.pcfNo.toLowerCase().includes(q) ?? false)
     );
   });
 
@@ -218,11 +232,19 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{getTypeLabel(txn)}</td>
                     <td className="px-4 py-3 font-mono text-xs">
-                      {file.href ? (
-                        <a
-                          href={file.href}
-                          className="text-amber-600 hover:underline"
+                      {txn.pettyCashId ? (
+                        <button
+                          onClick={() => void openPettyCashModal(txn.pettyCashId!)}
+                          className="text-amber-600 hover:underline font-mono text-xs"
                         >
+                          {loadingPcfId === txn.pettyCashId ? (
+                            <Loader2 size={12} className="animate-spin inline" />
+                          ) : (
+                            txn.pettyCash?.pcfNo ?? txn.pettyCashId
+                          )}
+                        </button>
+                      ) : file.href ? (
+                        <a href={file.href} className="text-amber-600 hover:underline">
                           {file.label}
                         </a>
                       ) : (
@@ -248,6 +270,14 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Petty Cash detail modal */}
+      {pettyCashRecord && (
+        <PettyCashViewModal
+          record={pettyCashRecord}
+          onClose={() => setPettyCashRecord(null)}
+        />
+      )}
     </div>
   );
 }

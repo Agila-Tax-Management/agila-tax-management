@@ -374,6 +374,7 @@ export interface ClientFundTransactionRecord {
   paymentId: string | null;
   payment: { id: string; paymentNumber: string } | null;
   pettyCashId: string | null;
+  pettyCash: { id: string; pcfNo: string } | null;
   processedBy: { id: string; name: string } | null;
   amount: number;
   runningBalance: number;
