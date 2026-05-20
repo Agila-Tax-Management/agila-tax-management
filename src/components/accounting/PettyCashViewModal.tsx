@@ -8,13 +8,13 @@ import type { PettyCashRecord } from './PettyCashFund';
 // ── Status badge styles ───────────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<string, string> = {
-  DRAFT:      'bg-gray-100   text-gray-600  dark:bg-gray-800       dark:text-gray-400',
-  PENDING:    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  APPROVED:   'bg-blue-100   text-blue-700  dark:bg-blue-900/30    dark:text-blue-400',
-  DISBURSED:  'bg-green-100  text-green-700 dark:bg-green-900/30   dark:text-green-400',
-  LIQUIDATED: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  REJECTED:   'bg-red-100    text-red-700   dark:bg-red-900/30     dark:text-red-400',
-  VOID:       'bg-gray-100   text-gray-500  dark:bg-gray-800       dark:text-gray-500',
+  DRAFT:      'bg-gray-100   text-gray-600',
+  PENDING:    'bg-yellow-100 text-yellow-700',
+  APPROVED:   'bg-blue-100   text-blue-700',
+  DISBURSED:  'bg-green-100  text-green-700',
+  LIQUIDATED: 'bg-purple-100 text-purple-700',
+  REJECTED:   'bg-red-100    text-red-700',
+  VOID:       'bg-gray-100   text-gray-500',
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
