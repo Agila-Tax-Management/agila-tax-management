@@ -220,14 +220,11 @@ export async function POST(request: NextRequest) {
   // Notify custodian
   if (custodianId) {
     void notify({
-      recipientId: custodianId,
-      actorId: session.user.id,
-      type: 'ACTION_REQUIRED',
+      userId: custodianId,
+      type: 'TASK',
       title: 'Petty cash request pending approval',
       message: `${session.user.name} submitted ${created.pcfNo} for ₱${totalRequested.toLocaleString('en-PH', { minimumFractionDigits: 2 })}. Please review and approve.`,
-      entity: 'PettyCash',
-      entityId: created.id,
-      actionUrl: '/dashboard/petty-cash',
+      linkUrl: '/dashboard/petty-cash',
     });
   }
 

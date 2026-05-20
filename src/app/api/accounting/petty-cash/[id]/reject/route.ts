@@ -79,16 +79,13 @@ export async function POST(
 
   // Notify requester
   void notify({
-    recipientId: pcf.requestedById,
-    actorId: userId,
-    type: 'ERROR',
+    userId: pcf.requestedById,
+    type: 'SYSTEM',
     title: 'Petty cash request rejected',
     message: reason
       ? `Your request ${pcf.pcfNo} was rejected. Reason: ${reason}`
       : `Your request ${pcf.pcfNo} was rejected.`,
-    entity: 'PettyCash',
-    entityId: id,
-    actionUrl: '/dashboard/petty-cash',
+    linkUrl: '/dashboard/petty-cash',
   });
 
   return NextResponse.json({ data: { status: 'REJECTED' } });

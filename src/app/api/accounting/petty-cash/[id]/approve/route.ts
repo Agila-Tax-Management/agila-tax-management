@@ -137,26 +137,20 @@ export async function POST(
     if (newStatus === 'APPROVED' && updated.accountingManagerId) {
       // Notify accounting manager that custodian has approved
       void notify({
-        recipientId: updated.accountingManagerId,
-        actorId: userId,
-        type: 'ACTION_REQUIRED',
+        userId: updated.accountingManagerId,
+        type: 'TASK',
         title: 'Petty cash request ready for disbursement',
         message: `${pcf.pcfNo} has been custodian-approved. Please review and disburse.`,
-        entity: 'PettyCash',
-        entityId: id,
-        actionUrl: '/dashboard/petty-cash',
+        linkUrl: '/dashboard/petty-cash',
       });
     } else if (newStatus === 'DISBURSED') {
       // Notify requester that it was approved and disbursed
       void notify({
-        recipientId: pcf.requestedById,
-        actorId: userId,
-        type: 'SUCCESS',
+        userId: pcf.requestedById,
+        type: 'SYSTEM',
         title: 'Petty cash request disbursed',
         message: `Your request ${pcf.pcfNo} has been approved and disbursed.`,
-        entity: 'PettyCash',
-        entityId: id,
-        actionUrl: '/dashboard/petty-cash',
+        linkUrl: '/dashboard/petty-cash',
       });
     }
 
@@ -202,14 +196,11 @@ export async function POST(
 
     // Notify requester
     void notify({
-      recipientId: pcf.requestedById,
-      actorId: userId,
-      type: 'SUCCESS',
+      userId: pcf.requestedById,
+      type: 'SYSTEM',
       title: 'Petty cash request disbursed',
       message: `Your request ${pcf.pcfNo} has been approved and disbursed.`,
-      entity: 'PettyCash',
-      entityId: id,
-      actionUrl: '/dashboard/petty-cash',
+      linkUrl: '/dashboard/petty-cash',
     });
 
     return NextResponse.json({ data: { status: updated.status } });
