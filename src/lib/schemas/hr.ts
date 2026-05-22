@@ -168,12 +168,18 @@ export const updateCompensationSchema = createCompensationSchema.omit({ contract
 
 export const workScheduleDaySchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
+  startTime: z.string().optional().nullable(),
+  endTime: z.string().optional().nullable(),
   breakStart: z.string().optional().nullable(),
   breakEnd: z.string().optional().nullable(),
   isWorkingDay: z.boolean().default(true),
-});
+  locationType: z.enum(["OFFICE", "WFH", "HYBRID"]).default("OFFICE"),
+  isFlexible: z.boolean().default(false),
+  requiredHours: z.number().int().min(1).max(24).optional().nullable(),
+}).refine(
+  (d) => d.isFlexible || (!!d.startTime && !!d.endTime),
+  { message: "Start time and end time are required for fixed schedules" },
+);
 
 export const createWorkScheduleSchema = z.object({
   name: z.string().min(1, "Schedule name is required"),
