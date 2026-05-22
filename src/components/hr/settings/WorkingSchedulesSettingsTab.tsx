@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Loader2, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Plus, Loader2, ChevronDown, ChevronUp, X, Building2, Home, Layers } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
@@ -10,13 +10,18 @@ import { useToast } from '@/context/ToastContext';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 
+type LocationType = 'OFFICE' | 'WFH' | 'HYBRID';
+
 interface ScheduleDay {
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   breakStart: string | null;
   breakEnd: string | null;
   isWorkingDay: boolean;
+  locationType: string;
+  isFlexible: boolean;
+  requiredHours: number | null;
 }
 
 interface WorkSchedule {
@@ -26,6 +31,19 @@ interface WorkSchedule {
   days: ScheduleDay[];
 }
 
+interface DayFormState {
+  dayOfWeek: number;
+  label: string;
+  enabled: boolean;
+  startTime: string;
+  endTime: string;
+  breakStart: string;
+  breakEnd: string;
+  locationType: LocationType;
+  isFlexible: boolean;
+  requiredHours: number;
+}
+
 const DAY_LABELS: Record<number, string> = {
   0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday',
   4: 'Thursday', 5: 'Friday', 6: 'Saturday',
@@ -33,19 +51,86 @@ const DAY_LABELS: Record<number, string> = {
 
 const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 0];
 
-const DEFAULT_DAYS = WEEK_DAYS.map((d) => ({
+const DEFAULT_DAY = (d: number): DayFormState => ({
   dayOfWeek: d,
-  label: DAY_LABELS[d],
+  label: DAY_LABELS[d] ?? String(d),
   enabled: d >= 1 && d <= 5,
   startTime: '08:00',
   endTime: '17:00',
   breakStart: '12:00',
   breakEnd: '13:00',
-}));
+  locationType: 'OFFICE',
+  isFlexible: false,
+  requiredHours: 8,
+});
+
+const DEFAULT_DAYS: DayFormState[] = WEEK_DAYS.map(DEFAULT_DAY);
+
+const LOCATION_OPTIONS: { value: LocationType; label: string; icon: React.ReactNode }[] = [
+  { value: 'OFFICE', label: 'Office', icon: <Building2 size={11} /> },
+  { value: 'WFH', label: 'WFH', icon: <Home size={11} /> },
+  { value: 'HYBRID', label: 'Hybrid', icon: <Layers size={11} /> },
+];
+
+const LOCATION_COLOR: Record<LocationType, string> = {
+  OFFICE: 'bg-blue-100 text-blue-700 border-blue-300',
+  WFH: 'bg-green-100 text-green-700 border-green-300',
+  HYBRID: 'bg-purple-100 text-purple-700 border-purple-300',
+};
+
+const TABLE_LOCATION_COLOR: Record<string, string> = {
+  Office: 'bg-blue-100 text-blue-700',
+  WFH: 'bg-green-100 text-green-700',
+  Hybrid: 'bg-purple-100 text-purple-700',
+  Mixed: 'bg-amber-100 text-amber-700',
+};
 
 const inputCls =
   'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500';
 const labelCls = 'block text-xs font-semibold text-muted-foreground mb-1.5';
+
+/* ─── Helpers ───────────────────────────────────────────────────── */
+
+function formatTime(t: string | null | undefined): string {
+  if (!t) return '—';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h ?? '0', 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}:${m ?? '00'} ${ampm}`;
+}
+
+function workingDaysLabel(days: ScheduleDay[]): string {
+  const working = days.filter((d) => d.isWorkingDay).map((d) => (DAY_LABELS[d.dayOfWeek] ?? '').slice(0, 3));
+  return working.length > 0 ? working.join(', ') : 'No working days';
+}
+
+function hoursDisplay(days: ScheduleDay[]): string {
+  const working = days.filter((d) => d.isWorkingDay);
+  if (working.length === 0) return '—';
+  const allFlex = working.every((d) => d.isFlexible);
+  const anyFlex = working.some((d) => d.isFlexible);
+  if (allFlex) {
+    const hrs = working[0]?.requiredHours;
+    return hrs != null ? `Flexible (${hrs}h)` : 'Flexible';
+  }
+  if (anyFlex) return 'Mixed';
+  const first = working[0];
+  return first ? `${formatTime(first.startTime)} – ${formatTime(first.endTime)}` : '—';
+}
+
+function locationDisplay(days: ScheduleDay[]): string {
+  const working = days.filter((d) => d.isWorkingDay);
+  const types = new Set(working.map((d) => d.locationType ?? 'OFFICE'));
+  if (types.size === 0) return '—';
+  if (types.size === 1) {
+    const t = [...types][0];
+    if (t === 'WFH') return 'WFH';
+    if (t === 'HYBRID') return 'Hybrid';
+    return 'Office';
+  }
+  return 'Mixed';
+}
 
 /* ─── Component ─────────────────────────────────────────────────── */
 
@@ -59,10 +144,9 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
   const [groupBy, setGroupBy] = useState('none');
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  // Add modal state
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newDays, setNewDays] = useState(DEFAULT_DAYS);
+  const [newDays, setNewDays] = useState<DayFormState[]>(DEFAULT_DAYS);
 
   /* ─── Fetch ─────────────────────────────────────────────────────── */
 
@@ -109,6 +193,14 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
     setIsAddOpen(true);
   };
 
+  const updateDay = (idx: number, patch: Partial<DayFormState>) => {
+    setNewDays((prev) => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx]!, ...patch };
+      return updated;
+    });
+  };
+
   const handleAdd = async () => {
     if (!newName.trim()) {
       error('Missing name', 'Please enter a schedule name.');
@@ -130,11 +222,14 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
           timezone: 'Asia/Manila',
           days: workingDays.map((d) => ({
             dayOfWeek: d.dayOfWeek,
-            startTime: d.startTime,
-            endTime: d.endTime,
-            breakStart: d.breakStart || null,
-            breakEnd: d.breakEnd || null,
+            startTime: d.isFlexible ? null : d.startTime,
+            endTime: d.isFlexible ? null : d.endTime,
+            breakStart: d.isFlexible ? null : (d.breakStart || null),
+            breakEnd: d.isFlexible ? null : (d.breakEnd || null),
             isWorkingDay: true,
+            locationType: d.locationType,
+            isFlexible: d.isFlexible,
+            requiredHours: d.isFlexible ? d.requiredHours : null,
           })),
         }),
       });
@@ -151,21 +246,6 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
     } finally {
       setSaving(false);
     }
-  };
-
-  /* ─── Helpers ───────────────────────────────────────────────────── */
-
-  const formatTime = (t: string) => {
-    const [h, m] = t.split(':');
-    const hour = parseInt(h, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const display = hour % 12 === 0 ? 12 : hour % 12;
-    return `${display}:${m} ${ampm}`;
-  };
-
-  const workingDaysLabel = (days: ScheduleDay[]) => {
-    const working = days.filter((d) => d.isWorkingDay).map((d) => DAY_LABELS[d.dayOfWeek].slice(0, 3));
-    return working.length > 0 ? working.join(', ') : 'No working days';
   };
 
   /* ─── Render ────────────────────────────────────────────────────── */
@@ -217,12 +297,13 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
                 <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider">Schedule Name</th>
                 <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider hidden sm:table-cell">Working Days</th>
                 <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider hidden md:table-cell">Hours</th>
+                <th className="text-left px-4 py-3 font-black uppercase text-xs tracking-wider hidden lg:table-cell">Location</th>
                 <th className="text-right px-4 py-3 font-black uppercase text-xs tracking-wider">Details</th>
               </tr>
             </thead>
             <tbody>
               {filteredSchedules.map((sched) => {
-                const workDay = sched.days.find((d) => d.isWorkingDay);
+                const locLabel = locationDisplay(sched.days);
                 return (
                   <React.Fragment key={sched.id}>
                     <tr className="border-t border-border/70 hover:bg-muted/20 transition-colors">
@@ -231,7 +312,16 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
                         {workingDaysLabel(sched.days)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">
-                        {workDay ? `${formatTime(workDay.startTime)} – ${formatTime(workDay.endTime)}` : '—'}
+                        {hoursDisplay(sched.days)}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {locLabel !== '—' ? (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${TABLE_LOCATION_COLOR[locLabel] ?? ''}`}>
+                            {locLabel}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -247,23 +337,38 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
                     {/* Expanded day details */}
                     {expandedId === sched.id && (
                       <tr className="border-t border-border/40 bg-muted/10">
-                        <td colSpan={4} className="px-4 py-3">
-                          <div className="space-y-1.5">
+                        <td colSpan={5} className="px-4 py-3">
+                          <div className="space-y-2">
                             {sched.days
                               .filter((d) => d.isWorkingDay)
-                              .map((d) => (
-                                <div key={d.dayOfWeek} className="flex items-center gap-4 text-xs">
-                                  <span className="w-24 font-semibold text-foreground">{DAY_LABELS[d.dayOfWeek]}</span>
-                                  <span className="text-muted-foreground">
-                                    {formatTime(d.startTime)} – {formatTime(d.endTime)}
-                                  </span>
-                                  {d.breakStart && d.breakEnd && (
-                                    <span className="text-muted-foreground/70">
-                                      Break: {formatTime(d.breakStart)} – {formatTime(d.breakEnd)}
+                              .map((d) => {
+                                const loc = (d.locationType ?? 'OFFICE') as LocationType;
+                                return (
+                                  <div key={d.dayOfWeek} className="flex items-center gap-3 text-xs flex-wrap">
+                                    <span className="w-24 font-semibold text-foreground shrink-0">{DAY_LABELS[d.dayOfWeek]}</span>
+                                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${LOCATION_COLOR[loc] ?? ''}`}>
+                                      {loc === 'WFH' ? <Home size={10} /> : loc === 'HYBRID' ? <Layers size={10} /> : <Building2 size={10} />}
+                                      {loc === 'WFH' ? 'WFH' : loc === 'HYBRID' ? 'Hybrid' : 'Office'}
                                     </span>
-                                  )}
-                                </div>
-                              ))}
+                                    {d.isFlexible ? (
+                                      <span className="text-muted-foreground">
+                                        Flexible — render <span className="font-semibold text-foreground">{d.requiredHours ?? '?'}h</span>
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <span className="text-muted-foreground">
+                                          {formatTime(d.startTime)} – {formatTime(d.endTime)}
+                                        </span>
+                                        {d.breakStart && d.breakEnd && (
+                                          <span className="text-muted-foreground/70">
+                                            Break: {formatTime(d.breakStart)} – {formatTime(d.breakEnd)}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             {sched.days.filter((d) => d.isWorkingDay).length === 0 && (
                               <p className="text-xs text-muted-foreground">No working days configured.</p>
                             )}
@@ -276,7 +381,7 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
               })}
               {filteredSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
                     {filterText ? 'No schedules match your search.' : 'No work schedules found. Add one to get started.'}
                   </td>
                 </tr>
@@ -307,43 +412,121 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weekly Schedule</p>
             {newDays.map((day, idx) => (
-              <div key={day.dayOfWeek} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                <div className="flex items-center gap-2 w-28 shrink-0">
+              <div key={day.dayOfWeek} className="rounded-lg border border-border p-3 space-y-2.5">
+                {/* Row 1: toggle + day name + location pills + mode toggle */}
+                <div className="flex items-center gap-3 flex-wrap">
                   <input
                     type="checkbox"
                     checked={day.enabled}
-                    onChange={(e) => {
-                      const updated = [...newDays];
-                      updated[idx] = { ...day, enabled: e.target.checked };
-                      setNewDays(updated);
-                    }}
-                    className="h-4 w-4 rounded border-border"
+                    onChange={(e) => updateDay(idx, { enabled: e.target.checked })}
+                    className="h-4 w-4 rounded border-border shrink-0"
                   />
-                  <span className={`text-xs font-medium ${day.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  <span className={`text-xs font-bold w-20 shrink-0 ${day.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
                     {day.label}
                   </span>
+
+                  {day.enabled && (
+                    <>
+                      {/* Location type pills */}
+                      <div className="flex items-center gap-1">
+                        {LOCATION_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => updateDay(idx, { locationType: opt.value })}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                              day.locationType === opt.value
+                                ? LOCATION_COLOR[opt.value]
+                                : 'border-border text-muted-foreground hover:border-rose-400 hover:text-foreground'
+                            }`}
+                          >
+                            {opt.icon} {opt.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Fixed / Flexible mode toggle */}
+                      <div className="flex items-center rounded-lg border border-border overflow-hidden ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => updateDay(idx, { isFlexible: false })}
+                          className={`px-3 py-1 text-xs font-medium transition-colors ${
+                            !day.isFlexible
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-background text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Fixed Time
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateDay(idx, { isFlexible: true })}
+                          className={`px-3 py-1 text-xs font-medium transition-colors ${
+                            day.isFlexible
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-background text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Flexible
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {!day.enabled && (
+                    <span className="text-xs text-muted-foreground italic">Day off</span>
+                  )}
                 </div>
+
+                {/* Row 2: time inputs or required hours */}
                 {day.enabled && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <input type="time" value={day.startTime}
-                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, startTime: e.target.value }; setNewDays(u); }}
-                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
-                    <span className="text-xs text-muted-foreground">to</span>
-                    <input type="time" value={day.endTime}
-                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, endTime: e.target.value }; setNewDays(u); }}
-                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
-                    <span className="text-xs text-muted-foreground ml-2">Break:</span>
-                    <input type="time" value={day.breakStart ?? ''}
-                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, breakStart: e.target.value }; setNewDays(u); }}
-                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
-                    <span className="text-xs text-muted-foreground">–</span>
-                    <input type="time" value={day.breakEnd ?? ''}
-                      onChange={(e) => { const u = [...newDays]; u[idx] = { ...day, breakEnd: e.target.value }; setNewDays(u); }}
-                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                  <div className="pl-7 flex items-center gap-2 flex-wrap">
+                    {day.isFlexible ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">Required hours:</span>
+                        <select
+                          value={day.requiredHours}
+                          onChange={(e) => updateDay(idx, { requiredHours: parseInt(e.target.value, 10) })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        >
+                          {[4, 5, 6, 7, 8, 9].map((h) => (
+                            <option key={h} value={h}>{h} hours</option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-muted-foreground italic">(no fixed clock-in/out)</span>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="time"
+                          value={day.startTime}
+                          onChange={(e) => updateDay(idx, { startTime: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                        <span className="text-xs text-muted-foreground">to</span>
+                        <input
+                          type="time"
+                          value={day.endTime}
+                          onChange={(e) => updateDay(idx, { endTime: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                        <span className="text-xs text-muted-foreground ml-2">Break:</span>
+                        <input
+                          type="time"
+                          value={day.breakStart}
+                          onChange={(e) => updateDay(idx, { breakStart: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                        <span className="text-xs text-muted-foreground">–</span>
+                        <input
+                          type="time"
+                          value={day.breakEnd}
+                          onChange={(e) => updateDay(idx, { breakEnd: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                      </>
+                    )}
                   </div>
-                )}
-                {!day.enabled && (
-                  <span className="text-xs text-muted-foreground italic">Day off</span>
                 )}
               </div>
             ))}

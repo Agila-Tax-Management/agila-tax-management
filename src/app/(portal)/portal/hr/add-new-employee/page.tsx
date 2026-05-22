@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { ArrowLeft, Check, ChevronRight, Loader2, SkipForward, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Building2, Check, ChevronRight, Home, Layers, Loader2, SkipForward, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import { useRouter } from 'next/navigation';
@@ -26,13 +26,18 @@ interface EmployeeLevelOption {
   position: number;
 }
 
+type LocationType = 'OFFICE' | 'WFH' | 'HYBRID';
+
 interface WorkScheduleDay {
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   breakStart: string | null;
   breakEnd: string | null;
   isWorkingDay: boolean;
+  locationType: string;
+  isFlexible: boolean;
+  requiredHours: number | null;
 }
 
 interface WorkScheduleOption {
@@ -110,19 +115,24 @@ interface Step3CompensationData {
   allowanceOnFirstCutoff: boolean;
 }
 
+interface Step4DayForm {
+  dayOfWeek: number;
+  label: string;
+  enabled: boolean;
+  startTime: string;
+  endTime: string;
+  breakStart: string;
+  breakEnd: string;
+  locationType: LocationType;
+  isFlexible: boolean;
+  requiredHours: number;
+}
+
 interface Step4Data {
   scheduleMode: 'existing' | 'new';
   existingScheduleId: string;
   newScheduleName: string;
-  newScheduleDays: {
-    dayOfWeek: number;
-    label: string;
-    enabled: boolean;
-    startTime: string;
-    endTime: string;
-    breakStart: string;
-    breakEnd: string;
-  }[];
+  newScheduleDays: Step4DayForm[];
 }
 
 /* ─── Constants ─────────────────────────────────────────────────── */
@@ -137,6 +147,20 @@ const WEEK_DAYS = [
   { dayOfWeek: 0, label: 'Sunday' },
 ];
 
+const LOCATION_OPTIONS_S4: { value: LocationType; label: string; icon: React.ReactNode }[] = [
+  { value: 'OFFICE', label: 'Office', icon: <Building2 size={11} /> },
+  { value: 'WFH', label: 'WFH', icon: <Home size={11} /> },
+  { value: 'HYBRID', label: 'Hybrid', icon: <Layers size={11} /> },
+];
+
+const LOCATION_COLOR_S4: Record<LocationType, string> = {
+  OFFICE: 'bg-blue-100 text-blue-700 border-blue-300',
+  WFH: 'bg-green-100 text-green-700 border-green-300',
+  HYBRID: 'bg-purple-100 text-purple-700 border-purple-300',
+};
+
+const DAY_LABELS_S4: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+
 const DEFAULT_STEP4: Step4Data = {
   scheduleMode: 'new',
   existingScheduleId: '',
@@ -148,6 +172,9 @@ const DEFAULT_STEP4: Step4Data = {
     endTime: '17:00',
     breakStart: '12:00',
     breakEnd: '13:00',
+    locationType: 'OFFICE' as LocationType,
+    isFlexible: false,
+    requiredHours: 8,
   })),
 };
 
@@ -526,11 +553,14 @@ export default function AddNewEmployeePage(): React.ReactNode {
             timezone: 'Asia/Manila',
             days: workingDays.map((d) => ({
               dayOfWeek: d.dayOfWeek,
-              startTime: d.startTime,
-              endTime: d.endTime,
-              breakStart: d.breakStart || null,
-              breakEnd: d.breakEnd || null,
+              startTime: d.isFlexible ? null : d.startTime,
+              endTime: d.isFlexible ? null : d.endTime,
+              breakStart: d.isFlexible ? null : (d.breakStart || null),
+              breakEnd: d.isFlexible ? null : (d.breakEnd || null),
               isWorkingDay: true,
+              locationType: d.locationType,
+              isFlexible: d.isFlexible,
+              requiredHours: d.isFlexible ? d.requiredHours : null,
             })),
           }),
         });
@@ -1213,7 +1243,6 @@ export default function AddNewEmployeePage(): React.ReactNode {
                 </div>
 
                 {s4.existingScheduleId && (() => {
-                  const DAY_LABELS: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
                   const selectedSchedule = schedules.find((s) => String(s.id) === s4.existingScheduleId);
                   const workingDays = selectedSchedule?.days.filter((d) => d.isWorkingDay) ?? [];
                   if (!selectedSchedule) return null;
@@ -1229,20 +1258,36 @@ export default function AddNewEmployeePage(): React.ReactNode {
                           <thead>
                             <tr className="border-b border-border">
                               <th className="text-left px-4 py-2 font-semibold text-muted-foreground">Day</th>
+                              <th className="text-left px-4 py-2 font-semibold text-muted-foreground">Location</th>
                               <th className="text-left px-4 py-2 font-semibold text-muted-foreground">Hours</th>
-                              <th className="text-left px-4 py-2 font-semibold text-muted-foreground hidden sm:table-cell">Break</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {workingDays.map((d) => (
-                              <tr key={d.dayOfWeek} className="border-b border-border/60 last:border-0">
-                                <td className="px-4 py-2 font-medium text-foreground">{DAY_LABELS[d.dayOfWeek] ?? `Day ${d.dayOfWeek}`}</td>
-                                <td className="px-4 py-2 text-muted-foreground">{d.startTime} – {d.endTime}</td>
-                                <td className="px-4 py-2 text-muted-foreground hidden sm:table-cell">
-                                  {d.breakStart && d.breakEnd ? `${d.breakStart} – ${d.breakEnd}` : '—'}
-                                </td>
-                              </tr>
-                            ))}
+                            {workingDays.map((d) => {
+                              const loc = (d.locationType ?? 'OFFICE') as LocationType;
+                              const locColorMap: Record<string, string> = {
+                                OFFICE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+                                WFH: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+                                HYBRID: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+                              };
+                              return (
+                                <tr key={d.dayOfWeek} className="border-b border-border/60 last:border-0">
+                                  <td className="px-4 py-2 font-medium text-foreground">{DAY_LABELS_S4[d.dayOfWeek] ?? `Day ${d.dayOfWeek}`}</td>
+                                  <td className="px-4 py-2">
+                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${locColorMap[loc] ?? ''}`}>
+                                      {loc === 'WFH' ? <Home size={10} /> : loc === 'HYBRID' ? <Layers size={10} /> : <Building2 size={10} />}
+                                      {loc === 'WFH' ? 'WFH' : loc === 'HYBRID' ? 'Hybrid' : 'Office'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 text-muted-foreground">
+                                    {d.isFlexible
+                                      ? <span>Flexible — <span className="font-semibold text-foreground">{d.requiredHours ?? '?'}h</span></span>
+                                      : `${d.startTime ?? '—'} – ${d.endTime ?? '—'}`
+                                    }
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       )}
@@ -1264,8 +1309,9 @@ export default function AddNewEmployeePage(): React.ReactNode {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground">Weekly Schedule</p>
                   {s4.newScheduleDays.map((day, idx) => (
-                    <div key={day.dayOfWeek} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                      <div className="flex items-center gap-2 w-28 shrink-0">
+                    <div key={day.dayOfWeek} className="rounded-lg border border-border p-3 space-y-2.5">
+                      {/* Row 1: checkbox + day name + location pills + mode toggle */}
+                      <div className="flex items-center gap-3 flex-wrap">
                         <input
                           type="checkbox"
                           checked={day.enabled}
@@ -1274,45 +1320,133 @@ export default function AddNewEmployeePage(): React.ReactNode {
                             updated[idx] = { ...day, enabled: e.target.checked };
                             setS4((p) => ({ ...p, newScheduleDays: updated }));
                           }}
-                          className="h-4 w-4 rounded border-border"
+                          className="h-4 w-4 rounded border-border shrink-0"
                         />
-                        <span className={`text-xs font-medium ${day.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                        <span className={`text-xs font-bold w-20 shrink-0 ${day.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
                           {day.label}
                         </span>
+
+                        {day.enabled && (
+                          <>
+                            {/* Location type pills */}
+                            <div className="flex items-center gap-1">
+                              {LOCATION_OPTIONS_S4.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...s4.newScheduleDays];
+                                    updated[idx] = { ...day, locationType: opt.value };
+                                    setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                  }}
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                                    day.locationType === opt.value
+                                      ? LOCATION_COLOR_S4[opt.value]
+                                      : 'border-border text-muted-foreground hover:border-blue-400 hover:text-foreground'
+                                  }`}
+                                >
+                                  {opt.icon} {opt.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Fixed / Flexible mode toggle */}
+                            <div className="flex items-center rounded-lg border border-border overflow-hidden ml-auto">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, isFlexible: false };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className={`px-3 py-1 text-xs font-medium transition-colors ${
+                                  !day.isFlexible
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-background text-muted-foreground hover:text-foreground'
+                                }`}
+                              >
+                                Fixed Time
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, isFlexible: true };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className={`px-3 py-1 text-xs font-medium transition-colors ${
+                                  day.isFlexible
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-background text-muted-foreground hover:text-foreground'
+                                }`}
+                              >
+                                Flexible
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {!day.enabled && (
+                          <span className="text-xs text-muted-foreground italic">Day off</span>
+                        )}
                       </div>
+
+                      {/* Row 2: time inputs or required hours */}
                       {day.enabled && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <input type="time" value={day.startTime}
-                            onChange={(e) => {
-                              const updated = [...s4.newScheduleDays];
-                              updated[idx] = { ...day, startTime: e.target.value };
-                              setS4((p) => ({ ...p, newScheduleDays: updated }));
-                            }}
-                            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
-                          <span className="text-xs text-muted-foreground">to</span>
-                          <input type="time" value={day.endTime}
-                            onChange={(e) => {
-                              const updated = [...s4.newScheduleDays];
-                              updated[idx] = { ...day, endTime: e.target.value };
-                              setS4((p) => ({ ...p, newScheduleDays: updated }));
-                            }}
-                            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
-                          <span className="text-xs text-muted-foreground ml-2">Break:</span>
-                          <input type="time" value={day.breakStart}
-                            onChange={(e) => {
-                              const updated = [...s4.newScheduleDays];
-                              updated[idx] = { ...day, breakStart: e.target.value };
-                              setS4((p) => ({ ...p, newScheduleDays: updated }));
-                            }}
-                            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
-                          <span className="text-xs text-muted-foreground">–</span>
-                          <input type="time" value={day.breakEnd}
-                            onChange={(e) => {
-                              const updated = [...s4.newScheduleDays];
-                              updated[idx] = { ...day, breakEnd: e.target.value };
-                              setS4((p) => ({ ...p, newScheduleDays: updated }));
-                            }}
-                            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                        <div className="pl-7 flex items-center gap-2 flex-wrap">
+                          {day.isFlexible ? (
+                            <>
+                              <span className="text-xs text-muted-foreground">Required hours:</span>
+                              <select
+                                value={day.requiredHours}
+                                onChange={(e) => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, requiredHours: parseInt(e.target.value, 10) };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                              >
+                                {[4, 5, 6, 7, 8, 9].map((h) => (
+                                  <option key={h} value={h}>{h} hours</option>
+                                ))}
+                              </select>
+                              <span className="text-xs text-muted-foreground italic">(no fixed clock-in/out)</span>
+                            </>
+                          ) : (
+                            <>
+                              <input type="time" value={day.startTime}
+                                onChange={(e) => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, startTime: e.target.value };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                              <span className="text-xs text-muted-foreground">to</span>
+                              <input type="time" value={day.endTime}
+                                onChange={(e) => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, endTime: e.target.value };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                              <span className="text-xs text-muted-foreground ml-2">Break:</span>
+                              <input type="time" value={day.breakStart}
+                                onChange={(e) => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, breakStart: e.target.value };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                              <span className="text-xs text-muted-foreground">–</span>
+                              <input type="time" value={day.breakEnd}
+                                onChange={(e) => {
+                                  const updated = [...s4.newScheduleDays];
+                                  updated[idx] = { ...day, breakEnd: e.target.value };
+                                  setS4((p) => ({ ...p, newScheduleDays: updated }));
+                                }}
+                                className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" />
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

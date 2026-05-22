@@ -60,11 +60,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       days: {
         create: parsed.data.days.map((d) => ({
           dayOfWeek: d.dayOfWeek,
-          startTime: d.startTime,
-          endTime: d.endTime,
+          startTime: d.startTime ?? null,
+          endTime: d.endTime ?? null,
           breakStart: d.breakStart ?? null,
           breakEnd: d.breakEnd ?? null,
           isWorkingDay: d.isWorkingDay,
+          locationType: d.locationType ?? "OFFICE",
+          isFlexible: d.isFlexible ?? false,
+          requiredHours: d.requiredHours ?? null,
         })),
       },
     },
