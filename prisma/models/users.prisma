@@ -118,6 +118,9 @@ model User {
   pettyCashManagerApprovals       PettyCash[]             @relation("PettyCashAccountingManager")
   clientFundTransactionsProcessed ClientFundTransaction[] @relation("ClientFundProcessor")
 
+  // ─── Announcements ───
+  announcements Announcement[] @relation("AnnouncementAuthor")
+
   @@index([role])
   @@index([active])
   @@unique([email])
