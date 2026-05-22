@@ -640,8 +640,8 @@ export function TsaModal({
 
               {/* Warning if no default approver configured */}
               {currentTsa.status === 'PENDING_APPROVAL' && !currentTsa.assignedApproverId && (
-                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                <div className="p-3 rounded-lg bg-amber-50  border-amber-200">
+                  <p className="text-xs text-amber-800 ">
                     ⚠️ No default TSA approver configured. Any admin can approve.
                   </p>
                 </div>
@@ -649,8 +649,8 @@ export function TsaModal({
 
               {/* Show assigned approver when pending */}
               {currentTsa.status === 'PENDING_APPROVAL' && currentTsa.assignedApprover && (
-                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                <div className="p-3 rounded-lg bg-blue-50  border-blue-200">
+                  <p className="text-xs font-semibold text-blue-900 mb-1">
                     Assigned Approver
                   </p>
                   <div className="flex items-center gap-2">
@@ -663,11 +663,11 @@ export function TsaModal({
                         className="rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-blue-300 dark:bg-blue-700 flex items-center justify-center text-xs font-bold text-blue-900 dark:text-blue-100">
+                      <div className="w-6 h-6 rounded-full bg-blue-300  flex items-center justify-center text-xs font-bold text-blue-900 ">
                         {currentTsa.assignedApprover.name.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="text-sm text-blue-900 dark:text-blue-200 font-medium">
+                    <span className="text-sm text-blue-900  font-medium">
                       {currentTsa.assignedApprover.name}
                     </span>
                   </div>
@@ -676,8 +676,8 @@ export function TsaModal({
 
               {/* Show actual approver when approved (with override badge if needed) */}
               {currentTsa.status !== 'DRAFT' && currentTsa.actualApprover && (
-                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                  <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300 mb-1">
+                <div className="p-3 rounded-lg bg-emerald-50  border-emerald-200">
+                  <p className="text-xs font-semibold text-emerald-900 mb-1">
                     Approved By
                   </p>
                   <div className="flex items-center gap-2">
@@ -690,21 +690,21 @@ export function TsaModal({
                         className="rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-emerald-300 dark:bg-emerald-700 flex items-center justify-center text-xs font-bold text-emerald-900 dark:text-emerald-100">
+                      <div className="w-6 h-6 rounded-full bg-emerald-300  flex items-center justify-center text-xs font-bold text-emerald-900 ">
                         {currentTsa.actualApprover.name.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="text-sm text-emerald-900 dark:text-emerald-200 font-medium">
+                    <span className="text-sm text-emerald-900  font-medium">
                       {currentTsa.actualApprover.name}
                     </span>
                     {currentTsa.assignedApproverId && currentTsa.actualApproverId !== currentTsa.assignedApproverId && (
-                      <span className="text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">
+                      <span className="text-xs bg-amber-100  text-amber-800  px-2 py-0.5 rounded-full font-semibold">
                         Override
                       </span>
                     )}
                   </div>
                   {currentTsa.approvedAt && (
-                    <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                    <p className="text-xs text-emerald-700  mt-1">
                       {new Date(currentTsa.approvedAt).toLocaleString('en-US', {
                         month: 'short',
                         day: 'numeric',
