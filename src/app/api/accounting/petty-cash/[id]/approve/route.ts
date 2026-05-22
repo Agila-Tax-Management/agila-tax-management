@@ -76,7 +76,11 @@ export async function POST(
       requestedById: true,
       totalRequestedAmount: true,
       totalClientFundUsed: true,
-      clientId: true,
+      // Fetch CLIENT_FUND items to know which clients to debit (one per unique clientId)
+      items: {
+        where: { category: 'CLIENT_FUND' },
+        select: { clientId: true, amount: true },
+      },
     },
   });
 
@@ -88,8 +92,18 @@ export async function POST(
   const role = session.user.role as string;
   const isSuperAdmin = role === 'SUPER_ADMIN';
   const total = Number(pcf.totalRequestedAmount);
-  const clientFundTotal = Number(pcf.totalClientFundUsed);
   const now = new Date();
+
+  // Build per-client debit map from items (supports multiple clients in one PCF)
+  const clientDebitMap = new Map<number, number>();
+  for (const item of pcf.items) {
+    if (item.clientId != null) {
+      clientDebitMap.set(
+        item.clientId,
+        (clientDebitMap.get(item.clientId) ?? 0) + Number(item.amount),
+      );
+    }
+  }
 
   // ── Custodian approval stage (PENDING → APPROVED or DISBURSED) ──────────────
   if (pcf.status === 'PENDING') {
@@ -115,8 +129,10 @@ export async function POST(
         select: { id: true, status: true, pcfNo: true, accountingManagerId: true },
       });
 
-      if (newStatus === 'DISBURSED' && clientFundTotal > 0) {
-        await createClientFundDebit(tx, id, pcf.clientId, clientFundTotal, userId);
+      if (newStatus === 'DISBURSED' && clientDebitMap.size > 0) {
+        for (const [cId, amount] of clientDebitMap) {
+          await createClientFundDebit(tx, id, cId, amount, userId);
+        }
       }
 
       return result;
@@ -178,8 +194,10 @@ export async function POST(
         select: { id: true, status: true, pcfNo: true },
       });
 
-      if (clientFundTotal > 0) {
-        await createClientFundDebit(tx, id, pcf.clientId, clientFundTotal, userId);
+      if (clientDebitMap.size > 0) {
+        for (const [cId, amount] of clientDebitMap) {
+          await createClientFundDebit(tx, id, cId, amount, userId);
+        }
       }
 
       return result;

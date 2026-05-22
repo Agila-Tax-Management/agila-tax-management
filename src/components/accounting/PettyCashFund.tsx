@@ -1,7 +1,7 @@
 ﻿// src/components/accounting/PettyCashFund.tsx
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search,
   Eye,
@@ -11,6 +11,8 @@ import {
   Ban,
   Trash2,
   Loader2,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { PettyCashViewModal } from './PettyCashViewModal';
@@ -31,6 +33,9 @@ export type PettyCashItemCategory = 'EMPLOYEE_EXPENSE' | 'CLIENT_FUND';
 export interface PettyCashItemRecord {
   id: number;
   category: PettyCashItemCategory;
+  clientId: number | null;
+  client: { id: number; businessName: string; clientNo: string | null } | null;
+  clientFundBalanceSnapshot: number | null;
   description: string;
   amount: number;
   remarks: string | null;
@@ -51,8 +56,8 @@ export interface PettyCashRecord {
   managerNotes: string | null;
   custodianApprovedAt: string | null;
   accountingManagerApprovedAt: string | null;
-  clientId: number;
-  client: { id: number; businessName: string; clientNo: string | null };
+  clientId: number | null;
+  client: { id: number; businessName: string; clientNo: string | null } | null;
   requestedById: string;
   requestedBy: { id: string; name: string };
   custodianId: string | null;
@@ -78,6 +83,78 @@ const STATUS_STYLES: Record<string, string> = {
 
 // â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// ── Client groups ────────────────────────────────────────────────────────────
+
+interface ClientGroup {
+  key: string;
+  label: string;
+  clientNo: string | null;
+  records: PettyCashRecord[];
+  totalClientFund: number;
+}
+
+function buildClientGroups(records: PettyCashRecord[]): ClientGroup[] {
+  const groupMap = new Map<string, ClientGroup>();
+
+  for (const record of records) {
+    const clientAmounts = new Map<string, { businessName: string; clientNo: string | null; amount: number }>();
+
+    if (record.client) {
+      const key = String(record.client.id);
+      clientAmounts.set(key, {
+        businessName: record.client.businessName,
+        clientNo: record.client.clientNo,
+        amount: record.totalClientFundUsed,
+      });
+    }
+
+    for (const item of record.items) {
+      if (item.category === 'CLIENT_FUND' && item.client) {
+        const key = String(item.client.id);
+        const existing = clientAmounts.get(key);
+        clientAmounts.set(key, {
+          businessName: item.client.businessName,
+          clientNo: item.client.clientNo,
+          amount: (existing?.amount ?? 0) + item.amount,
+        });
+      }
+    }
+
+    if (clientAmounts.size === 0) {
+      if (!groupMap.has('emp')) {
+        groupMap.set('emp', { key: 'emp', label: 'Employee Expenses', clientNo: null, records: [], totalClientFund: 0 });
+      }
+      groupMap.get('emp')!.records.push(record);
+    } else {
+      for (const [key, info] of clientAmounts) {
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { key, label: info.businessName, clientNo: info.clientNo, records: [], totalClientFund: 0 });
+        }
+        const g = groupMap.get(key)!;
+        g.records.push(record);
+        g.totalClientFund += info.amount;
+      }
+    }
+  }
+
+  return Array.from(groupMap.values()).sort((a, b) => {
+    if (a.key === 'emp') return 1;
+    if (b.key === 'emp') return -1;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+function getClientAmountForRecord(record: PettyCashRecord, groupKey: string): number {
+  if (groupKey === 'emp') return record.totalEmployeeExpenses;
+  const clientId = parseInt(groupKey, 10);
+  if (record.client?.id === clientId) return record.totalClientFundUsed;
+  return record.items
+    .filter((it) => it.category === 'CLIENT_FUND' && it.clientId === clientId)
+    .reduce((sum, it) => sum + it.amount, 0);
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function PettyCashFund(): React.ReactNode {
   const { success, error: toastError } = useToast();
 
@@ -90,6 +167,11 @@ export function PettyCashFund(): React.ReactNode {
   const [rejectState, setRejectState]     = useState<{ id: string; reason: string } | null>(null);
   const [voidConfirmId, setVoidConfirmId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction]             = useState<{ type: 'approve' | 'disburse' | 'void' | 'delete'; records: PettyCashRecord[] } | null>(null);
+  const [bulkStep, setBulkStep]                 = useState(0);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkConfirmed, setBulkConfirmed]       = useState(false);
 
   // â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -116,12 +198,42 @@ export function PettyCashFund(): React.ReactNode {
 
   // â”€â”€ Filtered records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  const filtered = records.filter(
-    (r) =>
-      r.pcfNo.toLowerCase().includes(search.toLowerCase()) ||
-      r.client.businessName.toLowerCase().includes(search.toLowerCase()) ||
-      r.requestedBy.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = records.filter((r) => {
+    const q = search.toLowerCase();
+    if (!q) return true;
+    return (
+      r.pcfNo.toLowerCase().includes(q) ||
+      r.purpose.toLowerCase().includes(q) ||
+      (r.client?.businessName.toLowerCase().includes(q) ?? false) ||
+      r.items.some((it) => it.category === 'CLIENT_FUND' && it.client?.businessName.toLowerCase().includes(q)) ||
+      r.requestedBy.name.toLowerCase().includes(q)
+    );
+  });
+
+  const clientGroups   = useMemo(() => buildClientGroups(filtered), [filtered]);
+  const pendingRecords   = useMemo(() => records.filter(r => r.status === 'PENDING'),                                            [records]);
+  const approvedRecords  = useMemo(() => records.filter(r => r.status === 'APPROVED'),                                           [records]);
+  const voidableRecords  = useMemo(() => records.filter(r => ['DRAFT', 'PENDING', 'APPROVED'].includes(r.status)),               [records]);
+  const deletableRecords = useMemo(() => records.filter(r => r.status === 'VOID'),                                               [records]);
+
+  const bulkEmployeeGroups = useMemo(() => {
+    if (!bulkAction) return [];
+    const map = new Map<string, { id: string; name: string; records: PettyCashRecord[] }>();
+    for (const r of bulkAction.records) {
+      const key = r.requestedBy.id;
+      if (!map.has(key)) map.set(key, { id: key, name: r.requestedBy.name, records: [] });
+      map.get(key)!.records.push(r);
+    }
+    return Array.from(map.values());
+  }, [bulkAction]);
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   // â”€â”€ Action handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -196,14 +308,98 @@ export function PettyCashFund(): React.ReactNode {
     }
   };
 
+  const handleBulkStep = async () => {
+    if (!bulkAction) return;
+    const currentGroup = bulkEmployeeGroups[bulkStep];
+    if (!currentGroup) return;
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    let failCount    = 0;
+    for (const record of currentGroup.records) {
+      try {
+        let res: Response;
+        if (bulkAction.type === 'void') {
+          res = await fetch(`/api/accounting/petty-cash/${record.id}/void`, { method: 'POST' });
+        } else if (bulkAction.type === 'delete') {
+          res = await fetch(`/api/accounting/petty-cash/${record.id}`, { method: 'DELETE' });
+        } else {
+          res = await fetch(`/api/accounting/petty-cash/${record.id}/approve`, { method: 'POST' });
+        }
+        if (res.ok) successCount++; else failCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    setIsBulkProcessing(false);
+    setBulkConfirmed(false);
+    const isLast = bulkStep >= bulkEmployeeGroups.length - 1;
+    if (isLast) {
+      const actionLabel =
+        bulkAction.type === 'approve'  ? 'approved'  :
+        bulkAction.type === 'disburse' ? 'disbursed' :
+        bulkAction.type === 'void'     ? 'voided'    : 'deleted';
+      setBulkAction(null);
+      setBulkStep(0);
+      if (failCount === 0) {
+        success('Done', `All requests ${actionLabel} successfully.`);
+      } else {
+        toastError('Partial', `${successCount} succeeded, ${failCount} failed.`);
+      }
+    } else {
+      if (failCount > 0) {
+        toastError('Partial', `${successCount} succeeded, ${failCount} failed for ${currentGroup.name}.`);
+      }
+      setBulkStep(prev => prev + 1);
+    }
+    void loadRecords();
+  };
+
   // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="space-y-6">
 
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-bold text-foreground">Petty Cash Fund</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          {pendingRecords.length > 0 && (
+            <button
+              onClick={() => { setBulkAction({ type: 'approve', records: pendingRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-green-600 text-white hover:bg-green-700 transition"
+            >
+              <CheckCircle2 size={15} />
+              Approve All ({pendingRecords.length})
+            </button>
+          )}
+          {approvedRecords.length > 0 && (
+            <button
+              onClick={() => { setBulkAction({ type: 'disburse', records: approvedRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+            >
+              <Banknote size={15} />
+              Disburse All ({approvedRecords.length})
+            </button>
+          )}
+          {voidableRecords.length > 0 && (
+            <button
+              onClick={() => { setBulkAction({ type: 'void', records: voidableRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition"
+            >
+              <Ban size={15} />
+              Void All ({voidableRecords.length})
+            </button>
+          )}
+          {deletableRecords.length > 0 && (
+            <button
+              onClick={() => { setBulkAction({ type: 'delete', records: deletableRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-red-600 text-white hover:bg-red-700 transition"
+            >
+              <Trash2 size={15} />
+              Delete All ({deletableRecords.length})
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search bar */}
@@ -226,8 +422,7 @@ export function PettyCashFund(): React.ReactNode {
               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">PCF No.</th>
               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Requestor</th>
-              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Client</th>
-              <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Request Amount</th>
+              <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Amount</th>
               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Action</th>
             </tr>
@@ -235,40 +430,72 @@ export function PettyCashFund(): React.ReactNode {
           <tbody className="divide-y divide-border">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center">
+                <td colSpan={6} className="px-4 py-10 text-center">
                   <Loader2 size={20} className="animate-spin mx-auto text-muted-foreground" />
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                   No petty cash records found.
                 </td>
               </tr>
             ) : (
-              filtered.map((record) => (
-                <tr key={record.id} className="bg-card hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{record.pcfNo}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                    {new Date(record.date).toLocaleDateString('en-PH', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-foreground">{record.requestedBy.name}</td>
-                  <td className="px-4 py-3 text-foreground">{record.client.businessName}</td>
-                  <td className="px-4 py-3 text-right font-medium text-foreground whitespace-nowrap">
-                    ₱{record.totalRequestedAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[record.status]}`}
+              clientGroups.map((group) => {
+                const collapsed = collapsedGroups.has(group.key);
+                return (
+                  <React.Fragment key={group.key}>
+                    {/* Group header row */}
+                    <tr
+                      onClick={() => toggleGroup(group.key)}
+                      className="bg-muted/40 hover:bg-muted/60 cursor-pointer select-none border-t border-border"
                     >
-                      {record.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
+                      <td colSpan={6} className="px-4 py-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {collapsed
+                              ? <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+                              : <ChevronDown  size={14} className="text-muted-foreground shrink-0" />
+                            }
+                            <span className="font-semibold text-foreground text-xs">{group.label}</span>
+                            {group.clientNo && (
+                              <span className="text-xs text-muted-foreground font-mono">{group.clientNo}</span>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {group.records.length} {group.records.length === 1 ? 'request' : 'requests'}
+                            </span>
+                          </div>
+                          {group.key !== 'emp' && (
+                            <span className="text-xs font-semibold text-foreground">
+                              ₱{group.totalClientFund.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Data rows */}
+                    {!collapsed && group.records.map((record) => (
+                      <tr key={record.id} className="bg-card hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3 font-medium text-foreground">{record.pcfNo}</td>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                          {new Date(record.date).toLocaleDateString('en-PH', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </td>
+                        <td className="px-4 py-3 text-foreground">{record.requestedBy.name}</td>
+                        <td className="px-4 py-3 text-right font-medium text-foreground whitespace-nowrap">
+                          ₱{getClientAmountForRecord(record, group.key).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[record.status]}`}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
 
                     {/* â”€â”€ Reject confirmation â”€â”€ */}
                     {rejectState?.id === record.id ? (
@@ -413,9 +640,12 @@ export function PettyCashFund(): React.ReactNode {
                         )}
                       </div>
                     )}
-                  </td>
-                </tr>
-              ))
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -425,6 +655,188 @@ export function PettyCashFund(): React.ReactNode {
       {viewRecord && (
         <PettyCashViewModal record={viewRecord} onClose={() => setViewRecord(null)} />
       )}
+
+      {/* Bulk action confirmation modal */}
+      {bulkAction && (() => {
+        const currentGroup = bulkEmployeeGroups[bulkStep];
+        if (!currentGroup) return null;
+        const totalSteps  = bulkEmployeeGroups.length;
+        const isLast      = bulkStep >= totalSteps - 1;
+        const groupTotal  = currentGroup.records.reduce((s, r) => s + r.totalRequestedAmount, 0);
+        const titleMap = {
+          approve:  'Approve All Pending Requests',
+          disburse: 'Disburse All Approved Requests',
+          void:     'Void All Requests',
+          delete:   'Delete All Voided Records',
+        } as const;
+        const actionNounMap = {
+          approve:  'approval',
+          disburse: 'disbursement',
+          void:     'void action',
+          delete:   'deletion',
+        } as const;
+        const btnLabelMap = {
+          approve:  'Approve',
+          disburse: 'Disburse',
+          void:     'Void',
+          delete:   'Delete',
+        } as const;
+        const btnColorMap = {
+          approve:  'bg-green-600 hover:bg-green-700',
+          disburse: 'bg-blue-600  hover:bg-blue-700',
+          void:     'bg-amber-500 hover:bg-amber-600',
+          delete:   'bg-red-600   hover:bg-red-700',
+        } as const;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-border">
+
+              {/* Header */}
+              <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">{titleMap[bulkAction.type]}</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Reviewing:{' '}
+                      <span className="font-medium text-foreground">{currentGroup.name}</span>
+                      {' — '}
+                      {currentGroup.records.length}{' '}
+                      {currentGroup.records.length === 1 ? 'request' : 'requests'}
+                    </p>
+                  </div>
+                  {totalSteps > 1 && (
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full whitespace-nowrap">
+                      {bulkStep + 1} / {totalSteps}
+                    </span>
+                  )}
+                </div>
+                {/* Step progress dots */}
+                {totalSteps > 1 && (
+                  <div className="flex items-center gap-1.5 mt-3">
+                    {bulkEmployeeGroups.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1.5 rounded-full transition-all ${
+                          i < bulkStep
+                            ? 'w-4 bg-green-500'
+                            : i === bulkStep
+                              ? 'w-6 bg-blue-500'
+                              : 'w-4 bg-muted-foreground/30'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Records - one card per request, replicating RequestFundModal item layout */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+                {currentGroup.records.map(r => (
+                  <div key={r.id}>
+                    {/* Request sub-header */}
+                    <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-foreground">{r.pcfNo}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(r.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mb-2 text-sm">
+                      <span className="font-semibold text-foreground">Purpose: </span>
+                      <span className="text-foreground">{r.purpose}</span>
+                    </div>
+                    {/* Items table */}
+                    <div className="border border-border rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground w-[22%]">Category</th>
+                            <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground w-[22%]">Client</th>
+                            <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">Description</th>
+                            <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground w-[18%]">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {r.items.map(item => (
+                            <tr key={item.id} className="bg-card">
+                              <td className="px-3 py-2 text-foreground">
+                                {item.category === 'EMPLOYEE_EXPENSE' ? 'Employee Expense' : 'Client Fund'}
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {item.client?.businessName ?? <span className="text-muted-foreground/50">-</span>}
+                              </td>
+                              <td className="px-3 py-2 text-foreground">{item.description}</td>
+                              <td className="px-3 py-2 text-right text-foreground whitespace-nowrap">
+                                {'₱'}{item.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-muted/40 border-t-2 border-border">
+                            <td colSpan={3} className="px-3 py-2.5 text-right font-bold text-foreground">Total</td>
+                            <td className="px-3 py-2.5 text-right font-bold text-foreground whitespace-nowrap">
+                              {'₱'}{r.totalRequestedAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+                {/* Employee subtotal when multiple records */}
+                {currentGroup.records.length > 1 && (
+                  <div className="flex justify-between items-center border-t-2 border-border pt-3">
+                    <span className="text-sm font-bold text-foreground">Employee Total</span>
+                    <span className="text-sm font-bold text-foreground whitespace-nowrap">
+                      {'₱'}{groupTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirmation checkbox + footer */}
+              <div className="px-6 pb-6 pt-4 border-t border-border shrink-0 space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={bulkConfirmed}
+                    onChange={e => setBulkConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border accent-blue-600"
+                  />
+                  <span className="text-sm text-foreground leading-snug">
+                    I have reviewed the requests above and confirm this {actionNounMap[bulkAction.type]}.
+                  </span>
+                </label>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => { setBulkAction(null); setBulkStep(0); setBulkConfirmed(false); }}
+                    disabled={isBulkProcessing}
+                    className="px-4 py-2 text-sm font-medium rounded-xl border border-border text-foreground hover:bg-muted transition disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleBulkStep()}
+                    disabled={!bulkConfirmed || isBulkProcessing}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl text-white transition disabled:opacity-50 disabled:cursor-not-allowed ${btnColorMap[bulkAction.type]}`}
+                  >
+                    {isBulkProcessing && <Loader2 size={14} className="animate-spin" />}
+                    {isBulkProcessing
+                      ? 'Processing...'
+                      : isLast
+                        ? `${btnLabelMap[bulkAction.type]} (${currentGroup.records.length}) & Finish`
+                        : `${btnLabelMap[bulkAction.type]} (${currentGroup.records.length}) & Continue →`
+                    }
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
