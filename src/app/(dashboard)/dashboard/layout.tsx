@@ -27,7 +27,6 @@ const NAV_ITEMS = [
 const HELP_ITEMS = [
   { href: '/dashboard/help/incident-report',    label: 'Incident Report',    icon: FileWarning },
   { href: '/dashboard/help/knowledgebase',      label: 'Knowledge Base',     icon: BookOpen    },
-  { href: '/dashboard/help/workplace-careline', label: 'Workplace Care Line', icon: Heart       },
 ];
 
 const PORTAL_ITEMS = [
