@@ -112,6 +112,12 @@ model User {
   ewtItemHistories          EwtItemHistory[]
   ewtItemTemplateHistories  EwtItemTemplateHistory[]
 
+  // ─── Petty Cash & Client Funds ───
+  pettyCashRequests               PettyCash[]             @relation("PettyCashRequester")
+  pettyCashCustodianApprovals     PettyCash[]             @relation("PettyCashCustodian")
+  pettyCashManagerApprovals       PettyCash[]             @relation("PettyCashAccountingManager")
+  clientFundTransactionsProcessed ClientFundTransaction[] @relation("ClientFundProcessor")
+
   @@index([role])
   @@index([active])
   @@unique([email])

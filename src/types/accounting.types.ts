@@ -1,5 +1,19 @@
 // src/types/accounting.types.ts
 
+export type InvoiceItemCategory =
+  | 'SERVICE_FEE'
+  | 'TAX_REIMBURSEMENT'
+  | 'GOV_FEE_REIMBURSEMENT'
+  | 'OUT_OF_POCKET'
+  | 'CLIENT_FUND_DEPOSIT';
+
+export type ClientFundTransactionType =
+  | 'INVOICE_PAYMENT'
+  | 'PETTY_CASH_DEBIT'
+  | 'MANUAL_CREDIT'
+  | 'MANUAL_DEBIT'
+  | 'REFUND';
+
 export type InvoiceStatus =
   | 'DRAFT'
   | 'UNPAID'
@@ -39,8 +53,8 @@ export interface InvoiceItemRecord {
   quantity: number;
   unitPrice: number;
   total: number;
-  category?: 'SERVICE_FEE' | 'TAX_REIMBURSEMENT' | 'GOV_FEE_REIMBURSEMENT' | 'OUT_OF_POCKET';
-  isVatable?: boolean;
+  category: InvoiceItemCategory;
+  isVatable: boolean;
   remarks: string | null;
 }
 
@@ -115,6 +129,33 @@ export interface InvoiceStats {
   totalCollected: number;
   totalOutstanding: number;
   overdueCount: number;
+}
+
+// ── Invoice Branding Settings ────────────────────────────────────
+
+export interface InvoiceBrandingBank {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+}
+
+export interface InvoiceBrandingEWallet {
+  eWalletName: string;
+  accountName: string;
+  accountNumber: string;
+}
+
+export interface InvoiceBrandingCash {
+  payableTo: string;
+  instructions: string | null;
+}
+
+export interface InvoiceBrandingSettings {
+  invoiceEmail: string | null;
+  invoicePhoneNumber: string | null;
+  banks: InvoiceBrandingBank[];
+  ewallets: InvoiceBrandingEWallet[];
+  cashMethods: InvoiceBrandingCash[];
 }
 
 export interface ClientOption {
@@ -228,6 +269,8 @@ export interface InvoiceItemInput {
   unitPrice: number;
   total: number;
   remarks: string;
+  category: InvoiceItemCategory;
+  isVatable: boolean;
 }
 
 export interface CreateInvoiceInput {
@@ -305,4 +348,43 @@ export interface SubscriptionListRecord {
 
 export interface SubscriptionDetailRecord extends SubscriptionListRecord {
   historyLogs: SubscriptionHistoryRecord[];
+}
+
+// ── Client Funds Module Types ─────────────────────────────────────
+
+export interface ClientFundListRecord {
+  clientId: number;
+  clientNo: string | null;
+  businessName: string;
+  currentBalance: number;
+  lastTransactionType: ClientFundTransactionType | null;
+  lastTransactionDate: string | null;
+  lastInvoiceId: string | null;
+  lastPaymentId: string | null;
+  lastPettyCashId: string | null;
+}
+
+export interface ClientFundTransactionRecord {
+  id: string;
+  transactionNo: string;
+  date: string;
+  type: ClientFundTransactionType;
+  invoiceId: string | null;
+  invoice: { id: string; invoiceNumber: string } | null;
+  paymentId: string | null;
+  payment: { id: string; paymentNumber: string } | null;
+  pettyCashId: string | null;
+  pettyCash: { id: string; pcfNo: string } | null;
+  processedBy: { id: string; name: string } | null;
+  amount: number;
+  runningBalance: number;
+  notes: string | null;
+}
+
+export interface ClientFundDetailData {
+  clientId: number;
+  clientNo: string | null;
+  businessName: string;
+  currentBalance: number;
+  transactions: ClientFundTransactionRecord[];
 }

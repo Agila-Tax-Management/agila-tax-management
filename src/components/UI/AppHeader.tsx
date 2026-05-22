@@ -17,7 +17,7 @@ export function AppHeader({ onMenuOpen, leftContent }: AppHeaderProps): React.Re
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="bg-header border-b border-header-border px-6 py-4 flex items-center justify-between shrink-0 z-30 shadow-sm">
+    <header className="bg-header border-b border-header-border px-6 py-5 flex items-center justify-between shrink-0 z-30 shadow-sm">
       <div className="flex items-center gap-4">
         {onMenuOpen && (
           <Button variant="ghost" className="lg:hidden" onClick={onMenuOpen}>

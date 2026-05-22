@@ -15,6 +15,8 @@ const TX_TYPE_TO_DB: Record<string, JournalTransactionType> = {
   'Payment':       'PAYMENT',
   'Expense':       'EXPENSE',
   'Receipt':       'RECEIPT',
+  'Petty Cash':    'PETTY_CASH',
+  'Client Fund':   'CLIENT_FUND',
 };
 const TX_TYPE_FROM_DB: Record<JournalTransactionType, string> = {
   JOURNAL_ENTRY: 'Journal Entry',
@@ -22,6 +24,8 @@ const TX_TYPE_FROM_DB: Record<JournalTransactionType, string> = {
   PAYMENT:       'Payment',
   EXPENSE:       'Expense',
   RECEIPT:       'Receipt',
+  PETTY_CASH:    'Petty Cash',
+  CLIENT_FUND:   'Client Fund',
 };
 const STATUS_FROM_DB: Record<JournalEntryStatus, string> = {
   DRAFT:  'Draft',
@@ -34,6 +38,8 @@ const REF_PREFIXES: Record<JournalTransactionType, string> = {
   PAYMENT:       'PMT',
   EXPENSE:       'EXP',
   RECEIPT:       'REC',
+  PETTY_CASH:    'PCF',
+  CLIENT_FUND:   'CFT',
 };
 
 // ─── Serializer ───────────────────────────────────────────────────────────────

@@ -42,6 +42,8 @@ const FULL_SELECT = {
       unitPrice: true,
       total: true,
       remarks: true,
+      category: true,
+      isVatable: true,
     },
     orderBy: { id: 'asc' as const },
   },
@@ -144,6 +146,8 @@ const updateItemSchema = z.object({
   unitPrice: z.number().min(0),
   total: z.number().min(0),
   remarks: z.string().optional().default(''),
+  category: z.enum(['SERVICE_FEE', 'TAX_REIMBURSEMENT', 'GOV_FEE_REIMBURSEMENT', 'OUT_OF_POCKET', 'CLIENT_FUND_DEPOSIT']).optional().default('SERVICE_FEE'),
+  isVatable: z.boolean().optional().default(false),
 });
 
 const updateSchema = z.object({
@@ -194,6 +198,8 @@ export async function PUT(
           unitPrice: it.unitPrice,
           total: it.total,
           remarks: it.remarks || null,
+          category: it.category,
+          isVatable: it.isVatable,
         })),
       });
     }

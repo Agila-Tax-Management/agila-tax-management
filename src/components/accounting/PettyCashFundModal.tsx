@@ -3,7 +3,28 @@
 
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import type { PCFLineItem, PCFModalMode, PCFRecord } from './PettyCashFund';
+// ── Local types (self-contained — not imported from PettyCashFund) ───────────
+
+type PCFStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+type PCFModalMode = 'create' | 'view' | 'edit';
+
+interface PCFLineItem {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+}
+
+interface PCFRecord {
+  id: string;
+  pcfNo: string;
+  date: string;
+  client: string;
+  requestedAmount: number;
+  status: PCFStatus;
+  lineItems: PCFLineItem[];
+  fundBalance: number;
+}
 
 // ── Mock clients (TODO: fetch from /api/clients) ──────────────────────────────
 

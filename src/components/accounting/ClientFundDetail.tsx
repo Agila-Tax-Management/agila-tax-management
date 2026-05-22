@@ -1,85 +1,62 @@
 // src/components/accounting/ClientFundDetail.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowLeft } from 'lucide-react';
+import { Search, ArrowLeft, Loader2 } from 'lucide-react';
+import type {
+  ClientFundDetailData,
+  ClientFundTransactionRecord,
+  ClientFundTransactionType,
+} from '@/types/accounting.types';
+import type { PettyCashRecord } from './PettyCashFund';
+import { PettyCashViewModal } from './PettyCashViewModal';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-interface ClientFundTransaction {
-  id: string;
-  date: string;
-  action: string;
-  type: string;
-  txnId: string;
-  assigned: string;
-  amount: number;
-  balance: number;
-}
-
-interface ClientFundData {
-  clientName: string;
-  transactions: ClientFundTransaction[];
-}
-
-// ── Mock data (TODO: replace with /api/accounting/client-funds/[clientId]) ────
-
-const MOCK_FUND_DATA: Record<string, ClientFundData> = {
-  'CLT-2026-001': {
-    clientName: 'Santos Realty Inc.',
-    transactions: [
-      { id: '1', date: '2026-05-15', action: 'Deposit',    type: 'Cash',          txnId: 'TXN-2026-0051', assigned: 'M. Santos', amount:  50000, balance: 125000 },
-      { id: '2', date: '2026-05-10', action: 'Withdrawal', type: 'Bank Transfer',  txnId: 'TXN-2026-0048', assigned: 'A. Reyes',  amount: -25000, balance:  75000 },
-      { id: '3', date: '2026-05-05', action: 'Deposit',    type: 'Check',          txnId: 'TXN-2026-0044', assigned: 'M. Santos', amount:  30000, balance: 100000 },
-      { id: '4', date: '2026-05-01', action: 'Transfer',   type: 'Bank Transfer',  txnId: 'TXN-2026-0040', assigned: 'J. Cruz',   amount: -30000, balance:  70000 },
-      { id: '5', date: '2026-04-25', action: 'Deposit',    type: 'Cash',           txnId: 'TXN-2026-0038', assigned: 'M. Santos', amount: 100000, balance: 100000 },
-    ],
-  },
-  'CLT-2026-002': {
-    clientName: 'Cruz & Associates',
-    transactions: [
-      { id: '1', date: '2026-05-12', action: 'Withdrawal', type: 'Bank Transfer',  txnId: 'TXN-2026-0050', assigned: 'L. Cruz',  amount: -15000, balance:  45500 },
-      { id: '2', date: '2026-05-08', action: 'Deposit',    type: 'Cash',           txnId: 'TXN-2026-0046', assigned: 'L. Cruz',  amount:  20000, balance:  60500 },
-      { id: '3', date: '2026-04-30', action: 'Adjustment', type: 'Internal',       txnId: 'TXN-2026-0041', assigned: 'Admin',    amount:  -1000, balance:  40500 },
-      { id: '4', date: '2026-04-25', action: 'Deposit',    type: 'Check',          txnId: 'TXN-2026-0037', assigned: 'L. Cruz',  amount:  41500, balance:  41500 },
-    ],
-  },
-  'CLT-2026-003': {
-    clientName: 'Dela Cruz Enterprises',
-    transactions: [
-      { id: '1', date: '2026-05-14', action: 'Transfer',   type: 'Bank Transfer',  txnId: 'TXN-2026-0049', assigned: 'R. Dela Cruz', amount: -10000, balance:  78200 },
-      { id: '2', date: '2026-05-09', action: 'Deposit',    type: 'Cash',           txnId: 'TXN-2026-0047', assigned: 'R. Dela Cruz', amount:  25000, balance:  88200 },
-      { id: '3', date: '2026-05-02', action: 'Withdrawal', type: 'Bank Transfer',  txnId: 'TXN-2026-0043', assigned: 'J. Santos',    amount: -13800, balance:  63200 },
-      { id: '4', date: '2026-04-28', action: 'Deposit',    type: 'Cash',           txnId: 'TXN-2026-0039', assigned: 'R. Dela Cruz', amount:  77000, balance:  77000 },
-    ],
-  },
-  'CLT-2026-004': {
-    clientName: 'Mendoza Trading Corp.',
-    transactions: [
-      { id: '1', date: '2026-05-13', action: 'Adjustment', type: 'Internal',       txnId: 'TXN-2026-0052', assigned: 'Admin',      amount:  -1200, balance:  33800 },
-      { id: '2', date: '2026-05-07', action: 'Deposit',    type: 'Check',          txnId: 'TXN-2026-0045', assigned: 'P. Mendoza', amount:  15000, balance:  35000 },
-      { id: '3', date: '2026-04-29', action: 'Withdrawal', type: 'Bank Transfer',  txnId: 'TXN-2026-0042', assigned: 'P. Mendoza', amount:  -5000, balance:  20000 },
-      { id: '4', date: '2026-04-20', action: 'Deposit',    type: 'Cash',           txnId: 'TXN-2026-0036', assigned: 'P. Mendoza', amount:  25000, balance:  25000 },
-    ],
-  },
-  'CLT-2026-005': {
-    clientName: 'Reyes Law Office',
-    transactions: [
-      { id: '1', date: '2026-05-16', action: 'Deposit',    type: 'Cash',          txnId: 'TXN-2026-0053', assigned: 'C. Reyes',  amount:  30000, balance:  60000 },
-      { id: '2', date: '2026-05-11', action: 'Withdrawal', type: 'Bank Transfer', txnId: 'TXN-2026-0049', assigned: 'C. Reyes',  amount: -10000, balance:  30000 },
-      { id: '3', date: '2026-05-03', action: 'Deposit',    type: 'Check',         txnId: 'TXN-2026-0043', assigned: 'C. Reyes',  amount:  40000, balance:  40000 },
-    ],
-  },
+const TRANSACTION_TYPE_LABELS: Record<ClientFundTransactionType, string> = {
+  INVOICE_PAYMENT: 'Invoice Payment',
+  PETTY_CASH_DEBIT: 'Petty Cash Debit',
+  MANUAL_CREDIT: 'Manual Credit',
+  MANUAL_DEBIT: 'Manual Debit',
+  REFUND: 'Refund',
 };
 
-// ── Action badge styles ───────────────────────────────────────────────────────
+const TRANSACTION_TYPE_CLASSES: Record<ClientFundTransactionType, string> = {
+  INVOICE_PAYMENT: 'bg-green-100 text-green-700',
+  PETTY_CASH_DEBIT: 'bg-red-100 text-red-700',
+  MANUAL_CREDIT: 'bg-emerald-100 text-emerald-700',
+  MANUAL_DEBIT: 'bg-red-100 text-red-700',
+  REFUND: 'bg-blue-100 text-blue-700',
+};
 
-function actionBadgeClass(action: string): string {
-  if (action === 'Deposit')    return 'bg-green-100 text-green-700';
-  if (action === 'Withdrawal') return 'bg-red-100 text-red-700';
-  if (action === 'Transfer')   return 'bg-blue-100 text-blue-700';
-  return 'bg-slate-100 text-slate-600';
+const CREDIT_TYPES: ClientFundTransactionType[] = ['INVOICE_PAYMENT', 'MANUAL_CREDIT', 'REFUND'];
+
+function isCredit(type: ClientFundTransactionType): boolean {
+  return CREDIT_TYPES.includes(type);
+}
+
+function getTypeLabel(txn: ClientFundTransactionRecord): string {
+  if (txn.invoiceId) return 'Invoice';
+  if (txn.paymentId) return 'Payment';
+  if (txn.pettyCashId) return 'Petty Cash';
+  return 'Manual';
+}
+
+function getFileInfo(txn: ClientFundTransactionRecord): { label: string; href: string | null } {
+  if (txn.invoice) {
+    return {
+      label: txn.invoice.invoiceNumber,
+      href: `/portal/accounting-and-finance/invoices/${txn.invoice.id}`,
+    };
+  }
+  if (txn.payment) {
+    return {
+      label: txn.payment.paymentNumber,
+      href: `/portal/accounting-and-finance/payments/${txn.payment.id}`,
+    };
+  }
+  return { label: txn.transactionNo, href: null };
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -93,10 +70,55 @@ interface ClientFundDetailProps {
 export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [data, setData] = useState<ClientFundDetailData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [pettyCashRecord, setPettyCashRecord] = useState<PettyCashRecord | null>(null);
+  const [loadingPcfId, setLoadingPcfId] = useState<string | null>(null);
 
-  const fundData = MOCK_FUND_DATA[clientId];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/accounting/client-funds/${clientId}`);
+        if (res.status === 404) { setNotFound(true); return; }
+        if (res.ok) {
+          const json = (await res.json()) as { data: ClientFundDetailData };
+          setData(json.data);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void load();
+  }, [clientId]);
 
-  if (!fundData) {
+  const openPettyCashModal = async (id: string) => {
+    setLoadingPcfId(id);
+    try {
+      const res = await fetch(`/api/accounting/petty-cash/${id}`);
+      if (res.ok) {
+        const json = (await res.json()) as { data: PettyCashRecord };
+        setPettyCashRecord(json.data);
+      }
+    } finally {
+      setLoadingPcfId(null);
+    }
+  };
+
+  const filtered = (data?.transactions ?? []).filter((t) => {
+    const q = search.toLowerCase();
+    return (
+      t.date.includes(q) ||
+      TRANSACTION_TYPE_LABELS[t.type].toLowerCase().includes(q) ||
+      getTypeLabel(t).toLowerCase().includes(q) ||
+      (t.processedBy?.name.toLowerCase().includes(q) ?? false) ||
+      (t.invoice?.invoiceNumber.toLowerCase().includes(q) ?? false) ||
+      (t.payment?.paymentNumber.toLowerCase().includes(q) ?? false) ||
+      (t.pettyCash?.pcfNo.toLowerCase().includes(q) ?? false)
+    );
+  });
+
+  if (!isLoading && (notFound || !data)) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
@@ -113,16 +135,6 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
       </div>
     );
   }
-
-  const filtered = fundData.transactions.filter(t =>
-    t.date.includes(search) ||
-    t.action.toLowerCase().includes(search.toLowerCase()) ||
-    t.type.toLowerCase().includes(search.toLowerCase()) ||
-    t.txnId.toLowerCase().includes(search.toLowerCase()) ||
-    t.assigned.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  const currentBalance = fundData.transactions[0]?.balance ?? 0;
 
   return (
     <div className="space-y-6">
@@ -143,13 +155,18 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-500">Client:</span>
-            <span className="text-sm font-bold text-slate-900">{fundData.clientName}</span>
+            <span className="text-sm font-bold text-slate-900">
+              {data?.businessName ?? '—'}
+            </span>
           </div>
           <div className="h-4 w-px bg-slate-200" />
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-500">Current Balance:</span>
             <span className="text-sm font-bold text-slate-900">
-              ₱{currentBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              ₱
+              {(data?.currentBalance ?? 0).toLocaleString('en-PH', {
+                minimumFractionDigits: 2,
+              })}
             </span>
           </div>
         </div>
@@ -159,7 +176,7 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
             type="text"
             placeholder="Search transactions..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 transition w-64"
           />
         </div>
@@ -171,49 +188,96 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <th className="text-left px-4 py-3 font-semibold text-slate-500">Date</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-500">Action</th>
+              <th className="text-left px-4 py-3 font-semibold text-slate-500">Transaction Type</th>
               <th className="text-left px-4 py-3 font-semibold text-slate-500">Type</th>
               <th className="text-left px-4 py-3 font-semibold text-slate-500">ID</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-500">Assigned</th>
+              <th className="text-left px-4 py-3 font-semibold text-slate-500">User</th>
               <th className="text-right px-4 py-3 font-semibold text-slate-500">Amount</th>
-              <th className="text-right px-4 py-3 font-semibold text-slate-500">Balance</th>
+              <th className="text-right px-4 py-3 font-semibold text-slate-500">Running Balance</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.length === 0 ? (
+            {isLoading ? (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                  No transactions found.
+                  <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+                  Loading...
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                  {search ? 'No matching transactions.' : 'No transactions yet.'}
                 </td>
               </tr>
             ) : (
-              filtered.map(txn => (
-                <tr key={txn.id} className="bg-white hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                    {new Date(txn.date).toLocaleDateString('en-PH', {
-                      year: 'numeric', month: 'short', day: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${actionBadgeClass(txn.action)}`}>
-                      {txn.action}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{txn.type}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{txn.txnId}</td>
-                  <td className="px-4 py-3 text-slate-700">{txn.assigned}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${txn.amount >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {txn.amount >= 0 ? '+' : ''}₱{Math.abs(txn.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                    ₱{txn.balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              ))
+              filtered.map((txn) => {
+                const file = getFileInfo(txn);
+                const credit = isCredit(txn.type);
+                return (
+                  <tr key={txn.id} className="bg-white hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {new Date(txn.date).toLocaleDateString('en-PH', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${TRANSACTION_TYPE_CLASSES[txn.type]}`}
+                      >
+                        {TRANSACTION_TYPE_LABELS[txn.type]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{getTypeLabel(txn)}</td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {txn.pettyCashId ? (
+                        <button
+                          onClick={() => void openPettyCashModal(txn.pettyCashId!)}
+                          className="text-amber-600 hover:underline font-mono text-xs"
+                        >
+                          {loadingPcfId === txn.pettyCashId ? (
+                            <Loader2 size={12} className="animate-spin inline" />
+                          ) : (
+                            txn.pettyCash?.pcfNo ?? txn.pettyCashId
+                          )}
+                        </button>
+                      ) : file.href ? (
+                        <a href={file.href} className="text-amber-600 hover:underline">
+                          {file.label}
+                        </a>
+                      ) : (
+                        <span className="text-slate-500">{file.label}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {txn.processedBy?.name ?? '—'}
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-right font-semibold ${credit ? 'text-green-700' : 'text-red-600'}`}
+                    >
+                      {credit ? '+' : '-'}₱
+                      {txn.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      ₱{txn.runningBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Petty Cash detail modal */}
+      {pettyCashRecord && (
+        <PettyCashViewModal
+          record={pettyCashRecord}
+          onClose={() => setPettyCashRecord(null)}
+        />
+      )}
     </div>
   );
 }
