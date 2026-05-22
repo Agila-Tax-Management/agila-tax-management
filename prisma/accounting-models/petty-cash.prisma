@@ -22,9 +22,11 @@ model PettyCash {
 
   date DateTime @default(now())
 
-  // Which client's fund pool will absorb the CLIENT_FUND items
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  // Legacy: previously held the single client for the whole request.
+  // Now nullable — client association has moved to PettyCashItem (per CLIENT_FUND line).
+  // Kept for backward compatibility with existing records.
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   purpose String @db.Text
 
@@ -49,9 +51,8 @@ model PettyCash {
   totalEmployeeExpenses Decimal @default(0) @db.Decimal(10, 2) // Sum of EMPLOYEE_EXPENSE items
   totalClientFundUsed   Decimal @default(0) @db.Decimal(10, 2) // Sum of CLIENT_FUND items
 
-  // Snapshot of client fund running balance captured at time of submission (PENDING status).
-  // Stored as a plain Decimal — avoids circular FK dependency with ClientFundTransaction.
-  // API validates: clientFundBalanceSnapshot >= totalClientFundUsed before allowing submission.
+  // Legacy: snapshot of the single client fund balance captured at submission.
+  // No longer set on new records — balance snapshots are now stored per PettyCashItem.
   clientFundBalanceSnapshot Decimal? @db.Decimal(10, 2)
 
   // ─── Approval Notes ───
@@ -89,6 +90,14 @@ model PettyCashItem {
   description String // e.g., "Notary Fee - SPA document", "Lunch - BIR filing"
   amount      Decimal @db.Decimal(10, 2)
 
+  // ─── Client Fund (for CLIENT_FUND items only) ───
+  // Which client's fund this line item draws from. Null for EMPLOYEE_EXPENSE items.
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Snapshot of that client's fund running balance at time of PCF submission.
+  clientFundBalanceSnapshot Decimal? @db.Decimal(10, 2)
+
   // ─── Liquidation Docs ───
   receiptNumber String?
   receiptUrl    String? // Cloudinary URL uploaded during liquidation
@@ -99,5 +108,6 @@ model PettyCashItem {
   updatedAt DateTime @updatedAt
 
   @@index([pettyCashId])
+  @@index([clientId])
   @@map("petty_cash_item")
 }

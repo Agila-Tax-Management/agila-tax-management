@@ -35,6 +35,9 @@ const FULL_SELECT = {
     select: {
       id: true,
       category: true,
+      clientId: true,
+      client: { select: { id: true, businessName: true, clientNo: true } },
+      clientFundBalanceSnapshot: true,
       description: true,
       amount: true,
       remarks: true,
@@ -48,10 +51,14 @@ const FULL_SELECT = {
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const updateItemSchema = z.object({
   category: z.enum(['EMPLOYEE_EXPENSE', 'CLIENT_FUND']),
+  clientId: z.number().int().positive().optional(),
   description: z.string().min(1, 'Description is required'),
   amount: z.number().positive('Amount must be positive'),
   remarks: z.string().optional(),
-});
+}).refine(
+  (it) => it.category !== 'CLIENT_FUND' || it.clientId != null,
+  { message: 'Client is required for CLIENT_FUND items' },
+);
 
 const updateSchema = z.object({
   purpose: z.string().min(1).optional(),
@@ -128,6 +135,7 @@ export async function PUT(
         data: data.items.map((it) => ({
           pettyCashId: id,
           category: it.category,
+          clientId: it.clientId ?? null,
           description: it.description,
           amount: it.amount,
           remarks: it.remarks ?? null,

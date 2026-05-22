@@ -1,9 +1,9 @@
-// src/components/accounting/PettyCashFundModal.tsx
+﻿// src/components/accounting/PettyCashFundModal.tsx
 'use client';
 
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-// ── Local types (self-contained — not imported from PettyCashFund) ───────────
+// -- Local types (self-contained - not imported from PettyCashFund) -----------
 
 type PCFStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type PCFModalMode = 'create' | 'view' | 'edit';
@@ -26,7 +26,7 @@ interface PCFRecord {
   fundBalance: number;
 }
 
-// ── Mock clients (TODO: fetch from /api/clients) ──────────────────────────────
+// -- Mock clients (TODO: fetch from /api/clients) ----------------------------
 
 const MOCK_CLIENTS = [
   'Santos Realty Inc.',
@@ -36,7 +36,7 @@ const MOCK_CLIENTS = [
   'Mendoza Trading Corp.',
 ];
 
-// ── Props ─────────────────────────────────────────────────────────────────────
+// -- Props -------------------------------------------------------------------
 
 interface PettyCashFundModalProps {
   isOpen: boolean;
@@ -47,7 +47,7 @@ interface PettyCashFundModalProps {
   onSave: (data: Omit<PCFRecord, 'id' | 'pcfNo'>) => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// -- Component ---------------------------------------------------------------
 
 export function PettyCashFundModal({
   isOpen,
@@ -57,7 +57,7 @@ export function PettyCashFundModal({
   onClose,
   onSave,
 }: PettyCashFundModalProps) {
-  // Lazy initializers — key prop on parent handles full resets between opens
+  // Lazy initializers - key prop on parent handles full resets between opens
   const [client, setClient] = useState<string>(() =>
     (mode === 'view' || mode === 'edit') && record ? record.client : '',
   );
@@ -75,7 +75,7 @@ export function PettyCashFundModal({
 
   const total = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-  // ── Line item handlers ────────────────────────────────────────────────────
+  // -- Line item handlers ---------------------------------------------------
 
   const addRow = () => {
     const newId = crypto.randomUUID();
@@ -105,13 +105,13 @@ export function PettyCashFundModal({
 
   const canSubmit = client.trim() !== '' && lineItems.some(i => i.category.trim() !== '');
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // -- Render ---------------------------------------------------------------
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-200">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-200 shrink-0">
           <div className="flex items-start justify-between gap-4">
 
@@ -164,7 +164,7 @@ export function PettyCashFundModal({
           </div>
         </div>
 
-        {/* ── Line items ── */}
+        {/* Line items */}
         <div className="px-6 py-5 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           <div className="border border-slate-200 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
@@ -254,7 +254,7 @@ export function PettyCashFundModal({
             </table>
           </div>
 
-          {/* Add item button — create & edit only */}
+          {/* Add item button - create & edit only */}
           {!isView && (
             <button
               onClick={addRow}
@@ -266,10 +266,10 @@ export function PettyCashFundModal({
           )}
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <div className="px-6 pb-6 shrink-0">
           {isView ? (
-            /* View — Received and Acknowledge signature block */
+            /* View - Received and Acknowledge signature block */
             <div className="border-t border-slate-200 pt-5 space-y-5">
               <p className="text-sm font-semibold text-slate-700">Received and Acknowledged</p>
               <div className="grid grid-cols-3 gap-6">
@@ -282,7 +282,7 @@ export function PettyCashFundModal({
               </div>
             </div>
           ) : (
-            /* Create / Edit — submit button */
+            /* Create / Edit - submit button */
             <div className="flex justify-end pt-2 border-t border-slate-200">
               <button
                 onClick={handleSubmit}

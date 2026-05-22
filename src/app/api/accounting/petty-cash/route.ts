@@ -15,13 +15,17 @@ const VALID_STATUSES: readonly string[] = [
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const itemSchema = z.object({
   category: z.enum(['EMPLOYEE_EXPENSE', 'CLIENT_FUND']),
+  // Required for CLIENT_FUND items; null/omitted for EMPLOYEE_EXPENSE
+  clientId: z.number().int().positive().optional(),
   description: z.string().min(1, 'Description is required'),
   amount: z.number().positive('Amount must be positive'),
   remarks: z.string().optional(),
-});
+}).refine(
+  (it) => it.category !== 'CLIENT_FUND' || it.clientId != null,
+  { message: 'Client is required for CLIENT_FUND items' },
+);
 
 const createSchema = z.object({
-  clientId: z.number().int().positive(),
   purpose: z.string().min(1, 'Purpose is required'),
   items: z.array(itemSchema).min(1, 'At least one item is required'),
   custodianId: z.string().optional(),
@@ -56,6 +60,9 @@ const FULL_SELECT = {
     select: {
       id: true,
       category: true,
+      clientId: true,
+      client: { select: { id: true, businessName: true, clientNo: true } },
+      clientFundBalanceSnapshot: true,
       description: true,
       amount: true,
       remarks: true,
@@ -87,6 +94,8 @@ export function serializePcf(pcf: unknown) {
     items: ((p.items as Record<string, unknown>[]) ?? []).map((it) => ({
       ...it,
       amount: Number(it.amount),
+      clientFundBalanceSnapshot:
+        it.clientFundBalanceSnapshot != null ? Number(it.clientFundBalanceSnapshot) : null,
     })),
   };
 }
@@ -155,15 +164,22 @@ export async function POST(request: NextRequest) {
     .reduce((s, i) => s + i.amount, 0);
   const totalRequested = totalEmployee + totalClient;
 
-  // Get client fund balance snapshot (only when CLIENT_FUND items exist)
-  let clientFundSnapshot: number | null = null;
-  if (totalClient > 0) {
+  // Fetch per-client fund balance snapshots (one query per unique clientId)
+  const uniqueClientIds = [
+    ...new Set(
+      data.items
+        .filter((i) => i.category === 'CLIENT_FUND' && i.clientId != null)
+        .map((i) => i.clientId!),
+    ),
+  ];
+  const balanceMap = new Map<number, number>();
+  for (const cId of uniqueClientIds) {
     const latestTx = await prisma.clientFundTransaction.findFirst({
-      where: { clientId: data.clientId },
+      where: { clientId: cId },
       orderBy: { date: 'desc' },
       select: { runningBalance: true },
     });
-    clientFundSnapshot = latestTx ? Number(latestTx.runningBalance) : 0;
+    balanceMap.set(cId, latestTx ? Number(latestTx.runningBalance) : 0);
   }
 
   const created = await prisma.$transaction(async (tx) => {
@@ -185,7 +201,7 @@ export async function POST(request: NextRequest) {
     return tx.pettyCash.create({
       data: {
         pcfNo,
-        clientId: data.clientId,
+        // clientId intentionally not set — client association lives on items now
         purpose: data.purpose,
         requestedById: session.user.id,
         custodianId,
@@ -194,10 +210,12 @@ export async function POST(request: NextRequest) {
         totalRequestedAmount: totalRequested,
         totalEmployeeExpenses: totalEmployee,
         totalClientFundUsed: totalClient,
-        clientFundBalanceSnapshot: clientFundSnapshot,
         items: {
           create: data.items.map((it) => ({
             category: it.category,
+            clientId: it.clientId ?? null,
+            clientFundBalanceSnapshot:
+              it.clientId != null ? (balanceMap.get(it.clientId) ?? 0) : null,
             description: it.description,
             amount: it.amount,
             remarks: it.remarks ?? null,
