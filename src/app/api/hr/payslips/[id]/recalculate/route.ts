@@ -390,8 +390,8 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       if (deductMin <= 0) continue;
       const tDow = (t.date as Date).getDay();
       const sd = schedule?.days.find((d) => d.dayOfWeek === tDow) ?? null;
-      const sStart = sd ? parseHHMM(sd.startTime) : 8 * 60;
-      const sEnd   = sd ? parseHHMM(sd.endTime)   : 17 * 60;
+      const sStart = sd?.startTime ? parseHHMM(sd.startTime) : 8 * 60;
+      const sEnd   = sd?.endTime   ? parseHHMM(sd.endTime)   : 17 * 60;
       const brkMin =
         sd?.breakStart && sd?.breakEnd
           ? parseHHMM(sd.breakEnd) - parseHHMM(sd.breakStart)

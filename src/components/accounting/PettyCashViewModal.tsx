@@ -77,7 +77,7 @@ export function PettyCashViewModal({ record, onClose }: PettyCashViewModalProps)
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Client</p>
-              <p className="text-foreground font-medium">{record.client.businessName}</p>
+              <p className="text-foreground font-medium">{record.client?.businessName ?? '—'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Requested by</p>
