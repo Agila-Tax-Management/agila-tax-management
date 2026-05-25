@@ -243,8 +243,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Resolve work schedule day for today (0=Sun … 6=Sat)
     const schedule = activeContract.schedule;
     const todayDow = now.getDay();
-    const scheduleDay =
-      schedule?.days.find((d) => d.dayOfWeek === todayDow) ?? null;
+    const scheduleDay = schedule?.days.find((d) => d.dayOfWeek === todayDow) ?? null;
 
     const compensation = activeContract.compensations[0] ?? null;
 

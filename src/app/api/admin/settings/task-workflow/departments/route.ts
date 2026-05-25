@@ -57,6 +57,8 @@ async function ensureDefaultDepartments(clientId: number) {
     } else {
       // Both exist — delete legacy (it has no seeded tasks; canonical is the correct one)
       await prisma.departmentTaskStatus.deleteMany({ where: { departmentId: legacyDept.id } });
+      await prisma.taskTemplateRoute.deleteMany({ where: { departmentId: legacyDept.id } });
+      await prisma.position.deleteMany({ where: { departmentId: legacyDept.id } });
       await prisma.department.delete({ where: { id: legacyDept.id } });
     }
     existingByName.delete(oldName);

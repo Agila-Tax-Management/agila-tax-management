@@ -31,8 +31,8 @@ export type DayType =
   | 'REGULAR_HOLIDAY_REST';
 
 export interface ScheduleDayInput {
-  startTime: string;   // "HH:MM" e.g. "08:00"
-  endTime: string;     // "HH:MM" e.g. "17:00"
+  startTime: string | null;   // "HH:MM" e.g. "08:00"
+  endTime: string | null;     // "HH:MM" e.g. "17:00"
   breakStart?: string | null;
   breakEnd?: string | null;
   isWorkingDay: boolean;
@@ -72,7 +72,7 @@ function toMinutes(hhmm: string): number {
  * Default fallback schedule: 08:00–17:00 with 60-minute lunch break.
  * Used when the employee has no work schedule configured.
  */
-const DEFAULT_SCHEDULE: Required<ScheduleDayInput> = {
+const DEFAULT_SCHEDULE: { startTime: string; endTime: string; breakStart: string; breakEnd: string; isWorkingDay: boolean } = {
   startTime: "08:00",
   endTime: "17:00",
   breakStart: "12:00",
@@ -101,10 +101,12 @@ export function computeTimesheetFields(
   dayType: DayType = 'REGULAR',
 ): TimesheetComputedFields {
   const sched = scheduleDay ?? DEFAULT_SCHEDULE;
+  const effectiveStartTime: string = sched.startTime ?? DEFAULT_SCHEDULE.startTime;
+  const effectiveEndTime: string = sched.endTime ?? DEFAULT_SCHEDULE.endTime;
 
   // ── Scheduled work minutes (excluding configured break) ──────────────────
-  const schedStartMin = toMinutes(sched.startTime);
-  const schedEndMin = toMinutes(sched.endTime);
+  const schedStartMin = toMinutes(effectiveStartTime);
+  const schedEndMin = toMinutes(effectiveEndTime);
 
   const breakStartMin =
     sched.breakStart ? toMinutes(sched.breakStart) :

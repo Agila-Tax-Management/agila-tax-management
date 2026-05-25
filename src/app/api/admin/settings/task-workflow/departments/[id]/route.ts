@@ -103,20 +103,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
 
   const dept = await prisma.department.findUnique({
     where: { id: deptId },
-    include: { templateRoutes: { take: 1 } },
   });
   if (!dept || dept.clientId !== clientId) {
     return NextResponse.json({ error: "Department not found" }, { status: 404 });
   }
 
-  if (dept.templateRoutes.length > 0) {
-    return NextResponse.json(
-      { error: "Cannot delete: department is used in one or more workflow templates. Remove it from those workflows first." },
-      { status: 409 }
-    );
-  }
-
-  await prisma.department.delete({ where: { id: deptId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.taskTemplateRoute.deleteMany({ where: { departmentId: deptId } });
+    await tx.position.deleteMany({ where: { departmentId: deptId } });
+    await tx.department.delete({ where: { id: deptId } });
+  });
 
   void logActivity({
     userId: session.user.id,
