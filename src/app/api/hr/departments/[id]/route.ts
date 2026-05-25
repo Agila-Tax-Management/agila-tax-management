@@ -109,7 +109,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
 
   const existing = await prisma.department.findUnique({
     where: { id: deptId },
-    include: { _count: { select: { employments: true, positions: true } } },
+    include: { _count: { select: { employments: true } } },
   });
   if (!existing) return NextResponse.json({ error: "Department not found" }, { status: 404 });
 
@@ -120,7 +120,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     );
   }
 
-  await prisma.department.delete({ where: { id: deptId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.taskTemplateRoute.deleteMany({ where: { departmentId: deptId } });
+    await tx.position.deleteMany({ where: { departmentId: deptId } });
+    await tx.department.delete({ where: { id: deptId } });
+  });
 
   void logActivity({
     userId: session.user.id,

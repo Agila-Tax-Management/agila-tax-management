@@ -31,6 +31,8 @@ export function DepartmentsTab(): React.ReactNode {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Department | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState<DeptForm>(EMPTY);
 
   const fetchDepartments = useCallback(async () => {
@@ -107,16 +109,23 @@ export function DepartmentsTab(): React.ReactNode {
     }
   };
 
-  const handleDelete = async (dept: Department) => {
-    if (!confirm(`Delete department "${dept.name}"? This cannot be undone.`)) return;
+  const openDelete = (dept: Department) => setDeleteTarget(dept);
+  const closeDelete = () => { setDeleteTarget(null); };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/hr/departments/${dept.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/hr/departments/${deleteTarget.id}`, { method: 'DELETE' });
       const data = await res.json() as { error?: string };
       if (!res.ok) { error('Cannot delete', data.error ?? 'Could not delete department.'); return; }
-      success('Department deleted', `${dept.name} has been removed.`);
+      success('Department deleted', `${deleteTarget.name} has been removed.`);
+      closeDelete();
       void fetchDepartments();
     } catch {
       error('Error', 'An unexpected error occurred.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -150,7 +159,7 @@ export function DepartmentsTab(): React.ReactNode {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" className="p-1.5 h-auto" onClick={() => openEdit(dept)}><Pencil size={14} /></Button>
-                  <Button variant="ghost" className="p-1.5 h-auto text-red-500" onClick={() => void handleDelete(dept)}><Trash2 size={14} /></Button>
+                  <Button variant="ghost" className="p-1.5 h-auto text-red-500" onClick={() => openDelete(dept)}><Trash2 size={14} /></Button>
                 </div>
               </div>
               {dept.description && <p className="text-sm text-muted-foreground">{dept.description}</p>}
@@ -191,6 +200,21 @@ export function DepartmentsTab(): React.ReactNode {
             <Button variant="outline" onClick={closeAdd} disabled={saving}>Cancel</Button>
             <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => void handleAdd()} disabled={saving}>
               {saving && <Loader2 size={14} className="animate-spin" />} Save Department
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={!!deleteTarget} onClose={closeDelete} title="Delete Department" size="sm">
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-foreground">
+            Are you sure you want to delete <span className="font-semibold">{deleteTarget?.name}</span>? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={closeDelete} disabled={deleting}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white gap-2" onClick={() => void handleDelete()} disabled={deleting}>
+              {deleting && <Loader2 size={14} className="animate-spin" />} Delete
             </Button>
           </div>
         </div>
