@@ -6,6 +6,8 @@ enum JournalTransactionType {
   PAYMENT
   EXPENSE
   RECEIPT
+  PETTY_CASH   // Petty cash disbursement journal entry
+  CLIENT_FUND  // Client fund adjustment journal entry
 }
 
 enum JournalEntryStatus {
@@ -35,6 +37,11 @@ model JournalEntry {
   salesRecords   SalesRecord[]
   expenseRecords ExpenseRecord[]
   invoices       Invoice[]
+
+  // ─── Linked accounting transaction records ───
+  payments               Payment[]
+  pettyCashes            PettyCash[]
+  clientFundTransactions ClientFundTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

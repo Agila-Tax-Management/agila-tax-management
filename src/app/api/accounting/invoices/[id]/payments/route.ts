@@ -28,6 +28,7 @@ export async function POST(
     include: {
       allocations: { select: { amountApplied: true } },
       lead: { select: { convertedClientId: true } },
+      items: { select: { category: true, total: true } },
     },
   });
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -104,6 +105,54 @@ export async function POST(
       where: { id },
       data: { balanceDue: newBalanceDue, status: newStatus },
     });
+
+    // Auto-create ClientFundTransaction when invoice is fully PAID
+    // and has CLIENT_FUND_DEPOSIT line items.
+    if (newStatus === 'PAID' && effectiveClientId) {
+      const depositTotal = invoice.items
+        .filter((i) => i.category === 'CLIENT_FUND_DEPOSIT')
+        .reduce((s, i) => s + Number(i.total), 0);
+
+      if (depositTotal > 0) {
+        // Running balance: latest row for this client (or 0)
+        const latestCFT = await tx.clientFundTransaction.findFirst({
+          where: { clientId: effectiveClientId },
+          orderBy: { date: 'desc' },
+          select: { runningBalance: true },
+        });
+        const prevBalance = Number(latestCFT?.runningBalance ?? 0);
+
+        // Sequential CFT number (CFT-YYYY-XXXX) — inside transaction to prevent duplicates
+        const cftYear = new Date().getFullYear();
+        const cftPrefix = `CFT-${cftYear}-`;
+        const latestCFTNo = await tx.clientFundTransaction.findFirst({
+          where: { transactionNo: { startsWith: cftPrefix } },
+          orderBy: { transactionNo: 'desc' },
+          select: { transactionNo: true },
+        });
+        let nextCFTSeq = 1;
+        if (latestCFTNo) {
+          const parts = latestCFTNo.transactionNo.split('-');
+          const lastSeq = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(lastSeq)) nextCFTSeq = lastSeq + 1;
+        }
+        const transactionNo = `${cftPrefix}${String(nextCFTSeq).padStart(4, '0')}`;
+
+        await tx.clientFundTransaction.create({
+          data: {
+            transactionNo,
+            clientId: effectiveClientId,
+            type: 'INVOICE_PAYMENT',
+            invoiceId: id,
+            paymentId: p.id,
+            amount: depositTotal,
+            runningBalance: prevBalance + depositTotal,
+            processedById: session.user.id,
+            notes: `Auto-credited from invoice ${invoice.invoiceNumber}`,
+          },
+        });
+      }
+    }
 
     return p;
   });

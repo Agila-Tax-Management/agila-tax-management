@@ -13,8 +13,8 @@ const itemSchema = z.object({
   quantity: z.number().int().min(1, 'Quantity must be at least 1'),
   unitPrice: z.number().min(0, 'Unit price must be >= 0'),
   total: z.number().min(0),
-  remarks: z.string().optional().default(''),
-});
+  remarks: z.string().optional().default(''),  category: z.enum(['SERVICE_FEE', 'TAX_REIMBURSEMENT', 'GOV_FEE_REIMBURSEMENT', 'OUT_OF_POCKET', 'CLIENT_FUND_DEPOSIT']).default('SERVICE_FEE'),
+  isVatable: z.boolean().optional().default(false),});
 
 const createSchema = z
   .object({
@@ -206,6 +206,8 @@ export async function POST(request: NextRequest) {
             unitPrice: it.unitPrice,
             total: it.total,
             remarks: it.remarks || null,
+            category: it.category,
+            isVatable: it.isVatable,
           })),
         },
       },

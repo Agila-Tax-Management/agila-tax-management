@@ -6,7 +6,8 @@ import {
   BookOpen, Plus, Search, X,
   Settings, TrendingUp, Wallet, Scale, BarChart2, Trash2, Pencil,
   PenLine, FileText, CreditCard, Receipt, Download, Hash, ListFilter,
-  RefreshCw, AlertTriangle, Tag,
+  RefreshCw, AlertTriangle, Tag, Mail, Smartphone, Landmark, Wallet2,
+  Banknote, Users,
 } from 'lucide-react';
 import type { GlAccountRecord } from './ChartofAccounts';
 import { useToast } from '@/context/ToastContext';
@@ -28,6 +29,55 @@ interface ApiAccountType {
   normalBalance: string;
   detailTypes?: { id: number; name: string }[];
   _count?: { detailTypes: number; accounts: number };
+}
+
+// ─── Accounting Settings (singleton) ─────────────────────────────────────────
+
+interface ApiAccountingSetting {
+  id: string;
+  invoiceEmail: string | null;
+  invoicePhoneNumber: string | null;
+  defaultCustodianId: string | null;
+  defaultCustodianName: string | null;
+  defaultAccountingManagerId: string | null;
+  defaultAccountingManagerName: string | null;
+  pcfNumberPrefix: string;
+  cftNumberPrefix: string;
+}
+
+// ─── Payment Method types ─────────────────────────────────────────────────────
+
+interface ApiPaymentMethodBank {
+  id: number;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface ApiPaymentMethodEWallet {
+  id: number;
+  eWalletName: string;
+  accountName: string;
+  accountNumber: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface ApiPaymentMethodCash {
+  id: number;
+  payableTo: string;
+  instructions: string | null;
+  isActive: boolean;
+}
+
+// ─── User search result ───────────────────────────────────────────────────────
+
+interface ApiUserSearchResult {
+  id: string;
+  name: string | null;
+  email: string;
 }
 
 // ─── Badge / Icon maps per DB financial group ─────────────────────────────────
@@ -812,10 +862,456 @@ function DeleteGlAccountModal({ account, onClose, onSuccess }: DeleteGlAccountPr
   );
 }
 
+// ─── UserSearchInput ──────────────────────────────────────────────────────────
+
+interface UserSearchInputProps {
+  label: string;
+  selectedId: string | null;
+  selectedName: string;
+  onSelect: (id: string, name: string) => void;
+  onClear: () => void;
+}
+
+function UserSearchInput({ label, selectedId, selectedName, onSelect, onClear }: UserSearchInputProps): React.ReactNode {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ApiUserSearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+
+  const doSearch = useCallback(async (q: string) => {
+    if (!q.trim()) { setResults([]); return; }
+    const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}&limit=6`);
+    if (res.ok) {
+      const json = await res.json() as { data: ApiUserSearchResult[] };
+      setResults(json.data);
+    }
+  }, []);
+
+  return (
+    <div className="relative">
+      <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">{label}</label>
+      {selectedId ? (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-amber-50 px-3 py-2">
+          <Users size={14} className="text-amber-600 shrink-0" />
+          <span className="text-sm font-medium text-foreground flex-1 truncate">{selectedName || selectedId}</span>
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-muted-foreground hover:text-red-600 transition-colors"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); void doSearch(e.target.value); }}
+            onFocus={() => setOpen(true)}
+            placeholder="Search by name or email…"
+            className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
+          />
+          {open && results.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-white shadow-lg overflow-hidden">
+              {results.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => { onSelect(u.id, u.name ?? u.email); setQuery(''); setResults([]); setOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                >
+                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <Users size={11} className="text-amber-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate">{u.name ?? '—'}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{u.email}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── BankMethodModal ──────────────────────────────────────────────────────────
+
+interface BankMethodModalProps {
+  initial?: ApiPaymentMethodBank;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function BankMethodModal({ initial, onClose, onSuccess }: BankMethodModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const isEdit = !!initial;
+  const [bankName, setBankName]       = useState(initial?.bankName ?? '');
+  const [accountName, setAccountName] = useState(initial?.accountName ?? '');
+  const [accountNo, setAccountNo]     = useState(initial?.accountNumber ?? '');
+  const [errors, setErrors]           = useState<{ bankName?: string; accountName?: string; accountNo?: string }>({});
+  const [saving, setSaving]           = useState(false);
+
+  function validate() {
+    const e: typeof errors = {};
+    if (!bankName.trim())   e.bankName    = 'Bank name is required.';
+    if (!accountName.trim()) e.accountName = 'Account name is required.';
+    if (!accountNo.trim())  e.accountNo   = 'Account number is required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const url = isEdit
+        ? `/api/accounting/settings/payment-methods/banks/${initial!.id}`
+        : '/api/accounting/settings/payment-methods/banks';
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bankName: bankName.trim(), accountName: accountName.trim(), accountNumber: accountNo.trim() }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) { toastError('Failed to save', json.error ?? 'Something went wrong.'); return; }
+      success(isEdit ? 'Bank updated' : 'Bank added', `${bankName.trim()} has been ${isEdit ? 'updated' : 'added'}.`);
+      onSuccess(); onClose();
+    } catch { toastError('Network error', 'Could not connect to the server.'); }
+    finally { setSaving(false); }
+  }
+
+  const inputCls = (err?: string) => `w-full rounded-lg border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground bg-background focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${err ? 'border-red-400 ring-1 ring-red-400' : 'border-border hover:border-slate-400'}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center"><Landmark size={15} className="text-white" /></div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit Bank' : 'Add Bank'}</h2>
+              <p className="text-xs text-slate-500">Payment Methods</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"><X size={15} /></button>
+        </div>
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Bank Name <span className="text-red-500">*</span></label>
+            <input type="text" value={bankName} onChange={(e) => { setBankName(e.target.value); setErrors((p) => ({ ...p, bankName: undefined })); }} placeholder="e.g. BDO Unibank" className={inputCls(errors.bankName)} />
+            {errors.bankName && <p className="mt-1 text-xs text-red-500">{errors.bankName}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Account Name <span className="text-red-500">*</span></label>
+            <input type="text" value={accountName} onChange={(e) => { setAccountName(e.target.value); setErrors((p) => ({ ...p, accountName: undefined })); }} placeholder="e.g. Agila Tax Management Solutions" className={inputCls(errors.accountName)} />
+            {errors.accountName && <p className="mt-1 text-xs text-red-500">{errors.accountName}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Account Number <span className="text-red-500">*</span></label>
+            <input type="text" value={accountNo} onChange={(e) => { setAccountNo(e.target.value); setErrors((p) => ({ ...p, accountNo: undefined })); }} placeholder="e.g. 1234 5678 9012" className={inputCls(errors.accountNo)} />
+            {errors.accountNo && <p className="mt-1 text-xs text-red-500">{errors.accountNo}</p>}
+          </div>
+          <div className="border-t border-slate-100 pt-1" />
+          <div className="flex items-center justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {isEdit ? 'Save Changes' : 'Add Bank'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── EWalletMethodModal ───────────────────────────────────────────────────────
+
+interface EWalletMethodModalProps {
+  initial?: ApiPaymentMethodEWallet;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function EWalletMethodModal({ initial, onClose, onSuccess }: EWalletMethodModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const isEdit = !!initial;
+  const [walletName, setWalletName]   = useState(initial?.eWalletName ?? '');
+  const [accountName, setAccountName] = useState(initial?.accountName ?? '');
+  const [accountNo, setAccountNo]     = useState(initial?.accountNumber ?? '');
+  const [errors, setErrors]           = useState<{ walletName?: string; accountName?: string; accountNo?: string }>({});
+  const [saving, setSaving]           = useState(false);
+
+  function validate() {
+    const e: typeof errors = {};
+    if (!walletName.trim())  e.walletName  = 'E-Wallet name is required.';
+    if (!accountName.trim()) e.accountName = 'Account name is required.';
+    if (!accountNo.trim())   e.accountNo   = 'Account number / mobile number is required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const url = isEdit
+        ? `/api/accounting/settings/payment-methods/ewallets/${initial!.id}`
+        : '/api/accounting/settings/payment-methods/ewallets';
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eWalletName: walletName.trim(), accountName: accountName.trim(), accountNumber: accountNo.trim() }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) { toastError('Failed to save', json.error ?? 'Something went wrong.'); return; }
+      success(isEdit ? 'E-Wallet updated' : 'E-Wallet added', `${walletName.trim()} has been ${isEdit ? 'updated' : 'added'}.`);
+      onSuccess(); onClose();
+    } catch { toastError('Network error', 'Could not connect to the server.'); }
+    finally { setSaving(false); }
+  }
+
+  const inputCls = (err?: string) => `w-full rounded-lg border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground bg-background focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${err ? 'border-red-400 ring-1 ring-red-400' : 'border-border hover:border-slate-400'}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center"><Wallet2 size={15} className="text-white" /></div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit E-Wallet' : 'Add E-Wallet'}</h2>
+              <p className="text-xs text-slate-500">Payment Methods</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"><X size={15} /></button>
+        </div>
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">E-Wallet Name <span className="text-red-500">*</span></label>
+            <input type="text" value={walletName} onChange={(e) => { setWalletName(e.target.value); setErrors((p) => ({ ...p, walletName: undefined })); }} placeholder="e.g. GCash, Maya" className={inputCls(errors.walletName)} />
+            {errors.walletName && <p className="mt-1 text-xs text-red-500">{errors.walletName}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Account Name <span className="text-red-500">*</span></label>
+            <input type="text" value={accountName} onChange={(e) => { setAccountName(e.target.value); setErrors((p) => ({ ...p, accountName: undefined })); }} placeholder="e.g. Agila Tax Management" className={inputCls(errors.accountName)} />
+            {errors.accountName && <p className="mt-1 text-xs text-red-500">{errors.accountName}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Mobile / Account No. <span className="text-red-500">*</span></label>
+            <input type="text" value={accountNo} onChange={(e) => { setAccountNo(e.target.value); setErrors((p) => ({ ...p, accountNo: undefined })); }} placeholder="e.g. 0917 123 4567" className={inputCls(errors.accountNo)} />
+            {errors.accountNo && <p className="mt-1 text-xs text-red-500">{errors.accountNo}</p>}
+          </div>
+          <div className="border-t border-slate-100 pt-1" />
+          <div className="flex items-center justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {isEdit ? 'Save Changes' : 'Add E-Wallet'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── CashMethodModal ──────────────────────────────────────────────────────────
+
+interface CashMethodModalProps {
+  initial?: ApiPaymentMethodCash;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function CashMethodModal({ initial, onClose, onSuccess }: CashMethodModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const isEdit = !!initial;
+  const [payableTo, setPayableTo]         = useState(initial?.payableTo ?? '');
+  const [instructions, setInstructions]   = useState(initial?.instructions ?? '');
+  const [errors, setErrors]               = useState<{ payableTo?: string }>({});
+  const [saving, setSaving]               = useState(false);
+
+  function validate() {
+    const e: typeof errors = {};
+    if (!payableTo.trim()) e.payableTo = '"Payable to" is required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const url = isEdit
+        ? `/api/accounting/settings/payment-methods/cash/${initial!.id}`
+        : '/api/accounting/settings/payment-methods/cash';
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payableTo: payableTo.trim(), instructions: instructions.trim() || null }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) { toastError('Failed to save', json.error ?? 'Something went wrong.'); return; }
+      success(isEdit ? 'Cash method updated' : 'Cash method added', `${payableTo.trim()} has been ${isEdit ? 'updated' : 'added'}.`);
+      onSuccess(); onClose();
+    } catch { toastError('Network error', 'Could not connect to the server.'); }
+    finally { setSaving(false); }
+  }
+
+  const inputCls = (err?: string) => `w-full rounded-lg border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground bg-background focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors ${err ? 'border-red-400 ring-1 ring-red-400' : 'border-border hover:border-slate-400'}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center"><Banknote size={15} className="text-white" /></div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{isEdit ? 'Edit Cash Method' : 'Add Cash Method'}</h2>
+              <p className="text-xs text-slate-500">Payment Methods</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"><X size={15} /></button>
+        </div>
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Payable To <span className="text-red-500">*</span></label>
+            <input type="text" value={payableTo} onChange={(e) => { setPayableTo(e.target.value); setErrors((p) => ({ ...p, payableTo: undefined })); }} placeholder="e.g. Agila Tax Management Solutions" className={inputCls(errors.payableTo)} />
+            {errors.payableTo && <p className="mt-1 text-xs text-red-500">{errors.payableTo}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">Payment Instructions <span className="text-slate-400 font-normal normal-case">(optional)</span></label>
+            <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g. Please bring exact change during office hours." rows={3} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors resize-none" />
+          </div>
+          <div className="border-t border-slate-100 pt-1" />
+          <div className="flex items-center justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {isEdit ? 'Save Changes' : 'Add Cash Method'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── DeletePaymentMethodModal ─────────────────────────────────────────────────
+
+interface DeletePaymentMethodModalProps {
+  label: string;
+  name: string;
+  apiUrl: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function DeletePaymentMethodModal({ label, name, apiUrl, onClose, onSuccess }: DeletePaymentMethodModalProps): React.ReactNode {
+  const { success, error: toastError } = useToast();
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(apiUrl, { method: 'DELETE' });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) { toastError('Cannot delete', json.error ?? 'Something went wrong.'); onClose(); return; }
+      success(`${label} deleted`, `"${name}" has been removed.`);
+      onSuccess(); onClose();
+    } catch { toastError('Network error', 'Could not connect to the server.'); }
+    finally { setDeleting(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4"><Trash2 size={18} className="text-red-600" /></div>
+          <h2 className="text-sm font-bold text-slate-900 mb-1">Delete {label}</h2>
+          <p className="text-xs text-slate-500">Are you sure you want to remove <span className="font-semibold text-slate-700">{name}</span>? This cannot be undone.</p>
+        </div>
+        <div className="flex items-center justify-end gap-2.5 px-6 pb-5">
+          <button onClick={onClose} disabled={deleting} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Cancel</button>
+          <button onClick={() => { void handleDelete(); }} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-60">
+            {deleting && <RefreshCw size={12} className="animate-spin" />}
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AccountingSettings(): React.ReactNode {
-  // ── Flat top-level tabs (matches Sales portal pattern)
+  // ── Main tabs
+  type MainTab = 'general' | 'accounting';
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>('general');
+
+  // ── Accounting sub-tabs
   type ActiveTab = 'account-names' | 'account-types' | 'detail-types' | 'journal';
   const [activeTab, setActiveTab] = useState<ActiveTab>('account-names');
+
+  // ── General Settings singleton state
+  const [generalSettings, setGeneralSettings] = useState<ApiAccountingSetting | null>(null);
+  const [prevGeneralSettings, setPrevGeneralSettings] = useState<ApiAccountingSetting | null>(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+
+  // ── Invoice Branding form
+  const [brandingEmail, setBrandingEmail] = useState('');
+  const [brandingPhone, setBrandingPhone] = useState('');
+  const [savingBranding, setSavingBranding] = useState(false);
+
+  // ── Petty Cash Workflow form
+  const [pcfPrefix, setPcfPrefix] = useState('PCF');
+  const [cftPrefix, setCftPrefix] = useState('CFT');
+  const [custodianId, setCustodianId]     = useState<string | null>(null);
+  const [custodianName, setCustodianName] = useState('');
+  const [managerId, setManagerId]         = useState<string | null>(null);
+  const [managerName, setManagerName]     = useState('');
+  const [savingPettyCash, setSavingPettyCash] = useState(false);
+
+  // ── Payment Methods state
+  const [banks, setBanks]           = useState<ApiPaymentMethodBank[]>([]);
+  const [loadingBanks, setLoadingBanks]     = useState(true);
+  const [showAddBank, setShowAddBank]       = useState(false);
+  const [editBank, setEditBank]             = useState<ApiPaymentMethodBank | null>(null);
+  const [deleteBank, setDeleteBank]         = useState<ApiPaymentMethodBank | null>(null);
+
+  const [ewallets, setEWallets]             = useState<ApiPaymentMethodEWallet[]>([]);
+  const [loadingEWallets, setLoadingEWallets] = useState(true);
+  const [showAddEWallet, setShowAddEWallet] = useState(false);
+  const [editEWallet, setEditEWallet]       = useState<ApiPaymentMethodEWallet | null>(null);
+  const [deleteEWallet, setDeleteEWallet]   = useState<ApiPaymentMethodEWallet | null>(null);
+
+  const [cashMethods, setCashMethods]       = useState<ApiPaymentMethodCash[]>([]);
+  const [loadingCash, setLoadingCash]       = useState(true);
+  const [showAddCash, setShowAddCash]       = useState(false);
+  const [editCash, setEditCash]             = useState<ApiPaymentMethodCash | null>(null);
+  const [deleteCash, setDeleteCash]         = useState<ApiPaymentMethodCash | null>(null);
+
+  // Sync form fields when general settings load (adjust state during render pattern)
+  if (generalSettings !== prevGeneralSettings) {
+    setPrevGeneralSettings(generalSettings);
+    if (generalSettings) {
+      setBrandingEmail(generalSettings.invoiceEmail ?? '');
+      setBrandingPhone(generalSettings.invoicePhoneNumber ?? '');
+      setPcfPrefix(generalSettings.pcfNumberPrefix);
+      setCftPrefix(generalSettings.cftNumberPrefix);
+      setCustodianId(generalSettings.defaultCustodianId);
+      setCustodianName(generalSettings.defaultCustodianName ?? '');
+      setManagerId(generalSettings.defaultAccountingManagerId);
+      setManagerName(generalSettings.defaultAccountingManagerName ?? '');
+    }
+  }
 
   // ── GL Accounts state
   const [accounts, setAccounts] = useState<GlAccountRecord[]>([]);
@@ -897,12 +1393,68 @@ export function AccountingSettings(): React.ReactNode {
     }
   }, []);
 
+  const fetchGeneralSettings = useCallback(async () => {
+    setLoadingSettings(true);
+    try {
+      const res = await fetch('/api/accounting/settings');
+      if (res.ok) {
+        const json = await res.json() as { data: ApiAccountingSetting };
+        setGeneralSettings(json.data);
+      }
+    } finally {
+      setLoadingSettings(false);
+    }
+  }, []);
+
+  const fetchBanks = useCallback(async () => {
+    setLoadingBanks(true);
+    try {
+      const res = await fetch('/api/accounting/settings/payment-methods/banks');
+      if (res.ok) {
+        const json = await res.json() as { data: ApiPaymentMethodBank[] };
+        setBanks(json.data);
+      }
+    } finally {
+      setLoadingBanks(false);
+    }
+  }, []);
+
+  const fetchEWallets = useCallback(async () => {
+    setLoadingEWallets(true);
+    try {
+      const res = await fetch('/api/accounting/settings/payment-methods/ewallets');
+      if (res.ok) {
+        const json = await res.json() as { data: ApiPaymentMethodEWallet[] };
+        setEWallets(json.data);
+      }
+    } finally {
+      setLoadingEWallets(false);
+    }
+  }, []);
+
+  const fetchCashMethods = useCallback(async () => {
+    setLoadingCash(true);
+    try {
+      const res = await fetch('/api/accounting/settings/payment-methods/cash');
+      if (res.ok) {
+        const json = await res.json() as { data: ApiPaymentMethodCash[] };
+        setCashMethods(json.data);
+      }
+    } finally {
+      setLoadingCash(false);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchAccounts();
     void fetchAccountTypes();
     void fetchDetailTypes();
     void fetchAccountTypesWithDetails();
-  }, [fetchAccounts, fetchAccountTypes, fetchDetailTypes, fetchAccountTypesWithDetails]);
+    void fetchGeneralSettings();
+    void fetchBanks();
+    void fetchEWallets();
+    void fetchCashMethods();
+  }, [fetchAccounts, fetchAccountTypes, fetchDetailTypes, fetchAccountTypesWithDetails, fetchGeneralSettings, fetchBanks, fetchEWallets, fetchCashMethods]);
 
   const filteredAccounts = useMemo(() => {
     if (!accountSearch.trim()) return accounts;
@@ -932,6 +1484,49 @@ export function AccountingSettings(): React.ReactNode {
     );
   }, [detailTypes, detailSearch]);
 
+  // ── Invoice Branding save handler
+  const { success: toastSuccess, error: toastError } = useToast();
+
+  async function handleSaveBranding(ev: React.FormEvent) {
+    ev.preventDefault();
+    setSavingBranding(true);
+    try {
+      const res = await fetch('/api/accounting/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceEmail: brandingEmail.trim() || null, invoicePhoneNumber: brandingPhone.trim() || null }),
+      });
+      const json = await res.json() as { error?: string; data?: ApiAccountingSetting };
+      if (!res.ok) { toastError('Failed to save', json.error ?? 'Something went wrong.'); return; }
+      if (json.data) setGeneralSettings(json.data);
+      toastSuccess('Branding saved', 'Invoice email and phone number have been updated.');
+    } catch { toastError('Network error', 'Could not connect to the server.'); }
+    finally { setSavingBranding(false); }
+  }
+
+  // ── Petty Cash Workflow save handler
+  async function handleSavePettyCash(ev: React.FormEvent) {
+    ev.preventDefault();
+    setSavingPettyCash(true);
+    try {
+      const res = await fetch('/api/accounting/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pcfNumberPrefix: pcfPrefix.trim() || 'PCF',
+          cftNumberPrefix: cftPrefix.trim() || 'CFT',
+          defaultCustodianId: custodianId,
+          defaultAccountingManagerId: managerId,
+        }),
+      });
+      const json = await res.json() as { error?: string; data?: ApiAccountingSetting };
+      if (!res.ok) { toastError('Failed to save', json.error ?? 'Something went wrong.'); return; }
+      if (json.data) setGeneralSettings(json.data);
+      toastSuccess('Petty cash settings saved', 'Workflow configuration has been updated.');
+    } catch { toastError('Network error', 'Could not connect to the server.'); }
+    finally { setSavingPettyCash(false); }
+  }
+
   // ── Shared table styles (match Sales portal)
   const thClass = 'px-6 py-3.5 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider';
   const tdClass = 'px-6 py-3.5';
@@ -954,20 +1549,18 @@ export function AccountingSettings(): React.ReactNode {
           </div>
         </div>
 
-        {/* Flat tab navigation */}
+        {/* Main tab navigation */}
         <div className="border-b border-border">
           <nav className="flex gap-1">
             {([
-              { id: 'account-names' as const, label: 'Account Names', icon: <BookOpen size={18} /> },
-              { id: 'account-types' as const, label: 'Account Types', icon: <Tag size={18} /> },
-              { id: 'detail-types' as const, label: 'Detail Types', icon: <ListFilter size={18} /> },
-              { id: 'journal' as const, label: 'Journal', icon: <PenLine size={18} /> },
+              { id: 'general' as const, label: 'General Settings', icon: <Settings size={18} /> },
+              { id: 'accounting' as const, label: 'Accounting', icon: <BookOpen size={18} /> },
             ]).map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveMainTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
+                  activeMainTab === tab.id
                     ? 'border-amber-600 text-amber-600'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                 }`}
@@ -982,6 +1575,264 @@ export function AccountingSettings(): React.ReactNode {
 
       {/* ── Content ── */}
       <div className="max-w-6xl mx-auto px-6 py-8">
+
+      {/* ─── General Settings tab ─── */}
+      {activeMainTab === 'general' && (
+        <div className="space-y-8">
+
+          {/* Invoice Branding */}
+          <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-border bg-muted/30 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center"><FileText size={15} className="text-white" /></div>
+              <div>
+                <h2 className="text-sm font-bold text-foreground">Invoice Branding</h2>
+                <p className="text-xs text-muted-foreground">Contact details shown on client invoices</p>
+              </div>
+            </div>
+            <form onSubmit={(e) => { void handleSaveBranding(e); }} className="p-6 space-y-4">
+              {loadingSettings ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <RefreshCw size={14} className="animate-spin" /> Loading…
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5 uppercase tracking-wide">Invoice Email</label>
+                      <div className="relative">
+                        <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <input type="email" value={brandingEmail} onChange={(e) => setBrandingEmail(e.target.value)} placeholder="billing@yourdomain.com" className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5 uppercase tracking-wide">Invoice Phone Number</label>
+                      <div className="relative">
+                        <Smartphone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <input type="tel" value={brandingPhone} onChange={(e) => setBrandingPhone(e.target.value)} placeholder="+63 917 123 4567" className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <button type="submit" disabled={savingBranding} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+                      {savingBranding && <RefreshCw size={12} className="animate-spin" />}
+                      Save Branding
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+
+          {/* Payment Methods */}
+          <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-border bg-muted/30 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center"><CreditCard size={15} className="text-white" /></div>
+              <div>
+                <h2 className="text-sm font-bold text-foreground">Payment Methods</h2>
+                <p className="text-xs text-muted-foreground">Bank, e-wallet, and cash options accepted from clients</p>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+
+              {/* Banks */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Landmark size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">Bank Transfers</span>
+                    <span className="rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5">{banks.length}</span>
+                  </div>
+                  <button onClick={() => setShowAddBank(true)} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
+                    <Plus size={12} /> Add Bank
+                  </button>
+                </div>
+                {loadingBanks ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><RefreshCw size={12} className="animate-spin" /> Loading…</div>
+                ) : banks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-2">No bank accounts added yet.</p>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+                    {banks.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/30 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{b.bankName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{b.accountName} · {b.accountNumber}</p>
+                        </div>
+                        <div className="flex items-center gap-1 ml-4 shrink-0">
+                          <button onClick={() => setEditBank(b)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-amber-50 hover:text-amber-600 transition-colors"><Pencil size={13} /></button>
+                          <button onClick={() => setDeleteBank(b)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-border" />
+
+              {/* E-Wallets */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Wallet2 size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">E-Wallets</span>
+                    <span className="rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5">{ewallets.length}</span>
+                  </div>
+                  <button onClick={() => setShowAddEWallet(true)} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
+                    <Plus size={12} /> Add E-Wallet
+                  </button>
+                </div>
+                {loadingEWallets ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><RefreshCw size={12} className="animate-spin" /> Loading…</div>
+                ) : ewallets.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-2">No e-wallets added yet.</p>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+                    {ewallets.map((w) => (
+                      <div key={w.id} className="flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/30 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{w.eWalletName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{w.accountName} · {w.accountNumber}</p>
+                        </div>
+                        <div className="flex items-center gap-1 ml-4 shrink-0">
+                          <button onClick={() => setEditEWallet(w)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-amber-50 hover:text-amber-600 transition-colors"><Pencil size={13} /></button>
+                          <button onClick={() => setDeleteEWallet(w)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-border" />
+
+              {/* Cash */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Banknote size={15} className="text-amber-600" />
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">Cash</span>
+                    <span className="rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5">{cashMethods.length}</span>
+                  </div>
+                  <button onClick={() => setShowAddCash(true)} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
+                    <Plus size={12} /> Add Cash Method
+                  </button>
+                </div>
+                {loadingCash ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><RefreshCw size={12} className="animate-spin" /> Loading…</div>
+                ) : cashMethods.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-2">No cash payment method added yet.</p>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+                    {cashMethods.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/30 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">Payable to: {c.payableTo}</p>
+                          {c.instructions && <p className="text-xs text-muted-foreground truncate">{c.instructions}</p>}
+                        </div>
+                        <div className="flex items-center gap-1 ml-4 shrink-0">
+                          <button onClick={() => setEditCash(c)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-amber-50 hover:text-amber-600 transition-colors"><Pencil size={13} /></button>
+                          <button onClick={() => setDeleteCash(c)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+          {/* Petty Cash Workflow */}
+          <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-border bg-muted/30 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center"><Wallet size={15} className="text-white" /></div>
+              <div>
+                <h2 className="text-sm font-bold text-foreground">Petty Cash Workflows</h2>
+                <p className="text-xs text-muted-foreground">Document numbering and default approvers</p>
+              </div>
+            </div>
+            <form onSubmit={(e) => { void handleSavePettyCash(e); }} className="p-6 space-y-5">
+              {loadingSettings ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <RefreshCw size={14} className="animate-spin" /> Loading…
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5 uppercase tracking-wide">PCF Number Prefix</label>
+                      <div className="relative">
+                        <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <input type="text" value={pcfPrefix} onChange={(e) => setPcfPrefix(e.target.value)} maxLength={10} placeholder="PCF" className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5 uppercase tracking-wide">CFT Number Prefix</label>
+                      <div className="relative">
+                        <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <input type="text" value={cftPrefix} onChange={(e) => setCftPrefix(e.target.value)} maxLength={10} placeholder="CFT" className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <UserSearchInput
+                      label="Default Custodian"
+                      selectedId={custodianId}
+                      selectedName={custodianName}
+                      onSelect={(id, name) => { setCustodianId(id); setCustodianName(name); }}
+                      onClear={() => { setCustodianId(null); setCustodianName(''); }}
+                    />
+                    <UserSearchInput
+                      label="Default Accounting Manager"
+                      selectedId={managerId}
+                      selectedName={managerName}
+                      onSelect={(id, name) => { setManagerId(id); setManagerName(name); }}
+                      onClear={() => { setManagerId(null); setManagerName(''); }}
+                    />
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <button type="submit" disabled={savingPettyCash} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-60">
+                      {savingPettyCash && <RefreshCw size={12} className="animate-spin" />}
+                      Save Petty Cash Settings
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+
+        </div>
+      )}
+
+      {/* ─── Accounting tab ─── */}
+      {activeMainTab === 'accounting' && (
+        <div>
+
+          {/* Accounting sub-tabs */}
+          <div className="border-b border-border mb-8">
+            <nav className="flex gap-1">
+              {([
+                { id: 'account-names' as const, label: 'Account Names', icon: <BookOpen size={18} /> },
+                { id: 'account-types' as const, label: 'Account Types', icon: <Tag size={18} /> },
+                { id: 'detail-types' as const, label: 'Detail Types', icon: <ListFilter size={18} /> },
+                { id: 'journal' as const, label: 'Journal', icon: <PenLine size={18} /> },
+              ]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-amber-600 text-amber-600'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
 
       {/* ─── Account Names tab ─── */}
       {activeTab === 'account-names' && (
@@ -1399,6 +2250,9 @@ export function AccountingSettings(): React.ReactNode {
         </div>
       )}
 
+        </div>
+      )}
+
       </div>
 
       {/* ── GL Account modals ── */}
@@ -1468,6 +2322,53 @@ export function AccountingSettings(): React.ReactNode {
           detailType={deleteDetail}
           onClose={() => setDeleteDetail(null)}
           onSuccess={() => { void fetchDetailTypes(); void fetchAccountTypesWithDetails(); }}
+        />
+      )}
+
+      {/* ── Payment Method modals ── */}
+      {showAddBank && (
+        <BankMethodModal onClose={() => setShowAddBank(false)} onSuccess={() => { void fetchBanks(); }} />
+      )}
+      {editBank && (
+        <BankMethodModal initial={editBank} onClose={() => setEditBank(null)} onSuccess={() => { void fetchBanks(); }} />
+      )}
+      {deleteBank && (
+        <DeletePaymentMethodModal
+          label="Bank"
+          name={deleteBank.bankName}
+          apiUrl={`/api/accounting/settings/payment-methods/banks/${deleteBank.id}`}
+          onClose={() => setDeleteBank(null)}
+          onSuccess={() => { void fetchBanks(); }}
+        />
+      )}
+      {showAddEWallet && (
+        <EWalletMethodModal onClose={() => setShowAddEWallet(false)} onSuccess={() => { void fetchEWallets(); }} />
+      )}
+      {editEWallet && (
+        <EWalletMethodModal initial={editEWallet} onClose={() => setEditEWallet(null)} onSuccess={() => { void fetchEWallets(); }} />
+      )}
+      {deleteEWallet && (
+        <DeletePaymentMethodModal
+          label="E-Wallet"
+          name={deleteEWallet.eWalletName}
+          apiUrl={`/api/accounting/settings/payment-methods/ewallets/${deleteEWallet.id}`}
+          onClose={() => setDeleteEWallet(null)}
+          onSuccess={() => { void fetchEWallets(); }}
+        />
+      )}
+      {showAddCash && (
+        <CashMethodModal onClose={() => setShowAddCash(false)} onSuccess={() => { void fetchCashMethods(); }} />
+      )}
+      {editCash && (
+        <CashMethodModal initial={editCash} onClose={() => setEditCash(null)} onSuccess={() => { void fetchCashMethods(); }} />
+      )}
+      {deleteCash && (
+        <DeletePaymentMethodModal
+          label="Cash Method"
+          name={deleteCash.payableTo}
+          apiUrl={`/api/accounting/settings/payment-methods/cash/${deleteCash.id}`}
+          onClose={() => setDeleteCash(null)}
+          onSuccess={() => { void fetchCashMethods(); }}
         />
       )}
     </div>

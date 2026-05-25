@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import type { InvoiceRecord } from '@/types/accounting.types';
+import type { InvoiceRecord, InvoiceBrandingSettings } from '@/types/accounting.types';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'DRAFT',
@@ -69,12 +69,14 @@ function getBilledTo(invoice: InvoiceRecord): {
 
 interface InvoiceTemplateProps {
   invoice: InvoiceRecord;
+  /** Branding & payment method settings from the accounting settings API. */
+  settings?: InvoiceBrandingSettings;
   /** When true, wraps in a plain white paper-style container (for print view). */
   printMode?: boolean;
   className?: string;
 }
 
-export function InvoiceTemplate({ invoice, printMode = false, className = '' }: InvoiceTemplateProps) {
+export function InvoiceTemplate({ invoice, settings, printMode = false, className = '' }: InvoiceTemplateProps) {
   const billed = getBilledTo(invoice);
   const statusColor = STATUS_COLORS[invoice.status] ?? STATUS_COLORS.DRAFT;
 
@@ -100,9 +102,15 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
               <p className="text-xs text-slate-500">Cebu City, Philippines</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mt-2">
-            accounting@agila.ph · 0912 312 313
-          </p>
+          {(settings?.invoiceEmail || settings?.invoicePhoneNumber) ? (
+            <p className="text-xs text-slate-400 mt-2">
+              {[settings.invoiceEmail, settings.invoicePhoneNumber].filter(Boolean).join(' · ')}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400 mt-2">
+              accounting@agila.ph · 0912 312 313
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="text-2xl font-black text-amber-600 tracking-tight">{invoice.invoiceNumber}</p>
@@ -158,11 +166,12 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
           </thead>
           <tbody className="divide-y divide-slate-50">
             {invoice.items.map((item) => {
-              const categoryConfig = {
+              const categoryConfig: Record<string, { label: string; color: string }> = {
                 SERVICE_FEE: { label: 'Service Fee', color: 'bg-purple-100 text-purple-700' },
                 TAX_REIMBURSEMENT: { label: 'Tax Reimb.', color: 'bg-amber-100 text-amber-700' },
                 GOV_FEE_REIMBURSEMENT: { label: 'Gov Fee Reimb.', color: 'bg-blue-100 text-blue-700' },
                 OUT_OF_POCKET: { label: 'Out of Pocket', color: 'bg-slate-100 text-slate-700' },
+                CLIENT_FUND_DEPOSIT: { label: 'Client Fund', color: 'bg-green-100 text-green-700' },
               };
               const category = item.category ?? 'SERVICE_FEE';
               const cfg = categoryConfig[category] ?? categoryConfig.SERVICE_FEE;
@@ -239,20 +248,48 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
             Payment Methods
           </p>
           <div className="space-y-2 text-xs text-slate-700">
-            <div>
-              <p className="font-bold text-slate-800">Cash</p>
-              <p className="text-slate-500">Payable to Agila Tax Management System</p>
-            </div>
-            <div>
-              <p className="font-bold text-slate-800">Bank Transfer</p>
-              <p className="text-slate-500">BDO Savings Account</p>
-              <p className="text-slate-500">Account Name: Agila Tax Management</p>
-              <p className="text-slate-500">Account No: 0012 3456 7890</p>
-            </div>
-            <div>
-              <p className="font-bold text-slate-800">GCash / Maya</p>
-              <p className="text-slate-500">0912 312 313</p>
-            </div>
+            {settings && (settings.cashMethods.length > 0 || settings.banks.length > 0 || settings.ewallets.length > 0) ? (
+              <>
+                {settings.cashMethods.map((c, i) => (
+                  <div key={`cash-${i}`}>
+                    <p className="font-bold text-slate-800">Cash</p>
+                    <p className="text-slate-500">Payable to {c.payableTo}</p>
+                    {c.instructions && <p className="text-slate-500">{c.instructions}</p>}
+                  </div>
+                ))}
+                {settings.banks.map((b, i) => (
+                  <div key={`bank-${i}`}>
+                    <p className="font-bold text-slate-800">{b.bankName}</p>
+                    <p className="text-slate-500">Account Name: {b.accountName}</p>
+                    <p className="text-slate-500">Account No: {b.accountNumber}</p>
+                  </div>
+                ))}
+                {settings.ewallets.map((e, i) => (
+                  <div key={`ewallet-${i}`}>
+                    <p className="font-bold text-slate-800">{e.eWalletName}</p>
+                    <p className="text-slate-500">Account Name: {e.accountName}</p>
+                    <p className="text-slate-500">{e.accountNumber}</p>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="font-bold text-slate-800">Cash</p>
+                  <p className="text-slate-500">Payable to Agila Tax Management System</p>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800">Bank Transfer</p>
+                  <p className="text-slate-500">BDO Savings Account</p>
+                  <p className="text-slate-500">Account Name: Agila Tax Management</p>
+                  <p className="text-slate-500">Account No: 0012 3456 7890</p>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800">GCash / Maya</p>
+                  <p className="text-slate-500">0912 312 313</p>
+                </div>
+              </>
+            )}
           </div>
           {/* Payments recorded */}
           {invoice.payments.length > 0 && (
@@ -290,7 +327,9 @@ export function InvoiceTemplate({ invoice, printMode = false, className = '' }: 
       <div className="px-8 py-4 bg-slate-50 rounded-b-2xl">
         <p className="text-xs text-center text-slate-500">
           If you have any questions, feel free to contact us at{' '}
-          <span className="font-bold text-slate-700">0912 312 313</span>
+          <span className="font-bold text-slate-700">
+            {settings?.invoicePhoneNumber ?? settings?.invoiceEmail ?? '0912 312 313'}
+          </span>
         </p>
         <p className="text-[10px] text-center text-slate-400 mt-1">
           Thank you for your business with Agila Tax Management System

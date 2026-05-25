@@ -1,0 +1,43 @@
+// prisma/models/announcements.prisma
+
+enum AnnouncementAudience {
+  ALL_CLIENTS
+  ACTIVE_ONLY
+  VAT_CLIENTS
+  NON_VAT_CLIENTS
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Announcement {
+  id       String @id @default(cuid())
+
+  title    String
+  content  String @db.Text
+
+  audience AnnouncementAudience @default(ALL_CLIENTS)
+  priority AnnouncementPriority @default(NORMAL)
+
+  // Who authored this announcement (display name)
+  authorName String
+
+  // Link to the internal User who created it
+  authorId   String?
+  author     User?   @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  // Visibility
+  isActive    Boolean   @default(true)
+  publishedAt DateTime  @default(now())
+  expiresAt   DateTime? // null = never expires
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([audience])
+  @@index([isActive, publishedAt])
+  @@map("announcements")
+}

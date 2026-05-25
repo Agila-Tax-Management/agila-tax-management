@@ -118,6 +118,7 @@ interface TaskManagementBoardProps {
   defaultDepartmentName?: string;
   taskHrefBase?: string;
   accentColor?: string;
+  allowedDepartmentNames?: string[];
 }
 
 const DEFAULT_STATUSES: TaskApiStatus[] = [
@@ -140,6 +141,7 @@ function TaskManagementBoardInner({
   defaultDepartmentName,
   taskHrefBase = '/portal/task-management/tasks',
   accentColor = '#0f766e',
+  allowedDepartmentNames,
 }: TaskManagementBoardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -361,7 +363,14 @@ function TaskManagementBoardInner({
     return { label: `${Math.abs(n)}d over`, cls: 'text-rose-600 bg-rose-50' };
   };
 
+  const allowedDeptIds = useMemo(() => {
+    if (!allowedDepartmentNames?.length) return null;
+    const allowed = new Set(allowedDepartmentNames.map(n => n.toLowerCase()));
+    return new Set(departments.filter(d => allowed.has(d.name.toLowerCase())).map(d => d.id));
+  }, [allowedDepartmentNames, departments]);
+
   const filteredTasks = useMemo(() => tasks.filter(t => {
+    if (allowedDeptIds && t.deptId != null && !allowedDeptIds.has(t.deptId)) return false;
     const matchSearch   = search === '' ||
       t.title.toLowerCase().includes(search.toLowerCase()) ||
       getClientName(t.clientId).toLowerCase().includes(search.toLowerCase()) ||
@@ -370,7 +379,7 @@ function TaskManagementBoardInner({
     const matchPriority = filterPriority === 'all' || t.priority === filterPriority;
     return matchSearch && matchStatus && matchPriority;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [tasks, search, filterStatus, filterPriority]);
+  }), [tasks, search, filterStatus, filterPriority, allowedDeptIds]);
 
   // Group tasks by deptId (numeric key)
   const tasksByDeptId = useMemo(() => {
@@ -454,6 +463,13 @@ function TaskManagementBoardInner({
   const pageSubtitle = activeDept
     ? `Tasks assigned to the ${activeDept.name} department.`
     : 'All tasks across departments.';
+
+  const displayDepts = useMemo(() => {
+    const base = activeDept ? [activeDept] : departments;
+    if (!allowedDepartmentNames?.length) return base;
+    const allowed = new Set(allowedDepartmentNames.map(n => n.toLowerCase()));
+    return base.filter(d => allowed.has(d.name.toLowerCase()));
+  }, [activeDept, departments, allowedDepartmentNames]);
 
   /* ─── Row renderer (list view) ─── */
   const renderTaskRow = (task: BoardTask) => {
@@ -735,8 +751,6 @@ function TaskManagementBoardInner({
       </div>
     );
   }
-
-  const displayDepts = activeDept ? [activeDept] : departments;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">

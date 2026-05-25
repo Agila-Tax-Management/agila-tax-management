@@ -261,13 +261,21 @@ model WorkScheduleDay {
   // 0 = Sunday … 6 = Saturday (ISO: 1 = Monday)
   dayOfWeek Int
 
-  startTime String
-  endTime   String
+  // Null when isFlexible = true
+  startTime String?
+  endTime   String?
 
   breakStart String?
   breakEnd   String?
 
   isWorkingDay Boolean @default(true)
+
+  // OFFICE | WFH | HYBRID
+  locationType String @default("OFFICE")
+
+  // If true, employee renders required hours freely (no fixed clock-in/out)
+  isFlexible    Boolean @default(false)
+  requiredHours Int?
 
   createdAt DateTime @default(now())
 

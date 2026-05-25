@@ -10,12 +10,39 @@ import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 import { InvoiceTemplate } from '@/components/accounting/InvoiceTemplate';
 
-async function openInvoicePDF(invoice: import('@/types/accounting.types').InvoiceRecord) {
+async function openInvoicePDF(
+  invoice: import('@/types/accounting.types').InvoiceRecord,
+  settings?: import('@/types/accounting.types').InvoiceBrandingSettings,
+) {
+  // Convert WebP logo → PNG via canvas before passing to react-pdf.
+  // PDF format does not support WebP natively, so react-pdf silently drops it
+  // unless we supply a pre-converted PNG base64 data URL.
+  let logoSrc: string | undefined;
+  try {
+    const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Logo load failed'));
+      img.src = `${window.location.origin}/images/agila_logo.webp`;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, 0, 0);
+      logoSrc = canvas.toDataURL('image/png');
+    }
+  } catch {
+    // Logo conversion failed — PDF will render without the logo
+  }
+
   const [{ pdf }, { InvoicePDF }] = await Promise.all([
     import('@react-pdf/renderer'),
     import('@/components/accounting/InvoicePDF'),
   ]);
-  const el = React.createElement(InvoicePDF, { invoice }) as Parameters<typeof pdf>[0];
+  const el = React.createElement(InvoicePDF, { invoice, settings, logoSrc }) as Parameters<typeof pdf>[0];
   const blob = await pdf(el).toBlob();
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
@@ -33,6 +60,7 @@ import type {
   InvoiceItemInput,
   PaymentMethodType,
   InvoiceStatus,
+  InvoiceBrandingSettings,
 } from '@/types/accounting.types';
 
 /* ── Helpers ──────────────────────────────────────────────────── */
@@ -82,6 +110,8 @@ function newRow(partial?: Partial<InvoiceItemInput>): ItemRow {
     unitPrice: partial?.unitPrice ?? 0,
     total: partial?.total ?? 0,
     remarks: partial?.remarks ?? '',
+    category: partial?.category ?? 'SERVICE_FEE',
+    isVatable: partial?.isVatable ?? false,
   };
 }
 
@@ -97,6 +127,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
 
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [brandingSettings, setBrandingSettings] = useState<InvoiceBrandingSettings | null>(null);
 
   // Edit mode
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
@@ -132,11 +163,18 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
     const load = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/accounting/invoices/${id}`);
+        const [res, brandingRes] = await Promise.all([
+          fetch(`/api/accounting/invoices/${id}`),
+          fetch('/api/accounting/settings/branding'),
+        ]);
         if (!res.ok) { toastError('Not found', 'Invoice could not be loaded.'); return; }
         const data = await res.json();
         const loadedInvoice = data.data as InvoiceRecord;
         setInvoice(loadedInvoice);
+        if (brandingRes.ok) {
+          const bd = await brandingRes.json();
+          setBrandingSettings(bd.data as InvoiceBrandingSettings);
+        }
         // If page opened directly in edit mode (?edit=true), populate edit fields now
         if (initialEditingRef.current) {
           setEditDueDate(loadedInvoice.dueDate.split('T')[0]);
@@ -151,6 +189,8 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
               unitPrice: it.unitPrice,
               total: it.total,
               remarks: it.remarks ?? '',
+              category: it.category ?? 'SERVICE_FEE',
+              isVatable: it.isVatable ?? false,
             })),
           );
         }
@@ -199,6 +239,8 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
         unitPrice: it.unitPrice,
         total: it.total,
         remarks: it.remarks ?? '',
+        category: it.category ?? 'SERVICE_FEE',
+        isVatable: it.isVatable ?? false,
       })),
     );
     setIsEditing(true);
@@ -207,7 +249,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
   const cancelEdit = () => setIsEditing(false);
 
   // Item update helpers
-  const updateEditItem = (key: string, field: keyof ItemRow, value: string | number) => {
+  const updateEditItem = (key: string, field: keyof ItemRow, value: string | number | boolean) => {
     setEditItems((prev) =>
       prev.map((row) => {
         if (row._key !== key) return row;
@@ -349,7 +391,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
                 disabled={isPrinting}
                 onClick={() => {
                   setIsPrinting(true);
-                  openInvoicePDF(invoice).catch(() => toastError('PDF Error', 'Could not generate PDF.')).finally(() => setIsPrinting(false));
+                  openInvoicePDF(invoice, brandingSettings ?? undefined).catch(() => toastError('PDF Error', 'Could not generate PDF.')).finally(() => setIsPrinting(false));
                 }}
               >
                 {isPrinting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={15} />}
@@ -382,7 +424,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
       </div>
 
       {/* ── VIEW MODE: Invoice Template ─────────────────────── */}
-      {!isEditing && <InvoiceTemplate invoice={invoice} />}
+      {!isEditing && <InvoiceTemplate invoice={invoice} settings={brandingSettings ?? undefined} />}
 
       {/* ── EDIT MODE ───────────────────────────────────────── */}
       {isEditing && (
@@ -411,9 +453,10 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
               <div>
                 <label className="text-xs font-bold text-slate-600 mb-1.5 block">Status</label>
                 <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as InvoiceStatus)} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-2 focus:ring-amber-500">
-                  {(Object.keys(STATUS_CONFIG) as InvoiceStatus[]).map((k) => (
-                    <option key={k} value={k}>{STATUS_CONFIG[k].label}</option>
-                  ))}
+                  <option value="DRAFT">Draft</option>
+                  <option value="UNPAID">Unpaid</option>
+                  <option value="OVERDUE">Overdue</option>
+                  <option value="VOID">Void</option>
                 </select>
               </div>
               <div>
@@ -476,6 +519,7 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className="text-left pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest pr-3">Description</th>
+                    <th className="text-left pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-36 pl-2">Category</th>
                     <th className="text-center pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">Qty</th>
                     <th className="text-right pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28">Unit Price</th>
                     <th className="text-left pb-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 px-2">Remarks</th>
@@ -488,6 +532,26 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
                     <tr key={row._key}>
                       <td className="py-2 pr-3">
                         <input type="text" value={row.description} onChange={(e) => updateEditItem(row._key, 'description', e.target.value)} className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500" />
+                      </td>
+                      <td className="py-2 pl-2">
+                        <select
+                          value={row.category}
+                          onChange={(e) =>
+                            updateEditItem(row._key, 'category', e.target.value)
+                          }
+                          className="w-36 h-9 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                          <option value="SERVICE_FEE">Service Fee</option>
+                          <option value="TAX_REIMBURSEMENT">Tax Reimbursement</option>
+                          <option value="GOV_FEE_REIMBURSEMENT">Gov. Fee Reimb.</option>
+                          <option value="OUT_OF_POCKET">Out of Pocket</option>
+                          <option value="CLIENT_FUND_DEPOSIT">Client Fund Deposit</option>
+                        </select>
+                        {row.category === 'CLIENT_FUND_DEPOSIT' && (
+                          <p className="text-[10px] text-amber-600 mt-1 leading-tight">
+                            ↑ Added to client fund when paid
+                          </p>
+                        )}
                       </td>
                       <td className="py-2">
                         <input type="number" min={1} value={row.quantity} onChange={(e) => updateEditItem(row._key, 'quantity', Number(e.target.value))} className="w-14 h-9 px-2 text-center bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500" />

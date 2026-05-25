@@ -156,7 +156,10 @@ export default function DashboardPage() {
             <SectionHeader icon={<GridIcon size={14} className="text-indigo-500" />} label="Enterprise Portals" />
             <p className="text-foreground text-xl font-bold mt-1.5 tracking-tight">Agila Internal Portals</p>
           </div>
-          <button className="text-blue-600 font-bold text-xs uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
+          <button
+            onClick={() => router.push('/dashboard/portals')}
+            className="text-blue-600 font-bold text-xs uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all"
+          >
             View All <ChevronRight size={14} />
           </button>
         </div>
