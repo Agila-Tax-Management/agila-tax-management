@@ -82,6 +82,7 @@ export const TimesheetView: React.FC = () => {
     hasActiveContract,
     hasActiveCompensation,
     isLoadingEmployee,
+    refreshEmployee,
   } = useAuth();
 
   const { success: toastSuccess, error: toastError } = useToast();
@@ -91,6 +92,7 @@ export const TimesheetView: React.FC = () => {
   const [lunchMins,    setLunchMins]    = useState(0);
   const [liveHours,    setLiveHours]    = useState('0.00');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [viewMode, setViewMode] = useState<'week'|'month'>('week');
   const [offset,   setOffset]   = useState(0);
@@ -268,6 +270,13 @@ export const TimesheetView: React.FC = () => {
           <p className="text-xs text-muted-foreground">
             Please contact your administrator to activate your contract and configure compensation before using the timesheet.
           </p>
+          <button
+            onClick={async () => { setIsRefreshing(true); await refreshEmployee(); setIsRefreshing(false); }}
+            disabled={isRefreshing}
+            className="mt-6 w-full rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-semibold py-2.5 px-4 transition-colors"
+          >
+            {isRefreshing ? 'Checking…' : 'Check Again'}
+          </button>
         </Card>
       </div>
     );

@@ -36,6 +36,7 @@ interface AuthContextType {
   hasActiveContract: boolean;
   hasActiveCompensation: boolean;
   isLoadingEmployee: boolean;
+  refreshEmployee: () => Promise<void>;
 }
 
 // ── Internal API types ───────────────────────────────────────────────────────
@@ -103,45 +104,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasActiveCompensation, setHasActiveCompensation] = useState(false);
   const [isLoadingEmployee,     setIsLoadingEmployee]     = useState(true);
 
+  const loadEmployee = React.useCallback(async () => {
+    setIsLoadingEmployee(true);
+    try {
+      const res = await fetch('/api/dashboard/timesheet/me');
+      if (!res.ok) { setIsLoadingEmployee(false); return; }
+      const json = (await res.json()) as { data?: TimesheetApiData };
+      const d = json.data;
+      if (!d) { setIsLoadingEmployee(false); return; }
+      const { employee, hasActiveContract: hac, hasActiveCompensation: hacp, todayRecord, records } = d;
+      const nameParts = [
+        employee.firstName,
+        employee.middleName ? `${employee.middleName[0]}.` : null,
+        employee.lastName,
+        employee.nameExtension,
+      ].filter(Boolean);
+      setUser({
+        name:          nameParts.join(' '),
+        role:          employee.position   ?? 'Employee',
+        employeeId:    employee.employeeNo ?? '',
+        department:    employee.department ?? '',
+        isClockedIn:   !!todayRecord?.timeIn && !todayRecord?.timeOut,
+        isOnLunch:     !!todayRecord?.lunchStart && !todayRecord?.lunchEnd,
+        clockInTime:   todayRecord?.timeIn    ?? null,
+        lunchStartTime:todayRecord?.lunchStart ?? null,
+      });
+      setHasActiveContract(hac);
+      setHasActiveCompensation(hacp);
+      setAttendanceLogs(records.map(mapApiRecord));
+    } catch {
+      // silent — UI handles null user
+    } finally {
+      setIsLoadingEmployee(false);
+    }
+  }, []);
+
    
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/dashboard/timesheet/me');
-        if (!res.ok || cancelled) { setIsLoadingEmployee(false); return; }
-        const json = (await res.json()) as { data?: TimesheetApiData };
-        if (cancelled) return;
-        const d = json.data;
-        if (!d) { setIsLoadingEmployee(false); return; }
-        const { employee, hasActiveContract: hac, hasActiveCompensation: hacp, todayRecord, records } = d;
-        const nameParts = [
-          employee.firstName,
-          employee.middleName ? `${employee.middleName[0]}.` : null,
-          employee.lastName,
-          employee.nameExtension,
-        ].filter(Boolean);
-        setUser({
-          name:          nameParts.join(' '),
-          role:          employee.position   ?? 'Employee',
-          employeeId:    employee.employeeNo ?? '',
-          department:    employee.department ?? '',
-          isClockedIn:   !!todayRecord?.timeIn && !todayRecord?.timeOut,
-          isOnLunch:     !!todayRecord?.lunchStart && !todayRecord?.lunchEnd,
-          clockInTime:   todayRecord?.timeIn    ?? null,
-          lunchStartTime:todayRecord?.lunchStart ?? null,
-        });
-        setHasActiveContract(hac);
-        setHasActiveCompensation(hacp);
-        setAttendanceLogs(records.map(mapApiRecord));
-      } catch {
-        // silent — UI handles null user
-      } finally {
-        if (!cancelled) setIsLoadingEmployee(false);
-      }
-    })();
+    void loadEmployee().then(() => { if (cancelled) return; });
     return () => { cancelled = true; };
-  }, []);
+  }, [loadEmployee]);
    
 
   const updateClockedIn      = (val: boolean)       => setUser(p => p ? { ...p, isClockedIn:    val } : p);
@@ -161,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasActiveContract,
       hasActiveCompensation,
       isLoadingEmployee,
+      refreshEmployee: loadEmployee,
     }}>
       {children}
     </AuthContext.Provider>

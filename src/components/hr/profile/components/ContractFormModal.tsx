@@ -32,7 +32,7 @@ interface ContractFormLocal {
 const DEFAULT_FORM: ContractFormLocal = {
   employmentId: '',
   contractType: 'PROBATIONARY',
-  status: 'DRAFT',
+  status: 'ACTIVE',
   startDate: '',
   endDate: '',
   workingHoursPerWeek: '',
