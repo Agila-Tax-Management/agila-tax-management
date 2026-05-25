@@ -68,6 +68,11 @@ export async function DELETE(
       // Compliance audit trail authored by this user
       await tx.complianceNote.deleteMany({ where: { authorId: id } });
       await tx.ewtItemHistory.deleteMany({ where: { actorId: id } });
+      await tx.ewtItemTemplateHistory.deleteMany({ where: { actorId: id } });
+
+      // Petty cash requests created by this user (non-nullable requestedById with Restrict)
+      // PettyCashItem cascades; ClientFundTransaction.pettyCashId is SetNull (auto-handled)
+      await tx.pettyCash.deleteMany({ where: { requestedById: id } });
 
       // ── Step 2: Nullify nullable FK references ─────────────────────────
 
@@ -211,7 +216,42 @@ export async function DELETE(
         data: { actualExecutiveId: null },
       });
 
-      // ── Step 3: Delete the Employee record (cascades its children) ──────
+      // ── Step 3: Delete Employee-owned records that lack onDelete: Cascade ─
+      // These relations use the default RESTRICT and must be removed manually
+      // before the Employee row itself can be deleted.
+      const employees = await tx.employee.findMany({
+        where: { userId: id },
+        select: { id: true },
+      });
+      const empIds = employees.map((e) => e.id);
+
+      if (empIds.length > 0) {
+        // Payslip cascades: CashAdvanceDeduction + GovernmentLoanDeduction
+        await tx.payslip.deleteMany({ where: { employeeId: { in: empIds } } });
+        // Deduction join rows are already gone; now safe to delete the parent loans/advances
+        await tx.cashAdvance.deleteMany({ where: { employeeId: { in: empIds } } });
+        await tx.governmentLoan.deleteMany({ where: { employeeId: { in: empIds } } });
+        await tx.timesheet.deleteMany({ where: { employeeId: { in: empIds } } });
+        await tx.scheduleOverride.deleteMany({ where: { employeeId: { in: empIds } } });
+        await tx.employeeGovernmentIds.deleteMany({ where: { employeeId: { in: empIds } } });
+        await tx.employeeRequirement.deleteMany({ where: { employeeId: { in: empIds } } });
+
+        // EmployeeContract → EmployeeCompensation (cascade), must be removed
+        // before EmployeeEmployment can be deleted.
+        const employments = await tx.employeeEmployment.findMany({
+          where: { employeeId: { in: empIds } },
+          select: { id: true },
+        });
+        const employmentIds = employments.map((e) => e.id);
+        if (employmentIds.length > 0) {
+          await tx.employeeContract.deleteMany({
+            where: { employmentId: { in: employmentIds } },
+          });
+        }
+        await tx.employeeEmployment.deleteMany({ where: { employeeId: { in: empIds } } });
+      }
+
+      // ── Step 4: Delete the Employee record (remaining cascades handle the rest) ──
       await tx.employee.deleteMany({ where: { userId: id } });
 
       // ── Step 4: Delete the User ─────────────────────────────────────────
@@ -234,9 +274,10 @@ export async function DELETE(
 
     return NextResponse.json({ data: { id } });
   } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("[DELETE /api/admin/users/[id]/purge] Error:", err);
     return NextResponse.json(
-      { error: "Failed to delete user" },
+      { error: `Failed to delete user: ${message}` },
       { status: 500 }
     );
   }
