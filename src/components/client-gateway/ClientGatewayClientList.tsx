@@ -208,7 +208,7 @@ export function ClientGatewayClientList(): React.ReactNode {
                       </td>
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-foreground">{client.businessName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{client.businessEntity.replace(/_/g, ' ')}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{(client.businessEntity ?? '').replace(/_/g, ' ')}</p>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-muted-foreground">
                         {client.companyCode ?? 'â€”'}
