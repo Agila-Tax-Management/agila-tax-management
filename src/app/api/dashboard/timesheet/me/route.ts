@@ -184,9 +184,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const now = new Date();
-  // Same UTC-aligned date construction as in GET — prevents date shifting on UTC+ servers.
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  // Shift real UTC time to Philippine local time (UTC+8) and store as "fake UTC"
+  // so that fmtTime (which reads .getUTCHours()) returns the correct PH clock time.
+  // This matches the buildUtcDate convention used for manually-entered times.
+  // Philippines does not observe DST so the +8 offset is always fixed.
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  // Use UTC accessors on the shifted value to get the Philippine date.
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
   let record = await prisma.timesheet.findUnique({
     where: { employeeId_date: { employeeId: employee.id, date: today } },
@@ -241,8 +245,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Resolve work schedule day for today (0=Sun … 6=Sat)
+    // Use UTC day on the PH-shifted `now` so we get the Philippine day of week.
     const schedule = activeContract.schedule;
-    const todayDow = now.getDay();
+    const todayDow = now.getUTCDay();
     const scheduleDay = schedule?.days.find((d) => d.dayOfWeek === todayDow) ?? null;
 
     const compensation = activeContract.compensations[0] ?? null;
