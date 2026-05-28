@@ -57,7 +57,7 @@ export function AddBranchModal({ isOpen, onClose, onSuccess, parentClient }: Pro
   const { success, error } = useToast();
   const [businessName, setBusinessName] = useState('');
   const [portalName, setPortalName] = useState('');
-  const [businessEntity, setBusinessEntity] = useState<BusinessEntity>('CORPORATION');
+  const [businessEntity, setBusinessEntity] = useState<BusinessEntity | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Reset form when modal opens — "adjust state during render" pattern
@@ -67,13 +67,17 @@ export function AddBranchModal({ isOpen, onClose, onSuccess, parentClient }: Pro
     if (isOpen && parentClient) {
       setBusinessName(parentClient.businessName);
       setPortalName(`${slugify(parentClient.businessName)}-branch`);
-      setBusinessEntity(parentClient.businessEntity ?? 'CORPORATION');
+      setBusinessEntity(parentClient.businessEntity);
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!parentClient) return;
+    if (!businessEntity) {
+      error('Business entity is required', 'Please select a business entity type.');
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/client-gateway/clients/${parentClient.id}/branch`, {
@@ -248,7 +252,7 @@ export function AddBranchModal({ isOpen, onClose, onSuccess, parentClient }: Pro
             </button>
             <button
               type="submit"
-              disabled={saving || !businessName.trim()}
+              disabled={saving || !businessName.trim() || !businessEntity}
               className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#25238e] text-white rounded-xl hover:bg-[#1e1c7a] transition-colors disabled:opacity-60"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
