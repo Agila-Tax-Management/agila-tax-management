@@ -134,7 +134,7 @@ export function ClientGatewayClientList(): React.ReactNode {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search by name, number, or codeâ€¦"
+            placeholder="Search by name, number, or code…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-[#25238e]/30"
@@ -204,14 +204,14 @@ export function ClientGatewayClientList(): React.ReactNode {
                   filtered.map((client) => (
                     <tr key={client.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3.5 font-mono text-xs font-semibold text-foreground">
-                        {client.clientNo ?? 'â€”'}
+                        {client.clientNo ?? '—'}
                       </td>
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-foreground">{client.businessName}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{(client.businessEntity ?? '').replace(/_/g, ' ')}</p>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-muted-foreground">
-                        {client.companyCode ?? 'â€”'}
+                        {client.companyCode ?? '—'}
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
@@ -255,7 +255,7 @@ export function ClientGatewayClientList(): React.ReactNode {
             </table>
           </div>
           <div className="px-4 py-2.5 border-t border-border bg-muted/30 text-xs text-muted-foreground">
-            {loading ? 'Loadingâ€¦' : `Showing ${filtered.length} of ${clients.length} clients`}
+            {loading ? 'Loading…' : `Showing ${filtered.length} of ${clients.length} clients`}
           </div>
         </div>
       </div>

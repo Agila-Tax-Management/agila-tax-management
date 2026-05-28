@@ -14,7 +14,7 @@ interface Props {
     id: number;
     businessName: string;
     companyCode: string | null;
-    businessEntity: BusinessEntity;
+    businessEntity: BusinessEntity | null;
   } | null;
 }
 
@@ -67,7 +67,7 @@ export function AddBranchModal({ isOpen, onClose, onSuccess, parentClient }: Pro
     if (isOpen && parentClient) {
       setBusinessName(parentClient.businessName);
       setPortalName(`${slugify(parentClient.businessName)}-branch`);
-      setBusinessEntity(parentClient.businessEntity);
+      setBusinessEntity(parentClient.businessEntity ?? 'CORPORATION');
     }
   }
 
