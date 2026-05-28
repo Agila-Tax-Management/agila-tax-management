@@ -179,7 +179,7 @@ export function AddBranchModal({ isOpen, onClose, onSuccess, parentClient }: Pro
                 After creating this branch, complete{' '}
                 <span className="font-semibold">BIR Information</span>,{' '}
                 <span className="font-semibold">Business Operations</span>, and{' '}
-                {['CORPORATION', 'PARTNERSHIP', 'COOPERATIVE'].includes(businessEntity) ? (
+                {['CORPORATION', 'PARTNERSHIP', 'COOPERATIVE'].includes(businessEntity ?? '') ? (
                   <><span className="font-semibold">Corporate Details</span>{businessEntity === 'CORPORATION' ? ' + Shareholders' : ''}</>
                 ) : (
                   <span className="font-semibold">Individual Details</span>
