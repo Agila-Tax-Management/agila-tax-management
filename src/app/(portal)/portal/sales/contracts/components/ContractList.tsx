@@ -165,8 +165,8 @@ function ServicePills({ names }: { names: string[] }) {
   const rest = names.length - 3;
   return (
     <div className="flex flex-wrap gap-1">
-      {visible.map((n) => (
-        <span key={n} className="inline-block text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium truncate max-w-30">
+      {visible.map((n, i) => (
+        <span key={`${i}-${n}`} className="inline-block text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium truncate max-w-30">
           {n}
         </span>
       ))}

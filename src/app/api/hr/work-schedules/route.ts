@@ -16,8 +16,17 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const clientId = await getClientIdFromSession();
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
+  // If the employee belongs to a branch client, also include schedules from
+  // the main/parent client so branch employees see all available schedules.
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { mainBranchId: true },
+  });
+  const clientIds = [clientId];
+  if (client?.mainBranchId) clientIds.push(client.mainBranchId);
+
   const schedules = await prisma.workSchedule.findMany({
-    where: { clientId },
+    where: { clientId: { in: clientIds } },
     orderBy: { name: "asc" },
     include: { days: { orderBy: { dayOfWeek: "asc" } } },
   });
