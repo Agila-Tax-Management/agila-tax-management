@@ -49,8 +49,8 @@ export interface EmploymentFormState {
 
 export interface ScheduleDay {
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   breakStart: string | null;
   breakEnd: string | null;
   isWorkingDay: boolean;
