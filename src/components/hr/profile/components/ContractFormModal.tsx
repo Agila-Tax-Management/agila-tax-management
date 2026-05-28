@@ -55,7 +55,8 @@ function mapToForm(c: ContractRecord): ContractFormLocal {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function formatTime(t: string): string {
+function formatTime(t: string | null | undefined): string {
+  if (!t) return '—';
   const [h, m] = t.split(':').map(Number);
   const period = (h ?? 0) >= 12 ? 'PM' : 'AM';
   const hour = (h ?? 0) % 12 || 12;
