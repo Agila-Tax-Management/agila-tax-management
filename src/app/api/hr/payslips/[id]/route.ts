@@ -1,4 +1,4 @@
-// src/app/api/hr/payslips/[id]/route.ts
+﻿// src/app/api/hr/payslips/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
@@ -142,7 +142,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+  if (
+    session.user.role !== "SUPER_ADMIN" &&
+    session.user.role !== "ADMIN" &&
+    !session.portalAccess?.HR?.canWrite
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

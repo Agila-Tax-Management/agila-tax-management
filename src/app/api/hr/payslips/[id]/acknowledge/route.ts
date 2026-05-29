@@ -1,4 +1,4 @@
-// src/app/api/hr/payslips/[id]/acknowledge/route.ts
+﻿// src/app/api/hr/payslips/[id]/acknowledge/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
@@ -18,7 +18,11 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+  if (
+    session.user.role !== "SUPER_ADMIN" &&
+    session.user.role !== "ADMIN" &&
+    !session.portalAccess?.HR?.canWrite
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

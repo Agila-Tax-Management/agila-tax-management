@@ -14,7 +14,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clientId = await getClientIdFromSession();
+  let clientId: number | null = null;
+  if (session.user.role === "SUPER_ADMIN" || session.user.role === "ADMIN") {
+    const atmsClient = await prisma.client.findUnique({ where: { companyCode: "ATMS-001" }, select: { id: true } });
+    clientId = atmsClient?.id ?? null;
+  } else {
+    clientId = await getClientIdFromSession();
+  }
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
@@ -53,7 +59,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+  const canWrite =
+    session.user.role === "SUPER_ADMIN" ||
+    session.user.role === "ADMIN" ||
+    session.portalAccess?.HR?.canWrite === true;
+  if (!canWrite) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -14,7 +14,13 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clientId = await getClientIdFromSession();
+  let clientId: number | null = null;
+  if (session.user.role === "SUPER_ADMIN" || session.user.role === "ADMIN") {
+    const atmsClient = await prisma.client.findUnique({ where: { companyCode: "ATMS-001" }, select: { id: true } });
+    clientId = atmsClient?.id ?? null;
+  } else {
+    clientId = await getClientIdFromSession();
+  }
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   const departments = await prisma.department.findMany({
@@ -45,7 +51,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+  const canWrite =
+    session.user.role === "SUPER_ADMIN" ||
+    session.user.role === "ADMIN" ||
+    session.portalAccess?.HR?.canWrite === true;
+  if (!canWrite) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
-  const atmsClient = await prisma.client.findUnique({ where: { companyCode: "atms" } });
+  const atmsClient = await prisma.client.findUnique({ where: { companyCode: "ATMS-001" } });
   if (!atmsClient) return NextResponse.json({ error: "ATMS client not found" }, { status: 500 });
 
   const existing = await prisma.department.findUnique({

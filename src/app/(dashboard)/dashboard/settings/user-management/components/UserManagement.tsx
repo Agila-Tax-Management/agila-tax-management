@@ -147,10 +147,10 @@ export default function UserManagement(): React.ReactNode {
   /* ─── Stats ──────────────────────────────────────────────── */
 
   const stats = [
-    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600 dark:text-blue-400' },
-    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600 dark:text-emerald-400' },
-    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500 dark:text-slate-400' },
-    { label: 'Admins', value: users.filter((u) => u.role === 'SUPER_ADMIN' || u.role === 'ADMIN').length, icon: ShieldCheck, color: 'text-purple-600 dark:text-purple-400' },
+    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600' },
+    { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-emerald-600' },
+    { label: 'Inactive', value: inactiveCount, icon: UserX, color: 'text-slate-500' },
+    { label: 'Admins', value: users.filter((u) => u.role === 'SUPER_ADMIN' || u.role === 'ADMIN').length, icon: ShieldCheck, color: 'text-purple-600' },
   ];
 
   /* ─── Render ─────────────────────────────────────────────── */
@@ -258,11 +258,11 @@ export default function UserManagement(): React.ReactNode {
                           onClick={() => setViewingUser(user)}
                           className="flex items-center gap-3 hover:opacity-80 transition text-left"
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
                             {initials}
                           </div>
                           <div>
-                            <span className="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap underline-offset-2 hover:underline block">
+                            <span className="font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap underline-offset-2 hover:underline block">
                               {user.name}
                             </span>
                             <span className="text-[11px] text-muted-foreground block">
