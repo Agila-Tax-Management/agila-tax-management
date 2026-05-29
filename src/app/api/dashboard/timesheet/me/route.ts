@@ -196,6 +196,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     where: { employeeId_date: { employeeId: employee.id, date: today } },
   });
 
+  // Cross-midnight fallback: if today has no open punch, check yesterday.
+  // Handles night-shift employees whose clock-out crosses midnight into the next day.
+  // Applies to LUNCH_START, LUNCH_END, and OUT — not IN (which always creates today's record).
+  if (action !== 'IN' && (!record?.timeIn || record.timeOut)) {
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const prevRecord = await prisma.timesheet.findUnique({
+      where: { employeeId_date: { employeeId: employee.id, date: yesterday } },
+    });
+    if (prevRecord?.timeIn && !prevRecord.timeOut) {
+      record = prevRecord;
+    }
+  }
+
   if (action === 'IN') {
     if (record?.timeIn) {
       return NextResponse.json({ error: 'Already clocked in today' }, { status: 409 });
@@ -244,11 +257,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Please end your lunch break first' }, { status: 409 });
     }
 
-    // Resolve work schedule day for today (0=Sun … 6=Sat)
-    // Use UTC day on the PH-shifted `now` so we get the Philippine day of week.
+    // Resolve work schedule day from the clock-in date (record.date), not the
+    // current clock-out time. This matters for cross-midnight shifts where the
+    // clock-out falls on the next calendar day.
     const schedule = activeContract.schedule;
-    const todayDow = now.getUTCDay();
-    const scheduleDay = schedule?.days.find((d) => d.dayOfWeek === todayDow) ?? null;
+    const recordDow = record.date.getUTCDay();
+    const scheduleDayRaw = schedule?.days.find((d) => d.dayOfWeek === recordDow) ?? null;
+    const scheduleDay = scheduleDayRaw
+      ? {
+          startTime: scheduleDayRaw.startTime,
+          endTime: scheduleDayRaw.endTime,
+          breakStart: scheduleDayRaw.breakStart,
+          breakEnd: scheduleDayRaw.breakEnd,
+          isWorkingDay: scheduleDayRaw.isWorkingDay,
+          isFlexible: scheduleDayRaw.isFlexible,
+          requiredHours: scheduleDayRaw.requiredHours,
+        }
+      : null;
 
     const compensation = activeContract.compensations[0] ?? null;
 
