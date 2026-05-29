@@ -187,6 +187,12 @@ export const createWorkScheduleSchema = z.object({
   days: z.array(workScheduleDaySchema).min(1, "At least one day is required"),
 });
 
+export const updateWorkScheduleSchema = z.object({
+  name: z.string().min(1, "Schedule name is required").optional(),
+  timezone: z.string().optional(),
+  days: z.array(workScheduleDaySchema).min(1, "At least one day is required").optional(),
+});
+
 /* ─── App Access (Step 5) ─────────────────────────────────────────── */
 
 export const upsertAccessSchema = z.object({
@@ -231,5 +237,6 @@ export type UpdateContractInput = z.infer<typeof updateContractSchema>;
 export type CreateCompensationInput = z.infer<typeof createCompensationSchema>;
 export type UpdateCompensationInput = z.infer<typeof updateCompensationSchema>;
 export type CreateWorkScheduleInput = z.infer<typeof createWorkScheduleSchema>;
+export type UpdateWorkScheduleInput = z.infer<typeof updateWorkScheduleSchema>;
 export type UpsertAccessInput = z.infer<typeof upsertAccessSchema>;
 export type UpdateGovernmentIdsInput = z.infer<typeof updateGovernmentIdsSchema>;

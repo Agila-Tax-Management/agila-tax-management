@@ -13,17 +13,25 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clientId = await getClientIdFromSession();
+  let clientId: number | null = null;
+  if (session.user.role === "SUPER_ADMIN" || session.user.role === "ADMIN") {
+    const atmsClient = await prisma.client.findUnique({ where: { companyCode: "ATMS-001" }, select: { id: true } });
+    clientId = atmsClient?.id ?? null;
+  } else {
+    clientId = await getClientIdFromSession();
+  }
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   // If the employee belongs to a branch client, also include schedules from
   // the main/parent client so branch employees see all available schedules.
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
-    select: { mainBranchId: true },
-  });
   const clientIds = [clientId];
-  if (client?.mainBranchId) clientIds.push(client.mainBranchId);
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { mainBranchId: true },
+    });
+    if (client?.mainBranchId) clientIds.push(client.mainBranchId);
+  }
 
   const schedules = await prisma.workSchedule.findMany({
     where: { clientId: { in: clientIds } },
@@ -62,7 +70,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Validation failed" }, { status: 400 });
   }
 
-  const clientId = await getClientIdFromSession();
+  let clientId: number | null = null;
+  if (session.user.role === "SUPER_ADMIN" || session.user.role === "ADMIN") {
+    const atmsClient = await prisma.client.findUnique({ where: { companyCode: "ATMS-001" }, select: { id: true } });
+    clientId = atmsClient?.id ?? null;
+  } else {
+    clientId = await getClientIdFromSession();
+  }
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
   const schedule = await prisma.workSchedule.create({
