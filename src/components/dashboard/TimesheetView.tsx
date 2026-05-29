@@ -34,7 +34,9 @@ const DS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const fmtClock   = (d: Date) =>
   `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
 
-const fmtTime    = (d: Date) => fmtClock(d);
+// Stored timestamps use "fake UTC" (PH time +8 recorded as UTC), so read UTC accessors.
+const fmtTime    = (d: Date) =>
+  `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`;
 
 const fmtLogDate = (d: Date) =>
   `${DS[d.getDay()]}, ${MS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
