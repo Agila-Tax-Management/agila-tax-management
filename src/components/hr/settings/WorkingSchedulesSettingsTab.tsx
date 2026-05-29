@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Loader2, ChevronDown, ChevronUp, X, Building2, Home, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronUp, X, Building2, Home, Layers } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
@@ -132,6 +132,25 @@ function locationDisplay(days: ScheduleDay[]): string {
   return 'Mixed';
 }
 
+function scheduleToFormDays(schedule: WorkSchedule): DayFormState[] {
+  return WEEK_DAYS.map((d) => {
+    const existing = schedule.days.find((sd) => sd.dayOfWeek === d);
+    if (!existing || !existing.isWorkingDay) return DEFAULT_DAY(d);
+    return {
+      dayOfWeek: d,
+      label: DAY_LABELS[d] ?? String(d),
+      enabled: true,
+      startTime: existing.startTime ?? '08:00',
+      endTime: existing.endTime ?? '17:00',
+      breakStart: existing.breakStart ?? '12:00',
+      breakEnd: existing.breakEnd ?? '13:00',
+      locationType: (existing.locationType ?? 'OFFICE') as LocationType,
+      isFlexible: existing.isFlexible,
+      requiredHours: existing.requiredHours ?? 8,
+    };
+  });
+}
+
 /* ─── Component ─────────────────────────────────────────────────── */
 
 export function WorkingSchedulesSettingsTab(): React.ReactNode {
@@ -147,6 +166,12 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDays, setNewDays] = useState<DayFormState[]>(DEFAULT_DAYS);
+
+  const [editTarget, setEditTarget] = useState<WorkSchedule | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDays, setEditDays] = useState<DayFormState[]>(DEFAULT_DAYS);
+  const [deleteTarget, setDeleteTarget] = useState<WorkSchedule | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   /* ─── Fetch ─────────────────────────────────────────────────────── */
 
@@ -201,6 +226,20 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
     });
   };
 
+  const updateEditDay = (idx: number, patch: Partial<DayFormState>) => {
+    setEditDays((prev) => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx]!, ...patch };
+      return updated;
+    });
+  };
+
+  const openEdit = (sched: WorkSchedule) => {
+    setEditTarget(sched);
+    setEditName(sched.name);
+    setEditDays(scheduleToFormDays(sched));
+  };
+
   const handleAdd = async () => {
     if (!newName.trim()) {
       error('Missing name', 'Please enter a schedule name.');
@@ -245,6 +284,73 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
       error('Network error', 'Could not connect to the server.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editTarget) return;
+    if (!editName.trim()) {
+      error('Missing name', 'Please enter a schedule name.');
+      return;
+    }
+    const workingDays = editDays.filter((d) => d.enabled);
+    if (workingDays.length === 0) {
+      error('No working days', 'Please enable at least one working day.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/hr/work-schedules/${editTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim(),
+          timezone: 'Asia/Manila',
+          days: workingDays.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            startTime: d.isFlexible ? null : d.startTime,
+            endTime: d.isFlexible ? null : d.endTime,
+            breakStart: d.isFlexible ? null : (d.breakStart || null),
+            breakEnd: d.isFlexible ? null : (d.breakEnd || null),
+            isWorkingDay: true,
+            locationType: d.locationType,
+            isFlexible: d.isFlexible,
+            requiredHours: d.isFlexible ? d.requiredHours : null,
+          })),
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        error('Failed to save', data.error ?? 'An error occurred.');
+        return;
+      }
+      success('Schedule updated', `"${editName.trim()}" has been updated successfully.`);
+      setEditTarget(null);
+      void fetchSchedules();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/hr/work-schedules/${deleteTarget.id}`, { method: 'DELETE' });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        error('Cannot delete', data.error ?? 'An error occurred.');
+        return;
+      }
+      success('Schedule deleted', `"${deleteTarget.name}" has been removed.`);
+      setDeleteTarget(null);
+      void fetchSchedules();
+    } catch {
+      error('Network error', 'Could not connect to the server.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -324,13 +430,31 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(expandedId === sched.id ? null : sched.id)}
-                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-foreground hover:bg-slate-200"
-                        >
-                          {expandedId === sched.id ? <><ChevronUp size={13} /> Hide</> : <><ChevronDown size={13} /> View</>}
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            title="Edit schedule"
+                            onClick={() => openEdit(sched)}
+                            className="inline-flex items-center justify-center rounded-md bg-slate-100 p-1.5 text-slate-600 dark:text-foreground hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete schedule"
+                            onClick={() => setDeleteTarget(sched)}
+                            className="inline-flex items-center justify-center rounded-md bg-slate-100 p-1.5 text-slate-600 dark:text-foreground hover:bg-red-100 hover:text-red-700 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(expandedId === sched.id ? null : sched.id)}
+                            className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-foreground hover:bg-slate-200"
+                          >
+                            {expandedId === sched.id ? <><ChevronUp size={13} /> Hide</> : <><ChevronDown size={13} /> View</>}
+                          </button>
+                        </div>
                       </td>
                     </tr>
 
@@ -539,6 +663,165 @@ export function WorkingSchedulesSettingsTab(): React.ReactNode {
             <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleAdd} disabled={saving}>
               {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Plus size={14} className="mr-1.5" />}
               Save Schedule
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      {/* Edit Schedule Modal */}
+      <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Work Schedule" size="lg">
+        <div className="p-6 space-y-5">
+          <div>
+            <label className={labelCls}>Schedule Name <span className="text-red-500">*</span></label>
+            <input
+              className={inputCls}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="e.g. Standard Office Hours"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weekly Schedule</p>
+            {editDays.map((day, idx) => (
+              <div key={day.dayOfWeek} className="rounded-lg border border-border p-3 space-y-2.5">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input
+                    type="checkbox"
+                    checked={day.enabled}
+                    onChange={(e) => updateEditDay(idx, { enabled: e.target.checked })}
+                    className="h-4 w-4 rounded border-border shrink-0"
+                  />
+                  <span className={`text-xs font-bold w-20 shrink-0 ${day.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {day.label}
+                  </span>
+
+                  {day.enabled && (
+                    <>
+                      <div className="flex items-center gap-1">
+                        {LOCATION_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => updateEditDay(idx, { locationType: opt.value })}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                              day.locationType === opt.value
+                                ? LOCATION_COLOR[opt.value]
+                                : 'border-border text-muted-foreground hover:border-rose-400 hover:text-foreground'
+                            }`}
+                          >
+                            {opt.icon} {opt.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center rounded-lg border border-border overflow-hidden ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => updateEditDay(idx, { isFlexible: false })}
+                          className={`px-3 py-1 text-xs font-medium transition-colors ${
+                            !day.isFlexible ? 'bg-rose-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Fixed Time
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateEditDay(idx, { isFlexible: true })}
+                          className={`px-3 py-1 text-xs font-medium transition-colors ${
+                            day.isFlexible ? 'bg-rose-600 text-white' : 'bg-background text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Flexible
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {!day.enabled && (
+                    <span className="text-xs text-muted-foreground italic">Day off</span>
+                  )}
+                </div>
+
+                {day.enabled && (
+                  <div className="pl-7 flex items-center gap-2 flex-wrap">
+                    {day.isFlexible ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">Required hours:</span>
+                        <select
+                          value={day.requiredHours}
+                          onChange={(e) => updateEditDay(idx, { requiredHours: parseInt(e.target.value, 10) })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        >
+                          {[4, 5, 6, 7, 8, 9].map((h) => (
+                            <option key={h} value={h}>{h} hours</option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-muted-foreground italic">(no fixed clock-in/out)</span>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="time"
+                          value={day.startTime}
+                          onChange={(e) => updateEditDay(idx, { startTime: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                        <span className="text-xs text-muted-foreground">to</span>
+                        <input
+                          type="time"
+                          value={day.endTime}
+                          onChange={(e) => updateEditDay(idx, { endTime: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                        <span className="text-xs text-muted-foreground ml-2">Break:</span>
+                        <input
+                          type="time"
+                          value={day.breakStart}
+                          onChange={(e) => updateEditDay(idx, { breakStart: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                        <span className="text-xs text-muted-foreground">–</span>
+                        <input
+                          type="time"
+                          value={day.breakEnd}
+                          onChange={(e) => updateEditDay(idx, { breakEnd: e.target.value })}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={saving}>
+              <X size={14} className="mr-1.5" /> Cancel
+            </Button>
+            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={handleEdit} disabled={saving}>
+              {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Pencil size={14} className="mr-1.5" />}
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Work Schedule" size="sm">
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-foreground">
+            Are you sure you want to delete{' '}
+            <span className="font-semibold">&ldquo;{deleteTarget?.name}&rdquo;</span>?{' '}
+            This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete} disabled={deleting}>
+              {deleting ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Trash2 size={14} className="mr-1.5" />}
+              Delete
             </Button>
           </div>
         </div>

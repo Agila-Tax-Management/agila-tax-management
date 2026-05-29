@@ -11,8 +11,7 @@ import {
   Ban,
   Trash2,
   Loader2,
-  ChevronDown,
-  ChevronRight,
+  ArrowDownUp,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { PettyCashViewModal } from './PettyCashViewModal';
@@ -162,12 +161,13 @@ export function PettyCashFund(): React.ReactNode {
   const [records, setRecords]         = useState<PettyCashRecord[]>([]);
   const [isLoading, setIsLoading]     = useState(false);
   const [viewRecord, setViewRecord]   = useState<PettyCashRecord | null>(null);
+  const [activeTab, setActiveTab]     = useState<'pcf' | 'statement'>('pcf');
 
   const [approvingId, setApprovingId]     = useState<string | null>(null);
   const [rejectState, setRejectState]     = useState<{ id: string; reason: string } | null>(null);
   const [voidConfirmId, setVoidConfirmId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [sortOrder, setSortOrder]             = useState<'desc' | 'asc'>('desc');
   const [bulkAction, setBulkAction]             = useState<{ type: 'approve' | 'disburse' | 'void' | 'delete'; records: PettyCashRecord[] } | null>(null);
   const [bulkStep, setBulkStep]                 = useState(0);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
@@ -199,6 +199,9 @@ export function PettyCashFund(): React.ReactNode {
   // â”€â”€ Filtered records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const filtered = records.filter((r) => {
+    const isDisbursed = ['DISBURSED', 'LIQUIDATED'].includes(r.status);
+    if (activeTab === 'pcf' && isDisbursed) return false;
+    if (activeTab === 'statement' && !isDisbursed) return false;
     const q = search.toLowerCase();
     if (!q) return true;
     return (
@@ -210,11 +213,18 @@ export function PettyCashFund(): React.ReactNode {
     );
   });
 
-  const clientGroups   = useMemo(() => buildClientGroups(filtered), [filtered]);
+  const sorted = [...filtered].sort((a, b) =>
+    sortOrder === 'desc'
+      ? new Date(b.date).getTime() - new Date(a.date).getTime()
+      : new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
   const pendingRecords   = useMemo(() => records.filter(r => r.status === 'PENDING'),                                            [records]);
   const approvedRecords  = useMemo(() => records.filter(r => r.status === 'APPROVED'),                                           [records]);
   const voidableRecords  = useMemo(() => records.filter(r => ['DRAFT', 'PENDING', 'APPROVED'].includes(r.status)),               [records]);
   const deletableRecords = useMemo(() => records.filter(r => r.status === 'VOID'),                                               [records]);
+  const pcfCount         = useMemo(() => records.filter(r => !['DISBURSED', 'LIQUIDATED'].includes(r.status)).length, [records]);
+  const statementCount   = useMemo(() => records.filter(r =>  ['DISBURSED', 'LIQUIDATED'].includes(r.status)).length, [records]);
 
   const bulkEmployeeGroups = useMemo(() => {
     if (!bulkAction) return [];
@@ -227,13 +237,6 @@ export function PettyCashFund(): React.ReactNode {
     return Array.from(map.values());
   }, [bulkAction]);
 
-  const toggleGroup = (key: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
 
   // â”€â”€ Action handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -360,58 +363,107 @@ export function PettyCashFund(): React.ReactNode {
     <div className="space-y-6">
 
       {/* Page header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-foreground">Petty Cash Fund</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          {pendingRecords.length > 0 && (
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Petty Cash Fund</h1>
+          <div className="flex mt-3 border-b border-border">
             <button
-              onClick={() => { setBulkAction({ type: 'approve', records: pendingRecords }); setBulkStep(0); setBulkConfirmed(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-green-600 text-white hover:bg-green-700 transition"
+              type="button"
+              onClick={() => { setActiveTab('pcf'); setSearch(''); setRejectState(null); setVoidConfirmId(null); setDeleteConfirmId(null); }}
+              className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition-colors ${
+                activeTab === 'pcf'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <CheckCircle2 size={15} />
-              Approve All ({pendingRecords.length})
+              PCF
+              {pcfCount > 0 && (
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-bold ${
+                  activeTab === 'pcf' ? 'bg-blue-100 text-blue-700' : 'bg-muted text-muted-foreground'
+                }`}>{pcfCount}</span>
+              )}
             </button>
-          )}
-          {approvedRecords.length > 0 && (
             <button
-              onClick={() => { setBulkAction({ type: 'disburse', records: approvedRecords }); setBulkStep(0); setBulkConfirmed(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+              type="button"
+              onClick={() => { setActiveTab('statement'); setSearch(''); setRejectState(null); setVoidConfirmId(null); setDeleteConfirmId(null); }}
+              className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition-colors ${
+                activeTab === 'statement'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <Banknote size={15} />
-              Disburse All ({approvedRecords.length})
+              PCF Statement
+              {statementCount > 0 && (
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-bold ${
+                  activeTab === 'statement' ? 'bg-blue-100 text-blue-700' : 'bg-muted text-muted-foreground'
+                }`}>{statementCount}</span>
+              )}
             </button>
-          )}
-          {voidableRecords.length > 0 && (
-            <button
-              onClick={() => { setBulkAction({ type: 'void', records: voidableRecords }); setBulkStep(0); setBulkConfirmed(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition"
-            >
-              <Ban size={15} />
-              Void All ({voidableRecords.length})
-            </button>
-          )}
-          {deletableRecords.length > 0 && (
-            <button
-              onClick={() => { setBulkAction({ type: 'delete', records: deletableRecords }); setBulkStep(0); setBulkConfirmed(false); }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-red-600 text-white hover:bg-red-700 transition"
-            >
-              <Trash2 size={15} />
-              Delete All ({deletableRecords.length})
-            </button>
-          )}
+          </div>
         </div>
+        {activeTab === 'pcf' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {pendingRecords.length > 0 && (
+              <button
+                onClick={() => { setBulkAction({ type: 'approve', records: pendingRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-green-600 text-white hover:bg-green-700 transition"
+              >
+                <CheckCircle2 size={15} />
+                Approve All ({pendingRecords.length})
+              </button>
+            )}
+            {approvedRecords.length > 0 && (
+              <button
+                onClick={() => { setBulkAction({ type: 'disburse', records: approvedRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+              >
+                <Banknote size={15} />
+                Disburse All ({approvedRecords.length})
+              </button>
+            )}
+            {voidableRecords.length > 0 && (
+              <button
+                onClick={() => { setBulkAction({ type: 'void', records: voidableRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition"
+              >
+                <Ban size={15} />
+                Void All ({voidableRecords.length})
+              </button>
+            )}
+            {deletableRecords.length > 0 && (
+              <button
+                onClick={() => { setBulkAction({ type: 'delete', records: deletableRecords }); setBulkStep(0); setBulkConfirmed(false); }}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-red-600 text-white hover:bg-red-700 transition"
+              >
+                <Trash2 size={15} />
+                Delete All ({deletableRecords.length})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Search bar */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Search PCF No., client, or requestor..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-        />
+      {/* Search bar + sort */}
+      <div className="flex items-center gap-2">
+        <div className="relative max-w-sm flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder={activeTab === 'statement' ? 'Search PCF No. or requestor...' : 'Search PCF No., client, or requestor...'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+          title={sortOrder === 'desc' ? 'Showing latest first — click for oldest first' : 'Showing oldest first — click for latest first'}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl border border-border bg-card text-foreground hover:bg-muted transition whitespace-nowrap"
+        >
+          <ArrowDownUp size={14} />
+          {sortOrder === 'desc' ? 'Latest' : 'Oldest'}
+        </button>
       </div>
 
       {/* Table */}
@@ -437,68 +489,45 @@ export function PettyCashFund(): React.ReactNode {
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                  No petty cash records found.
+                  {activeTab === 'statement' ? 'No disbursed records found.' : 'No petty cash records found.'}
                 </td>
               </tr>
             ) : (
-              clientGroups.map((group) => {
-                const collapsed = collapsedGroups.has(group.key);
-                return (
-                  <React.Fragment key={group.key}>
-                    {/* Group header row */}
-                    <tr
-                      onClick={() => toggleGroup(group.key)}
-                      className="bg-muted/40 hover:bg-muted/60 cursor-pointer select-none border-t border-border"
+              sorted.map((record) => (
+                <tr key={record.id} className="bg-card hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3 font-medium text-foreground">{record.pcfNo}</td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                    {new Date(record.date).toLocaleDateString('en-PH', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </td>
+                  <td className="px-4 py-3 text-foreground">{record.requestedBy.name}</td>
+                  <td className="px-4 py-3 text-right font-medium text-foreground whitespace-nowrap">
+                    ₱{record.totalRequestedAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[record.status]}`}
                     >
-                      <td colSpan={6} className="px-4 py-2.5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {collapsed
-                              ? <ChevronRight size={14} className="text-muted-foreground shrink-0" />
-                              : <ChevronDown  size={14} className="text-muted-foreground shrink-0" />
-                            }
-                            <span className="font-semibold text-foreground text-xs">{group.label}</span>
-                            {group.clientNo && (
-                              <span className="text-xs text-muted-foreground font-mono">{group.clientNo}</span>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              {group.records.length} {group.records.length === 1 ? 'request' : 'requests'}
-                            </span>
-                          </div>
-                          {group.key !== 'emp' && (
-                            <span className="text-xs font-semibold text-foreground">
-                              ₱{group.totalClientFund.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    {/* Data rows */}
-                    {!collapsed && group.records.map((record) => (
-                      <tr key={record.id} className="bg-card hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-foreground">{record.pcfNo}</td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                          {new Date(record.date).toLocaleDateString('en-PH', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </td>
-                        <td className="px-4 py-3 text-foreground">{record.requestedBy.name}</td>
-                        <td className="px-4 py-3 text-right font-medium text-foreground whitespace-nowrap">
-                          ₱{getClientAmountForRecord(record, group.key).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[record.status]}`}
-                          >
-                            {record.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
+                      {record.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
 
                     {/* â”€â”€ Reject confirmation â”€â”€ */}
-                    {rejectState?.id === record.id ? (
+                    {activeTab === 'statement' ? (
+                      <div className="flex items-center justify-center">
+                        <button
+                          onClick={() => setViewRecord(record)}
+                          title="View"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      </div>
+                    ) : rejectState?.id === record.id ? (
                       <div className="flex flex-col gap-2 min-w-45">
                         <textarea
                           rows={2}
@@ -640,14 +669,22 @@ export function PettyCashFund(): React.ReactNode {
                         )}
                       </div>
                     )}
-                        </td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                );
-              })
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
+          {activeTab === 'statement' && filtered.length > 0 && (
+            <tfoot>
+              <tr className="bg-muted/60 border-t-2 border-border">
+                <td colSpan={3} className="px-4 py-3 text-right font-bold text-foreground text-sm">Grand Total</td>
+                <td className="px-4 py-3 text-right font-bold text-foreground text-sm whitespace-nowrap">
+                  ₱{filtered.reduce((s, r) => s + r.totalRequestedAmount, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </td>
+                <td colSpan={2} className="px-4 py-3" />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
