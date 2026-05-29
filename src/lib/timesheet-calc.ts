@@ -36,6 +36,8 @@ export interface ScheduleDayInput {
   breakStart?: string | null;
   breakEnd?: string | null;
   isWorkingDay: boolean;
+  isFlexible?: boolean;       // No fixed start/end — only requiredHours matters
+  requiredHours?: number | null; // Hours employee must render (e.g. 8)
 }
 
 export interface CompensationInput {
@@ -72,12 +74,14 @@ function toMinutes(hhmm: string): number {
  * Default fallback schedule: 08:00–17:00 with 60-minute lunch break.
  * Used when the employee has no work schedule configured.
  */
-const DEFAULT_SCHEDULE: { startTime: string; endTime: string; breakStart: string; breakEnd: string; isWorkingDay: boolean } = {
+const DEFAULT_SCHEDULE: { startTime: string; endTime: string; breakStart: string; breakEnd: string; isWorkingDay: boolean; isFlexible?: boolean; requiredHours?: number | null } = {
   startTime: "08:00",
   endTime: "17:00",
   breakStart: "12:00",
   breakEnd: "13:00",
   isWorkingDay: true,
+  isFlexible: false,
+  requiredHours: null,
 };
 
 /**
@@ -101,13 +105,9 @@ export function computeTimesheetFields(
   dayType: DayType = 'REGULAR',
 ): TimesheetComputedFields {
   const sched = scheduleDay ?? DEFAULT_SCHEDULE;
-  const effectiveStartTime: string = sched.startTime ?? DEFAULT_SCHEDULE.startTime;
-  const effectiveEndTime: string = sched.endTime ?? DEFAULT_SCHEDULE.endTime;
+  const isFlexible = sched.isFlexible ?? false;
 
-  // ── Scheduled work minutes (excluding configured break) ──────────────────
-  const schedStartMin = toMinutes(effectiveStartTime);
-  const schedEndMin = toMinutes(effectiveEndTime);
-
+  // ── Break minutes (used for both fixed and flexible schedules) ───────────
   const breakStartMin =
     sched.breakStart ? toMinutes(sched.breakStart) :
     sched.breakEnd   ? toMinutes(sched.breakEnd) - 60 : null;
@@ -120,7 +120,24 @@ export function computeTimesheetFields(
       ? Math.max(0, breakEndMin - breakStartMin)
       : 60; // default 60 min break assumed if schedule has no break configured
 
-  const scheduledWorkMin = Math.max(0, schedEndMin - schedStartMin - configuredBreakMin);
+  // ── Scheduled work minutes ───────────────────────────────────────────────
+  // Flexible: use requiredHours (no fixed start/end → no late/undertime).
+  // Fixed:    derive from startTime → endTime minus break.
+  let scheduledWorkMin: number;
+  let schedStartMin: number;
+  let schedEndMin: number;
+  if (isFlexible) {
+    const reqHrs = sched.requiredHours ?? 8;
+    scheduledWorkMin = reqHrs * 60; // e.g. 480 min for 8-hour flexible
+    schedStartMin = 0;              // not used for late/undertime on flexible
+    schedEndMin = 0;
+  } else {
+    const effectiveStartTime: string = sched.startTime ?? DEFAULT_SCHEDULE.startTime;
+    const effectiveEndTime: string = sched.endTime ?? DEFAULT_SCHEDULE.endTime;
+    schedStartMin = toMinutes(effectiveStartTime);
+    schedEndMin = toMinutes(effectiveEndTime);
+    scheduledWorkMin = Math.max(0, schedEndMin - schedStartMin - configuredBreakMin);
+  }
 
   // ── Actual worked milliseconds ───────────────────────────────────────────
   // Use actual lunch punch duration when available; otherwise assume the configured
@@ -154,13 +171,16 @@ export function computeTimesheetFields(
   const isVariable = compensation?.payType === 'VARIABLE_PAY';
 
   if (dayType === 'REGULAR') {
-    // ── Late / undertime (only on scheduled working days) ─────────────────
-    // Times are stored as UTC (buildUtcDate: "HH:MM" → T${HH:MM}:00.000Z).
-    const timeInMin = timeIn.getUTCHours() * 60 + timeIn.getUTCMinutes();
-    lateMinutes = Math.max(0, timeInMin - schedStartMin);
+    // ── Late / undertime ──────────────────────────────────────────────────
+    // Flexible schedules have no fixed start/end — no lateness or undertime.
+    // Fixed schedules compare actual punch times against scheduled start/end.
+    if (!isFlexible) {
+      const timeInMin = timeIn.getUTCHours() * 60 + timeIn.getUTCMinutes();
+      lateMinutes = Math.max(0, timeInMin - schedStartMin);
 
-    const timeOutMin = timeOut.getUTCHours() * 60 + timeOut.getUTCMinutes();
-    undertimeMinutes = Math.max(0, schedEndMin - timeOutMin);
+      const timeOutMin = timeOut.getUTCHours() * 60 + timeOut.getUTCMinutes();
+      undertimeMinutes = Math.max(0, schedEndMin - timeOutMin);
+    }
 
     // ── Regular vs reg OT hours ───────────────────────────────────────────
     regularHours = parseFloat((Math.min(workedMin, scheduledWorkMin) / 60).toFixed(2));
