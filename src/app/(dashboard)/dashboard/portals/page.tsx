@@ -16,102 +16,102 @@ import type { AppPortal } from '@/generated/prisma/client';
 
 const ALL_PORTALS = [
   {
-    id: 'sales',
+    id: 'sales',      statsKey: 'sales',
     title: 'Sales Portal',
     description: 'Manage leads, sales pipeline, service plans, client list, and team commissions.',
     href: '/portal/sales',
     icon: <Megaphone />,
     color: 'bg-rose-600',
     lightColor: 'bg-rose-50 text-rose-600 border-rose-200',
-    stats: { label: 'Active Leads', value: '124' },
+    stats: { label: 'Active Leads' },
     category: 'Revenue',
   },
   {
-    id: 'accounting',
+    id: 'accounting', statsKey: 'accounting',
     title: 'Accounting & Finance Portal',
     description: 'Handle bookkeeping, invoices, billing, payments, petty cash, and financial reports.',
     href: '/portal/accounting-and-finance',
     icon: <BarChart3 />,
     color: 'bg-blue-600',
     lightColor: 'bg-blue-50 text-blue-600 border-blue-200',
-    stats: { label: 'Open Invoices', value: '38' },
+    stats: { label: 'Open Invoices' },
     category: 'Finance',
   },
   {
-    id: 'compliance',
+    id: 'compliance', statsKey: 'compliance',
     title: 'Compliance Portal',
     description: 'Track BIR filings, government permits, regulatory tasks, and client compliance cases.',
     href: '/portal/compliance',
     icon: <ShieldCheck />,
     color: 'bg-indigo-600',
     lightColor: 'bg-indigo-50 text-indigo-600 border-indigo-200',
-    stats: { label: 'Pending Filings', value: '7' },
+    stats: { label: 'Pending Filings' },
     category: 'Operations',
   },
   {
-    id: 'liaison',
+    id: 'liaison',    statsKey: 'liaison',
     title: 'Liaison Portal',
     description: 'Coordinate government agency tasks, field scheduling, and liaison activities.',
     href: '/portal/liaison',
     icon: <Building2 />,
     color: 'bg-amber-600',
     lightColor: 'bg-amber-50 text-amber-700 border-amber-200',
-    stats: { label: 'Active Tasks', value: '15' },
+    stats: { label: 'Active Tasks' },
     category: 'Operations',
   },
   {
-    id: 'ao',
+    id: 'ao',         statsKey: 'ao',
     title: 'Account Officer Portal',
     description: 'Oversee client accounts, task management, discussions, and service delivery.',
     href: '/portal/account-officer',
     icon: <Briefcase />,
     color: 'bg-violet-600',
     lightColor: 'bg-violet-50 text-violet-600 border-violet-200',
-    stats: { label: 'Clients Managed', value: '86' },
+    stats: { label: 'Clients Managed' },
     category: 'Operations',
   },
   {
-    id: 'hr',
+    id: 'hr',         statsKey: 'hr',
     title: 'HR Portal',
     description: 'Manage employees, onboarding, attendance, payroll, leave, and government compliance.',
     href: '/portal/hr',
     icon: <UserCheck />,
     color: 'bg-teal-600',
     lightColor: 'bg-teal-50 text-teal-600 border-teal-200',
-    stats: { label: 'Employees', value: '52' },
+    stats: { label: 'Employees' },
     category: 'People',
   },
   {
-    id: 'task-mgmt',
+    id: 'task-mgmt',  statsKey: 'task-mgmt',
     title: 'Task Management Portal',
     description: 'Unified task board across liaison and compliance departments.',
     href: '/portal/task-management',
     icon: <Target />,
     color: 'bg-teal-600',
     lightColor: 'bg-teal-50 text-teal-600 border-teal-200',
-    stats: { label: 'Active Tasks', value: '16' },
+    stats: { label: 'Active Tasks' },
     category: 'Operations',
   },
   {
-    id: 'operation',
+    id: 'operation',  statsKey: 'operation',
     title: 'Operations Portal',
     description: 'Manage active clients, operational requirements, and cross-department tasks.',
     href: '/portal/operation',
     icon: <Zap />,
     color: 'bg-amber-600',
     lightColor: 'bg-amber-50 text-amber-700 border-amber-200',
-    stats: { label: 'Active Clients', value: '0' },
+    stats: { label: 'Active Clients' },
     category: 'Operations',
   },
   {
-    id: 'crm',
+    id: 'crm',        statsKey: 'crm',
     title: 'Client Gateway System',
     description: 'Client portal, self-service gateway, and external client access management.',
     href: '/portal/client-gateway',
     icon: <Users />,
     color: 'bg-blue-500',
     lightColor: 'bg-blue-50 text-blue-600 border-blue-200',
-    stats: { label: 'Active Clients', value: '0' },
+    stats: { label: 'Active Clients' },
     category: 'Client-Facing',
   },
 ];
@@ -126,18 +126,20 @@ export default function AllPortalsPage(): React.ReactNode {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [accessiblePortals, setAccessiblePortals] = useState<Set<AppPortal>>(new Set());
   const [loadingAccess, setLoadingAccess] = useState(true);
+  const [portalStats, setPortalStats] = useState<Record<string, number | undefined>>({});
   const [filter, setFilter] = useState<string>('All');
 
   const displayName = session?.user?.name ?? '';
 
   useEffect(() => {
-    void fetch('/api/auth/portal-access')
-      .then((res) => res.json())
-      .then((data: { userRole: string; portals: { portal: AppPortal }[] }) => {
-        setUserRole(data.userRole);
-        setAccessiblePortals(new Set(data.portals.map((p) => p.portal)));
-      })
-      .catch(() => { /* no-op */ })
+    void Promise.all([
+      fetch('/api/auth/portal-access').then((r) => r.json()),
+      fetch('/api/dashboard/portal-stats').then((r) => r.json()),
+    ]).then(([access, stats]: [{ userRole: string; portals: { portal: AppPortal }[] }, { data?: Record<string, number> }]) => {
+      setUserRole(access.userRole);
+      setAccessiblePortals(new Set(access.portals.map((p) => p.portal)));
+      if (stats?.data) setPortalStats(stats.data);
+    }).catch(() => { /* no-op */ })
       .finally(() => setLoadingAccess(false));
   }, []);
 
@@ -231,7 +233,11 @@ export default function AllPortalsPage(): React.ReactNode {
 
               {/* Stats */}
               <div className="hidden sm:flex flex-col items-end shrink-0 mr-2">
-                <span className="text-lg font-extrabold text-foreground leading-none">{portal.stats.value}</span>
+                <span className="text-lg font-extrabold text-foreground leading-none">
+                  {portalStats[portal.statsKey] !== undefined
+                    ? portalStats[portal.statsKey]
+                    : <span className="inline-block w-8 h-4 rounded bg-muted animate-pulse" />}
+                </span>
                 <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">{portal.stats.label}</span>
               </div>
 

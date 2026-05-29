@@ -5,8 +5,8 @@ import {
   Users, ChevronRight, ExternalLink, ArrowRight,
   ShieldCheck, Star, Settings, Clock, FileText,
   BarChart3, Briefcase, DollarSign, UserCheck, Building2,
-  Globe, BookOpen, Megaphone, Zap, Receipt, Layers, Target, 
-  Calculator, CalendarDays
+  Globe, BookOpen, Megaphone, Zap, Receipt, Layers, Target,
+  Calculator, CalendarDays, Loader2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
@@ -22,15 +22,15 @@ const EMPLOYEE_SERVICES = [
 ];
 
 const PORTALS = [
-  { id: 'sales',      title: 'Sales Portal',         description: 'Manage leads, pipeline, and client engagements.',    href: '/portal/sales',      icon: <Megaphone />,   color: 'bg-rose-600',    stats: { label: 'Active Leads', value: '124' } },
-  { id: 'accounting', title: 'ACF Portal',     description: 'Handle bookkeeping, invoices, and financial reports.',href: '/portal/accounting-and-finance', icon: <BarChart3 />,   color: 'bg-blue-600',    stats: { label: 'Open Invoices', value: '38' } },
-  { id: 'compliance', title: 'Compliance Portal',     description: 'Track BIR filings, permits, and regulatory tasks.',  href: '/portal/compliance', icon: <ShieldCheck />, color: 'bg-indigo-600',  stats: { label: 'Pending Filings', value: '7' } },
-  { id: 'liaison',    title: 'Liaison Portal',        description: 'Coordinate government agency tasks and schedules.',  href: '/portal/liaison',    icon: <Building2 />,   color: 'bg-amber-600',   stats: { label: 'Active Tasks', value: '15' } },
-  { id: 'hr',         title: 'HR Portal',             description: 'Manage employees, onboarding, and company policies.',href: '/portal/hr',         icon: <UserCheck />,   color: 'bg-teal-600',    stats: { label: 'Employees', value: '52' } },
-  { id: 'ao',         title: 'Account Officer Portal', description: 'Oversee client accounts and service delivery.',     href: '/portal/account-officer', icon: <Briefcase />, color: 'bg-violet-600', stats: { label: 'Clients Managed', value: '86' } },
-  { id: 'task-mgmt',  title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',      href: '/portal/task-management', icon: <Target />,    color: 'bg-teal-600',    stats: { label: 'Active Tasks',   value: '16' } },
-  { id: 'crm',        title: 'Client Gateway System', description: 'Client portal and self-service gateway.',            href: '/portal/client-gateway',  icon: <Users />,     color: 'bg-blue-500',    stats: { label: 'Active Clients', value: '0' } },
-  { id: 'operation',  title: 'Operations Portal',     description: 'Manage active clients, requirements, and operations tasks.', href: '/portal/operation', icon: <Zap />,       color: 'bg-amber-600',   stats: { label: 'Active Clients', value: '0' } },
+  { id: 'sales',      statsKey: 'sales',      title: 'Sales Portal',          description: 'Manage leads, pipeline, and client engagements.',               href: '/portal/sales',               icon: <Megaphone />,   color: 'bg-rose-600',   stats: { label: 'Active Leads'    } },
+  { id: 'accounting', statsKey: 'accounting', title: 'ACF Portal',             description: 'Handle bookkeeping, invoices, and financial reports.',           href: '/portal/accounting-and-finance', icon: <BarChart3 />,color: 'bg-blue-600',   stats: { label: 'Open Invoices'   } },
+  { id: 'compliance', statsKey: 'compliance', title: 'Compliance Portal',      description: 'Track BIR filings, permits, and regulatory tasks.',             href: '/portal/compliance',          icon: <ShieldCheck />, color: 'bg-indigo-600', stats: { label: 'Pending Filings' } },
+  { id: 'liaison',    statsKey: 'liaison',    title: 'Liaison Portal',         description: 'Coordinate government agency tasks and schedules.',             href: '/portal/liaison',             icon: <Building2 />,   color: 'bg-amber-600',  stats: { label: 'Active Tasks'    } },
+  { id: 'hr',         statsKey: 'hr',         title: 'HR Portal',              description: 'Manage employees, onboarding, and company policies.',           href: '/portal/hr',                  icon: <UserCheck />,   color: 'bg-teal-600',   stats: { label: 'Employees'       } },
+  { id: 'ao',         statsKey: 'ao',         title: 'Account Officer Portal', description: 'Oversee client accounts and service delivery.',                href: '/portal/account-officer',     icon: <Briefcase />,   color: 'bg-violet-600', stats: { label: 'Clients Managed' } },
+  { id: 'task-mgmt',  statsKey: 'task-mgmt',  title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',                 href: '/portal/task-management',     icon: <Target />,      color: 'bg-teal-600',   stats: { label: 'Active Tasks'    } },
+  { id: 'crm',        statsKey: 'crm',        title: 'Client Gateway System',  description: 'Client portal and self-service gateway.',                      href: '/portal/client-gateway',      icon: <Users />,       color: 'bg-blue-500',   stats: { label: 'Active Clients'  } },
+  { id: 'operation',  statsKey: 'operation',  title: 'Operations Portal',      description: 'Manage active clients, requirements, and operations tasks.',   href: '/portal/operation',           icon: <Zap />,         color: 'bg-amber-600',  stats: { label: 'Active Clients'  } },
 ];
 
 const APP_SYSTEMS = [
@@ -62,6 +62,14 @@ export default function DashboardPage() {
   const [accessiblePortals, setAccessiblePortals] = useState<Set<AppPortal>>(new Set());
   const [loadingAccess, setLoadingAccess] = useState(true);
 
+  // Dynamic portal stats
+  const [portalStats, setPortalStats] = useState<Record<string, number | null>>({});
+
+  // Today's timesheet record (drives the clock button label)
+  type TodayRecord = { timeIn: string | null; lunchStart: string | null; lunchEnd: string | null; timeOut: string | null } | null;
+  const [todayRecord, setTodayRecord] = useState<TodayRecord>(undefined as unknown as TodayRecord);
+  const [clockLoading, setClockLoading] = useState(false);
+
   const displayName = session?.user?.name?.split(' ')[0] ?? 'there';
 
   useEffect(() => {
@@ -69,18 +77,22 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch portal access on mount
+  // Fetch portal access, portal stats, and today's timesheet record in parallel
   useEffect(() => {
-    void fetch('/api/auth/portal-access')
-      .then(res => res.json())
-      .then(data => {
-        setUserRole(data.userRole);
-        setAccessiblePortals(new Set(data.portals.map((p: { portal: AppPortal }) => p.portal)));
-        setLoadingAccess(false);
-      })
-      .catch(() => {
-        setLoadingAccess(false);
-      });
+    void Promise.all([
+      fetch('/api/auth/portal-access').then(r => r.json()),
+      fetch('/api/dashboard/portal-stats').then(r => r.json()),
+      fetch('/api/dashboard/timesheet/me').then(r => r.json()),
+    ]).then(([access, stats, ts]) => {
+      setUserRole(access.userRole);
+      setAccessiblePortals(new Set(access.portals.map((p: { portal: AppPortal }) => p.portal)));
+      setLoadingAccess(false);
+      if (stats?.data) setPortalStats(stats.data as Record<string, number>);
+      setTodayRecord((ts?.data?.todayRecord as TodayRecord) ?? null);
+    }).catch(() => {
+      setLoadingAccess(false);
+      setTodayRecord(null);
+    });
   }, []);
 
   // Filter portals based on user access
@@ -91,6 +103,41 @@ export default function DashboardPage() {
   });
 
   const formatDate = (d: Date) => `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+
+  // Derive the next clock action from today's punch state
+  const clockAction: 'IN' | 'LUNCH_START' | 'LUNCH_END' | 'OUT' | null = (() => {
+    if (todayRecord === undefined) return null; // still loading
+    if (!todayRecord?.timeIn) return 'IN';
+    if (todayRecord.lunchStart && !todayRecord.lunchEnd) return 'LUNCH_END';
+    if (!todayRecord.lunchStart) return 'LUNCH_START';
+    if (!todayRecord.timeOut) return 'OUT';
+    return null; // already clocked out
+  })();
+
+  const CLOCK_CONFIG: Record<'IN' | 'LUNCH_START' | 'LUNCH_END' | 'OUT', { label: string; color: string }> = {
+    IN:          { label: 'Clock In',    color: 'bg-blue-600 hover:bg-blue-700' },
+    LUNCH_START: { label: 'Start Lunch', color: 'bg-amber-500 hover:bg-amber-600' },
+    LUNCH_END:   { label: 'End Lunch',   color: 'bg-orange-500 hover:bg-orange-600' },
+    OUT:         { label: 'Clock Out',   color: 'bg-emerald-600 hover:bg-emerald-700' },
+  };
+
+  const handleClockAction = async () => {
+    if (!clockAction || clockLoading) return;
+    setClockLoading(true);
+    try {
+      const res = await fetch('/api/dashboard/timesheet/me', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: clockAction }),
+      });
+      const json = await res.json() as { data?: TodayRecord; error?: string };
+      if (res.ok && json.data) {
+        setTodayRecord(json.data);
+      }
+    } finally {
+      setClockLoading(false);
+    }
+  };
 
   const handleNav = (href: string) => {
     if (href.startsWith('http')) {
@@ -112,12 +159,28 @@ export default function DashboardPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Here&apos;s an overview of your workspace and portals.</p>
         </div>
-        <button
-          onClick={() => handleNav('/dashboard/timesheet')}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97]"
-        >
-          Clock In <ArrowRight size={16} />
-        </button>
+        {/* Smart clock button — label/color reflects next punch action */}
+        {todayRecord === undefined ? (
+          // Loading skeleton
+          <div className="inline-flex items-center gap-2 bg-muted text-muted-foreground font-semibold rounded-xl px-5 h-10 text-sm">
+            <Loader2 size={15} className="animate-spin" /> Loading...
+          </div>
+        ) : clockAction === null ? (
+          // Already clocked out for the day
+          <div className="inline-flex items-center gap-2 bg-muted text-muted-foreground font-semibold rounded-xl px-5 h-10 text-sm cursor-default">
+            <Clock size={15} /> Clocked Out
+          </div>
+        ) : (
+          <button
+            onClick={() => void handleClockAction()}
+            disabled={clockLoading}
+            className={`inline-flex items-center gap-2 ${CLOCK_CONFIG[clockAction].color} text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-70 disabled:cursor-not-allowed`}
+          >
+            {clockLoading
+              ? <><Loader2 size={15} className="animate-spin" /> {CLOCK_CONFIG[clockAction].label}...</>
+              : <>{CLOCK_CONFIG[clockAction].label} <ArrowRight size={16} /></>}
+          </button>
+        )}
       </section>
 
       {/* ── 2. Essential Services ─────────────────────────────── */}
@@ -195,7 +258,11 @@ export default function DashboardPage() {
                   <div className="mt-6 pt-5 border-t border-border flex items-center justify-between">
                     <div>
                       <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">{portal.stats.label}</p>
-                      <p className="text-xl font-extrabold text-foreground mt-0.5">{portal.stats.value}</p>
+                      <p className="text-xl font-extrabold text-foreground mt-0.5">
+                        {portalStats[portal.statsKey] !== undefined
+                          ? portalStats[portal.statsKey]
+                          : <span className="inline-block w-10 h-5 rounded bg-muted animate-pulse" />}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1 bg-muted rounded-full text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
                       <ShieldCheck size={12} className="text-blue-500" /> Verified
