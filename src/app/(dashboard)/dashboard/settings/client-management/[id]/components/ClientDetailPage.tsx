@@ -231,7 +231,7 @@ export default function ClientDetailPage(): React.ReactNode {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-sm font-bold text-blue-700 dark:text-blue-300">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-sm font-bold text-blue-700">
             {clientInitials}
           </div>
           <div>
@@ -345,7 +345,7 @@ export default function ClientDetailPage(): React.ReactNode {
                     {/* User */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
                           {getInitials(u.name, u.email)}
                         </div>
                         <div className="min-w-0">

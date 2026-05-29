@@ -70,9 +70,9 @@ export default function UserHardDeleteModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Permanently Delete User" size="sm">
       <div className="p-6 space-y-5">
         {/* Warning banner */}
-        <div className="flex gap-3 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900">
-          <AlertTriangle size={18} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-          <div className="text-sm text-red-800 dark:text-red-300 space-y-1">
+        <div className="flex gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
+          <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-red-800 space-y-1">
             <p className="font-semibold">This action is irreversible</p>
             <p>
               Permanently deletes <span className="font-semibold">{user.name}</span> and removes

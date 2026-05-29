@@ -426,8 +426,8 @@ export default function UserFormModal({
             <div
               className={`rounded-xl border p-4 transition ${
                 employeeActive
-                  ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-600/40 dark:bg-emerald-950/20'
-                  : 'border-rose-300 bg-rose-50/50 dark:border-rose-600/40 dark:bg-rose-950/20'
+                  ? 'border-emerald-300 bg-emerald-50/50'
+                  : 'border-rose-300 bg-rose-50/50'
               }`}
             >
               <label className="flex items-center gap-3 cursor-pointer">
@@ -449,7 +449,7 @@ export default function UserFormModal({
                 </div>
               </label>
               {editingUser.employee.softDelete && !employeeActive && (
-                <p className="text-xs text-rose-600 dark:text-rose-400 mt-2 pl-7">
+                <p className="text-xs text-rose-600 mt-2 pl-7">
                   This record was soft-deleted (e.g. via account deactivation). Check the box above to restore it.
                 </p>
               )}
@@ -532,7 +532,7 @@ export default function UserFormModal({
                   key={p.key}
                   className={`rounded-xl border p-4 transition ${
                     flags.enabled
-                      ? 'border-blue-300 bg-blue-50/50 dark:border-blue-600/40 dark:bg-blue-950/20'
+                      ? 'border-blue-300 bg-blue-50/50'
                       : 'border-border hover:bg-muted/50'
                   }`}
                 >
