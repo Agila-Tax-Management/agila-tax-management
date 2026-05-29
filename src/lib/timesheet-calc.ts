@@ -74,12 +74,14 @@ function toMinutes(hhmm: string): number {
  * Default fallback schedule: 08:00–17:00 with 60-minute lunch break.
  * Used when the employee has no work schedule configured.
  */
-const DEFAULT_SCHEDULE: { startTime: string; endTime: string; breakStart: string; breakEnd: string; isWorkingDay: boolean } = {
+const DEFAULT_SCHEDULE: { startTime: string; endTime: string; breakStart: string; breakEnd: string; isWorkingDay: boolean; isFlexible?: boolean; requiredHours?: number | null } = {
   startTime: "08:00",
   endTime: "17:00",
   breakStart: "12:00",
   breakEnd: "13:00",
   isWorkingDay: true,
+  isFlexible: false,
+  requiredHours: null,
 };
 
 /**
