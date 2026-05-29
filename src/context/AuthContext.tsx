@@ -76,7 +76,7 @@ function fmtLogDate(d: Date): string {
 }
 
 function fmtTime(d: Date): string {
-  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+  return [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()]
     .map(n => String(n).padStart(2, '0'))
     .join(':');
 }
