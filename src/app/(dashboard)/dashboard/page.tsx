@@ -111,7 +111,7 @@ export default function DashboardPage() {
     if (todayRecord.lunchStart && !todayRecord.lunchEnd) return 'LUNCH_END';
     if (!todayRecord.lunchStart) return 'LUNCH_START';
     if (!todayRecord.timeOut) return 'OUT';
-    return null; // already clocked out
+    return 'IN'; // clocked out — allow re-clock-in for a new shift
   })();
 
   const CLOCK_CONFIG: Record<'IN' | 'LUNCH_START' | 'LUNCH_END' | 'OUT', { label: string; color: string }> = {
@@ -165,20 +165,15 @@ export default function DashboardPage() {
           <div className="inline-flex items-center gap-2 bg-muted text-muted-foreground font-semibold rounded-xl px-5 h-10 text-sm">
             <Loader2 size={15} className="animate-spin" /> Loading...
           </div>
-        ) : clockAction === null ? (
-          // Already clocked out for the day
-          <div className="inline-flex items-center gap-2 bg-muted text-muted-foreground font-semibold rounded-xl px-5 h-10 text-sm cursor-default">
-            <Clock size={15} /> Clocked Out
-          </div>
         ) : (
           <button
             onClick={() => void handleClockAction()}
             disabled={clockLoading}
-            className={`inline-flex items-center gap-2 ${CLOCK_CONFIG[clockAction].color} text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-70 disabled:cursor-not-allowed`}
+            className={`inline-flex items-center gap-2 ${CLOCK_CONFIG[clockAction!].color} text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-70 disabled:cursor-not-allowed`}
           >
             {clockLoading
-              ? <><Loader2 size={15} className="animate-spin" /> {CLOCK_CONFIG[clockAction].label}...</>
-              : <>{CLOCK_CONFIG[clockAction].label} <ArrowRight size={16} /></>}
+              ? <><Loader2 size={15} className="animate-spin" /> {CLOCK_CONFIG[clockAction!].label}...</>
+              : <>{CLOCK_CONFIG[clockAction!].label} <ArrowRight size={16} /></>}
           </button>
         )}
       </section>
