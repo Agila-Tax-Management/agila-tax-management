@@ -63,15 +63,20 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   const _now = new Date();
   const today = new Date(Date.UTC(_now.getFullYear(), _now.getMonth(), _now.getDate()));
 
-  // Get today's timesheet record
-  const todayRecord = await prisma.timesheet.findUnique({
-    where: {
-      employeeId_date: {
+  // Get today's timesheet record + approved OT request in parallel
+  const [todayRecord, approvedOT] = await Promise.all([
+    prisma.timesheet.findUnique({
+      where: { employeeId_date: { employeeId: employee.id, date: today } },
+    }),
+    prisma.overtimeRequest.findFirst({
+      where: {
         employeeId: employee.id,
         date: today,
+        status: 'APPROVED',
       },
-    },
-  });
+      select: { id: true },
+    }),
+  ]);
 
   // Get historical records — last 120 days
   const cutoff = new Date(today);
@@ -110,6 +115,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
             lunchEnd: todayRecord.lunchEnd?.toISOString() ?? null,
             timeOut: todayRecord.timeOut?.toISOString() ?? null,
             regularHours: todayRecord.regularHours.toString(),
+            hasApprovedOT: approvedOT !== null,
           }
         : null,
       records: records.map((r) => ({

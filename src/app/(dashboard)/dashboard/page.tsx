@@ -66,7 +66,7 @@ export default function DashboardPage() {
   const [portalStats, setPortalStats] = useState<Record<string, number | null>>({});
 
   // Today's timesheet record (drives the clock button label)
-  type TodayRecord = { timeIn: string | null; lunchStart: string | null; lunchEnd: string | null; timeOut: string | null } | null;
+  type TodayRecord = { timeIn: string | null; lunchStart: string | null; lunchEnd: string | null; timeOut: string | null; hasApprovedOT?: boolean } | null;
   const [todayRecord, setTodayRecord] = useState<TodayRecord>(undefined as unknown as TodayRecord);
   const [clockLoading, setClockLoading] = useState(false);
 
@@ -105,30 +105,35 @@ export default function DashboardPage() {
   const formatDate = (d: Date) => `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 
   // Derive the next clock action from today's punch state
-  const clockAction: 'IN' | 'LUNCH_START' | 'LUNCH_END' | 'OUT' | null = (() => {
+  const clockAction: 'IN' | 'IN_OT' | 'LUNCH_START' | 'LUNCH_END' | 'OUT' | null = (() => {
     if (todayRecord === undefined) return null; // still loading
     if (!todayRecord?.timeIn) return 'IN';
     if (todayRecord.lunchStart && !todayRecord.lunchEnd) return 'LUNCH_END';
     if (!todayRecord.lunchStart) return 'LUNCH_START';
     if (!todayRecord.timeOut) return 'OUT';
-    return null; // already clocked out
+    // Already clocked out — only allow re-clock-in if there is an approved OT request
+    if (todayRecord.hasApprovedOT) return 'IN_OT';
+    return null; // fully done for today
   })();
 
-  const CLOCK_CONFIG: Record<'IN' | 'LUNCH_START' | 'LUNCH_END' | 'OUT', { label: string; color: string }> = {
-    IN:          { label: 'Clock In',    color: 'bg-blue-600 hover:bg-blue-700' },
-    LUNCH_START: { label: 'Start Lunch', color: 'bg-amber-500 hover:bg-amber-600' },
-    LUNCH_END:   { label: 'End Lunch',   color: 'bg-orange-500 hover:bg-orange-600' },
-    OUT:         { label: 'Clock Out',   color: 'bg-emerald-600 hover:bg-emerald-700' },
+  const CLOCK_CONFIG: Record<'IN' | 'IN_OT' | 'LUNCH_START' | 'LUNCH_END' | 'OUT', { label: string; color: string }> = {
+    IN:          { label: 'Clock In',       color: 'bg-blue-600 hover:bg-blue-700' },
+    IN_OT:       { label: 'Clock In (OT)',  color: 'bg-purple-600 hover:bg-purple-700' },
+    LUNCH_START: { label: 'Start Lunch',    color: 'bg-amber-500 hover:bg-amber-600' },
+    LUNCH_END:   { label: 'End Lunch',      color: 'bg-orange-500 hover:bg-orange-600' },
+    OUT:         { label: 'Clock Out',      color: 'bg-emerald-600 hover:bg-emerald-700' },
   };
 
   const handleClockAction = async () => {
     if (!clockAction || clockLoading) return;
     setClockLoading(true);
+    // IN_OT is a UI-only variant — the API accepts 'IN' for both initial and OT clock-ins
+    const apiAction = clockAction === 'IN_OT' ? 'IN' : clockAction;
     try {
       const res = await fetch('/api/dashboard/timesheet/me', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: clockAction }),
+        body: JSON.stringify({ action: apiAction }),
       });
       const json = await res.json() as { data?: TodayRecord; error?: string };
       if (res.ok && json.data) {
