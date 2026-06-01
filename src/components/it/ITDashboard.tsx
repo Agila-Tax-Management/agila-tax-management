@@ -5,18 +5,14 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/UI/Card';
 import {
-  Ticket, ShieldCheck, HardDrive, Activity,
+  Ticket, ShieldCheck, HardDrive,
   AlertTriangle, CheckCircle2, Clock, ArrowRight, Loader2,
 } from 'lucide-react';
-import { Badge } from '@/components/UI/Badge';
 
 interface DashboardData {
   openTickets: number;
   pendingAccessRequests: number;
   totalAssets: number;
-  systemsDown: number;
-  systemsDegraded: number;
-  systemsOperational: number;
   urgentTickets: number;
   resolvedThisWeek: number;
 }
@@ -25,9 +21,6 @@ const EMPTY: DashboardData = {
   openTickets: 0,
   pendingAccessRequests: 0,
   totalAssets: 0,
-  systemsDown: 0,
-  systemsDegraded: 0,
-  systemsOperational: 0,
   urgentTickets: 0,
   resolvedThisWeek: 0,
 };
@@ -41,13 +34,11 @@ export function ITDashboard() {
     void Promise.all([
       fetch('/api/it/tickets', { cache: 'no-store' }).then((r) => r.json()),
       fetch('/api/it/assets', { cache: 'no-store' }).then((r) => r.json()),
-      fetch('/api/it/system-status', { cache: 'no-store' }).then((r) => r.json()),
       fetch('/api/it/access-requests?status=PENDING', { cache: 'no-store' }).then((r) => r.json()),
     ])
-      .then(([tickets, assets, systems, accessReqs]) => {
+      .then(([tickets, assets, accessReqs]) => {
         const ticketList: Array<{ status: string; priority: string; resolvedAt: string | null; updatedAt: string }> = tickets?.data ?? [];
         const assetList: Array<unknown> = assets?.data ?? [];
-        const systemList: Array<{ status: string }> = systems?.data ?? [];
         const accessList: Array<unknown> = accessReqs?.data ?? [];
 
         const now = new Date();
@@ -58,9 +49,6 @@ export function ITDashboard() {
           urgentTickets: ticketList.filter((t) => t.priority === 'URGENT' && t.status !== 'CLOSED' && t.status !== 'RESOLVED').length,
           resolvedThisWeek: ticketList.filter((t) => (t.status === 'RESOLVED' || t.status === 'CLOSED') && t.resolvedAt && new Date(t.resolvedAt) >= weekAgo).length,
           totalAssets: assetList.length,
-          systemsDown: systemList.filter((s) => s.status === 'OUTAGE').length,
-          systemsDegraded: systemList.filter((s) => s.status === 'DEGRADED' || s.status === 'MAINTENANCE').length,
-          systemsOperational: systemList.filter((s) => s.status === 'OPERATIONAL').length,
           pendingAccessRequests: accessList.length,
         });
       })
@@ -76,8 +64,6 @@ export function ITDashboard() {
     );
   }
 
-  const overallHealth = data.systemsDown > 0 ? 'OUTAGE' : data.systemsDegraded > 0 ? 'DEGRADED' : 'OPERATIONAL';
-
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -86,22 +72,8 @@ export function ITDashboard() {
         <p className="text-sm text-slate-500 mt-1">Overview of IT operations, tickets, and system health.</p>
       </div>
 
-      {/* System health banner */}
-      {overallHealth !== 'OPERATIONAL' && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium ${
-          overallHealth === 'OUTAGE'
-            ? 'bg-red-50 border-red-200 text-red-700'
-            : 'bg-amber-50 border-amber-200 text-amber-700'
-        }`}>
-          <AlertTriangle size={18} />
-          {overallHealth === 'OUTAGE'
-            ? `${data.systemsDown} system${data.systemsDown > 1 ? 's are' : ' is'} currently experiencing an outage.`
-            : `${data.systemsDegraded} system${data.systemsDegraded > 1 ? 's are' : ' is'} degraded or under maintenance.`}
-        </div>
-      )}
-
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <Card className="p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push('/portal/it/tickets')}>
           <div className="flex items-start justify-between">
             <div>
@@ -154,28 +126,6 @@ export function ITDashboard() {
           </div>
         </Card>
 
-        <Card className="p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push('/portal/it/system-status')}>
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">System Health</p>
-              <div className="mt-1">
-                <Badge
-                  variant={overallHealth === 'OPERATIONAL' ? 'success' : overallHealth === 'OUTAGE' ? 'danger' : 'warning'}
-                  className="text-xs font-bold"
-                >
-                  {overallHealth}
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">{data.systemsOperational} operational · {data.systemsDegraded + data.systemsDown} issues</p>
-            </div>
-            <div className="w-10 h-10 bg-cyan-100 rounded-xl flex items-center justify-center">
-              <Activity size={20} className="text-cyan-700" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-1 text-xs text-cyan-700 font-medium">
-            View status <ArrowRight size={12} />
-          </div>
-        </Card>
       </div>
 
       {/* Resolved this week */}
