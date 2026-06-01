@@ -47,23 +47,9 @@ export async function PATCH(
     },
   });
 
-  // If approved, upsert the actual EmployeeAppAccess record
-  if (parsed.data.status === 'APPROVED') {
-    const app = await prisma.app.findUnique({
-      where: { name: accessRequest.requestedPortal },
-    });
-    if (app) {
-      await prisma.employeeAppAccess.upsert({
-        where: { employeeId_appId: { employeeId: accessRequest.requestedById, appId: app.id } },
-        create: {
-          employeeId: accessRequest.requestedById,
-          appId: app.id,
-          role: accessRequest.requestedRole,
-        },
-        update: { role: accessRequest.requestedRole },
-      });
-    }
-  }
+  // NOTE: Access is NOT automatically granted on approval.
+  // IT must manually grant portal access via Active Access after coordinating with an approver.
+  // This status update simply records that the process was completed.
 
   // Notify the requester
   if (accessRequest.requestedBy.user?.id) {
@@ -90,4 +76,35 @@ export async function PATCH(
   });
 
   return NextResponse.json({ data: accessRequest });
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const session = await getSessionWithAccess();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session.portalAccess.IT_MANAGEMENT.canDelete) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const reqId = parseInt(id, 10);
+  if (isNaN(reqId)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
+  const existing = await prisma.itPortalAccessRequest.findUnique({ where: { id: reqId } });
+  if (!existing) return NextResponse.json({ error: 'Access request not found' }, { status: 404 });
+
+  await prisma.itPortalAccessRequest.delete({ where: { id: reqId } });
+
+  void logActivity({
+    userId: session.user.id,
+    action: 'DELETED',
+    entity: 'ItPortalAccessRequest',
+    entityId: String(reqId),
+    description: `Deleted access request #${reqId} for ${existing.requestedPortal}`,
+    ...getRequestMeta(request),
+  });
+
+  return NextResponse.json({ data: { message: 'Access request deleted' } });
 }

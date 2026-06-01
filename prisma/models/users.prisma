@@ -126,6 +126,8 @@ model User {
   itTicketsAssigned    ItTicket[]            @relation("ItTicketAssignee")
   itAccessReviewed     ItPortalAccessRequest[] @relation("ItAccessReviewer")
   itStatusUpdates      ItSystemStatusEntry[] @relation("ItStatusUpdater")
+  itAccessApprover     ItAccessApprover?     @relation("ItAccessApproverUser")
+  itApproverAdditions  ItAccessApprover[]    @relation("ItAccessApproverAddedBy")
 
   @@index([role])
   @@index([active])

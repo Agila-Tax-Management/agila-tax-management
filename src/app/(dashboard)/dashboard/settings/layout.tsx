@@ -3,13 +3,14 @@
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, Building2, Settings, UserCheck, KeyRound } from 'lucide-react';
+import { Users, Building2, Settings, UserCheck, KeyRound, ShieldCheck } from 'lucide-react';
 
 const SETTINGS_TABS = [
   { href: '/dashboard/settings/user-management', label: 'User Management', icon: Users },
   { href: '/dashboard/settings/user-client-management', label: 'User Client Management', icon: UserCheck },
   { href: '/dashboard/settings/client-management', label: 'Client Management', icon: Building2 },
   { href: '/dashboard/settings/api-keys', label: 'API Keys', icon: KeyRound },
+  { href: '/dashboard/settings/access-grantor', label: 'Access Grantor', icon: ShieldCheck },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }): React.ReactNode {

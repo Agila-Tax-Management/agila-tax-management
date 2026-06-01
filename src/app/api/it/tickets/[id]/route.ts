@@ -7,6 +7,9 @@ import { logActivity, getRequestMeta } from '@/lib/activity-log';
 import { notify } from '@/lib/notification';
 
 const updateSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  type: z.enum(['BUG', 'SYSTEM_ISSUE', 'DOWNTIME', 'CREATE_USER', 'REVOKE_ACCESS', 'HARDWARE_REQUEST', 'SOFTWARE_REQUEST', 'OTHER']).optional(),
   status: z.enum(['OPEN', 'IN_PROGRESS', 'PENDING_INFO', 'RESOLVED', 'CLOSED']).optional(),
   priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']).optional(),
   assignedToId: z.string().nullable().optional(),

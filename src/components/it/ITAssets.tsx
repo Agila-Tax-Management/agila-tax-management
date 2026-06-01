@@ -8,7 +8,7 @@ import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import {
   Plus, Search, HardDrive, X, Loader2, Pencil, Monitor,
-  Laptop, Tablet, Phone, Server, Printer, Wifi, HelpCircle,
+  Laptop, Phone, Printer, Wifi, HelpCircle, Cpu, Trash2, AlertTriangle,
 } from 'lucide-react';
 
 interface AssetRecord {
@@ -27,42 +27,48 @@ interface AssetRecord {
   assignedTo: { id: number; firstName: string; lastName: string; employeeNo: string | null } | null;
 }
 
+interface EmployeeOption {
+  id: number;
+  fullName: string;
+  employeeNo: string | null;
+}
+
 const TYPE_ICONS: Record<string, typeof HardDrive> = {
-  COMPUTER: Monitor,
   LAPTOP: Laptop,
-  TABLET: Tablet,
+  DESKTOP: Monitor,
+  MONITOR: Monitor,
   PHONE: Phone,
-  SERVER: Server,
   PRINTER: Printer,
-  NETWORK_DEVICE: Wifi,
+  PERIPHERAL: Cpu,
+  NETWORKING: Wifi,
   OTHER: HelpCircle,
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  COMPUTER: 'Computer',
   LAPTOP: 'Laptop',
-  TABLET: 'Tablet',
+  DESKTOP: 'Desktop',
+  MONITOR: 'Monitor',
   PHONE: 'Phone',
-  SERVER: 'Server',
   PRINTER: 'Printer',
-  NETWORK_DEVICE: 'Network Device',
+  PERIPHERAL: 'Peripheral',
+  NETWORKING: 'Networking',
   OTHER: 'Other',
 };
 
 const STATUS_VARIANT: Record<string, 'neutral' | 'success' | 'info' | 'warning' | 'danger'> = {
   ACTIVE: 'success',
   UNASSIGNED: 'neutral',
-  UNDER_REPAIR: 'warning',
+  IN_REPAIR: 'warning',
   RETIRED: 'danger',
   DISPOSED: 'danger',
 };
 
 const EMPTY_FORM = {
-  name: '', type: 'COMPUTER', status: 'UNASSIGNED', brand: '', model: '',
-  serialNumber: '', purchaseDate: '', warrantyUntil: '', notes: '',
+  name: '', type: 'LAPTOP', status: 'UNASSIGNED', brand: '', model: '',
+  serialNumber: '', purchaseDate: '', warrantyUntil: '', notes: '', assignedToId: '',
 };
 
-export function ITAssets() {
+export function ITAssets(): React.ReactNode {
   const { success, error } = useToast();
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +79,9 @@ export function ITAssets() {
   const [editAsset, setEditAsset] = useState<AssetRecord | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchAssets = useCallback(async () => {
     const params = new URLSearchParams();
@@ -84,10 +93,26 @@ export function ITAssets() {
     setAssets(json.data ?? []);
   }, [filterStatus, filterType, search]);
 
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/hr/employees', { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        setEmployees(json.data ?? []);
+      }
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     void fetchAssets().finally(() => setLoading(false));
   }, [fetchAssets]);
+
+  useEffect(() => {
+    void fetchEmployees();
+  }, [fetchEmployees]);
 
   function openAdd() {
     setEditAsset(null);
@@ -107,6 +132,7 @@ export function ITAssets() {
       purchaseDate: asset.purchaseDate ? asset.purchaseDate.slice(0, 10) : '',
       warrantyUntil: asset.warrantyUntil ? asset.warrantyUntil.slice(0, 10) : '',
       notes: asset.notes ?? '',
+      assignedToId: asset.assignedTo ? String(asset.assignedTo.id) : '',
     });
     setShowForm(true);
   }
@@ -124,6 +150,7 @@ export function ITAssets() {
       if (form.purchaseDate) payload.purchaseDate = form.purchaseDate;
       if (form.warrantyUntil) payload.warrantyUntil = form.warrantyUntil;
       if (form.notes) payload.notes = form.notes;
+      payload.assignedToId = form.assignedToId ? parseInt(form.assignedToId, 10) : null;
 
       const res = editAsset
         ? await fetch(`/api/it/assets/${editAsset.id}`, {
@@ -144,6 +171,18 @@ export function ITAssets() {
       void fetchAssets();
     } catch { error('Failed', 'Unexpected error.'); }
     finally { setSubmitting(false); }
+  }
+
+  async function handleDelete(id: number) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/it/assets/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const j = await res.json(); error('Failed to delete', j.error ?? 'Error occurred.'); return; }
+      success('Asset deleted', 'The asset has been removed from inventory.');
+      setConfirmDeleteId(null);
+      void fetchAssets();
+    } catch { error('Failed', 'Unexpected error.'); }
+    finally { setDeleting(false); }
   }
 
   return (
@@ -177,7 +216,7 @@ export function ITAssets() {
           <option value="">All Statuses</option>
           <option value="ACTIVE">Active</option>
           <option value="UNASSIGNED">Unassigned</option>
-          <option value="UNDER_REPAIR">Under Repair</option>
+          <option value="IN_REPAIR">In Repair</option>
           <option value="RETIRED">Retired</option>
           <option value="DISPOSED">Disposed</option>
         </select>
@@ -229,7 +268,7 @@ export function ITAssets() {
               >
                 <option value="ACTIVE">Active</option>
                 <option value="UNASSIGNED">Unassigned</option>
-                <option value="UNDER_REPAIR">Under Repair</option>
+                <option value="IN_REPAIR">In Repair</option>
                 <option value="RETIRED">Retired</option>
                 <option value="DISPOSED">Disposed</option>
               </select>
@@ -281,6 +320,21 @@ export function ITAssets() {
             </div>
           </div>
           <div className="mb-4">
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Assign To Employee</label>
+            <select
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cyan-600"
+              value={form.assignedToId}
+              onChange={(e) => setForm((f) => ({ ...f, assignedToId: e.target.value }))}
+            >
+              <option value="">Unassigned</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={String(emp.id)}>
+                  {emp.fullName}{emp.employeeNo ? ` (${emp.employeeNo})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-4">
             <label className="text-xs font-semibold text-slate-600 mb-1 block">Notes</label>
             <input
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600"
@@ -321,9 +375,24 @@ export function ITAssets() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
                       <p className="text-sm font-bold text-slate-900 truncate">{asset.name}</p>
-                      <button onClick={() => openEdit(asset)} className="text-slate-400 hover:text-cyan-700 shrink-0">
-                        <Pencil size={13} />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          title="Edit asset"
+                          onClick={() => openEdit(asset)}
+                          className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-cyan-700 transition"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete asset"
+                          onClick={() => setConfirmDeleteId(asset.id)}
+                          className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[10px] font-mono text-slate-400 mt-0.5">{asset.assetTag}</p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -350,6 +419,30 @@ export function ITAssets() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={22} className="text-red-600" />
+            </div>
+            <h3 className="font-black text-slate-900 mb-1">Delete Asset</h3>
+            <p className="text-sm text-slate-500 mb-6">This action cannot be undone. The asset record will be permanently removed.</p>
+            <div className="flex gap-3 justify-center">
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)} className="flex-1">Cancel</Button>
+              <Button
+                onClick={() => void handleDelete(confirmDeleteId)}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+                Delete
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
