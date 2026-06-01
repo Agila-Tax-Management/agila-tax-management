@@ -68,7 +68,6 @@ export default function DashboardPage() {
   // Today's timesheet record (drives the clock button label)
   type TodayRecord = { timeIn: string | null; lunchStart: string | null; lunchEnd: string | null; timeOut: string | null; hasApprovedOT?: boolean } | null;
   const [todayRecord, setTodayRecord] = useState<TodayRecord>(undefined as unknown as TodayRecord);
-  const [clockLoading, setClockLoading] = useState(false);
 
   const displayName = session?.user?.name?.split(' ')[0] ?? 'there';
 
@@ -124,25 +123,7 @@ export default function DashboardPage() {
     OUT:         { label: 'Clock Out',      color: 'bg-emerald-600 hover:bg-emerald-700' },
   };
 
-  const handleClockAction = async () => {
-    if (!clockAction || clockLoading) return;
-    setClockLoading(true);
-    // IN_OT is a UI-only variant — the API accepts 'IN' for both initial and OT clock-ins
-    const apiAction = clockAction === 'IN_OT' ? 'IN' : clockAction;
-    try {
-      const res = await fetch('/api/dashboard/timesheet/me', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: apiAction }),
-      });
-      const json = await res.json() as { data?: TodayRecord; error?: string };
-      if (res.ok && json.data) {
-        setTodayRecord(json.data);
-      }
-    } finally {
-      setClockLoading(false);
-    }
-  };
+
 
   const handleNav = (href: string) => {
     if (href.startsWith('http')) {
@@ -177,13 +158,10 @@ export default function DashboardPage() {
           </div>
         ) : (
           <button
-            onClick={() => void handleClockAction()}
-            disabled={clockLoading}
-            className={`inline-flex items-center gap-2 ${CLOCK_CONFIG[clockAction].color} text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-70 disabled:cursor-not-allowed`}
+            onClick={() => router.push('/dashboard/timesheet')}
+            className={`inline-flex items-center gap-2 ${CLOCK_CONFIG[clockAction].color} text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97]`}
           >
-            {clockLoading
-              ? <><Loader2 size={15} className="animate-spin" /> {CLOCK_CONFIG[clockAction].label}...</>
-              : <>{CLOCK_CONFIG[clockAction].label} <ArrowRight size={16} /></>}
+            {CLOCK_CONFIG[clockAction].label} <ArrowRight size={16} />
           </button>
         )}
       </section>
