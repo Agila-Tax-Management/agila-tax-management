@@ -7,8 +7,13 @@ import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { useToast } from '@/context/ToastContext';
 import {
-  Plus, Search, ShieldCheck, X, Loader2, User, CheckCircle2, XCircle,
+  Plus, Search, ShieldCheck, X, Loader2, User, CheckCircle2, XCircle, Trash2, AlertTriangle, UserCheck,
 } from 'lucide-react';
+
+interface Approver {
+  id: number;
+  user: { id: string; name: string; email: string; role: string };
+}
 
 interface AccessRequest {
   id: number;
@@ -48,6 +53,16 @@ export function ITAccessRequests() {
   const [submitting, setSubmitting] = useState(false);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [reviewNote, setReviewNote] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Approval confirmation modal state
+  const [approveTarget, setApproveTarget] = useState<AccessRequest | null>(null);
+  const [approvers, setApprovers] = useState<Approver[]>([]);
+  const [approversLoading, setApproversLoading] = useState(false);
+  const [confirmedByName, setConfirmedByName] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [approveNote, setApproveNote] = useState('');
 
   const fetchRequests = useCallback(async () => {
     const params = new URLSearchParams();
@@ -87,20 +102,46 @@ export function ITAccessRequests() {
     finally { setSubmitting(false); }
   }
 
-  async function handleReview(id: number, status: 'APPROVED' | 'REJECTED') {
+  async function handleReview(id: number, status: 'APPROVED' | 'REJECTED', note?: string) {
     setReviewingId(id);
     try {
       const res = await fetch(`/api/it/access-requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, reviewNote }),
+        body: JSON.stringify({ status, reviewNote: note ?? reviewNote }),
       });
       if (!res.ok) { const j = await res.json(); error('Failed', j.error ?? 'Error occurred.'); return; }
       success(`Request ${status.toLowerCase()}`, `Access request has been ${status.toLowerCase()}.`);
       setReviewNote('');
+      setApproveTarget(null);
       void fetchRequests();
     } catch { error('Failed', 'Unexpected error.'); }
     finally { setReviewingId(null); }
+  }
+
+  function openApproveModal(req: AccessRequest) {
+    setApproveTarget(req);
+    setConfirmedByName('');
+    setAcknowledged(false);
+    setApproveNote('');
+    setApproversLoading(true);
+    fetch('/api/it/settings/approvers', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setApprovers(j.data ?? []))
+      .catch(() => setApprovers([]))
+      .finally(() => setApproversLoading(false));
+  }
+
+  async function handleDelete(id: number) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/it/access-requests/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const j = await res.json(); error('Failed to delete', j.error ?? 'Error occurred.'); return; }
+      success('Request deleted', 'The access request has been removed.');
+      setConfirmDeleteId(null);
+      void fetchRequests();
+    } catch { error('Failed', 'Unexpected error.'); }
+    finally { setDeleting(false); }
   }
 
   return (
@@ -230,10 +271,9 @@ export function ITAccessRequests() {
                       />
                       <Button
                         className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white h-8"
-                        disabled={reviewingId === req.id}
-                        onClick={() => void handleReview(req.id, 'APPROVED')}
+                        onClick={() => openApproveModal(req)}
                       >
-                        {reviewingId === req.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <CheckCircle2 size={12} className="mr-1" />}
+                        <CheckCircle2 size={12} className="mr-1" />
                         Approve
                       </Button>
                       <Button
@@ -242,16 +282,162 @@ export function ITAccessRequests() {
                         disabled={reviewingId === req.id}
                         onClick={() => void handleReview(req.id, 'REJECTED')}
                       >
-                        <XCircle size={12} className="mr-1" />
+                        {reviewingId === req.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <XCircle size={12} className="mr-1" />}
                         Reject
                       </Button>
                     </div>
                   )}
                 </div>
                 <span className="text-xs text-slate-400 shrink-0">{new Date(req.createdAt).toLocaleDateString('en-PH')}</span>
+                <button
+                  type="button"
+                  title="Delete request"
+                  onClick={() => setConfirmDeleteId(req.id)}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition shrink-0"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Approval confirmation modal */}
+      {approveTarget !== null && (
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setApproveTarget(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start gap-3 mb-5">
+              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                <UserCheck size={18} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-900">Approve Access Request</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {approveTarget.requestedBy.firstName} {approveTarget.requestedBy.lastName} &middot;{' '}
+                  {approveTarget.requestedPortal.replace(/_/g, ' ')} &middot; {approveTarget.requestedRole}
+                </p>
+              </div>
+            </div>
+
+            {/* Default approvers */}
+            <div className="mb-4">
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Contact an Approver First</p>
+              {approversLoading ? (
+                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                  <Loader2 size={13} className="animate-spin" /> Loading approvers…
+                </div>
+              ) : approvers.length === 0 ? (
+                <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
+                  <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+                  <p className="text-xs text-amber-700">No default approvers configured. Go to IT Settings → Access Control to add approvers.</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                  {approvers.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                      <div className="w-6 h-6 rounded-full bg-cyan-100 flex items-center justify-center shrink-0">
+                        <span className="text-[9px] font-bold text-cyan-700">{a.user.name.charAt(0)}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800">{a.user.name}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{a.user.email}</p>
+                      </div>
+                      <Badge variant="neutral" className="text-[9px] ml-auto shrink-0">{a.user.role.replace(/_/g, ' ')}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Confirmed by */}
+            <div className="mb-3">
+              <label className="text-xs font-bold text-slate-600 mb-1 block">Confirmed by <span className="text-red-500">*</span></label>
+              <input
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="Name of approver who authorized this…"
+                value={confirmedByName}
+                onChange={(e) => setConfirmedByName(e.target.value)}
+              />
+            </div>
+
+            {/* Review note */}
+            <div className="mb-4">
+              <label className="text-xs font-bold text-slate-600 mb-1 block">Review Note <span className="text-slate-400 font-normal">(optional)</span></label>
+              <textarea
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                placeholder="Any notes for the requester…"
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+              />
+            </div>
+
+            {/* Acknowledgment */}
+            <label className="flex items-start gap-2.5 cursor-pointer mb-5 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded accent-emerald-600 cursor-pointer shrink-0"
+              />
+              <span className="text-xs text-emerald-800 leading-relaxed">
+                I confirm I have contacted the approver, received authorization, and have <strong>manually granted the portal access</strong> before marking this request as approved.
+              </span>
+            </label>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setApproveTarget(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!acknowledged || !confirmedByName.trim() || reviewingId === approveTarget.id}
+                onClick={() => {
+                  const note = confirmedByName.trim()
+                    ? `Confirmed by: ${confirmedByName.trim()}${approveNote.trim() ? ` — ${approveNote.trim()}` : ''}`
+                    : approveNote.trim();
+                  void handleReview(approveTarget.id, 'APPROVED', note);
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reviewingId === approveTarget.id
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <CheckCircle2 size={14} />}
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={22} className="text-red-600" />
+            </div>
+            <h3 className="font-black text-slate-900 mb-1">Delete Access Request</h3>
+            <p className="text-sm text-slate-500 mb-6">This action cannot be undone.</p>
+            <div className="flex gap-3 justify-center">
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)} className="flex-1">Cancel</Button>
+              <Button
+                onClick={() => void handleDelete(confirmDeleteId)}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleting ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+                Delete
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -163,6 +163,23 @@ model ItPortalAccessRequest {
   @@map("it_portal_access_request")
 }
 
+// ─── IT Access Default Approvers ────────────────────────────────────
+model ItAccessApprover {
+  id Int @id @default(autoincrement())
+
+  // The user designated as a default approver
+  userId String @unique
+  user   User   @relation("ItAccessApproverUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Who added this approver
+  addedById String
+  addedBy   User   @relation("ItAccessApproverAddedBy", fields: [addedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("it_access_approver")
+}
+
 // ─── IT System Status Entry ───────────────────────────────────────
 model ItSystemStatusEntry {
   id Int @id @default(autoincrement())
