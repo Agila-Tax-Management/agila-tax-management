@@ -34,7 +34,7 @@ const PORTAL_ENTITIES: Record<string, string[]> = {
   ],
   it: [
     'ItTicket', 'ItAsset', 'ItPortalAccessRequest',
-    'ItSystemStatusEntry', 'EmployeeAppAccess',
+    'EmployeeAppAccess',
   ],
   tasks: ['Task', 'TaskSubtask', 'TaskTemplate', 'DepartmentTaskStatus'],
   admin: ['User', 'Client', 'ClientUser', 'ClientApiKey', 'Announcement'],

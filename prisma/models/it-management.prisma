@@ -53,13 +53,6 @@ enum ItPortalAccessRequestStatus {
   REJECTED
 }
 
-enum ItSystemStatus {
-  OPERATIONAL
-  DEGRADED
-  OUTAGE
-  MAINTENANCE
-}
-
 // ─── IT Ticket ────────────────────────────────────────────────────
 model ItTicket {
   id Int @id @default(autoincrement())
@@ -178,27 +171,4 @@ model ItAccessApprover {
   createdAt DateTime @default(now())
 
   @@map("it_access_approver")
-}
-
-// ─── IT System Status Entry ───────────────────────────────────────
-model ItSystemStatusEntry {
-  id Int @id @default(autoincrement())
-
-  clientId Int?
-  client   Client? @relation(fields: [clientId], references: [id])
-
-  systemName  String
-  status      ItSystemStatus @default(OPERATIONAL)
-  description String?        @db.Text
-
-  // Who last updated this entry
-  updatedById String?
-  updatedBy   User?   @relation("ItStatusUpdater", fields: [updatedById], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([clientId, systemName])
-  @@index([clientId])
-  @@map("it_system_status_entry")
 }

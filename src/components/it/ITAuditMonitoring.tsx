@@ -109,7 +109,6 @@ const ENTITY_LABELS: Record<string, string> = {
   ItTicket: 'Ticket',
   ItAsset: 'Asset',
   ItPortalAccessRequest: 'Access Request',
-  ItSystemStatusEntry: 'System Status',
   EmployeeAppAccess: 'App Access',
   // Task Management
   Task: 'Task',

@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Ticket, ShieldCheck, Activity,
+  LayoutDashboard, Ticket, ShieldCheck,
   ClipboardList, HardDrive, Settings, Monitor, FileClock,
   ChevronDown, Users, History, ShieldAlert,
 } from 'lucide-react';
@@ -35,7 +35,6 @@ const IT_NAV_ITEMS: NavItem[] = [
       { id: 'access-history', label: 'Access History', icon: History, href: '/portal/it/access-management/history' },
     ],
   },
-  { id: 'system-status', label: 'System Status', icon: Activity, href: '/portal/it/system-status' },
   { id: 'section-mgmt', label: 'MANAGEMENT', isSection: true },
   { id: 'task-board', label: 'Task Board', icon: ClipboardList, href: '/portal/it/task-board' },
   { id: 'assets', label: 'Asset Management', icon: HardDrive, href: '/portal/it/assets' },

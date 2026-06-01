@@ -125,7 +125,6 @@ model User {
   itTicketsReported    ItTicket[]            @relation("ItTicketReporter")
   itTicketsAssigned    ItTicket[]            @relation("ItTicketAssignee")
   itAccessReviewed     ItPortalAccessRequest[] @relation("ItAccessReviewer")
-  itStatusUpdates      ItSystemStatusEntry[] @relation("ItStatusUpdater")
   itAccessApprover     ItAccessApprover?     @relation("ItAccessApproverUser")
   itApproverAdditions  ItAccessApprover[]    @relation("ItAccessApproverAddedBy")
 
