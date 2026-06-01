@@ -15,6 +15,7 @@ export const PORTAL_ROUTE_MAP: Record<string, AppPortal> = {
   '/portal/task-management': 'TASK_MANAGEMENT',
   '/portal/operation': 'OPERATIONS_MANAGEMENT',
   '/portal/client-gateway': 'CLIENT_RELATIONS',
+  '/portal/it': 'IT_MANAGEMENT',
 };
 
 /**

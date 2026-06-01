@@ -121,6 +121,12 @@ model User {
   // ─── Announcements ───
   announcements Announcement[] @relation("AnnouncementAuthor")
 
+  // ─── IT Management ───
+  itTicketsReported    ItTicket[]            @relation("ItTicketReporter")
+  itTicketsAssigned    ItTicket[]            @relation("ItTicketAssignee")
+  itAccessReviewed     ItPortalAccessRequest[] @relation("ItAccessReviewer")
+  itStatusUpdates      ItSystemStatusEntry[] @relation("ItStatusUpdater")
+
   @@index([role])
   @@index([active])
   @@unique([email])

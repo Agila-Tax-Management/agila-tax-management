@@ -8,6 +8,7 @@ enum AppPortal {
   HR
   TASK_MANAGEMENT
   CLIENT_RELATIONS
+  IT_MANAGEMENT
 }
 
 // ─── NEW: Portal-Specific Roles ───

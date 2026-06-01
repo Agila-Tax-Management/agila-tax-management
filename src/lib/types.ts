@@ -26,7 +26,8 @@ export type AppPortalName =
   | 'OPERATIONS_MANAGEMENT'
   | 'HR'
   | 'TASK_MANAGEMENT'
-  | 'CLIENT_RELATIONS';
+  | 'CLIENT_RELATIONS'
+  | 'IT_MANAGEMENT';
 
 export interface PortalPermissions {
   canRead: boolean;

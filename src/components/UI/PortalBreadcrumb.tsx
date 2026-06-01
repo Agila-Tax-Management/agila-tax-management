@@ -14,6 +14,7 @@ const MODULE_LABELS: Record<string, string> = {
   'account-officer': 'Account Officer Portal',
   'task-management': 'Task Management Portal',
   'operation': 'Operations Portal',
+  'it': 'IT Portal',
 };
 
 function toLabel(segment: string): string {
