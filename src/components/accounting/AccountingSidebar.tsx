@@ -1,15 +1,12 @@
 ﻿'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CreditCard, FileText, Receipt,
   BarChart3, Calculator, BookOpen, PenLine, Settings, Wallet, Landmark,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
-import { INITIAL_PAYMENTS } from '@/lib/mock-accounting-data';
-
-const pendingCount = INITIAL_PAYMENTS.filter(p => p.status === 'Pending' || p.status === 'Overdue').length;
 
 const ACCOUNTING_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/accounting-and-finance' },
@@ -18,7 +15,7 @@ const ACCOUNTING_NAV_ITEMS = [
     label: 'OPERATIONS',
     isSection: true,
   },
-  { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting-and-finance/payments', badge: pendingCount },
+  { id: 'payments', label: 'Payments', icon: CreditCard, href: '/portal/accounting-and-finance/payments' },
   { id: 'invoices', label: 'Invoices', icon: FileText, href: '/portal/accounting-and-finance/invoices' },
   { id: 'billing', label: 'Billing', icon: Receipt, href: '/portal/accounting-and-finance/billing' },
   {
@@ -46,6 +43,14 @@ interface AccountingSidebarProps {
 export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [unpaidCount, setUnpaidCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/accounting/sidebar', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { if (d.data?.unpaidCount) setUnpaidCount(d.data.unpaidCount); })
+      .catch(() => {});
+  }, []);
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -112,9 +117,9 @@ export function AccountingSidebar({ isOpen, onClose }: AccountingSidebarProps) {
               >
                 {Icon && <Icon size={18} />}
                 <span className="text-sm flex-1 text-left">{item.label}</span>
-                {'badge' in item && item.badge !== undefined && item.badge > 0 && (
+                {item.id === 'payments' && unpaidCount > 0 && (
                   <Badge variant="danger" className="text-[9px] px-1.5 py-0.5">
-                    {item.badge}
+                    {unpaidCount}
                   </Badge>
                 )}
               </button>

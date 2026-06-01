@@ -1,43 +1,20 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ClipboardList, Users,
   UserCircle,
 } from 'lucide-react';
-import { INITIAL_AO_TASKS, INITIAL_AO_NOTIFICATIONS, INITIAL_AO_DISCUSSIONS } from '@/lib/mock-ao-data';
-
-// Mock badge counts derived from mock data
-const TASK_BADGE_COUNT = INITIAL_AO_TASKS.filter(t => t.status !== 'Done').length;
-const _NOTIF_BADGE_COUNT = INITIAL_AO_NOTIFICATIONS.filter(n => !n.isRead).length;
-const _DISCUSSION_BADGE_COUNT = (() => {
-  // Count client messages that came after the last AO reply per thread
-  const clientIds = [...new Set(INITIAL_AO_DISCUSSIONS.map(m => m.clientId))];
-  let total = 0;
-  for (const cid of clientIds) {
-    const msgs = INITIAL_AO_DISCUSSIONS.filter(m => m.clientId === cid);
-    const lastAO = msgs
-      .filter(m => m.senderRole === 'account-officer')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-    if (!lastAO) {
-      total += msgs.filter(m => m.senderRole === 'client').length;
-    } else {
-      total += msgs.filter(m => m.senderRole === 'client' && new Date(m.createdAt) > new Date(lastAO.createdAt)).length;
-    }
-  }
-  return total;
-})();
-
 const AO_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/account-officer', badge: 0 },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/portal/account-officer' },
   {
     id: 'management',
     label: 'MANAGEMENT',
     isSection: true,
   },
-  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/account-officer/tasks', badge: TASK_BADGE_COUNT },
-  { id: 'clients', label: 'Clients', icon: Users, href: '/portal/account-officer/clients', badge: 0 },
+  { id: 'tasks', label: 'Task Board', icon: ClipboardList, href: '/portal/account-officer/tasks' },
+  { id: 'clients', label: 'Clients', icon: Users, href: '/portal/account-officer/clients' },
 ];
 
 interface AOSidebarProps {
@@ -48,6 +25,14 @@ interface AOSidebarProps {
 export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [openTasksCount, setOpenTasksCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/account-officer/sidebar', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { if (d.data?.openTasksCount) setOpenTasksCount(d.data.openTasksCount); })
+      .catch(() => {});
+  }, []);
 
   const handleNavigation = (href: string) => {
     router.push(href);
@@ -111,9 +96,9 @@ export function AOSidebar({ isOpen, onClose }: AOSidebarProps) {
               >
                 {Icon && <Icon size={18} />}
                 <span className="text-sm flex-1 text-left">{item.label}</span>
-                {'badge' in item && item.badge !== undefined && item.badge > 0 && (
+                {item.id === 'tasks' && openTasksCount > 0 && (
                   <span className="min-w-5 h-5 px-1.5 bg-[#25238e] rounded-full flex items-center justify-center text-[10px] font-bold text-white">
-                    {item.badge}
+                    {openTasksCount}
                   </span>
                 )}
               </button>

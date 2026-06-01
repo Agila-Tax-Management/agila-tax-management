@@ -340,7 +340,7 @@ export function GeneralSettingsTab() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-foreground">Employee Number Prefix</h3>
-            <p className="text-xs text-muted-foreground">Used when auto-generating new employee numbers (e.g. {prefix || 'EMP'}-00001)</p>
+            <p className="text-xs text-muted-foreground">Used when auto-generating new employee numbers (e.g. {prefix || 'EMP'} - 10001)</p>
           </div>
         </div>
         <div className="flex items-end gap-3">
@@ -357,7 +357,7 @@ export function GeneralSettingsTab() {
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Preview</label>
             <div className="px-3 py-2 rounded-lg bg-muted text-sm font-mono text-muted-foreground">
-              {prefix || 'EMP'}-00001
+              {prefix || 'EMP'} - 10001
             </div>
           </div>
           {prefixDirty && (
