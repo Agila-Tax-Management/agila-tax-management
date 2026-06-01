@@ -6,7 +6,7 @@ import {
   ShieldCheck, Star, Settings, Clock, FileText,
   BarChart3, Briefcase, DollarSign, UserCheck, Building2,
   Globe, BookOpen, Megaphone, Zap, Receipt, Layers, Target,
-  Calculator, CalendarDays, Loader2,
+  Calculator, CalendarDays, Loader2, Monitor,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
@@ -31,6 +31,7 @@ const PORTALS = [
   { id: 'task-mgmt',  statsKey: 'task-mgmt',  title: 'Task Management Portal', description: 'Unified view of liaison and compliance tasks.',                 href: '/portal/task-management',     icon: <Target />,      color: 'bg-teal-600',   stats: { label: 'Active Tasks'    } },
   { id: 'crm',        statsKey: 'crm',        title: 'Client Gateway System',  description: 'Client portal and self-service gateway.',                      href: '/portal/client-gateway',      icon: <Users />,       color: 'bg-blue-500',   stats: { label: 'Active Clients'  } },
   { id: 'operation',  statsKey: 'operation',  title: 'Operations Portal',      description: 'Manage active clients, requirements, and operations tasks.',   href: '/portal/operation',           icon: <Zap />,         color: 'bg-amber-600',  stats: { label: 'Active Clients'  } },
+  { id: 'it',         statsKey: 'it',         title: 'IT Portal',              description: 'Manage tickets, system status, assets, and access.',           href: '/portal/it',                  icon: <Monitor />,     color: 'bg-cyan-700',   stats: { label: 'Open Tickets'    } },
 ];
 
 const APP_SYSTEMS = [

@@ -1,0 +1,187 @@
+// prisma/models/it-management.prisma
+
+// ─── Enums ────────────────────────────────────────────────────────
+
+enum ItTicketType {
+  BUG
+  SYSTEM_ISSUE
+  DOWNTIME
+  CREATE_USER
+  REVOKE_ACCESS
+  HARDWARE_REQUEST
+  SOFTWARE_REQUEST
+  OTHER
+}
+
+enum ItTicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_INFO
+  RESOLVED
+  CLOSED
+}
+
+enum ItTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ItAssetType {
+  LAPTOP
+  DESKTOP
+  MONITOR
+  PHONE
+  PRINTER
+  PERIPHERAL
+  NETWORKING
+  OTHER
+}
+
+enum ItAssetStatus {
+  ACTIVE
+  IN_REPAIR
+  RETIRED
+  UNASSIGNED
+  DISPOSED
+}
+
+enum ItPortalAccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ItSystemStatus {
+  OPERATIONAL
+  DEGRADED
+  OUTAGE
+  MAINTENANCE
+}
+
+// ─── IT Ticket ────────────────────────────────────────────────────
+model ItTicket {
+  id Int @id @default(autoincrement())
+
+  ticketNumber String @unique // e.g., "IT-2026-0001"
+
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  // Who reported this ticket
+  reportedById String
+  reportedBy   User   @relation("ItTicketReporter", fields: [reportedById], references: [id])
+
+  // IT staff assigned to handle it
+  assignedToId String?
+  assignedTo   User?   @relation("ItTicketAssignee", fields: [assignedToId], references: [id])
+
+  type     ItTicketType
+  status   ItTicketStatus   @default(OPEN)
+  priority ItTicketPriority @default(NORMAL)
+
+  title       String
+  description String  @db.Text
+  resolution  String? @db.Text
+
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([reportedById])
+  @@index([assignedToId])
+  @@index([status])
+  @@map("it_ticket")
+}
+
+// ─── IT Asset ─────────────────────────────────────────────────────
+model ItAsset {
+  id Int @id @default(autoincrement())
+
+  assetTag String @unique // e.g., "ASSET-0001"
+
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  name         String
+  type         ItAssetType
+  status       ItAssetStatus @default(UNASSIGNED)
+  brand        String?
+  model        String?
+  serialNumber String?
+
+  // Employee this asset is assigned to
+  assignedToId Int?
+  assignedTo   Employee? @relation("ItAssetAssignee", fields: [assignedToId], references: [id])
+
+  purchaseDate DateTime?
+  warrantyUntil DateTime?
+  notes        String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([assignedToId])
+  @@index([status])
+  @@map("it_asset")
+}
+
+// ─── IT Portal Access Request ──────────────────────────────────────
+model ItPortalAccessRequest {
+  id Int @id @default(autoincrement())
+
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  // Employee requesting access
+  requestedById Int
+  requestedBy   Employee @relation("ItAccessRequester", fields: [requestedById], references: [id])
+
+  // IT/Admin who reviewed the request
+  reviewedById String?
+  reviewedBy   User?   @relation("ItAccessReviewer", fields: [reviewedById], references: [id])
+
+  requestedPortal AppPortal
+  requestedRole   PortalRole
+
+  status     ItPortalAccessRequestStatus @default(PENDING)
+  reason     String                      @db.Text
+  reviewNote String?                     @db.Text
+
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([requestedById])
+  @@index([status])
+  @@map("it_portal_access_request")
+}
+
+// ─── IT System Status Entry ───────────────────────────────────────
+model ItSystemStatusEntry {
+  id Int @id @default(autoincrement())
+
+  clientId Int?
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  systemName  String
+  status      ItSystemStatus @default(OPERATIONAL)
+  description String?        @db.Text
+
+  // Who last updated this entry
+  updatedById String?
+  updatedBy   User?   @relation("ItStatusUpdater", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, systemName])
+  @@index([clientId])
+  @@map("it_system_status_entry")
+}

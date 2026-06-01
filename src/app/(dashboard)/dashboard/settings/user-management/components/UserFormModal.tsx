@@ -36,6 +36,7 @@ const PORTALS = [
   { key: 'HR', label: 'HR Portal' },
   { key: 'TASK_MANAGEMENT', label: 'Task Management Portal' },
   { key: 'CLIENT_RELATIONS', label: 'Client Relations Portal' },
+  { key: 'IT_MANAGEMENT',    label: 'IT Portal' },
 ] as const;
 
 const PORTAL_ROLES = [

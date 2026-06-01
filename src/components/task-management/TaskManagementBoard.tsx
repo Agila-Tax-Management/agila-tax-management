@@ -119,6 +119,7 @@ interface TaskManagementBoardProps {
   taskHrefBase?: string;
   accentColor?: string;
   allowedDepartmentNames?: string[];
+  hideTemplate?: boolean;
 }
 
 const DEFAULT_STATUSES: TaskApiStatus[] = [
@@ -142,6 +143,7 @@ function TaskManagementBoardInner({
   taskHrefBase = '/portal/task-management/tasks',
   accentColor = '#0f766e',
   allowedDepartmentNames,
+  hideTemplate = false,
 }: TaskManagementBoardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -920,6 +922,7 @@ function TaskManagementBoardInner({
           </div>
 
           {/* 2. Use Template */}
+          {!hideTemplate && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Use Template</label>
@@ -994,6 +997,7 @@ function TaskManagementBoardInner({
               )}
             </div>
           </div>
+          )}
 
           <div className="border-t border-slate-100 pt-1" />
 
