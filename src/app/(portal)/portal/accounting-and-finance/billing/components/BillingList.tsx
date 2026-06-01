@@ -19,7 +19,7 @@ const CYCLE_LABELS: Record<string, string> = {
 };
 
 function fmt(n: number) {
-  return '?' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
+  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 }
 
 function fmtDate(iso: string | null) {

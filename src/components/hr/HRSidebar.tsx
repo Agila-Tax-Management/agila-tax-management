@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Star,
-  Clock, Wallet, Landmark, FileQuestion, Heart, Settings,
+  Clock, Wallet, FileQuestion, Heart, Settings,
 } from 'lucide-react';
 import { Badge } from '@/components/UI/Badge';
 
@@ -24,7 +24,6 @@ const HR_NAV_ITEMS = [
   },
   { id: 'attendance', label: 'Attendance Tracking', icon: Clock, href: '/portal/hr/attendance-tracking' },
   { id: 'payroll', label: 'Payroll Coordination', icon: Wallet, href: '/portal/hr/payroll-coordination' },
-  { id: 'gov-compliance', label: 'Gov Compliance', icon: Landmark, href: '/portal/hr/gov-compliance-tracking' },
   {
     id: 'support',
     label: 'SUPPORT',

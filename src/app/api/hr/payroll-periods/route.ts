@@ -6,6 +6,7 @@ import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { computeTimesheetFields } from "@/lib/timesheet-calc";
 import { computeDoleOvertimePay, sumOtHours } from "@/lib/dole-overtime";
+import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from "@/lib/hr-settings-guard";
 import { getSSSEmployeeDeduction } from "@/lib/sss-contribution";
 import {
   getPhilHealthEmployeeDeduction,
@@ -207,6 +208,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const employeeIds = [...new Set(compensations.map((c) => c.contract.employment.employeeId))];
 
+  // Load HR setting guards and approved OT map once — applied during pre-transaction recalc
+  const hrSettingCache = await loadHrSettingCache(clientId);
+  const approvedOtRequests = await prisma.overtimeRequest.findMany({
+    where: {
+      employeeId: { in: employeeIds },
+      clientId,
+      status: 'APPROVED',
+      date: { gte: startDate, lte: endDate },
+    },
+    select: { employeeId: true, date: true, type: true, hours: true },
+  });
+  // Map: `${employeeId}_${dateKey}` → total approved regular-day OT hours
+  const approvedOtByEmpDate = new Map<string, number>();
+  for (const otr of approvedOtRequests) {
+    if (otr.type.toLowerCase().includes('rest')) continue;
+    const key = `${otr.employeeId}_${otr.date.toISOString().slice(0, 10)}`;
+    approvedOtByEmpDate.set(key, (approvedOtByEmpDate.get(key) ?? 0) + parseFloat(otr.hours.toString()));
+  }
+
   // Fetch timesheet records for the period
   const timesheets = await prisma.timesheet.findMany({
     where: {
@@ -284,14 +304,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } : null,
     );
 
+    // Apply HR setting guards (strict OT zeroes punch OT; disable late/undertime zeroes deductions)
+    const isVarPay = emp?.payType === 'VARIABLE_PAY';
+    const dRate = Number(emp?.calculatedDailyRate ?? 0);
+    const guardFlags = flagsFromCache(hrSettingCache, ts.employeeId);
+    const guarded = applyHrSettingGuards(computed, guardFlags, dRate, isVarPay);
+    // Merge approved regular-day OT back in (guard may have zeroed punch-derived OT)
+    const approvedOtKey = `${ts.employeeId}_${ts.date.toISOString().slice(0, 10)}`;
+    const approvedRegOtHours = approvedOtByEmpDate.get(approvedOtKey) ?? 0;
+    const finalRegOtHours = Math.max(guarded.regOtHours, approvedRegOtHours);
+
     await prisma.timesheet.update({
       where: { id: ts.id },
       data: {
-        regularHours: computed.regularHours,
-        lateMinutes: computed.lateMinutes,
-        undertimeMinutes: computed.undertimeMinutes,
-        regOtHours: computed.regOtHours,
-        dailyGrossPay: computed.dailyGrossPay,
+        regularHours: guarded.regularHours,
+        lateMinutes: guarded.lateMinutes,
+        undertimeMinutes: guarded.undertimeMinutes,
+        regOtHours: finalRegOtHours,
+        dailyGrossPay: guarded.dailyGrossPay,
       },
     });
     timesheetRecalcCount++;

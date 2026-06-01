@@ -31,22 +31,12 @@ export function TaskManagementSidebar({ isOpen, onClose }: TaskManagementSidebar
   const [totalActiveCount, setTotalActiveCount] = useState(0);
 
   useEffect(() => {
-    fetch('/api/tasks')
-      .then(r => r.ok ? r.json() : null)
-      .then((json: { data: Array<{ currentStatus: { name: string } | null; currentDepartment: { id: number } | null }> } | null) => {
-        if (!json) return;
-        const active = json.data.filter(t => {
-          const name = t.currentStatus?.name?.toLowerCase() ?? '';
-          return !name.includes('done') && !name.includes('complet');
-        });
-        setTotalActiveCount(active.length);
-        const map = new Map<number, number>();
-        for (const t of active) {
-          if (t.currentDepartment?.id) {
-            map.set(t.currentDepartment.id, (map.get(t.currentDepartment.id) ?? 0) + 1);
-          }
-        }
-        setDeptActiveCounts(map);
+    fetch('/api/task-management/sidebar', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { data: { totalActiveCount: number; deptCounts: Record<number, number> } } | null) => {
+        if (!json?.data) return;
+        setTotalActiveCount(json.data.totalActiveCount);
+        setDeptActiveCounts(new Map(Object.entries(json.data.deptCounts).map(([k, v]) => [Number(k), v])));
       })
       .catch(() => undefined);
   }, []);

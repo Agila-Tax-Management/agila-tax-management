@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { computeTimesheetFields } from '@/lib/timesheet-calc';
+import { resolveHrSettingFlags, applyHrSettingGuards } from '@/lib/hr-settings-guard';
 
 /**
  * GET /api/dashboard/timesheet/me
@@ -297,15 +298,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         : null,
     );
 
+    const isVariable = (compensation?.payType ?? '') === 'VARIABLE_PAY';
+    const dailyRateNum = Number(compensation?.calculatedDailyRate ?? 0);
+    const guardFlags = await resolveHrSettingFlags(activeEmployment.clientId, employee.id);
+    const guarded = applyHrSettingGuards(computed, guardFlags, dailyRateNum, isVariable);
+
     record = await prisma.timesheet.update({
       where: { id: record.id },
       data: {
         timeOut: now,
-        regularHours: computed.regularHours,
-        lateMinutes: computed.lateMinutes,
-        undertimeMinutes: computed.undertimeMinutes,
-        regOtHours: computed.regOtHours,
-        dailyGrossPay: computed.dailyGrossPay,
+        regularHours: guarded.regularHours,
+        lateMinutes: guarded.lateMinutes,
+        undertimeMinutes: guarded.undertimeMinutes,
+        regOtHours: guarded.regOtHours,
+        dailyGrossPay: guarded.dailyGrossPay,
         status: 'PRESENT',
       },
     });
