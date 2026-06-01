@@ -13,6 +13,7 @@ const portalAccessEntrySchema = z.object({
     "HR",
     "TASK_MANAGEMENT",
     "CLIENT_RELATIONS",
+    "IT_MANAGEMENT",
   ]),
   role: z.enum(["VIEWER", "USER", "ADMIN", "SETTINGS"]),
 });

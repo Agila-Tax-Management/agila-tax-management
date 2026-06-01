@@ -119,6 +119,12 @@ model Client {
 
   glAccounts GlAccount[]
 
+  // ─── IT Management ───
+  itTickets             ItTicket[]
+  itAssets              ItAsset[]
+  itAccessRequests      ItPortalAccessRequest[]
+  itSystemStatusEntries ItSystemStatusEntry[]
+
   // ─── Client Funds & Petty Cash ───
   clientFundTransactions ClientFundTransaction[]
   pettyCashes            PettyCash[]

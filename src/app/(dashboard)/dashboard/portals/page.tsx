@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, ExternalLink, Megaphone, BarChart3, ShieldCheck,
-  Building2, UserCheck, Briefcase, Target, Users, Zap,
+  Building2, UserCheck, Briefcase, Target, Users, Zap, Monitor,
   ChevronRight,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -113,6 +113,17 @@ const ALL_PORTALS = [
     lightColor: 'bg-blue-50 text-blue-600 border-blue-200',
     stats: { label: 'Active Clients' },
     category: 'Client-Facing',
+  },
+  {
+    id: 'it',         statsKey: 'it',
+    title: 'IT Portal',
+    description: 'Manage IT support tickets, access requests, system status, and asset inventory.',
+    href: '/portal/it',
+    icon: <Monitor />,
+    color: 'bg-cyan-700',
+    lightColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    stats: { label: 'Open Tickets' },
+    category: 'Operations',
   },
 ];
 

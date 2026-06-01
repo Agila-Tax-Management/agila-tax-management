@@ -25,6 +25,7 @@ const PORTAL_LABELS: Record<string, string> = {
   HR: 'HR Portal',
   TASK_MANAGEMENT: 'Task Management Portal',
   CLIENT_RELATIONS: 'Client Relations Portal',
+  IT_MANAGEMENT: 'IT Portal',
 };
 
 const ROLE_VARIANT: Record<string, 'info' | 'warning' | 'success' | 'neutral'> = {

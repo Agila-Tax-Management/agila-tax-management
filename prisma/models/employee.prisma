@@ -120,6 +120,10 @@ model Employee {
   cashAdvances       CashAdvance[]
   governmentLoans    GovernmentLoan[]
 
+  // ─── IT Management ───
+  itAssignedAssets    ItAsset[]               @relation("ItAssetAssignee")
+  itAccessRequests    ItPortalAccessRequest[] @relation("ItAccessRequester")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

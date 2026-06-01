@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Clock, FileBadge, SendHorizontal, Wallet,
   Settings, ChevronLeft, ChevronRight, X,
   ChevronDown, Briefcase, BarChart3, ShieldCheck, Building2, UserCheck, Megaphone,
-  HelpCircle, BookOpen, Heart, FileWarning
+  HelpCircle, BookOpen, FileWarning, Monitor, KeyRound, Zap, Target, Users
 } from 'lucide-react';
 import { AppHeader } from '@/components/UI/AppHeader';
 import { RoleProvider } from '@/lib/role-context';
@@ -30,14 +30,16 @@ const HELP_ITEMS = [
 ];
 
 const PORTAL_ITEMS = [
-  { href: '/portal/sales',           label: 'Sales',           icon: Megaphone  },
-  { href: '/portal/compliance',      label: 'Compliance',      icon: ShieldCheck },
-  { href: '/portal/liaison',         label: 'Liaison',         icon: Building2  },
-  { href: '/portal/accounting-and-finance',      label: 'ACF',      icon: BarChart3  },
-  { href: '/portal/account-officer', label: 'Account Officer', icon: Briefcase  },
-  { href: '/portal/hr',              label: 'HR',              icon: UserCheck  },
-  { href: '/portal/task-management', label: 'Task Management', icon: UserCheck  },
-  { href: '/portal/operation',       label: 'Operations',       icon: Building2  },
+  { href: '/portal/sales',                    label: 'Sales',           icon: Megaphone  },
+  { href: '/portal/compliance',               label: 'Compliance',      icon: ShieldCheck },
+  { href: '/portal/liaison',                  label: 'Liaison',         icon: Building2  },
+  { href: '/portal/accounting-and-finance',   label: 'ACF',             icon: BarChart3  },
+  { href: '/portal/account-officer',          label: 'Account Officer', icon: Briefcase  },
+  { href: '/portal/hr',                       label: 'HR',              icon: UserCheck  },
+  { href: '/portal/task-management',          label: 'Task Management', icon: Target     },
+  { href: '/portal/operation',                label: 'Operations',      icon: Zap        },
+  { href: '/portal/client-gateway',           label: 'Client Gateway',  icon: Users      },
+  { href: '/portal/it',                       label: 'IT Portal',       icon: Monitor    },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -273,6 +275,15 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
                     <span className="text-[13px] font-medium">{label}</span>
                   </button>
                 ))}
+                {/* IT support — available to all employees */}
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard/it-support')}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-slate-400 hover:bg-slate-700/60 hover:text-white"
+                >
+                  <KeyRound size={15} className="shrink-0" />
+                  <span className="text-[13px] font-medium">Submit Ticket</span>
+                </button>
               </div>
             )}
           </div>
@@ -351,6 +362,7 @@ function Sidebar({ isOpen, isExpanded, onClose, onToggleExpand }: SidebarProps) 
           )}
         </div>
       </aside>
+
     </>
   );
 }
