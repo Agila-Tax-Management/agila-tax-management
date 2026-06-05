@@ -12,7 +12,10 @@ export type ClientFundTransactionType =
   | 'PETTY_CASH_DEBIT'
   | 'MANUAL_CREDIT'
   | 'MANUAL_DEBIT'
-  | 'REFUND';
+  | 'REFUND'
+  | 'CHEQUE_CLEARING';
+
+export type ChequeStatus = 'FOR_CLEARING' | 'CLEARED' | 'BOUNCED';
 
 export type InvoiceStatus =
   | 'DRAFT'
@@ -261,6 +264,10 @@ export interface RecordPaymentInput {
   referenceNumber?: string;
   notes?: string;
   allocations: Array<{ invoiceId: string; amountApplied: number }>;
+  // Cheque-specific fields (required when method === 'CHECK')
+  chequeNo?: string;
+  bankName?: string;
+  chequeDate?: string;
 }
 
 export interface InvoiceItemInput {
@@ -362,6 +369,8 @@ export interface ClientFundListRecord {
   lastInvoiceId: string | null;
   lastPaymentId: string | null;
   lastPettyCashId: string | null;
+  pendingChequeCount: number;
+  pendingChequeAmount: number;
 }
 
 export interface ClientFundTransactionRecord {
@@ -387,4 +396,27 @@ export interface ClientFundDetailData {
   businessName: string;
   currentBalance: number;
   transactions: ClientFundTransactionRecord[];
+  cheques: ChequeMonitoringRecord[];
+}
+
+export interface ChequeMonitoringRecord {
+  id: string;
+  chequeNo: string;
+  bankName: string;
+  chequeDate: string;
+  clientId: number;
+  clientNo: string | null;
+  businessName: string;
+  amount: number;
+  invoiceId: string | null;
+  invoice: { id: string; invoiceNumber: string } | null;
+  paymentId: string | null;
+  payment: { id: string; paymentNumber: string } | null;
+  status: ChequeStatus;
+  clearedAt: string | null;
+  bouncedAt: string | null;
+  receivedBy: { id: string; name: string } | null;
+  processedBy: { id: string; name: string } | null;
+  notes: string | null;
+  createdAt: string;
 }

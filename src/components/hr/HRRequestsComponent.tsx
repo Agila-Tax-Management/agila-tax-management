@@ -45,6 +45,13 @@ interface OvertimeRequest {
   reviewedBy: string | null;
 }
 
+interface TimesheetOnDate {
+  timeIn: string | null;
+  lunchStart: string | null;
+  lunchEnd: string | null;
+  timeOut: string | null;
+}
+
 interface CoaRequest {
   id: string;
   type: 'COA';
@@ -58,6 +65,7 @@ interface CoaRequest {
   appliedDate: string;
   reviewedBy: string | null;
   rejectionReason: string | null;
+  timesheetOnDate: TimesheetOnDate | null;
 }
 
 type UnifiedRequest = LeaveRequest | OvertimeRequest | CoaRequest;
@@ -141,6 +149,7 @@ interface ApiCoaRequest {
   createdAt: string;
   reviewedBy?: string | null;
   rejectionReason?: string | null;
+  timesheetOnDate?: TimesheetOnDate | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────
@@ -228,8 +237,7 @@ export function HRRequestsComponent() {
             status: r.status,
             appliedDate: r.createdAt,
             reviewedBy: r.reviewedBy ?? null,
-            rejectionReason: r.rejectionReason ?? null,
-          })),
+            rejectionReason: r.rejectionReason ?? null,            timesheetOnDate: r.timesheetOnDate ?? null,          })),
         );
       }
     } catch {
@@ -583,25 +591,55 @@ export function HRRequestsComponent() {
 
             {/* COA fields */}
             {selectedRequest.type === 'COA' && (
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { label: 'Date Affected', value: selectedRequest.dateAffected },
-                  {
-                    label: 'Action',
-                    value:
-                      COA_ACTION_LABEL[selectedRequest.actionType] ?? selectedRequest.actionType,
-                  },
-                  { label: 'Corrected Time', value: formatTime(selectedRequest.timeValue) },
-                  { label: 'Submitted', value: selectedRequest.appliedDate.slice(0, 10) },
-                  { label: 'Reviewed By', value: selectedRequest.reviewedBy ?? '—' },
-                ].map((f) => (
-                  <div key={f.label}>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                      {f.label}
-                    </p>
-                    <p className="text-sm font-semibold text-foreground mt-0.5">{f.value}</p>
-                  </div>
-                ))}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: 'Date Affected', value: selectedRequest.dateAffected },
+                    {
+                      label: 'Action',
+                      value:
+                        COA_ACTION_LABEL[selectedRequest.actionType] ?? selectedRequest.actionType,
+                    },
+                    { label: 'Corrected Time', value: formatTime(selectedRequest.timeValue) },
+                    { label: 'Submitted', value: selectedRequest.appliedDate.slice(0, 10) },
+                    { label: 'Reviewed By', value: selectedRequest.reviewedBy ?? '—' },
+                  ].map((f) => (
+                    <div key={f.label}>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                        {f.label}
+                      </p>
+                      <p className="text-sm font-semibold text-foreground mt-0.5">{f.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Timesheet on affected date */}
+                <div className="rounded-xl border border-border bg-muted/50 p-4">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-3">
+                    Timesheet on {selectedRequest.dateAffected}
+                  </p>
+                  {selectedRequest.timesheetOnDate ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {(
+                        [
+                          { label: 'Time In',      value: selectedRequest.timesheetOnDate.timeIn      },
+                          { label: 'Lunch Start',  value: selectedRequest.timesheetOnDate.lunchStart  },
+                          { label: 'Lunch End',    value: selectedRequest.timesheetOnDate.lunchEnd    },
+                          { label: 'Time Out',     value: selectedRequest.timesheetOnDate.timeOut     },
+                        ] as { label: string; value: string | null }[]
+                      ).map((p) => (
+                        <div key={p.label} className="bg-background rounded-lg px-3 py-2">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">{p.label}</p>
+                          <p className={`text-sm font-semibold mt-0.5 ${p.value ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {p.value ? formatTime(p.value) : '—'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No timesheet record found for this date.</p>
+                  )}
+                </div>
               </div>
             )}
 

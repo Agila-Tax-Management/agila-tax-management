@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, ChevronRight, Loader2, Clock } from 'lucide-react';
 import type { ClientFundListRecord, ClientFundTransactionType } from '@/types/accounting.types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -14,6 +14,7 @@ const TRANSACTION_TYPE_LABELS: Record<ClientFundTransactionType, string> = {
   MANUAL_CREDIT: 'Manual Credit',
   MANUAL_DEBIT: 'Manual Debit',
   REFUND: 'Refund',
+  CHEQUE_CLEARING: 'Cheque Clearing',
 };
 
 const TRANSACTION_TYPE_CLASSES: Record<ClientFundTransactionType, string> = {
@@ -22,7 +23,10 @@ const TRANSACTION_TYPE_CLASSES: Record<ClientFundTransactionType, string> = {
   MANUAL_CREDIT: 'bg-emerald-100 text-emerald-700',
   MANUAL_DEBIT: 'bg-red-100 text-red-700',
   REFUND: 'bg-blue-100 text-blue-700',
+  CHEQUE_CLEARING: 'bg-teal-100 text-teal-700',
 };
+
+
 
 function getFileDisplay(record: ClientFundListRecord): { label: string; href: string | null } {
   if (record.lastInvoiceId) {
@@ -103,6 +107,7 @@ export function ClientFunds() {
               <th className="text-left px-4 py-3 font-semibold text-slate-500">Client Name</th>
               <th className="text-left px-4 py-3 font-semibold text-slate-500">Last Action</th>
               <th className="text-left px-4 py-3 font-semibold text-slate-500">File</th>
+              <th className="text-right px-4 py-3 font-semibold text-slate-500">Pending Cheques</th>
               <th className="text-right px-4 py-3 font-semibold text-slate-500">Balance Fund</th>
               <th className="w-8" />
             </tr>
@@ -110,14 +115,14 @@ export function ClientFunds() {
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   <Loader2 size={20} className="animate-spin mx-auto mb-2" />
                   Loading...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   {search ? 'No matching clients.' : 'No client fund records yet.'}
                 </td>
               </tr>
@@ -160,6 +165,16 @@ export function ClientFunds() {
                         </a>
                       ) : (
                         <span className="text-slate-400">{file.label}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {client.pendingChequeCount > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                          <Clock size={11} />
+                          {client.pendingChequeCount} · ₱{client.pendingChequeAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">

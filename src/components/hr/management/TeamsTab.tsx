@@ -1,12 +1,27 @@
 ﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Network, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Network, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
+
+// ─── Types ────────────────────────────────────────────────────────
+
+interface TeamEmployee {
+  employmentId: number;
+  employeeId: number;
+  fullName: string;
+  employeeNo: string | null;
+}
+
+interface TeamPosition {
+  id: number;
+  title: string;
+  employees: TeamEmployee[];
+}
 
 interface ApiTeam {
   id: number;
@@ -15,22 +30,19 @@ interface ApiTeam {
   leaderName: string | null;
   leaderEmployeeNo: string | null;
   memberCount: number;
+  positions: TeamPosition[];
 }
 
 interface ApiEmployee {
   id: number;
   fullName: string;
   employeeNo: string | null;
-  employment: { id: number; position: { title: string } | null } | null;
+  employment: { id: number; position: { id: number; title: string } | null } | null;
 }
 
-interface TeamMember {
-  employmentId: number;
-  employeeId: number;
-  fullName: string;
-  employeeNo: string | null;
-  position: string | null;
-  department: string | null;
+interface ApiPosition {
+  id: number;
+  title: string;
 }
 
 interface TeamFormState {
@@ -41,36 +53,35 @@ interface TeamFormState {
 const EMPTY_FORM: TeamFormState = { name: '', leaderId: '' };
 
 const SELECT_CLASS = 'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30 appearance-none';
-const INPUT_CLASS = 'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30';
+const INPUT_CLASS  = 'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/30';
 
 export function TeamsTab(): React.ReactNode {
   const { success, error } = useToast();
 
-  const [teams, setTeams] = useState<ApiTeam[]>([]);
-  const [loadingTeams, setLoadingTeams] = useState(true);
-
-  const [employees, setEmployees] = useState<ApiEmployee[]>([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
+  const [teams,            setTeams]            = useState<ApiTeam[]>([]);
+  const [loadingTeams,     setLoadingTeams]      = useState(true);
+  const [employees,        setEmployees]         = useState<ApiEmployee[]>([]);
+  const [loadingEmployees, setLoadingEmployees]  = useState(true);
+  const [allPositions,     setAllPositions]      = useState<ApiPosition[]>([]);
 
   // Add / Edit modal
-  const [addOpen, setAddOpen] = useState(false);
+  const [addOpen,    setAddOpen]    = useState(false);
   const [editTarget, setEditTarget] = useState<ApiTeam | null>(null);
-  const [form, setForm] = useState<TeamFormState>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  const [form,       setForm]       = useState<TeamFormState>(EMPTY_FORM);
+  const [saving,     setSaving]     = useState(false);
 
   // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<ApiTeam | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleting,     setDeleting]     = useState(false);
 
-  // Members modal
-  const [membersTeam, setMembersTeam] = useState<ApiTeam | null>(null);
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
-  const [addEmploymentId, setAddEmploymentId] = useState('');
-  const [addingMember, setAddingMember] = useState(false);
+  // Manage Positions modal
+  const [positionsTeam,  setPositionsTeam]  = useState<ApiTeam | null>(null);
+  const [addPositionId,  setAddPositionId]  = useState('');
+  const [addingPosition, setAddingPosition] = useState(false);
+  const [removingPosId,  setRemovingPosId]  = useState<number | null>(null);
+  const [expandedPosIds, setExpandedPosIds] = useState<Set<number>>(new Set());
 
-  // Reset form when modals open (adjust state during render)
+  // Reset form on modal open (adjust-during-render pattern)
   const [prevAddOpen, setPrevAddOpen] = useState(false);
   if (addOpen !== prevAddOpen) {
     setPrevAddOpen(addOpen);
@@ -81,13 +92,13 @@ export function TeamsTab(): React.ReactNode {
     setPrevEditTarget(editTarget);
     if (editTarget) setForm({ name: editTarget.name, leaderId: editTarget.leaderId ? String(editTarget.leaderId) : '' });
   }
-  const [prevMembersTeam, setPrevMembersTeam] = useState<ApiTeam | null>(null);
-  if (membersTeam !== prevMembersTeam) {
-    setPrevMembersTeam(membersTeam);
-    if (membersTeam) setAddEmploymentId('');
+  const [prevPositionsTeam, setPrevPositionsTeam] = useState<ApiTeam | null>(null);
+  if (positionsTeam !== prevPositionsTeam) {
+    setPrevPositionsTeam(positionsTeam);
+    if (positionsTeam) { setAddPositionId(''); setExpandedPosIds(new Set()); }
   }
 
-  /* â”€â”€ Data fetchers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Data fetchers ───────────────────────────────────────────── */
 
   const fetchTeams = useCallback(async () => {
     setLoadingTeams(true);
@@ -110,36 +121,29 @@ export function TeamsTab(): React.ReactNode {
     finally { setLoadingEmployees(false); }
   }, []);
 
-  const fetchMembers = useCallback(async (teamId: number) => {
-    setLoadingMembers(true);
+  const fetchPositions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/hr/teams/${teamId}/members`);
-      const json: { data?: TeamMember[]; error?: string } = await res.json();
-      if (!res.ok) { error('Failed to load members', json.error ?? 'An error occurred.'); return; }
-      setMembers(json.data ?? []);
-    } catch { error('Failed to load members', 'Could not reach the server.'); }
-    finally { setLoadingMembers(false); }
-  }, [error]);
+      const res = await fetch('/api/hr/positions');
+      const json: { data?: ApiPosition[]; error?: string } = await res.json();
+      if (res.ok) setAllPositions(json.data ?? []);
+    } catch { /* silently ignore */ }
+  }, []);
 
   useEffect(() => {
     void fetchTeams();
     void fetchEmployees();
-  }, [fetchTeams, fetchEmployees]);
+    void fetchPositions();
+  }, [fetchTeams, fetchEmployees, fetchPositions]);
 
-  useEffect(() => {
-    if (membersTeam) void fetchMembers(membersTeam.id);
-    else setMembers([]);
-  }, [membersTeam, fetchMembers]);
-
-  /* â”€â”€ CRUD handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── CRUD handlers ───────────────────────────────────────────── */
 
   const handleSave = async () => {
     if (!form.name.trim()) { error('Validation error', 'Team name is required.'); return; }
     setSaving(true);
     try {
       const isEdit = editTarget !== null;
-      const url = isEdit ? `/api/hr/teams/${editTarget.id}` : '/api/hr/teams';
-      const res = await fetch(url, {
+      const url    = isEdit ? `/api/hr/teams/${editTarget.id}` : '/api/hr/teams';
+      const res    = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: form.name.trim(), leaderId: form.leaderId ? Number(form.leaderId) : null }),
@@ -148,9 +152,9 @@ export function TeamsTab(): React.ReactNode {
       if (!res.ok) { error(isEdit ? 'Failed to update team' : 'Failed to create team', json.error ?? 'An error occurred.'); return; }
       if (json.data) {
         if (isEdit) setTeams((prev) => prev.map((t) => (t.id === editTarget.id ? json.data! : t)));
-        else setTeams((prev) => [...prev, json.data!]);
+        else        setTeams((prev) => [...prev, json.data!]);
       }
-      success(isEdit ? 'Team updated' : 'Team created', isEdit ? `"${form.name.trim()}" has been updated.` : `"${form.name.trim()}" has been created.`);
+      success(isEdit ? 'Team updated' : 'Team created', `"${form.name.trim()}" has been ${isEdit ? 'updated' : 'created'}.`);
       setAddOpen(false);
       setEditTarget(null);
     } catch { error('Network error', 'Could not reach the server.'); }
@@ -161,7 +165,7 @@ export function TeamsTab(): React.ReactNode {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/hr/teams/${deleteTarget.id}`, { method: 'DELETE' });
+      const res  = await fetch(`/api/hr/teams/${deleteTarget.id}`, { method: 'DELETE' });
       const json: { error?: string } = await res.json();
       if (!res.ok) { error('Failed to delete team', json.error ?? 'An error occurred.'); return; }
       setTeams((prev) => prev.filter((t) => t.id !== deleteTarget.id));
@@ -171,53 +175,67 @@ export function TeamsTab(): React.ReactNode {
     finally { setDeleting(false); }
   };
 
-  const handleAddMember = async () => {
-    if (!membersTeam || !addEmploymentId) return;
-    setAddingMember(true);
+  const handleAddPosition = async () => {
+    if (!positionsTeam || !addPositionId) return;
+    setAddingPosition(true);
     try {
-      const res = await fetch(`/api/hr/teams/${membersTeam.id}/members`, {
+      const res  = await fetch(`/api/hr/teams/${positionsTeam.id}/positions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employmentId: Number(addEmploymentId) }),
+        body: JSON.stringify({ positionId: Number(addPositionId) }),
       });
-      const json: { error?: string } = await res.json();
-      if (!res.ok) { error('Failed to add member', json.error ?? 'An error occurred.'); return; }
-      setAddEmploymentId('');
-      await fetchMembers(membersTeam.id);
-      setTeams((prev) => prev.map((t) => t.id === membersTeam.id ? { ...t, memberCount: t.memberCount + 1 } : t));
-      success('Member added', 'The employee has been added to the team.');
+      const json: { data?: TeamPosition; error?: string } = await res.json();
+      if (!res.ok) { error('Failed to add position', json.error ?? 'An error occurred.'); return; }
+      const newPos = json.data!;
+      const updatedTeam: ApiTeam = {
+        ...positionsTeam,
+        positions: [...positionsTeam.positions, newPos].sort((a, b) => a.title.localeCompare(b.title)),
+      };
+      setPositionsTeam(updatedTeam);
+      setTeams((prev) => prev.map((t) => t.id === positionsTeam.id ? updatedTeam : t));
+      setAddPositionId('');
+      setExpandedPosIds((prev) => new Set(prev).add(newPos.id));
+      success('Position added', `"${newPos.title}" has been assigned to the team.`);
     } catch { error('Network error', 'Could not reach the server.'); }
-    finally { setAddingMember(false); }
+    finally { setAddingPosition(false); }
   };
 
-  const handleRemoveMember = async (employmentId: number) => {
-    if (!membersTeam) return;
-    setRemovingMemberId(employmentId);
+  const handleRemovePosition = async (positionId: number, positionTitle: string) => {
+    if (!positionsTeam) return;
+    setRemovingPosId(positionId);
     try {
-      const res = await fetch(`/api/hr/teams/${membersTeam.id}/members`, {
+      const res  = await fetch(`/api/hr/teams/${positionsTeam.id}/positions`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employmentId }),
+        body: JSON.stringify({ positionId }),
       });
       const json: { error?: string } = await res.json();
-      if (!res.ok) { error('Failed to remove member', json.error ?? 'An error occurred.'); return; }
-      setMembers((prev) => prev.filter((m) => m.employmentId !== employmentId));
-      setTeams((prev) => prev.map((t) => t.id === membersTeam.id ? { ...t, memberCount: Math.max(0, t.memberCount - 1) } : t));
-      success('Member removed', 'The employee has been removed from the team.');
+      if (!res.ok) { error('Failed to remove position', json.error ?? 'An error occurred.'); return; }
+      const updatedTeam: ApiTeam = {
+        ...positionsTeam,
+        positions: positionsTeam.positions.filter((p) => p.id !== positionId),
+      };
+      setPositionsTeam(updatedTeam);
+      setTeams((prev) => prev.map((t) => t.id === positionsTeam.id ? updatedTeam : t));
+      success('Position removed', `"${positionTitle}" has been removed from the team.`);
     } catch { error('Network error', 'Could not reach the server.'); }
-    finally { setRemovingMemberId(null); }
+    finally { setRemovingPosId(null); }
   };
 
-  /* â”€â”€ Derived data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  const toggleExpand = (posId: number) => {
+    setExpandedPosIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(posId)) next.delete(posId); else next.add(posId);
+      return next;
+    });
+  };
 
-  // Employees not already in the team (for the add-member select)
-  const memberEmploymentIds = new Set(members.map((m) => m.employmentId));
-  const availableToAdd = employees.filter((emp) => {
-    if (!emp.employment) return false;
-    return !memberEmploymentIds.has(emp.employment.id);
-  });
+  /* ── Derived data ────────────────────────────────────────────── */
 
-  /* â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  const assignedPosIds     = new Set(positionsTeam?.positions.map((p) => p.id) ?? []);
+  const availablePositions = allPositions.filter((p) => !assignedPosIds.has(p.id));
+
+  /* ── Render ──────────────────────────────────────────────────── */
 
   return (
     <>
@@ -234,7 +252,7 @@ export function TeamsTab(): React.ReactNode {
               <tr className="bg-muted border-b border-border">
                 <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">Team Name</th>
                 <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">Leader</th>
-                <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">Members</th>
+                <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider hidden lg:table-cell">Positions</th>
                 <th className="text-center px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -261,18 +279,29 @@ export function TeamsTab(): React.ReactNode {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                      {team.leaderName ?? <span className="text-muted-foreground/50 italic">â€”</span>}
+                      {team.leaderName ?? <span className="text-muted-foreground/50 italic">—</span>}
                     </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="neutral">{team.memberCount}</Badge>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      {team.positions.length === 0 ? (
+                        <span className="text-muted-foreground/50 italic text-xs">No positions</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {team.positions.map((p) => (
+                            <span key={p.id} className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                              {p.title}
+                              <span className="ml-1 text-blue-500">({p.employees.length})</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex justify-center gap-1">
                         <button
                           type="button"
-                          title="Manage members"
+                          title="Manage positions"
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                          onClick={() => setMembersTeam(team)}
+                          onClick={() => setPositionsTeam(team)}
                         ><Users size={14} /></button>
                         <button
                           type="button"
@@ -296,7 +325,7 @@ export function TeamsTab(): React.ReactNode {
         </div>
       </Card>
 
-      {/* â”€â”€ Add / Edit Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Add / Edit Modal ───────────────────────────────────── */}
       <Modal
         isOpen={addOpen || editTarget !== null}
         onClose={() => { setAddOpen(false); setEditTarget(null); }}
@@ -326,6 +355,7 @@ export function TeamsTab(): React.ReactNode {
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.fullName}{emp.employeeNo ? ` (${emp.employeeNo})` : ''}
+                  {emp.employment?.position ? ` — ${emp.employment.position.title}` : ''}
                 </option>
               ))}
             </select>
@@ -340,7 +370,7 @@ export function TeamsTab(): React.ReactNode {
         </div>
       </Modal>
 
-      {/* â”€â”€ Delete Confirmation Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Delete Confirmation Modal ──────────────────────────── */}
       <Modal
         isOpen={deleteTarget !== null}
         onClose={() => { if (!deleting) setDeleteTarget(null); }}
@@ -349,7 +379,7 @@ export function TeamsTab(): React.ReactNode {
       >
         <div className="space-y-4 p-4">
           <p className="text-sm text-foreground">
-            Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? All member assignments will be cleared.
+            Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? All position assignments will be cleared.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
@@ -360,93 +390,115 @@ export function TeamsTab(): React.ReactNode {
         </div>
       </Modal>
 
-      {/*  Manage Members Modal */}
+      {/* ── Manage Positions Modal ─────────────────────────────── */}
       <Modal
-        isOpen={membersTeam !== null}
-        onClose={() => setMembersTeam(null)}
-        title={`${membersTeam?.name ?? ''} Members`}
+        isOpen={positionsTeam !== null}
+        onClose={() => setPositionsTeam(null)}
+        title={`${positionsTeam?.name ?? ''} — Positions`}
         size="lg"
       >
         <div className="p-6 space-y-4">
-          {/* Current members list */}
+
+          {/* Assigned positions list */}
           <div className="rounded-lg border border-border overflow-hidden">
             <div className="px-4 py-3 bg-muted/60 border-b border-border flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current Members</p>
-              <Badge variant="neutral">{members.length}</Badge>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assigned Positions</p>
+              <Badge variant="neutral">{positionsTeam?.positions.length ?? 0}</Badge>
             </div>
-            <div className="max-h-56 overflow-auto">
-              {loadingMembers ? (
-                <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  <Loader2 className="inline-block animate-spin mr-2" size={14} />Loading...
-                </p>
-              ) : members.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-muted-foreground">No members assigned yet.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/40 border-b border-border">
-                      <th className="text-left px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase">Employee</th>
-                      <th className="text-left px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase hidden sm:table-cell">Position</th>
-                      <th className="text-right px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase">Remove</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.map((m) => (
-                      <tr key={m.employmentId} className="border-b border-border/70 last:border-b-0">
-                        <td className="px-4 py-2.5">
-                          <p className="font-semibold text-foreground">{m.fullName}</p>
-                          {m.employeeNo && <p className="text-[11px] text-muted-foreground">{m.employeeNo}</p>}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">{m.position ?? 'â€”'}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          <button
-                            type="button"
-                            disabled={removingMemberId === m.employmentId}
-                            onClick={() => void handleRemoveMember(m.employmentId)}
-                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                          >
-                            {removingMemberId === m.employmentId
-                              ? <Loader2 size={14} className="animate-spin" />
-                              : <Trash2 size={14} />}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+
+            {!positionsTeam?.positions.length ? (
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground italic">
+                No positions assigned yet.
+              </p>
+            ) : (
+              <div className="divide-y divide-border/70">
+                {positionsTeam.positions.map((pos) => {
+                  const isExpanded = expandedPosIds.has(pos.id);
+                  return (
+                    <div key={pos.id}>
+                      <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 flex-1 text-left"
+                          onClick={() => toggleExpand(pos.id)}
+                        >
+                          {isExpanded
+                            ? <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                            : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                          <span className="font-semibold text-foreground text-sm">{pos.title}</span>
+                          <Badge variant="neutral">{pos.employees.length} employee{pos.employees.length !== 1 ? 's' : ''}</Badge>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={removingPosId === pos.id}
+                          onClick={() => void handleRemovePosition(pos.id, pos.title)}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
+                          title="Remove position from team"
+                        >
+                          {removingPosId === pos.id
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <Trash2 size={14} />}
+                        </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="bg-muted/30 border-t border-border/40">
+                          {pos.employees.length === 0 ? (
+                            <p className="px-8 py-3 text-xs text-muted-foreground italic">
+                              No active employees hold this position.
+                            </p>
+                          ) : (
+                            <ul className="px-8 py-2 space-y-1.5">
+                              {pos.employees.map((emp) => (
+                                <li key={emp.employmentId} className="flex items-center gap-2 text-sm">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                                  <span className="font-medium text-foreground">{emp.fullName}</span>
+                                  {emp.employeeNo && (
+                                    <span className="text-xs text-muted-foreground">({emp.employeeNo})</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Add member */}
+          {/* Add position */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Add Member</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Add Position</p>
             <div className="flex gap-2">
               <select
                 className={`${SELECT_CLASS} flex-1`}
-                value={addEmploymentId}
-                disabled={loadingEmployees || addingMember}
-                onChange={(e) => setAddEmploymentId(e.target.value)}
+                value={addPositionId}
+                disabled={addingPosition}
+                onChange={(e) => setAddPositionId(e.target.value)}
               >
-                <option value="">Select an employee</option>
-                {availableToAdd.map((emp) => (
-                  <option key={emp.employment!.id} value={emp.employment!.id}>
-                    {emp.fullName}{emp.employeeNo ? ` (${emp.employeeNo})` : ''}
-                  </option>
+                <option value="">Select a position...</option>
+                {availablePositions.map((p) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
               </select>
               <Button
                 className="bg-rose-600 hover:bg-rose-700 text-white shrink-0"
-                disabled={!addEmploymentId || addingMember}
-                onClick={() => void handleAddMember()}
+                disabled={!addPositionId || addingPosition}
+                onClick={() => void handleAddPosition()}
               >
-                {addingMember ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                {addingPosition ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
               </Button>
             </div>
+            {availablePositions.length === 0 && allPositions.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1.5 italic">All available positions are already assigned.</p>
+            )}
           </div>
 
           <div className="flex justify-end pt-2 border-t border-border">
-            <Button variant="outline" onClick={() => setMembersTeam(null)}>Close</Button>
+            <Button variant="outline" onClick={() => setPositionsTeam(null)}>Close</Button>
           </div>
         </div>
       </Modal>

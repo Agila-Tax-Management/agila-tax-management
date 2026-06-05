@@ -3,11 +3,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowLeft, Loader2 } from 'lucide-react';
+import { Search, ArrowLeft, Loader2, Clock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import type {
   ClientFundDetailData,
   ClientFundTransactionRecord,
   ClientFundTransactionType,
+  ChequeMonitoringRecord,
+  ChequeStatus,
 } from '@/types/accounting.types';
 import type { PettyCashRecord } from './PettyCashFund';
 import { PettyCashViewModal } from './PettyCashViewModal';
@@ -20,6 +22,7 @@ const TRANSACTION_TYPE_LABELS: Record<ClientFundTransactionType, string> = {
   MANUAL_CREDIT: 'Manual Credit',
   MANUAL_DEBIT: 'Manual Debit',
   REFUND: 'Refund',
+  CHEQUE_CLEARING: 'Cheque Clearing',
 };
 
 const TRANSACTION_TYPE_CLASSES: Record<ClientFundTransactionType, string> = {
@@ -28,9 +31,16 @@ const TRANSACTION_TYPE_CLASSES: Record<ClientFundTransactionType, string> = {
   MANUAL_CREDIT: 'bg-emerald-100 text-emerald-700',
   MANUAL_DEBIT: 'bg-red-100 text-red-700',
   REFUND: 'bg-blue-100 text-blue-700',
+  CHEQUE_CLEARING: 'bg-teal-100 text-teal-700',
 };
 
-const CREDIT_TYPES: ClientFundTransactionType[] = ['INVOICE_PAYMENT', 'MANUAL_CREDIT', 'REFUND'];
+const CREDIT_TYPES: ClientFundTransactionType[] = ['INVOICE_PAYMENT', 'MANUAL_CREDIT', 'REFUND', 'CHEQUE_CLEARING'];
+
+const CHEQUE_STATUS_CONFIG: Record<ChequeStatus, { label: string; cls: string; icon: React.ReactNode }> = {
+  FOR_CLEARING: { label: 'For Clearing', cls: 'bg-amber-100 text-amber-700', icon: <Clock size={11} /> },
+  CLEARED:      { label: 'Cleared',      cls: 'bg-green-100 text-green-700', icon: <CheckCircle2 size={11} /> },
+  BOUNCED:      { label: 'Bounced',      cls: 'bg-red-100 text-red-700',    icon: <XCircle size={11} /> },
+};
 
 function isCredit(type: ClientFundTransactionType): boolean {
   return CREDIT_TYPES.includes(type);
@@ -182,6 +192,20 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
         </div>
       </div>
 
+      {/* ── Pending cheque alert ── */}
+      {(data?.cheques ?? []).some((c) => c.status === 'FOR_CLEARING') && (
+        <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
+          <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-amber-800">Pending Cheques</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              ₱{(data?.cheques ?? []).filter(c => c.status === 'FOR_CLEARING').reduce((s, c) => s + c.amount, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })} across{' '}
+              {(data?.cheques ?? []).filter(c => c.status === 'FOR_CLEARING').length} cheque(s) awaiting clearance — these will reflect in the balance once cleared.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Transactions table ── */}
       <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <table className="w-full text-sm">
@@ -278,6 +302,73 @@ export function ClientFundDetail({ clientId }: ClientFundDetailProps) {
           onClose={() => setPettyCashRecord(null)}
         />
       )}
+
+      {/* ── Cheque Monitoring section ── */}
+      {(data?.cheques ?? []).length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-base font-bold text-slate-800">Cheque Monitoring</h2>
+          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500">Cheque No.</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500">Bank</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500">Cheque Date</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500">Reference</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-500">Status</th>
+                  <th className="text-right px-4 py-3 font-semibold text-slate-500">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(data?.cheques ?? []).map((ch) => {
+                  const cfg = CHEQUE_STATUS_CONFIG[ch.status];
+                  const ref = ch.payment
+                    ? { label: ch.payment.paymentNumber, href: `/portal/accounting-and-finance/payments/${ch.payment.id}` }
+                    : ch.invoice
+                    ? { label: ch.invoice.invoiceNumber, href: `/portal/accounting-and-finance/invoices/${ch.invoice.id}` }
+                    : null;
+                  return (
+                    <tr key={ch.id} className="bg-white hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-800">{ch.chequeNo}</td>
+                      <td className="px-4 py-3 text-slate-600">{ch.bankName}</td>
+                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                        {new Date(ch.chequeDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {ref ? (
+                          <a href={ref.href} className="text-amber-600 hover:underline">{ref.label}</a>
+                        ) : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.cls}`}>
+                          {cfg.icon} {cfg.label}
+                        </span>
+                        {ch.status === 'CLEARED' && ch.clearedAt && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {new Date(ch.clearedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                        {ch.status === 'BOUNCED' && ch.bouncedAt && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {new Date(ch.bouncedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-semibold ${
+                        ch.status === 'CLEARED' ? 'text-green-700' :
+                        ch.status === 'BOUNCED' ? 'text-red-600' : 'text-amber-700'
+                      }`}>
+                        ₱{ch.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

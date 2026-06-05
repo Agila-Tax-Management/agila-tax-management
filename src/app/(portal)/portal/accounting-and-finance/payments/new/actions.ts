@@ -94,6 +94,24 @@ export async function recordPaymentAction(
       return newPayment;
     });
 
+    // Auto-create ChequeMonitoring record when payment method is CHECK
+    // Must be awaited — fire-and-forget is dropped in serverless environments
+    if (input.method === 'CHECK' && input.chequeNo && input.bankName && input.chequeDate) {
+      await prisma.chequeMonitoring.create({
+        data: {
+          chequeNo: input.chequeNo,
+          bankName: input.bankName,
+          chequeDate: new Date(input.chequeDate),
+          clientId: input.clientId,
+          amount: input.amount,
+          paymentId: payment.id,
+          receivedById: session.user.id,
+          status: 'FOR_CLEARING',
+          notes: input.notes ?? null,
+        },
+      });
+    }
+
     void logActivity({
       userId: session.user.id,
       action: 'CREATED',

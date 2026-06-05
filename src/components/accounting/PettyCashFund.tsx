@@ -12,9 +12,13 @@ import {
   Trash2,
   Loader2,
   ArrowDownUp,
+  Plus,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { PettyCashViewModal } from './PettyCashViewModal';
+import type { ChequeMonitoringRecord, ChequeStatus } from '@/types/accounting.types';
 
 // â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -161,7 +165,7 @@ export function PettyCashFund(): React.ReactNode {
   const [records, setRecords]         = useState<PettyCashRecord[]>([]);
   const [isLoading, setIsLoading]     = useState(false);
   const [viewRecord, setViewRecord]   = useState<PettyCashRecord | null>(null);
-  const [activeTab, setActiveTab]     = useState<'pcf' | 'statement'>('pcf');
+  const [activeTab, setActiveTab]     = useState<'pcf' | 'statement' | 'cheque'>('pcf');
 
   const [approvingId, setApprovingId]     = useState<string | null>(null);
   const [rejectState, setRejectState]     = useState<{ id: string; reason: string } | null>(null);
@@ -172,6 +176,25 @@ export function PettyCashFund(): React.ReactNode {
   const [bulkStep, setBulkStep]                 = useState(0);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkConfirmed, setBulkConfirmed]       = useState(false);
+
+  // ── Cheque Monitoring state ──────────────────────────────────────────────────
+  const [cheques, setCheques]               = useState<ChequeMonitoringRecord[]>([]);
+  const [chequeSearch, setChequeSearch]     = useState('');
+  const [chequeStatusFilter, setChequeStatusFilter] = useState<ChequeStatus | ''>('');
+  const [chequeLoading, setChequeLoading]   = useState(false);
+  const [showAddCheque, setShowAddCheque]   = useState(false);
+  const [updatingChequeId, setUpdatingChequeId] = useState<string | null>(null);
+  const [chequeClients, setChequeClients]   = useState<{ id: number; businessName: string; clientNo: string | null }[]>([]);
+  // Add cheque form
+  const [chequeForm, setChequeForm] = useState({ chequeNo: '', bankName: '', chequeDate: '', clientId: '', amount: '', invoiceId: '', notes: '' });
+  const [isSavingCheque, setIsSavingCheque] = useState(false);
+  // Edit cheque
+  const [editCheque, setEditCheque] = useState<ChequeMonitoringRecord | null>(null);
+  const [editForm, setEditForm] = useState({ chequeNo: '', bankName: '', chequeDate: '', amount: '', invoiceId: '', notes: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // Delete cheque
+  const [deleteCheque, setDeleteCheque] = useState<ChequeMonitoringRecord | null>(null);
+  const [isDeletingCheque, setIsDeletingCheque] = useState(false);
 
   // â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -195,6 +218,33 @@ export function PettyCashFund(): React.ReactNode {
   useEffect(() => {
     void loadRecords();
   }, [loadRecords]);
+
+  // ── Load cheques when tab becomes active ─────────────────────────────────────
+  const loadCheques = useCallback(async () => {
+    setChequeLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (chequeStatusFilter) params.set('status', chequeStatusFilter);
+      const [chequeRes, clientsRes] = await Promise.all([
+        fetch(`/api/accounting/cheque-monitoring?${params.toString()}`),
+        chequeClients.length === 0 ? fetch('/api/accounting/payments/clients') : Promise.resolve(null),
+      ]);
+      if (chequeRes.ok) {
+        const d = (await chequeRes.json()) as { data: ChequeMonitoringRecord[] };
+        setCheques(d.data);
+      }
+      if (clientsRes?.ok) {
+        const d = (await clientsRes.json()) as { data: { id: number; businessName: string; clientNo: string | null }[] };
+        setChequeClients(d.data);
+      }
+    } finally {
+      setChequeLoading(false);
+    }
+  }, [chequeStatusFilter, chequeClients.length]);
+
+  useEffect(() => {
+    if (activeTab === 'cheque') void loadCheques();
+  }, [activeTab, loadCheques]);
 
   // â”€â”€ Filtered records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -399,6 +449,17 @@ export function PettyCashFund(): React.ReactNode {
                 }`}>{statementCount}</span>
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('cheque'); setSearch(''); setRejectState(null); setVoidConfirmId(null); setDeleteConfirmId(null); }}
+              className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition-colors ${
+                activeTab === 'cheque'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Cheque Monitoring
+            </button>
           </div>
         </div>
         {activeTab === 'pcf' && (
@@ -443,7 +504,9 @@ export function PettyCashFund(): React.ReactNode {
         )}
       </div>
 
-      {/* Search bar + sort */}
+      {/* Search bar + sort — PCF/Statement only */}
+      {activeTab !== 'cheque' && (
+      <>
       <div className="flex items-center gap-2">
         <div className="relative max-w-sm flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -687,6 +750,450 @@ export function PettyCashFund(): React.ReactNode {
           )}
         </table>
       </div>
+      </> )} {/* end activeTab !== 'cheque' */}
+
+      {/* ── Cheque Monitoring Tab Content ── */}
+      {activeTab === 'cheque' && (
+        <div className="space-y-4">
+          {/* Controls */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search cheques..."
+                  value={chequeSearch}
+                  onChange={(e) => setChequeSearch(e.target.value)}
+                  className="pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 transition w-56"
+                />
+              </div>
+              <select
+                value={chequeStatusFilter}
+                onChange={(e) => setChequeStatusFilter(e.target.value as ChequeStatus | '')}
+                className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="FOR_CLEARING">For Clearing</option>
+                <option value="CLEARED">Cleared</option>
+                <option value="BOUNCED">Bounced</option>
+              </select>
+            </div>
+            <button
+              onClick={() => { setChequeForm({ chequeNo: '', bankName: '', chequeDate: '', clientId: '', amount: '', invoiceId: '', notes: '' }); setShowAddCheque(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
+            >
+              <Plus size={15} />
+              Log Cheque
+            </button>
+            <button
+              onClick={() => void loadCheques()}
+              disabled={chequeLoading}
+              className="flex items-center gap-2 px-3 py-2 border border-border bg-card text-foreground rounded-xl text-sm font-semibold hover:bg-muted transition disabled:opacity-50"
+              title="Refresh cheque list"
+            >
+              <RefreshCw size={14} className={chequeLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {/* Table */}
+          <div className="border border-border rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cheque No.</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Bank</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Client</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Reference</th>
+                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Amount</th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Status</th>
+                  <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {chequeLoading ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                      <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+                      Loading...
+                    </td>
+                  </tr>
+                ) : cheques.filter((c) => {
+                  const q = chequeSearch.toLowerCase();
+                  return (
+                    c.chequeNo.toLowerCase().includes(q) ||
+                    c.bankName.toLowerCase().includes(q) ||
+                    c.businessName.toLowerCase().includes(q) ||
+                    (c.clientNo ?? '').toLowerCase().includes(q) ||
+                    (c.invoice?.invoiceNumber ?? '').toLowerCase().includes(q)
+                  );
+                }).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                      {chequeSearch || chequeStatusFilter ? 'No matching cheques.' : 'No cheque records yet.'}
+                    </td>
+                  </tr>
+                ) : (
+                  cheques
+                    .filter((c) => {
+                      const q = chequeSearch.toLowerCase();
+                      return (
+                        c.chequeNo.toLowerCase().includes(q) ||
+                        c.bankName.toLowerCase().includes(q) ||
+                        c.businessName.toLowerCase().includes(q) ||
+                        (c.clientNo ?? '').toLowerCase().includes(q) ||
+                        (c.invoice?.invoiceNumber ?? '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map((c) => (
+                      <tr key={c.id} className="bg-card hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">{c.chequeNo}</td>
+                        <td className="px-4 py-3 text-foreground">{c.bankName}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-foreground text-xs">{c.businessName}</div>
+                          {c.clientNo && <div className="font-mono text-xs text-muted-foreground">{c.clientNo}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                          {new Date(c.chequeDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs">
+                          {c.invoice ? (
+                            <a href={`/portal/accounting-and-finance/invoices/${c.invoice.id}`} className="text-blue-600 hover:underline">{c.invoice.invoiceNumber}</a>
+                          ) : c.payment ? (
+                            <a href={`/portal/accounting-and-finance/payments/${c.payment.id}`} className="text-blue-600 hover:underline">{c.payment.paymentNumber}</a>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">
+                          ₱{c.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            c.status === 'FOR_CLEARING' ? 'bg-amber-100 text-amber-700' :
+                            c.status === 'CLEARED'      ? 'bg-green-100 text-green-700' :
+                                                          'bg-red-100 text-red-700'
+                          }`}>
+                            {c.status === 'FOR_CLEARING' ? 'For Clearing' : c.status === 'CLEARED' ? 'Cleared' : 'Bounced'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {c.status === 'FOR_CLEARING' && (
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => void (async () => {
+                                  setUpdatingChequeId(c.id);
+                                  try {
+                                    const res = await fetch(`/api/accounting/cheque-monitoring/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'CLEARED' }) });
+                                    const json = (await res.json()) as { error?: string };
+                                    if (!res.ok) { toastError('Failed', json.error ?? 'Error'); return; }
+                                    success('Cheque cleared', 'Cheque cleared and credited to client funds.');
+                                    void loadCheques();
+                                  } catch { toastError('Error', 'Unexpected error.'); }
+                                  finally { setUpdatingChequeId(null); }
+                                })()}
+                                disabled={updatingChequeId === c.id}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 disabled:opacity-50 transition"
+                              >
+                                {updatingChequeId === c.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                                Cleared
+                              </button>
+                              <button
+                                onClick={() => void (async () => {
+                                  setUpdatingChequeId(c.id);
+                                  try {
+                                    const res = await fetch(`/api/accounting/cheque-monitoring/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'BOUNCED' }) });
+                                    const json = (await res.json()) as { error?: string };
+                                    if (!res.ok) { toastError('Failed', json.error ?? 'Error'); return; }
+                                    success('Cheque bounced', 'Cheque marked as bounced.');
+                                    void loadCheques();
+                                  } catch { toastError('Error', 'Unexpected error.'); }
+                                  finally { setUpdatingChequeId(null); }
+                                })()}
+                                disabled={updatingChequeId === c.id}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 disabled:opacity-50 transition"
+                              >
+                                {updatingChequeId === c.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={13} />}
+                                Bounced
+                              </button>
+                            </div>
+                          )}
+                          {c.status === 'BOUNCED' && (
+                            <button
+                              onClick={() => void (async () => {
+                                setUpdatingChequeId(c.id);
+                                try {
+                                  const res = await fetch(`/api/accounting/cheque-monitoring/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'FOR_CLEARING' }) });
+                                  const json = (await res.json()) as { error?: string };
+                                  if (!res.ok) { toastError('Failed', json.error ?? 'Error'); return; }
+                                  success('Status updated', 'Cheque reset to for clearing.');
+                                  void loadCheques();
+                                } catch { toastError('Error', 'Unexpected error.'); }
+                                finally { setUpdatingChequeId(null); }
+                              })()}
+                              disabled={updatingChequeId === c.id}
+                              className="px-2 py-1 rounded-lg bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 disabled:opacity-50 transition"
+                            >
+                              {updatingChequeId === c.id ? <Loader2 size={12} className="animate-spin" /> : 'Re-submit'}
+                            </button>
+                          )}
+                          {c.status === 'CLEARED' && (
+                            <span className="text-xs text-muted-foreground italic">
+                              {c.clearedAt ? new Date(c.clearedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : 'Cleared'}
+                            </span>
+                          )}
+                          {/* Edit / Delete — not for CLEARED */}
+                          {c.status !== 'CLEARED' && (
+                            <div className="flex items-center justify-center gap-1 mt-1">
+                              <button
+                                onClick={() => {
+                                  setEditCheque(c);
+                                  setEditForm({
+                                    chequeNo: c.chequeNo,
+                                    bankName: c.bankName,
+                                    chequeDate: c.chequeDate.split('T')[0] ?? '',
+                                    amount: String(c.amount),
+                                    invoiceId: c.invoiceId ?? '',
+                                    notes: c.notes ?? '',
+                                  });
+                                }}
+                                className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition"
+                                title="Edit cheque"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setDeleteCheque(c)}
+                                className="px-2 py-1 rounded-lg bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 transition"
+                                title="Delete cheque"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Add Cheque Modal */}
+          {showAddCheque && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setShowAddCheque(false)} />
+              <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-lg border border-border">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                  <h2 className="text-lg font-bold text-foreground">Log Cheque Payment</h2>
+                  <button onClick={() => setShowAddCheque(false)} className="p-1 rounded-lg hover:bg-muted transition">
+                    <X size={18} className="text-muted-foreground" />
+                  </button>
+                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void (async () => {
+                      setIsSavingCheque(true);
+                      try {
+                        const res = await fetch('/api/accounting/cheque-monitoring', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            chequeNo: chequeForm.chequeNo.trim(),
+                            bankName: chequeForm.bankName.trim(),
+                            chequeDate: chequeForm.chequeDate,
+                            clientId: parseInt(chequeForm.clientId, 10),
+                            amount: parseFloat(chequeForm.amount),
+                            invoiceId: chequeForm.invoiceId.trim() || null,
+                            notes: chequeForm.notes.trim() || null,
+                          }),
+                        });
+                        const json = (await res.json()) as { data?: ChequeMonitoringRecord; error?: string };
+                        if (!res.ok) { toastError('Failed', json.error ?? 'Error'); return; }
+                        success('Cheque logged', `Cheque #${chequeForm.chequeNo} recorded for clearing.`);
+                        setCheques((prev) => [json.data!, ...prev]);
+                        setShowAddCheque(false);
+                      } catch { toastError('Error', 'Unexpected error.'); }
+                      finally { setIsSavingCheque(false); }
+                    })();
+                  }}
+                  className="px-6 py-5 space-y-4"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Client <span className="text-red-500">*</span></label>
+                    <select
+                      value={chequeForm.clientId}
+                      onChange={(e) => setChequeForm((f) => ({ ...f, clientId: e.target.value }))}
+                      className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select client...</option>
+                      {chequeClients.map((c) => (
+                        <option key={c.id} value={c.id}>{c.businessName}{c.clientNo ? ` (${c.clientNo})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Cheque No. <span className="text-red-500">*</span></label>
+                      <input type="text" value={chequeForm.chequeNo} onChange={(e) => setChequeForm((f) => ({ ...f, chequeNo: e.target.value }))} placeholder="e.g. 001234" className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Bank Name <span className="text-red-500">*</span></label>
+                      <input type="text" value={chequeForm.bankName} onChange={(e) => setChequeForm((f) => ({ ...f, bankName: e.target.value }))} placeholder="e.g. BDO" className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Cheque Date <span className="text-red-500">*</span></label>
+                      <input type="date" value={chequeForm.chequeDate} onChange={(e) => setChequeForm((f) => ({ ...f, chequeDate: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Amount (₱) <span className="text-red-500">*</span></label>
+                      <input type="number" value={chequeForm.amount} onChange={(e) => setChequeForm((f) => ({ ...f, amount: e.target.value }))} placeholder="0.00" min="0.01" step="0.01" className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Invoice ID <span className="text-muted-foreground text-xs font-normal">(optional)</span></label>
+                    <input type="text" value={chequeForm.invoiceId} onChange={(e) => setChequeForm((f) => ({ ...f, invoiceId: e.target.value }))} placeholder="INV-2026-XXXX" className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Notes <span className="text-muted-foreground text-xs font-normal">(optional)</span></label>
+                    <textarea value={chequeForm.notes} onChange={(e) => setChequeForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Additional notes..." rows={2} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                  </div>
+                  <div className="flex justify-end gap-3 pt-1">
+                    <button type="button" onClick={() => setShowAddCheque(false)} className="px-4 py-2 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-muted transition">Cancel</button>
+                    <button type="submit" disabled={isSavingCheque} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition flex items-center gap-2">
+                      {isSavingCheque && <Loader2 size={14} className="animate-spin" />}
+                      Log Cheque
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Cheque Modal */}
+          {editCheque && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setEditCheque(null)} />
+              <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-lg border border-border">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                  <h2 className="text-lg font-bold text-foreground">Edit Cheque</h2>
+                  <button onClick={() => setEditCheque(null)} className="p-1 rounded-lg hover:bg-muted transition">
+                    <X size={18} className="text-muted-foreground" />
+                  </button>
+                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void (async () => {
+                      setIsSavingEdit(true);
+                      try {
+                        const res = await fetch(`/api/accounting/cheque-monitoring/${editCheque.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            chequeNo: editForm.chequeNo.trim(),
+                            bankName: editForm.bankName.trim(),
+                            chequeDate: editForm.chequeDate,
+                            amount: parseFloat(editForm.amount),
+                            invoiceId: editForm.invoiceId.trim() || null,
+                            notes: editForm.notes.trim() || null,
+                          }),
+                        });
+                        const json = (await res.json()) as { data?: ChequeMonitoringRecord; error?: string };
+                        if (!res.ok) { toastError('Failed', json.error ?? 'Error'); return; }
+                        success('Cheque updated', `Cheque #${editForm.chequeNo} updated.`);
+                        setCheques((prev) => prev.map((c) => c.id === editCheque.id ? json.data! : c));
+                        setEditCheque(null);
+                      } catch { toastError('Error', 'Unexpected error.'); }
+                      finally { setIsSavingEdit(false); }
+                    })();
+                  }}
+                  className="px-6 py-5 space-y-4"
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Cheque No. <span className="text-red-500">*</span></label>
+                      <input type="text" value={editForm.chequeNo} onChange={(e) => setEditForm((f) => ({ ...f, chequeNo: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Bank Name <span className="text-red-500">*</span></label>
+                      <input type="text" value={editForm.bankName} onChange={(e) => setEditForm((f) => ({ ...f, bankName: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Cheque Date <span className="text-red-500">*</span></label>
+                      <input type="date" value={editForm.chequeDate} onChange={(e) => setEditForm((f) => ({ ...f, chequeDate: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Amount (₱) <span className="text-red-500">*</span></label>
+                      <input type="number" value={editForm.amount} onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))} min="0.01" step="0.01" className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Invoice ID <span className="text-muted-foreground text-xs font-normal">(optional)</span></label>
+                    <input type="text" value={editForm.invoiceId} onChange={(e) => setEditForm((f) => ({ ...f, invoiceId: e.target.value }))} placeholder="INV-2026-XXXX" className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Notes <span className="text-muted-foreground text-xs font-normal">(optional)</span></label>
+                    <textarea value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                  </div>
+                  <div className="flex justify-end gap-3 pt-1">
+                    <button type="button" onClick={() => setEditCheque(null)} className="px-4 py-2 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-muted transition">Cancel</button>
+                    <button type="submit" disabled={isSavingEdit} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition flex items-center gap-2">
+                      {isSavingEdit && <Loader2 size={14} className="animate-spin" />}
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Cheque Confirmation */}
+          {deleteCheque && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteCheque(null)} />
+              <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-sm border border-border p-6 space-y-4">
+                <h2 className="text-base font-bold text-foreground">Delete Cheque</h2>
+                <p className="text-sm text-muted-foreground">
+                  Are you sure you want to delete cheque{' '}
+                  <span className="font-semibold text-foreground">#{deleteCheque.chequeNo}</span>{' '}
+                  from <span className="font-semibold text-foreground">{deleteCheque.businessName}</span>?
+                  This action cannot be undone.
+                </p>
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => setDeleteCheque(null)} className="flex-1 px-4 py-2 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-muted transition">Cancel</button>
+                  <button
+                    disabled={isDeletingCheque}
+                    onClick={() => void (async () => {
+                      setIsDeletingCheque(true);
+                      try {
+                        const res = await fetch(`/api/accounting/cheque-monitoring/${deleteCheque.id}`, { method: 'DELETE' });
+                        const json = (await res.json()) as { error?: string };
+                        if (!res.ok) { toastError('Failed', json.error ?? 'Error'); return; }
+                        success('Deleted', `Cheque #${deleteCheque.chequeNo} deleted.`);
+                        setCheques((prev) => prev.filter((c) => c.id !== deleteCheque.id));
+                        setDeleteCheque(null);
+                      } catch { toastError('Error', 'Unexpected error.'); }
+                      finally { setIsDeletingCheque(false); }
+                    })()}
+                    className="flex-1 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition flex items-center justify-center gap-2"
+                  >
+                    {isDeletingCheque && <Loader2 size={14} className="animate-spin" />}
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* View modal */}
       {viewRecord && (

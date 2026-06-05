@@ -1,11 +1,18 @@
 // prisma/accounting-models/client-funds.prisma
 
+enum ChequeStatus {
+  FOR_CLEARING // Cheque received, pending bank clearance
+  CLEARED      // Bank confirmed; triggers ClientFundTransaction credit
+  BOUNCED      // Cheque returned/dishonoured
+}
+
 enum ClientFundTransactionType {
   INVOICE_PAYMENT  // Invoice marked PAID; CLIENT_FUND_DEPOSIT items credited (one combined entry)
   PETTY_CASH_DEBIT // Petty cash DISBURSED; CLIENT_FUND items deducted (one combined entry)
   MANUAL_CREDIT    // Accountant manually adds funds
   MANUAL_DEBIT     // Accountant manually removes funds
   REFUND           // Funds returned to client
+  CHEQUE_CLEARING  // Cheque confirmed CLEARED; credited to client funds
 }
 
 // ─── Client Fund Transaction (Running Ledger per Client) ───────────
@@ -49,6 +56,10 @@ model ClientFundTransaction {
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
   isJournalized  Boolean       @default(false)
 
+  // ─── Cheque Monitoring Linkage ───
+  chequeMonitoringId String?
+  chequeMonitoring   ChequeMonitoring? @relation(fields: [chequeMonitoringId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -58,4 +69,50 @@ model ClientFundTransaction {
   @@index([isJournalized])
   @@index([journalEntryId])
   @@map("client_fund_transaction")
+}
+
+// ─── Cheque Monitoring ─────────────────────────────────────────────
+// Tracks cheques received from clients. Cheques do NOT credit client funds
+// immediately; only when status transitions to CLEARED does a
+// ClientFundTransaction (CHEQUE_CLEARING) get created.
+model ChequeMonitoring {
+  id         String @id @default(cuid())
+  chequeNo   String // Cheque number as written on the physical cheque
+  bankName   String // Issuing bank name
+  chequeDate DateTime // Date written on the cheque
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  amount Decimal @db.Decimal(10, 2)
+
+  // Optional link to an invoice or payment this cheque covers
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  status    ChequeStatus @default(FOR_CLEARING)
+  clearedAt DateTime?    // Timestamp when status moved to CLEARED
+  bouncedAt DateTime?    // Timestamp when status moved to BOUNCED
+
+  // Created ClientFundTransaction when cleared
+  clientFundTransactions ClientFundTransaction[]
+
+  receivedById String?
+  receivedBy   User?   @relation("ChequeReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
+
+  processedById String?
+  processedBy   User?   @relation("ChequeProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+  @@index([chequeDate])
+  @@map("cheque_monitoring")
 }

@@ -146,6 +146,7 @@ model Invoice {
   isJournalized Boolean @default(false)
 
   clientFundTransactions ClientFundTransaction[]
+  chequeMonitorings      ChequeMonitoring[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -229,6 +230,7 @@ model Payment {
   isJournalized  Boolean       @default(false)
 
   clientFundTransactions ClientFundTransaction[]
+  chequeMonitorings      ChequeMonitoring[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

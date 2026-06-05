@@ -148,6 +148,9 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
   const [payMethod, setPayMethod] = useState<PaymentMethodType>('CASH');
   const [payRef, setPayRef] = useState('');
   const [payNotes, setPayNotes] = useState('');
+  const [payChequeNo, setPayChequeNo] = useState('');
+  const [payBankName, setPayBankName] = useState('');
+  const [payChequeDate, setPayChequeDate] = useState('');
   const [isRecording, setIsRecording] = useState(false);
 
   // Print
@@ -314,6 +317,14 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invoice) return;
+
+    // Validate cheque fields
+    if (payMethod === 'CHECK') {
+      if (!payChequeNo.trim()) { toastError('Validation', 'Cheque number is required.'); return; }
+      if (!payBankName.trim()) { toastError('Validation', 'Bank name is required.'); return; }
+      if (!payChequeDate) { toastError('Validation', 'Cheque date is required.'); return; }
+    }
+
     setIsRecording(true);
     try {
       const res = await fetch(`/api/accounting/invoices/${id}/payments`, {
@@ -325,14 +336,21 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
           method: payMethod,
           referenceNumber: payRef || undefined,
           notes: payNotes || undefined,
+          ...(payMethod === 'CHECK' ? { chequeNo: payChequeNo, bankName: payBankName, chequeDate: payChequeDate } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) { toastError('Payment failed', data.error ?? 'An error occurred.'); return; }
 
-      success('Payment recorded', `₱${Number(payAmount).toLocaleString('en-PH')} recorded successfully.`);
+      success(
+        payMethod === 'CHECK' ? 'Cheque logged' : 'Payment recorded',
+        payMethod === 'CHECK'
+          ? `Cheque #${payChequeNo} added to monitoring. It will reflect on client funds once cleared.`
+          : `₱${Number(payAmount).toLocaleString('en-PH')} recorded successfully.`,
+      );
       setShowPaymentForm(false);
       setPayAmount(''); setPayRef(''); setPayNotes('');
+      setPayChequeNo(''); setPayBankName(''); setPayChequeDate('');
 
       // Refresh invoice
       const invRes = await fetch(`/api/accounting/invoices/${id}`);
@@ -707,6 +725,26 @@ export function InvoiceDetailView({ id }: InvoiceDetailViewProps) {
             <label className="text-xs font-bold text-slate-600 mb-1.5 block">Reference Number</label>
             <input type="text" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Bank transfer ref, check no., etc." className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500" />
           </div>
+          {/* Cheque fields — shown only when method is CHECK */}
+          {payMethod === 'CHECK' && (
+            <div className="grid grid-cols-1 gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/50">
+              <p className="text-xs font-bold text-amber-700">Cheque Details — payment will go to Cheque Monitoring first</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Cheque No.<span className="text-red-500"> *</span></label>
+                  <input type="text" value={payChequeNo} onChange={(e) => setPayChequeNo(e.target.value)} placeholder="e.g. 000123" className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Bank Name<span className="text-red-500"> *</span></label>
+                  <input type="text" value={payBankName} onChange={(e) => setPayBankName(e.target.value)} placeholder="e.g. BDO" className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 mb-1.5 block">Cheque Date<span className="text-red-500"> *</span></label>
+                <input type="date" value={payChequeDate} onChange={(e) => setPayChequeDate(e.target.value)} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500" />
+              </div>
+            </div>
+          )}
           <div>
             <label className="text-xs font-bold text-slate-600 mb-1.5 block">Notes</label>
             <textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} rows={2} placeholder="Optional notes..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500 resize-none" />

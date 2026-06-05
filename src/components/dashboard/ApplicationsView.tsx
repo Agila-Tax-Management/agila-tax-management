@@ -238,6 +238,9 @@ export function ApplicationsView(): React.ReactNode {
   const [coa,          setCoa]          = useState<COAData>(BLANK_COA);
   const [ot,           setOt]           = useState<OTData>(BLANK_OT);
   const [leave,        setLeave]        = useState<LeaveData>(BLANK_LEAVE);
+  const [coaThisMonth, setCoaThisMonth] = useState(0);
+
+  const COA_MONTHLY_LIMIT = 5;
 
   const fetchAll = useCallback(async () => {
     try {
@@ -304,6 +307,15 @@ export function ApplicationsView(): React.ReactNode {
           createdAt: r.createdAt,
         });
       }
+
+      // Count non-cancelled COA requests filed in the current calendar month
+      const now = new Date();
+      const thisMonthCoas = (coaData.data ?? []).filter((r) => {
+        if (r.status === 'CANCELLED') return false;
+        const d = new Date(r.createdAt);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      });
+      setCoaThisMonth(thisMonthCoas.length);
 
       unified.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setRequests(unified);
@@ -528,22 +540,38 @@ export function ApplicationsView(): React.ReactNode {
           {step === 'select' ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground mb-4">Select the type of application you want to file.</p>
-              {APP_TYPES.map(({ type, label, desc, icon, color }) => (
-                <button
-                  key={type}
-                  onClick={() => selectType(type)}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl border border-border hover:border-slate-300 hover:bg-muted transition-all text-left group"
-                >
-                  <div className={`w-11 h-11 ${color} rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                    {icon}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-black text-foreground text-sm">{label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
-                </button>
-              ))}
+          {APP_TYPES.map(({ type, label, desc, icon, color }) => {
+                const isCOALimited = type === 'COA' && coaThisMonth >= COA_MONTHLY_LIMIT;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => { if (!isCOALimited) selectType(type); }}
+                    disabled={isCOALimited}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left group ${
+                      isCOALimited
+                        ? 'border-border bg-muted opacity-60 cursor-not-allowed'
+                        : 'border-border hover:border-slate-300 hover:bg-muted'
+                    }`}
+                  >
+                    <div className={`w-11 h-11 ${color} rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                      {icon}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-black text-foreground text-sm">{label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {isCOALimited
+                          ? `Monthly limit reached (${COA_MONTHLY_LIMIT}/${COA_MONTHLY_LIMIT}) — resets next month`
+                          : type === 'COA'
+                            ? `${desc} · ${coaThisMonth}/${COA_MONTHLY_LIMIT} used this month`
+                            : desc}
+                      </p>
+                    </div>
+                    {!isCOALimited && (
+                      <ChevronRight size={16} className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="space-y-5">
