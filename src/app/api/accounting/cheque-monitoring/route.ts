@@ -28,7 +28,12 @@ export async function GET(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const statusParam = searchParams.get('status') as 'FOR_CLEARING' | 'CLEARED' | 'BOUNCED' | null;
+  const rawStatus = searchParams.get('status');
+  const statusParam =
+    rawStatus && ['FOR_CLEARING', 'CLEARED', 'BOUNCED'].includes(rawStatus) ? rawStatus : null;
+  if (rawStatus && !statusParam) {
+    return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+  }
   const clientIdParam = searchParams.get('clientId');
 
   const where: Record<string, unknown> = {};
