@@ -3,7 +3,18 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "./db";
 
 export const auth = betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL,
+    baseURL: {
+		allowedHosts: [
+			"localhost:3000",
+            "localhost:3001",
+			"localhost:5173",
+            "http://localhost:3001",
+            "https://portal.agilaworkspace.com",
+			"portal.agilaworkspace.com",
+			"*.vercel.app",
+		],
+		protocol: process.env.NODE_ENV === "development" ? "http" : "https",
+	},
     basePath: "/api/auth",
     database: prismaAdapter(prisma, {
         provider: "postgresql",
