@@ -27,6 +27,24 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     include: {
       leader: { select: { id: true, firstName: true, lastName: true, employeeNo: true } },
       _count: { select: { employments: true } },
+      teamPositions: {
+        orderBy: { position: { title: "asc" } },
+        include: {
+          position: {
+            select: {
+              id: true,
+              title: true,
+              employments: {
+                where: { employmentStatus: "ACTIVE", isPastRole: false },
+                select: {
+                  id: true,
+                  employee: { select: { id: true, firstName: true, lastName: true, employeeNo: true } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -35,11 +53,19 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       id: t.id,
       name: t.name,
       leaderId: t.leaderId,
-      leaderName: t.leader
-        ? `${t.leader.firstName} ${t.leader.lastName}`
-        : null,
+      leaderName: t.leader ? `${t.leader.firstName} ${t.leader.lastName}` : null,
       leaderEmployeeNo: t.leader?.employeeNo ?? null,
       memberCount: t._count.employments,
+      positions: t.teamPositions.map((tp) => ({
+        id: tp.position.id,
+        title: tp.position.title,
+        employees: tp.position.employments.map((e) => ({
+          employmentId: e.id,
+          employeeId: e.employee.id,
+          fullName: `${e.employee.firstName} ${e.employee.lastName}`,
+          employeeNo: e.employee.employeeNo,
+        })),
+      })),
       createdAt: t.createdAt.toISOString(),
     })),
   });
@@ -108,6 +134,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       leaderName: team.leader ? `${team.leader.firstName} ${team.leader.lastName}` : null,
       leaderEmployeeNo: team.leader?.employeeNo ?? null,
       memberCount: team._count.employments,
+      positions: [],
       createdAt: team.createdAt.toISOString(),
     },
   }, { status: 201 });

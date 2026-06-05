@@ -341,6 +341,7 @@ model Position {
   department   Department @relation(fields: [departmentId], references: [id])
 
   employments EmployeeEmployment[]
+  teamPositions EmployeeTeamPosition[]
 
   createdAt DateTime @default(now())
 }
@@ -358,10 +359,27 @@ model EmployeeTeam {
   leader   Employee? @relation("TeamLeader", fields: [leaderId], references: [id])
 
   employments EmployeeEmployment[]
+  teamPositions EmployeeTeamPosition[]
 
   createdAt DateTime @default(now())
 
   @@unique([clientId, name])
+}
+
+// ─── Team ↔ Position (many-to-many join) ─────────────────────────
+model EmployeeTeamPosition {
+  id Int @id @default(autoincrement())
+
+  teamId Int
+  team   EmployeeTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  positionId Int
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, positionId])
+  @@map("employee_team_position")
 }
 
 // ─── Employee Levels (Dynamic — position 1 = highest) ────────────

@@ -65,6 +65,10 @@ export function RecordPaymentForm(): React.ReactNode {
   const [method, setMethod] = useState<PaymentMethodType>('CASH');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
+  // — Cheque-specific state —
+  const [chequeNo, setChequeNo] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [chequeDate, setChequeDate] = useState('');
 
   // — Invoice allocation state —
   const [invoices, setInvoices] = useState<UnpaidInvoiceOption[]>([]);
@@ -194,6 +198,12 @@ export function RecordPaymentForm(): React.ReactNode {
 
     setIsSubmitting(true);
     try {
+      if (method === 'CHECK') {
+        if (!chequeNo.trim()) { toastError('Validation', 'Cheque number is required for cheque payments.'); setIsSubmitting(false); return; }
+        if (!bankName.trim()) { toastError('Validation', 'Bank name is required for cheque payments.'); setIsSubmitting(false); return; }
+        if (!chequeDate) { toastError('Validation', 'Cheque date is required for cheque payments.'); setIsSubmitting(false); return; }
+      }
+
       const result = await recordPaymentAction({
         clientId: selectedClient.id,
         amount: amountNum,
@@ -202,6 +212,7 @@ export function RecordPaymentForm(): React.ReactNode {
         referenceNumber: referenceNumber.trim() || undefined,
         notes: notes.trim() || undefined,
         allocations: validAllocations,
+        ...(method === 'CHECK' ? { chequeNo: chequeNo.trim(), bankName: bankName.trim(), chequeDate } : {}),
       });
 
       if ('error' in result) {
@@ -326,6 +337,42 @@ export function RecordPaymentForm(): React.ReactNode {
               />
             </div>
           </div>
+
+          {/* Cheque-specific fields */}
+          {method === 'CHECK' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-amber-200 bg-amber-50/50">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Cheque No. <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  value={chequeNo}
+                  onChange={(e) => setChequeNo(e.target.value)}
+                  placeholder="e.g. 001234"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Bank Name <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="e.g. BDO"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Cheque Date <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={chequeDate}
+                  onChange={(e) => setChequeDate(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div>

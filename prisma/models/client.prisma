@@ -126,6 +126,7 @@ model Client {
 
   // ─── Client Funds & Petty Cash ───
   clientFundTransactions ClientFundTransaction[]
+  chequeMonitorings      ChequeMonitoring[]
   pettyCashes            PettyCash[]
   pettyCashItems         PettyCashItem[]
 

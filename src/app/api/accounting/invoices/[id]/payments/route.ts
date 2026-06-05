@@ -13,6 +13,16 @@ const paymentSchema = z.object({
   method: z.enum(['CASH', 'BANK_TRANSFER', 'CHECK', 'E_WALLET', 'CREDIT_CARD']),
   referenceNumber: z.string().optional(),
   notes: z.string().optional(),
+  // Cheque-specific fields (required when method === 'CHECK')
+  chequeNo: z.string().optional(),
+  bankName: z.string().optional(),
+  chequeDate: z.string().optional(),
+}).superRefine((val, ctx) => {
+  if (val.method === 'CHECK') {
+    if (!val.chequeNo?.trim()) ctx.addIssue({ code: 'custom', path: ['chequeNo'], message: 'Cheque number is required for cheque payments' });
+    if (!val.bankName?.trim()) ctx.addIssue({ code: 'custom', path: ['bankName'], message: 'Bank name is required for cheque payments' });
+    if (!val.chequeDate?.trim()) ctx.addIssue({ code: 'custom', path: ['chequeDate'], message: 'Cheque date is required for cheque payments' });
+  }
 });
 
 export async function POST(
@@ -108,7 +118,8 @@ export async function POST(
 
     // Auto-create ClientFundTransaction when invoice is fully PAID
     // and has CLIENT_FUND_DEPOSIT line items.
-    if (newStatus === 'PAID' && effectiveClientId) {
+    // CHECK payments are excluded — they must be CLEARED in Cheque Monitoring first.
+    if (newStatus === 'PAID' && effectiveClientId && data.method !== 'CHECK') {
       const depositTotal = invoice.items
         .filter((i) => i.category === 'CLIENT_FUND_DEPOSIT')
         .reduce((s, i) => s + Number(i.total), 0);
@@ -163,6 +174,25 @@ export async function POST(
     changeType: 'PAYMENT_ADDED',
     newValue: `${data.method} ₱${data.amount.toLocaleString('en-PH')}`,
   });
+
+  // Auto-create ChequeMonitoring for CHECK payments (does NOT credit client funds yet)
+  // Must be awaited — fire-and-forget is dropped in serverless environments
+  if (data.method === 'CHECK' && data.chequeNo && data.bankName && data.chequeDate && effectiveClientId) {
+    await prisma.chequeMonitoring.create({
+      data: {
+        chequeNo: data.chequeNo,
+        bankName: data.bankName,
+        chequeDate: new Date(data.chequeDate),
+        clientId: effectiveClientId,
+        amount: data.amount,
+        invoiceId: id,
+        paymentId: payment.id,
+        receivedById: session.user.id,
+        status: 'FOR_CLEARING',
+        notes: data.notes ?? null,
+      },
+    });
+  }
 
   void logActivity({
     userId: session.user.id,

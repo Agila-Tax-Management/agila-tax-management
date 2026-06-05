@@ -22,7 +22,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid client ID' }, { status: 400 });
   }
 
-  const [client, transactions] = await Promise.all([
+  const [client, transactions, cheques] = await Promise.all([
     prisma.client.findUnique({
       where: { id: clientId },
       select: { id: true, businessName: true, clientNo: true },
@@ -45,6 +45,16 @@ export async function GET(
         amount: true,
         runningBalance: true,
         notes: true,
+      },
+    }),
+    prisma.chequeMonitoring.findMany({
+      where: { clientId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        invoice: { select: { id: true, invoiceNumber: true } },
+        payment: { select: { id: true, paymentNumber: true } },
+        receivedBy: { select: { id: true, name: true } },
+        processedBy: { select: { id: true, name: true } },
       },
     }),
   ]);
@@ -77,6 +87,27 @@ export async function GET(
         amount: Number(t.amount),
         runningBalance: Number(t.runningBalance),
         notes: t.notes,
+      })),
+      cheques: cheques.map((c) => ({
+        id: c.id,
+        chequeNo: c.chequeNo,
+        bankName: c.bankName,
+        chequeDate: c.chequeDate.toISOString(),
+        clientId: c.clientId,
+        clientNo: client.clientNo,
+        businessName: client.businessName,
+        amount: Number(c.amount),
+        invoiceId: c.invoiceId,
+        invoice: c.invoice,
+        paymentId: c.paymentId,
+        payment: c.payment,
+        status: c.status,
+        clearedAt: c.clearedAt?.toISOString() ?? null,
+        bouncedAt: c.bouncedAt?.toISOString() ?? null,
+        receivedBy: c.receivedBy,
+        processedBy: c.processedBy,
+        notes: c.notes,
+        createdAt: c.createdAt.toISOString(),
       })),
     },
   });

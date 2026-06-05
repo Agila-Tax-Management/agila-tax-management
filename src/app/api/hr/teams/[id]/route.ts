@@ -56,6 +56,23 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
     include: {
       leader: { select: { id: true, firstName: true, lastName: true, employeeNo: true } },
       _count: { select: { employments: true } },
+      teamPositions: {
+        include: {
+          position: {
+            select: {
+              id: true,
+              title: true,
+              employments: {
+                where: { employmentStatus: "ACTIVE", isPastRole: false },
+                select: {
+                  id: true,
+                  employee: { select: { id: true, firstName: true, lastName: true, employeeNo: true } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -77,6 +94,16 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
       leaderName: team.leader ? `${team.leader.firstName} ${team.leader.lastName}` : null,
       leaderEmployeeNo: team.leader?.employeeNo ?? null,
       memberCount: team._count.employments,
+      positions: team.teamPositions.map((tp) => ({
+        id: tp.position.id,
+        title: tp.position.title,
+        employees: tp.position.employments.map((e) => ({
+          employmentId: e.id,
+          employeeId: e.employee.id,
+          fullName: `${e.employee.firstName} ${e.employee.lastName}`,
+          employeeNo: e.employee.employeeNo,
+        })),
+      })),
       createdAt: team.createdAt.toISOString(),
     },
   });
