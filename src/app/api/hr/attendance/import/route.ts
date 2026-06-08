@@ -14,10 +14,6 @@ import { logActivity, getRequestMeta } from '@/lib/activity-log';
 const timeRegex = /^\d{2}:\d{2}$/;
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * IMPORTANT CHANGE:
- * timeIn/timeOut are now optional so we can detect ABSENT + INCOMPLETE
- */
 const rowSchema = z.object({
   employeeNo: z.string().min(1),
   date: z.string().regex(dateRegex, 'Must be YYYY-MM-DD'),
@@ -36,6 +32,21 @@ const importSchema = z.object({
 function buildUtcDate(dateStr: string, timeStr: string): Date {
   return new Date(`${dateStr}T${timeStr}:00.000Z`);
 }
+
+const ZERO_DOLE = {
+  regularHours: 0,
+  regOtHours: 0,
+  rdHours: 0,
+  rdOtHours: 0,
+  shHours: 0,
+  shOtHours: 0,
+  shRdHours: 0,
+  shRdOtHours: 0,
+  rhHours: 0,
+  rhOtHours: 0,
+  rhRdHours: 0,
+  rhRdOtHours: 0,
+};
 
 type AttendanceStatus = 'ABSENT' | 'INCOMPLETE' | 'PRESENT';
 
@@ -96,23 +107,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const targetDate = new Date(`${row.date}T00:00:00.000Z`);
       const dayOfWeek = targetDate.getUTCDay();
 
-      // ─────────────────────────────
-      // STATUS CLASSIFICATION
-      // ─────────────────────────────
       const hasIn = !!row.timeIn;
       const hasOut = !!row.timeOut;
 
       let status: AttendanceStatus;
 
-      if (!hasIn && !hasOut) {
-        status = 'ABSENT';
-      } else if (!hasIn || !hasOut) {
-        status = 'INCOMPLETE';
-      } else {
-        status = 'PRESENT';
-      }
+      if (!hasIn && !hasOut) status = 'ABSENT';
+      else if (!hasIn || !hasOut) status = 'INCOMPLETE';
+      else status = 'PRESENT';
 
-      // ABSENT → still store record but zeroed (or skip if you prefer)
+      // ─────────────────────────────
+      // ABSENT (FULL RESET)
+      // ─────────────────────────────
       if (status === 'ABSENT') {
         await prisma.timesheet.upsert({
           where: {
@@ -126,25 +132,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             clientId,
             date: targetDate,
             status: 'ABSENT',
+
             timeIn: null,
             timeOut: null,
             lunchStart: null,
             lunchEnd: null,
+
             lateMinutes: 0,
             undertimeMinutes: 0,
-            regularHours: 0,
             dailyGrossPay: 0,
+
+            ...ZERO_DOLE,
           },
           update: {
             status: 'ABSENT',
+
             timeIn: null,
             timeOut: null,
             lunchStart: null,
             lunchEnd: null,
+
             lateMinutes: 0,
             undertimeMinutes: 0,
-            regularHours: 0,
             dailyGrossPay: 0,
+
+            ...ZERO_DOLE,
           },
         });
 
@@ -152,7 +164,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         continue;
       }
 
-      // INCOMPLETE → reject or store as flagged (recommended: store flagged)
+      // ─────────────────────────────
+      // INCOMPLETE (SKIP SAFE)
+      // ─────────────────────────────
       if (status === 'INCOMPLETE') {
         errors.push({
           row: i + 1,
@@ -164,7 +178,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
 
       // ─────────────────────────────
-      // PRESENT (FULL COMPUTATION)
+      // PRESENT (FULL COMPUTE)
       // ─────────────────────────────
 
       const contract = await prisma.employeeContract.findFirst({
@@ -194,12 +208,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       let lunchStart = row.lunchStart ?? null;
       let lunchEnd = row.lunchEnd ?? null;
 
-      if (!lunchStart && scheduleDay?.breakStart) {
-        lunchStart = scheduleDay.breakStart;
-      }
-      if (!lunchEnd && scheduleDay?.breakEnd) {
-        lunchEnd = scheduleDay.breakEnd;
-      }
+      if (!lunchStart && scheduleDay?.breakStart) lunchStart = scheduleDay.breakStart;
+      if (!lunchEnd && scheduleDay?.breakEnd) lunchEnd = scheduleDay.breakEnd;
 
       const compensation = await prisma.employeeCompensation.findFirst({
         where: {
@@ -250,6 +260,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         compensation?.payType === 'VARIABLE_PAY',
       );
 
+      // 🧠 IMPORTANT: destructure to avoid TS duplicate key error
+      const {
+        regularHours,
+        regOtHours,
+        rdHours,
+        rdOtHours,
+        shHours,
+        shOtHours,
+        shRdHours,
+        shRdOtHours,
+        rhHours,
+        rhOtHours,
+        rhRdHours,
+        rhRdOtHours,
+        lateMinutes,
+        undertimeMinutes,
+        dailyGrossPay,
+      } = guarded;
+
       await prisma.timesheet.upsert({
         where: {
           employeeId_date: {
@@ -262,25 +291,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           clientId,
           date: targetDate,
           status: 'PRESENT',
+
           timeIn: timeInDate,
           timeOut: timeOutDate,
           lunchStart: lunchStartDate,
           lunchEnd: lunchEndDate,
-          lateMinutes: guarded.lateMinutes,
-          undertimeMinutes: guarded.undertimeMinutes,
-          regularHours: guarded.regularHours,
-          dailyGrossPay: guarded.dailyGrossPay,
+
+          lateMinutes,
+          undertimeMinutes,
+          dailyGrossPay,
+
+          regularHours,
+          regOtHours,
+          rdHours,
+          rdOtHours,
+          shHours,
+          shOtHours,
+          shRdHours,
+          shRdOtHours,
+          rhHours,
+          rhOtHours,
+          rhRdHours,
+          rhRdOtHours,
         },
         update: {
           status: 'PRESENT',
+
           timeIn: timeInDate,
           timeOut: timeOutDate,
           lunchStart: lunchStartDate,
           lunchEnd: lunchEndDate,
-          lateMinutes: guarded.lateMinutes,
-          undertimeMinutes: guarded.undertimeMinutes,
-          regularHours: guarded.regularHours,
-          dailyGrossPay: guarded.dailyGrossPay,
+
+          lateMinutes,
+          undertimeMinutes,
+          dailyGrossPay,
+
+          regularHours,
+          regOtHours,
+          rdHours,
+          rdOtHours,
+          shHours,
+          shOtHours,
+          shRdHours,
+          shRdOtHours,
+          rhHours,
+          rhOtHours,
+          rhRdHours,
+          rhRdOtHours,
         },
       });
 
