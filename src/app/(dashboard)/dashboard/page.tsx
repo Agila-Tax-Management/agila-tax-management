@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users, ChevronRight, ExternalLink, ArrowRight,
   ShieldCheck, Star, Settings, Clock, FileText,
@@ -134,35 +134,65 @@ export default function DashboardPage() {
     }
   };
 
+  const clockState = useMemo(() => {
+    if (!todayRecord) return 'LOADING';
+
+    // ABSENT (no punches yet)
+    if (!todayRecord.timeIn && !todayRecord.timeOut) {
+      return 'CLOCK_IN';
+    }
+
+    // INCOMPLETE (missing one punch)
+    if (!todayRecord.timeIn || !todayRecord.timeOut) {
+      if (!todayRecord.lunchStart) return 'START_LUNCH';
+      if (todayRecord.lunchStart && !todayRecord.lunchEnd) return 'END_LUNCH';
+      return 'CLOCK_OUT';
+    }
+
+    // COMPLETE DAY
+    return null;
+  }, [todayRecord]);
+
 
   return (
     <div className="space-y-10 max-w-360 mx-auto pb-16">
       {/* ── 1. Welcome ─────────────────────────────────── */}
       <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground font-medium">{formatDate(currentTime)}</p>
+          <p className="text-sm text-muted-foreground font-medium">
+            {formatDate(currentTime)}
+          </p>
+
           <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-1">
             Welcome back, <span className="text-blue-600">{displayName}</span>
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Here&apos;s an overview of your workspace and portals.</p>
+
+          <p className="text-muted-foreground text-sm mt-1">
+            Here&apos;s an overview of your workspace and portals.
+          </p>
         </div>
-        {/* Smart clock button — label/color reflects next punch action */}
+
+        {/* SMART CLOCK BUTTON */}
+
         {todayRecord === undefined ? (
-          // Loading skeleton
           <div className="inline-flex items-center gap-2 bg-muted text-muted-foreground font-semibold rounded-xl px-5 h-10 text-sm">
             <Loader2 size={15} className="animate-spin" /> Loading...
           </div>
-        ) : clockAction === null ? (
-          // Already clocked out for the day
+        ) : clockState === null ? (
           <div className="inline-flex items-center gap-2 bg-muted text-muted-foreground font-semibold rounded-xl px-5 h-10 text-sm cursor-default">
             <Clock size={15} /> Clocked Out
           </div>
         ) : (
           <button
-            onClick={() => router.push('/dashboard/timesheet')}
-            className={`inline-flex items-center gap-2 ${CLOCK_CONFIG[clockAction].color} text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97]`}
+            onClick={() => router.push("/dashboard/timesheet")}
+            className={`inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-5 h-10 text-sm shadow-sm transition-all active:scale-[0.97]`}
           >
-            {CLOCK_CONFIG[clockAction].label} <ArrowRight size={16} />
+            {clockState === "CLOCK_IN" && "Clock In"}
+            {clockState === "START_LUNCH" && "Start Lunch"}
+            {clockState === "END_LUNCH" && "End Lunch"}
+            {clockState === "CLOCK_OUT" && "Clock Out"}
+
+            <ArrowRight size={16} />
           </button>
         )}
       </section>
