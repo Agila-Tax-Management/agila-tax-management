@@ -4,40 +4,41 @@ import prisma from '@/lib/db';
 import { getSessionWithAccess, getClientIdFromSession } from '@/lib/session';
 import { z } from 'zod';
 import { computeTimesheetFields } from '@/lib/timesheet-calc';
-import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from '@/lib/hr-settings-guard';
+import {
+  loadHrSettingCache,
+  flagsFromCache,
+  applyHrSettingGuards,
+} from '@/lib/hr-settings-guard';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
 const timeRegex = /^\d{2}:\d{2}$/;
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * IMPORTANT CHANGE:
+ * timeIn/timeOut are now optional so we can detect ABSENT + INCOMPLETE
+ */
 const rowSchema = z.object({
   employeeNo: z.string().min(1),
   date: z.string().regex(dateRegex, 'Must be YYYY-MM-DD'),
-  timeIn: z.string().regex(timeRegex, 'Must be HH:MM'),
-  timeOut: z.string().regex(timeRegex, 'Must be HH:MM'),
+
+  timeIn: z.string().regex(timeRegex).optional().nullable(),
+  timeOut: z.string().regex(timeRegex).optional().nullable(),
+
   lunchStart: z.string().regex(timeRegex).nullable().optional(),
   lunchEnd: z.string().regex(timeRegex).nullable().optional(),
 });
 
 const importSchema = z.object({
-  rows: z
-    .array(rowSchema)
-    .min(1, 'At least one row is required')
-    .max(500, 'Maximum 500 rows per import'),
+  rows: z.array(rowSchema).min(1).max(500),
 });
 
 function buildUtcDate(dateStr: string, timeStr: string): Date {
   return new Date(`${dateStr}T${timeStr}:00.000Z`);
 }
 
-/**
- * POST /api/hr/attendance/import
- *
- * Bulk-upserts Timesheet records from CSV / Excel upload.
- * Each row must include employeeNo, date (YYYY-MM-DD), timeIn, timeOut.
- * If lunchStart / lunchEnd are omitted the employee's work schedule
- * break times are used automatically.
- */
+type AttendanceStatus = 'ABSENT' | 'INCOMPLETE' | 'PRESENT';
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -45,8 +46,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const clientId = await getClientIdFromSession();
   if (!clientId) return NextResponse.json({ error: 'No active employment found' }, { status: 403 });
 
-  const body = await request.json() as unknown;
+  const body = (await request.json()) as unknown;
   const parsed = importSchema.safeParse(body);
+
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? 'Invalid input' },
@@ -56,7 +58,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { rows } = parsed.data;
 
-  // Pre-fetch HR settings once for the whole batch (avoids N+1 DB calls)
   const settingCache = await loadHrSettingCache(clientId);
 
   let imported = 0;
@@ -65,21 +66,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
+
     try {
-      // Resolve employee by employeeNo within this client
       const employee = await prisma.employee.findFirst({
         where: {
           employeeNo: row.employeeNo,
           softDelete: false,
           employments: {
-            some: { clientId, employmentStatus: 'ACTIVE', isPastRole: false },
+            some: {
+              clientId,
+              employmentStatus: 'ACTIVE',
+              isPastRole: false,
+            },
           },
         },
         select: { id: true },
       });
 
       if (!employee) {
-        errors.push({ row: i + 1, employeeNo: row.employeeNo, error: 'Employee not found or inactive' });
+        errors.push({
+          row: i + 1,
+          employeeNo: row.employeeNo,
+          error: 'Employee not found or inactive',
+        });
         skipped++;
         continue;
       }
@@ -87,7 +96,77 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const targetDate = new Date(`${row.date}T00:00:00.000Z`);
       const dayOfWeek = targetDate.getUTCDay();
 
-      // Look up the employee's active contract + work schedule for this day
+      // ─────────────────────────────
+      // STATUS CLASSIFICATION
+      // ─────────────────────────────
+      const hasIn = !!row.timeIn;
+      const hasOut = !!row.timeOut;
+
+      let status: AttendanceStatus;
+
+      if (!hasIn && !hasOut) {
+        status = 'ABSENT';
+      } else if (!hasIn || !hasOut) {
+        status = 'INCOMPLETE';
+      } else {
+        status = 'PRESENT';
+      }
+
+      // ABSENT → still store record but zeroed (or skip if you prefer)
+      if (status === 'ABSENT') {
+        await prisma.timesheet.upsert({
+          where: {
+            employeeId_date: {
+              employeeId: employee.id,
+              date: targetDate,
+            },
+          },
+          create: {
+            employeeId: employee.id,
+            clientId,
+            date: targetDate,
+            status: 'ABSENT',
+            timeIn: null,
+            timeOut: null,
+            lunchStart: null,
+            lunchEnd: null,
+            lateMinutes: 0,
+            undertimeMinutes: 0,
+            regularHours: 0,
+            dailyGrossPay: 0,
+          },
+          update: {
+            status: 'ABSENT',
+            timeIn: null,
+            timeOut: null,
+            lunchStart: null,
+            lunchEnd: null,
+            lateMinutes: 0,
+            undertimeMinutes: 0,
+            regularHours: 0,
+            dailyGrossPay: 0,
+          },
+        });
+
+        imported++;
+        continue;
+      }
+
+      // INCOMPLETE → reject or store as flagged (recommended: store flagged)
+      if (status === 'INCOMPLETE') {
+        errors.push({
+          row: i + 1,
+          employeeNo: row.employeeNo,
+          error: 'Incomplete time-in/time-out',
+        });
+        skipped++;
+        continue;
+      }
+
+      // ─────────────────────────────
+      // PRESENT (FULL COMPUTATION)
+      // ─────────────────────────────
+
       const contract = await prisma.employeeContract.findFirst({
         where: {
           employment: {
@@ -112,13 +191,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       const scheduleDay = contract?.schedule?.days[0] ?? null;
 
-      // Resolve lunch: use provided value first; fall back to schedule break
       let lunchStart = row.lunchStart ?? null;
       let lunchEnd = row.lunchEnd ?? null;
-      if (!lunchStart && scheduleDay?.breakStart) lunchStart = scheduleDay.breakStart;
-      if (!lunchEnd && scheduleDay?.breakEnd) lunchEnd = scheduleDay.breakEnd;
 
-      // Look up active compensation
+      if (!lunchStart && scheduleDay?.breakStart) {
+        lunchStart = scheduleDay.breakStart;
+      }
+      if (!lunchEnd && scheduleDay?.breakEnd) {
+        lunchEnd = scheduleDay.breakEnd;
+      }
+
       const compensation = await prisma.employeeCompensation.findFirst({
         where: {
           isActive: true,
@@ -134,10 +216,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         orderBy: { createdAt: 'desc' },
       });
 
-      const timeInDate = buildUtcDate(row.date, row.timeIn);
-      const timeOutDate = buildUtcDate(row.date, row.timeOut);
-      const lunchStartDate = lunchStart ? buildUtcDate(row.date, lunchStart) : null;
-      const lunchEndDate = lunchEnd ? buildUtcDate(row.date, lunchEnd) : null;
+      const timeInDate = buildUtcDate(row.date, row.timeIn!);
+      const timeOutDate = buildUtcDate(row.date, row.timeOut!);
+
+      const lunchStartDate = lunchStart
+        ? buildUtcDate(row.date, lunchStart)
+        : null;
+
+      const lunchEndDate = lunchEnd
+        ? buildUtcDate(row.date, lunchEnd)
+        : null;
 
       const computed = computeTimesheetFields(
         timeInDate,
@@ -154,6 +242,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
 
       const guardFlags = flagsFromCache(settingCache, employee.id);
+
       const guarded = applyHrSettingGuards(
         computed,
         guardFlags,
@@ -174,45 +263,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           date: targetDate,
           status: 'PRESENT',
           timeIn: timeInDate,
+          timeOut: timeOutDate,
           lunchStart: lunchStartDate,
           lunchEnd: lunchEndDate,
-          timeOut: timeOutDate,
           lateMinutes: guarded.lateMinutes,
           undertimeMinutes: guarded.undertimeMinutes,
           regularHours: guarded.regularHours,
-          regOtHours: guarded.regOtHours,
-          rdHours: guarded.rdHours,
-          rdOtHours: guarded.rdOtHours,
-          shHours: guarded.shHours,
-          shOtHours: guarded.shOtHours,
-          shRdHours: guarded.shRdHours,
-          shRdOtHours: guarded.shRdOtHours,
-          rhHours: guarded.rhHours,
-          rhOtHours: guarded.rhOtHours,
-          rhRdHours: guarded.rhRdHours,
-          rhRdOtHours: guarded.rhRdOtHours,
           dailyGrossPay: guarded.dailyGrossPay,
         },
         update: {
           status: 'PRESENT',
           timeIn: timeInDate,
+          timeOut: timeOutDate,
           lunchStart: lunchStartDate,
           lunchEnd: lunchEndDate,
-          timeOut: timeOutDate,
           lateMinutes: guarded.lateMinutes,
           undertimeMinutes: guarded.undertimeMinutes,
           regularHours: guarded.regularHours,
-          regOtHours: guarded.regOtHours,
-          rdHours: guarded.rdHours,
-          rdOtHours: guarded.rdOtHours,
-          shHours: guarded.shHours,
-          shOtHours: guarded.shOtHours,
-          shRdHours: guarded.shRdHours,
-          shRdOtHours: guarded.shRdOtHours,
-          rhHours: guarded.rhHours,
-          rhOtHours: guarded.rhOtHours,
-          rhRdHours: guarded.rhRdHours,
-          rhRdOtHours: guarded.rhRdOtHours,
           dailyGrossPay: guarded.dailyGrossPay,
         },
       });
@@ -237,5 +304,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ...getRequestMeta(request),
   });
 
-  return NextResponse.json({ data: { imported, skipped, errors } });
+  return NextResponse.json({
+    data: { imported, skipped, errors },
+  });
 }
