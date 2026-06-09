@@ -145,7 +145,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const ALLOWED_OFFICE_IPS = [
     "49.145.37.126", // PLDT Wifi
-    "113.19.181.217", // Converge Wifi
+    "113.19.181.57", // Converge Wifi
   ];
 
  const forwarded = request.headers.get("x-forwarded-for");
