@@ -143,35 +143,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  /*const ALLOWED_OFFICE_IPS = [
-    "49.145.37.126", // PLDT Wifi
-    "113.19.181.57", // Converge Wifi
-  ];
-
- const forwarded = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-
-  const clientIP =
-    (forwarded?.split(",")[0] || realIp || "").trim();
-
-  if (!ALLOWED_OFFICE_IPS.includes(clientIP)) {
-    return NextResponse.json(
-      {
-        error: "Time in/out is only allowed from office WiFi",
-        ip: clientIP,
-      },
-      { status: 403 }
-    );
-  }
-
   const body = (await request.json()) as { action?: string };
   const action = body.action;
+
   if (!['IN', 'OUT', 'LUNCH_START', 'LUNCH_END'].includes(action ?? '')) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  }*/
-
-  const body = (await request.json()) as { action?: string };
-  const action = body.action;
+  }
 
   const employee = await prisma.employee.findFirst({
     where: { userId: session.user.id, softDelete: false },
