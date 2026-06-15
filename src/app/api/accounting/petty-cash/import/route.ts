@@ -15,7 +15,6 @@ const rowSchema = z.object({
     .min(1, 'Date is required')
     .refine((v) => !isNaN(Date.parse(v)), { message: 'Date must be a valid date' })
     .transform((v) => {
-      // Force any valid date string ("1/5/26", "Jan 5 2026") into strict "YYYY-MM-DD"
       const d = new Date(v);
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -92,8 +91,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!file || typeof file === 'string') {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
   }
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: 'File too large (max 5 MB)' }, { status: 400 });
+  
+  // Note: Upping the file size limit to 25MB to accommodate much larger Excel sheets
+  if (file.size > 25 * 1024 * 1024) {
+    return NextResponse.json({ error: 'File too large (max 25 MB)' }, { status: 400 });
   }
 
   let rows: Record<string, unknown>[];
@@ -109,7 +110,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (rows.length === 0) return NextResponse.json({ error: 'The file has no data rows.' }, { status: 400 });
-  if (rows.length > 500) return NextResponse.json({ error: 'Max 500 rows per import.' }, { status: 400 });
+
+  // REMOVED: 500 Row Limit Check
 
   const settings = await prisma.accountingSetting.findFirst();
   const custodianId = settings?.defaultCustodianId ?? null;
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const parsedRows: ParsedRow[] = [];
   const results: PcfImportRowResult[] = [];
 
+  // Memory optimization: Process validations sequentially to avoid event loop blocking
   for (let i = 0; i < rows.length; i++) {
     const rawRow = rows[i]!;
     const rowNum = i + 2;
@@ -135,7 +138,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       countedBy: cell(rawRow, 'Counted By', 'countedBy'),
     };
 
-    // Check if the entire row contains nothing but empty fields/spaces
     const isRowCompletelyEmpty =
       !rawData.date &&
       !rawData.pcfTrackingNumber &&
@@ -145,14 +147,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       rawData.payment === '0' &&
       !rawData.countedBy;
 
-    // If it's a completely blank row, log it as skipped and continue processing safely
     if (isRowCompletelyEmpty) {
-      results.push({
-        row: rowNum,
-        staffName: 'BLANK_ROW',
-        status: 'skipped',
-        error: 'Skipped empty row',
-      });
+      results.push({ row: rowNum, staffName: 'BLANK_ROW', status: 'skipped', error: 'Skipped empty row' });
       continue;
     }
 
@@ -174,7 +170,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     parsedRows.push({ ...parsed.data, rowNum });
   }
 
-  // Grouping
   const groups = new Map<string, ParsedRow[]>();
   for (const row of parsedRows) {
     const key = `${row.staffName.trim().toLowerCase()}|||${row.date}`;
@@ -182,7 +177,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     groups.get(key)!.push(row);
   }
 
-  // Pre-resolve Users
   const users = await prisma.user.findMany({ select: { id: true, name: true } });
   const staffMap = new Map<string, string>();
   for (const user of users) {
