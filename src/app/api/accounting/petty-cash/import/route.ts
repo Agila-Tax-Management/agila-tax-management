@@ -93,7 +93,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
   }
   
-  // Increased to 25MB to allow for massive un-capped row files
   if (file.size > 25 * 1024 * 1024) {
     return NextResponse.json({ error: 'File too large (max 25 MB)' }, { status: 400 });
   }
@@ -111,8 +110,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (rows.length === 0) return NextResponse.json({ error: 'The file has no data rows.' }, { status: 400 });
-  
-  // REMOVED: if (rows.length > 500) ... 
 
   const settings = await prisma.accountingSetting.findFirst();
   const custodianId = settings?.defaultCustodianId ?? null;
@@ -138,7 +135,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       countedBy: cell(rawRow, 'Counted By', 'countedBy'),
     };
 
-    // Check if the entire row contains nothing but empty fields/spaces
     const isRowCompletelyEmpty =
       !rawData.date &&
       !rawData.pcfTrackingNumber &&
@@ -148,7 +144,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       rawData.payment === '0' &&
       !rawData.countedBy;
 
-    // If it's a completely blank row, log it as skipped and continue processing safely
     if (isRowCompletelyEmpty) {
       results.push({
         row: rowNum,
@@ -185,7 +180,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     groups.get(key)!.push(row);
   }
 
-  // Pre-resolve Users
   const users = await prisma.user.findMany({ select: { id: true, name: true } });
   const staffMap = new Map<string, string>();
   for (const user of users) {
@@ -235,29 +229,45 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Broad deduplication check (Date, Requester, Purpose)
         const existing = await tx.pettyCash.findFirst({
           where: { requestedById, date: new Date(`${firstRow.date}T00:00:00`), purpose },
           select: { id: true },
         });
         if (existing) throw new Error('Duplicate import detected');
 
-        const latest = await tx.pettyCash.findFirst({
-          where: { pcfNo: { startsWith: pcfPrefix } },
-          orderBy: { pcfNo: 'desc' },
-          select: { pcfNo: true },
-        });
+        let finalPcfNo: string;
 
-        let nextSeq = 1;
-        if (latest) {
-          const parts = latest.pcfNo.split('-');
-          const lastSeq = parseInt(parts[parts.length - 1]!, 10);
-          if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+        // NEW LOGIC: Use the tracking number from the sheet if it exists
+        if (firstRow.pcfTrackingNumber) {
+          finalPcfNo = firstRow.pcfTrackingNumber.trim();
+          
+          // Double-check that this specific tracking number doesn't already exist in the DB
+          const pcfExists = await tx.pettyCash.findFirst({
+            where: { pcfNo: finalPcfNo },
+            select: { id: true }
+          });
+          if (pcfExists) throw new Error(`Tracking number ${finalPcfNo} already exists in the system.`);
+        } else {
+          // Fallback to auto-generation
+          const latest = await tx.pettyCash.findFirst({
+            where: { pcfNo: { startsWith: pcfPrefix } },
+            orderBy: { pcfNo: 'desc' },
+            select: { pcfNo: true },
+          });
+
+          let nextSeq = 1;
+          if (latest) {
+            const parts = latest.pcfNo.split('-');
+            const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+            if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+          }
+          finalPcfNo = `${pcfPrefix}${String(nextSeq).padStart(4, '0')}`;
         }
-        const pcfNo = `${pcfPrefix}${String(nextSeq).padStart(4, '0')}`;
 
         return tx.pettyCash.create({
           data: {
-            pcfNo,
+            pcfNo: finalPcfNo,
             purpose,
             requestedById,
             custodianId,
