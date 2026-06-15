@@ -1,7 +1,7 @@
 ﻿// src/components/accounting/PettyCashFund.tsx
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Eye,
@@ -15,10 +15,58 @@ import {
   Plus,
   X,
   RefreshCw,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { PettyCashViewModal } from './PettyCashViewModal';
 import type { ChequeMonitoringRecord, ChequeStatus } from '@/types/accounting.types';
+
+/* ── Template download ─────────────────────────────────────────────────────── */
+function downloadPcfTemplate() {
+  const headers = [
+    'Date',
+    'PCF Tracking Number',
+    'Staff Name',
+    'Description',
+    'Category',
+    'Received',
+    'Payment',
+    'Balance',
+    'Cash Count',
+    'Variance',
+    'Counted By',
+  ];
+  const example = [
+    '2026-07-01',
+    'PCF-2026-0001',
+    'Juan dela Cruz',
+    'Office supplies',
+    'EMPLOYEE_EXPENSE',
+    '500',
+    '500',
+    '0',
+    '0',
+    '0',
+    'Maria Santos',
+  ];
+  const csv = [headers.join(','), example.join(',')].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'petty-cash-import-template.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+type PcfImportResult = {
+  row: number;
+  staffName: string;
+  status: 'ok' | 'error' | 'skipped';
+  pcfNo?: string;
+  error?: string;
+};
 
 // â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -177,6 +225,11 @@ export function PettyCashFund(): React.ReactNode {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkConfirmed, setBulkConfirmed]       = useState(false);
 
+  // Import state
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting]       = useState(false);
+  const [importResults, setImportResults]   = useState<PcfImportResult[] | null>(null);
+
   // ── Cheque Monitoring state ──────────────────────────────────────────────────
   const [cheques, setCheques]               = useState<ChequeMonitoringRecord[]>([]);
   const [chequeSearch, setChequeSearch]     = useState('');
@@ -219,7 +272,31 @@ export function PettyCashFund(): React.ReactNode {
     void loadRecords();
   }, [loadRecords]);
 
-  // ── Load cheques when tab becomes active ─────────────────────────────────────
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setIsImporting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/accounting/petty-cash/import', { method: 'POST', body: form });
+      const data = await res.json() as { error?: string; data?: { total: number; imported: number; errors: number; results: PcfImportResult[] } };
+      if (!res.ok) { toastError('Import failed', data.error ?? 'An error occurred.'); return; }
+      setImportResults(data.data?.results ?? []);
+      const { imported, errors } = data.data ?? { imported: 0, errors: 0 };
+      if (errors === 0) {
+        success('Import complete', `${imported} petty cash request(s) created.`);
+      } else {
+        toastError('Import partial', `${imported} created, ${errors} row(s) had errors.`);
+      }
+      void loadRecords();
+    } catch {
+      toastError('Import failed', 'An unexpected error occurred.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
   const loadCheques = useCallback(async () => {
     setChequeLoading(true);
     try {
@@ -464,6 +541,26 @@ export function PettyCashFund(): React.ReactNode {
         </div>
         {activeTab === 'pcf' && (
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={downloadPcfTemplate}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl border border-border bg-card text-foreground hover:bg-muted transition"
+            >
+              <Download size={15} /> Template
+            </button>
+            <button
+              onClick={() => importFileRef.current?.click()}
+              disabled={isImporting}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl border border-border bg-card text-foreground hover:bg-muted transition disabled:opacity-50"
+            >
+              <Upload size={15} /> {isImporting ? 'Importing…' : 'Import'}
+            </button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => void handleImportFile(e)}
+            />
             {pendingRecords.length > 0 && (
               <button
                 onClick={() => { setBulkAction({ type: 'approve', records: pendingRecords }); setBulkStep(0); setBulkConfirmed(false); }}
@@ -1381,6 +1478,59 @@ export function PettyCashFund(): React.ReactNode {
           </div>
         );
       })()}
+
+      {/* Import Results Modal */}
+      {importResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setImportResults(null)} />
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-border">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-base font-bold text-foreground">Import Results</h2>
+              <button onClick={() => setImportResults(null)} className="p-1 rounded-lg hover:bg-muted transition">
+                <X size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left border-b border-border">
+                    <th className="pb-2 font-black text-muted-foreground uppercase tracking-widest">Row</th>
+                    <th className="pb-2 font-black text-muted-foreground uppercase tracking-widest">Staff Name</th>
+                    <th className="pb-2 font-black text-muted-foreground uppercase tracking-widest">PCF No.</th>
+                    <th className="pb-2 font-black text-muted-foreground uppercase tracking-widest">Status</th>
+                    <th className="pb-2 font-black text-muted-foreground uppercase tracking-widest">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {importResults.map((r) => (
+                    <tr key={r.row}>
+                      <td className="py-2 text-muted-foreground">{r.row}</td>
+                      <td className="py-2 text-foreground font-medium">{r.staffName}</td>
+                      <td className="py-2 font-mono text-blue-600">{r.pcfNo ?? '—'}</td>
+                      <td className="py-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          r.status === 'ok'      ? 'bg-green-100 text-green-700' :
+                          r.status === 'skipped' ? 'bg-yellow-100 text-yellow-700' :
+                                                   'bg-red-100 text-red-700'
+                        }`}>{r.status}</span>
+                      </td>
+                      <td className="py-2 text-muted-foreground">{r.error ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t border-border">
+              <button
+                onClick={() => setImportResults(null)}
+                className="w-full h-9 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

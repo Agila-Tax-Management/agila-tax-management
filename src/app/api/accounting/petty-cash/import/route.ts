@@ -1,0 +1,349 @@
+// src/app/api/accounting/petty-cash/import/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
+import { auth } from '@/lib/auth';
+import prisma from '@/lib/db';
+import { z } from 'zod';
+import { logActivity, getRequestMeta } from '@/lib/activity-log';
+
+const VALID_CATEGORIES = ['EMPLOYEE_EXPENSE', 'CLIENT_FUND'] as const;
+
+const rowSchema = z.object({
+  date: z
+    .string()
+    .min(1, 'Date is required')
+    .refine((v) => !isNaN(Date.parse(v)), { message: 'Date must be a valid date (YYYY-MM-DD)' }),
+  pcfTrackingNumber: z.string().optional().nullable(),
+  staffName: z.string().min(1, 'Staff Name is required'),
+  description: z.string().min(1, 'Description is required'),
+  category: z
+    .string()
+    .optional()
+    .transform((v) => {
+      if (!v) return 'EMPLOYEE_EXPENSE';
+      const upper = v.trim().toUpperCase().replace(/\s+/g, '_');
+      if (upper === 'CLIENT_FUND' || upper === 'CLIENT FUND') return 'CLIENT_FUND';
+      return 'EMPLOYEE_EXPENSE';
+    })
+    .pipe(z.enum(VALID_CATEGORIES)),
+    received: z
+      .union([z.string(), z.number()])
+      .optional()
+      .transform((v) => {
+        if (v === undefined || v === null || v === '') return 0;
+
+        const n = parseFloat(String(v).replace(/,/g, ''));
+
+        return Number.isFinite(n) ? n : 0;
+      }),
+
+    payment: z
+      .union([z.string(), z.number()])
+      .optional()
+      .transform((v) => {
+        if (v === undefined || v === null || v === '') return 0;
+
+        const n = parseFloat(String(v).replace(/,/g, ''));
+
+        return Number.isFinite(n) ? n : 0;
+      }),
+  countedBy: z.string().optional().nullable(),
+});
+
+export type PcfImportRowResult = {
+  row: number;
+  staffName: string;
+  status: 'ok' | 'error' | 'skipped';
+  pcfNo?: string;
+  error?: string;
+};
+
+/**
+ * POST /api/accounting/petty-cash/import
+ * Accepts multipart/form-data with a `file` field (CSV or XLSX).
+ * Groups rows by staffName + date into one petty cash request per group.
+ * The `payment` column value is used as the item amount.
+ * Returns a JSON summary.
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: 'Invalid multipart body' }, { status: 400 });
+  }
+
+  const file = formData.get('file');
+  if (!file || typeof file === 'string') {
+    return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ error: 'File too large (max 5 MB)' }, { status: 400 });
+  }
+
+  const XLSX = await import('xlsx');
+
+  let rows: Record<string, unknown>[];
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const sheetName = wb.SheetNames[0];
+    if (!sheetName) throw new Error('Empty workbook');
+    const ws = wb.Sheets[sheetName];
+    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws ?? {}, { raw: false, dateNF: 'yyyy-mm-dd' });
+  } catch {
+    return NextResponse.json({ error: 'Could not parse the file. Use the provided template.' }, { status: 400 });
+  }
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: 'The file has no data rows.' }, { status: 400 });
+  }
+  if (rows.length > 500) {
+    return NextResponse.json({ error: 'Max 500 rows per import.' }, { status: 400 });
+  }
+
+  // Load accounting settings
+  const settings = await prisma.accountingSetting.findFirst();
+  const custodianId = settings?.defaultCustodianId ?? null;
+  const accountingManagerId = settings?.defaultAccountingManagerId ?? null;
+  const prefix = settings?.pcfNumberPrefix ?? 'PCF';
+
+  function cell(row: Record<string, unknown>, ...keys: string[]): string | null {
+    for (const key of keys) {
+      const raw = row[key];
+      if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+        return String(raw).trim();
+      }
+    }
+    return null;
+  }
+
+  type ParsedRow = z.infer<typeof rowSchema> & { rowNum: number };
+  const parsedRows: ParsedRow[] = [];
+  const results: PcfImportRowResult[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const rawRow = rows[i]!;
+    const rowNum = i + 2;
+    const rawData = {
+      date: cell(rawRow, 'Date', 'date') ?? '',
+      pcfTrackingNumber: cell(rawRow, 'PCF Tracking Number', 'pcfTrackingNumber'),
+      staffName: cell(rawRow, 'Staff Name', 'staffName') ?? '',
+      description: cell(rawRow, 'Description', 'description') ?? '',
+      category: cell(rawRow, 'Category', 'category') ?? 'EMPLOYEE_EXPENSE',
+      received: cell(rawRow, 'Received', 'received') ?? '0',
+      payment: cell(rawRow, 'Payment', 'payment') ?? '0',
+      countedBy: cell(rawRow, 'Counted By', 'countedBy'),
+    };
+
+    const parsed = rowSchema.safeParse(rawData);
+    if (!parsed.success) {
+      results.push({
+        row: rowNum,
+        staffName: rawData.staffName || `Row ${rowNum}`,
+        status: 'error',
+        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+      });
+      continue;
+    }
+    parsedRows.push({ ...parsed.data, rowNum });
+  }
+
+  // Group rows by staffName + date (each group = one PCF request)
+  const groups = new Map<string, ParsedRow[]>();
+  for (const row of parsedRows) {
+    const key =
+  `${row.staffName.trim().toLowerCase()}|||${row.date}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
+  }
+
+  // Pre-resolve staff name → user id
+const uniqueStaffNames = [
+  ...new Set(
+    parsedRows
+      .map((r) => r.staffName.trim())
+      .filter(Boolean)
+  ),
+];
+
+const users = await prisma.user.findMany({
+  select: {
+    id: true,
+    name: true,
+  },
+});
+
+const staffMap = new Map<string, string>();
+
+for (const user of users) {
+  if (!user.name) continue;
+
+  const normalizedUserName = user.name.trim().toLowerCase();
+
+  if (
+    uniqueStaffNames.some(
+      (name) => name.trim().toLowerCase() === normalizedUserName
+    )
+  ) {
+    staffMap.set(normalizedUserName, user.id);
+  }
+}
+
+  let imported = 0;
+
+  for (const [, groupRows] of groups) {
+    const firstRow = groupRows[0]!;
+    const requestedById = staffMap.get(firstRow.staffName.toLowerCase()) ?? session.user.id;
+    const purpose =
+      firstRow.pcfTrackingNumber
+        ? `Import: ${firstRow.pcfTrackingNumber}`
+        : `Imported on ${firstRow.date} for ${firstRow.staffName}`;
+
+    // Use `payment` column as the item amount (outflow)
+    const items = groupRows.map((row) => ({
+      category: row.category as 'EMPLOYEE_EXPENSE' | 'CLIENT_FUND',
+      description: row.description,
+      amount: row.payment > 0 ? row.payment : row.received > 0 ? row.received : 0.01,
+      remarks: row.countedBy ? `Counted by: ${row.countedBy}` : null,
+    }));
+
+    const validItems = items.filter((it) => it.amount > 0);
+    if (validItems.length === 0) {
+      for (const row of groupRows) {
+        results.push({
+          row: row.rowNum,
+          staffName: firstRow.staffName,
+          status: 'error',
+          error: 'No valid payment amounts found in this group',
+        });
+      }
+      continue;
+    }
+
+    let totalEmployee = 0;
+    let totalClient = 0;
+
+    for (const item of validItems) {
+      if (item.category === 'EMPLOYEE_EXPENSE') {
+        totalEmployee += item.amount;
+      } else {
+        totalClient += item.amount;
+      }
+    }
+
+    try {
+      const created = await prisma.$transaction(async (tx) => {
+        const year = new Date().getFullYear();
+        const pcfPrefix = `${prefix}-${year}-`;
+
+        const latest = await tx.pettyCash.findFirst({
+          where: { pcfNo: { startsWith: pcfPrefix } },
+          orderBy: { pcfNo: 'desc' },
+          select: { pcfNo: true },
+        });
+
+        let nextSeq = 1;
+
+        if (latest) {
+          const parts = latest.pcfNo.split('-');
+          const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+
+          if (!isNaN(lastSeq)) {
+            nextSeq = lastSeq + 1;
+          }
+        }
+
+        const pcfNo = `${pcfPrefix}${String(nextSeq).padStart(4, '0')}`;
+
+        // Prevent duplicate imports
+        const existing = await tx.pettyCash.findFirst({
+          where: {
+            requestedById,
+            date: new Date(`${firstRow.date}T00:00:00`),
+            purpose,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (existing) {
+          throw new Error('Duplicate import detected');
+        }
+
+        return tx.pettyCash.create({
+          data: {
+            pcfNo,
+            purpose,
+            requestedById,
+            custodianId,
+            accountingManagerId,
+            status: 'PENDING',
+            date: new Date(`${firstRow.date}T00:00:00`),
+            totalRequestedAmount: totalEmployee + totalClient,
+            totalEmployeeExpenses: totalEmployee,
+            totalClientFundUsed: totalClient,
+            items: {
+              create: validItems.map((it) => ({
+                category: it.category,
+                description: it.description,
+                amount: it.amount,
+                remarks: it.remarks ?? null,
+              })),
+            },
+          },
+          select: {
+            id: true,
+            pcfNo: true,
+          },
+        });
+      });
+
+      imported++;
+      for (const row of groupRows) {
+        results.push({
+          row: row.rowNum,
+          staffName: firstRow.staffName,
+          status: 'ok',
+          pcfNo: created.pcfNo,
+        });
+      }
+
+      void logActivity({
+        userId: session.user.id,
+        action: 'CREATED',
+        entity: 'PettyCash',
+        entityId: created.id,
+        description: `Imported petty cash request ${created.pcfNo} via bulk import`,
+        ...getRequestMeta(request),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Database insert failed';
+
+      for (const row of groupRows) {
+        results.push({
+          row: row.rowNum,
+          staffName: firstRow.staffName,
+          status: 'error',
+          error: message,
+        });
+      }
+    }
+  }
+
+  return NextResponse.json({
+    data: {
+      total: rows.length,
+      imported,
+      errors: results.filter((r) => r.status === 'error').length,
+      results,
+    },
+  });
+}

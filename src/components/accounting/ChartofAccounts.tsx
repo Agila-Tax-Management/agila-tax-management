@@ -1,8 +1,45 @@
 // src/components/accounting/ChartofAccounts.tsx
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, BookOpen, TrendingUp, Wallet, Scale, BarChart2, RefreshCw } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Search, BookOpen, TrendingUp, Wallet, Scale, BarChart2, RefreshCw, Download, Upload, X } from 'lucide-react';
+
+/* ── Template download ─────────────────────────────────────────────────────── */
+function downloadGlTemplate() {
+  const headers = [
+    'Account Code',
+    'Account Name',
+    'Account Type',
+    'Detail Type',
+    'Description',
+    'Opening Balance',
+    'Is Bank Account',
+  ];
+  const example = [
+    '1010',
+    'Cash on Hand',
+    'Current Assets',
+    'Cash and Cash Equivalents',
+    'Petty cash and physical currency',
+    '0',
+    'No',
+  ];
+  const csv = [headers.join(','), example.join(',')].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'chart-of-accounts-import-template.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+type GlImportResult = {
+  row: number;
+  accountCode: string;
+  status: 'ok' | 'error' | 'skipped';
+  error?: string;
+};
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,6 +116,12 @@ export function ChartofAccounts(): React.ReactNode {
   const [error, setError]       = useState<string | null>(null);
   const [search, setSearch]     = useState('');
 
+  // Import state
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState<GlImportResult[] | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -98,6 +141,27 @@ export function ChartofAccounts(): React.ReactNode {
   }, []);
 
   useEffect(() => { void fetchAccounts(); }, [fetchAccounts]);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/accounting/gl-accounts/import', { method: 'POST', body: form });
+      const data = await res.json() as { error?: string; data?: { total: number; imported: number; errors: number; skipped: number; results: GlImportResult[] } };
+      if (!res.ok) { setImportError(data.error ?? 'Import failed'); return; }
+      setImportResults(data.data?.results ?? []);
+      void fetchAccounts();
+    } catch {
+      setImportError('An unexpected error occurred.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!search.trim()) return accounts;
@@ -136,14 +200,36 @@ export function ChartofAccounts(): React.ReactNode {
             View your account structure for accurate financial reporting.
           </p>
         </div>
-        <button
-          onClick={() => void fetchAccounts()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={downloadGlTemplate}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <Download size={13} /> Template
+          </button>
+          <button
+            onClick={() => importFileRef.current?.click()}
+            disabled={isImporting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            <Upload size={13} /> {isImporting ? 'Importing…' : 'Import'}
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={(e) => void handleImportFile(e)}
+          />
+          <button
+            onClick={() => void fetchAccounts()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -162,6 +248,14 @@ export function ChartofAccounts(): React.ReactNode {
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
+        </div>
+      )}
+
+      {/* Import error banner */}
+      {importError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 flex items-center justify-between gap-4">
+          <span>{importError}</span>
+          <button onClick={() => setImportError(null)} className="shrink-0"><X size={14} /></button>
         </div>
       )}
 
@@ -257,6 +351,57 @@ export function ChartofAccounts(): React.ReactNode {
           </div>
         )}
       </div>
+
+      {/* Import Results Modal */}
+      {importResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setImportResults(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="text-base font-black text-slate-900">Import Results</h2>
+              <button onClick={() => setImportResults(null)} className="p-1 rounded-lg hover:bg-slate-100 transition">
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left border-b border-slate-100">
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Row</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Account Code</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Status</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {importResults.map((r) => (
+                    <tr key={r.row}>
+                      <td className="py-2 text-slate-500">{r.row}</td>
+                      <td className="py-2 font-mono text-slate-700 font-medium">{r.accountCode}</td>
+                      <td className="py-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          r.status === 'ok' ? 'bg-emerald-100 text-emerald-700' :
+                          r.status === 'skipped' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>{r.status}</span>
+                      </td>
+                      <td className="py-2 text-slate-400">{r.error ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100">
+              <button
+                onClick={() => setImportResults(null)}
+                className="w-full h-9 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
