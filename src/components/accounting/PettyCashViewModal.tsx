@@ -112,8 +112,10 @@ export function PettyCashViewModal({ record, onClose }: PettyCashViewModalProps)
                 <tbody className="divide-y divide-border">
                   {record.items.map((item) => (
                     <tr key={item.id} className="bg-card">
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {item.category === 'CLIENT_FUND' ? 'Client Fund' : 'Employee Expense'}
+                      <td className="px-3 py-2 text-xs text-muted-foreground font-medium">
+                        {item.category === 'CLIENT_FUNDS' 
+                          ? 'Client Fund' 
+                          : item.category.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </td>
                       <td className="px-3 py-2 text-foreground">{item.description}</td>
                       <td className="px-3 py-2 text-right font-medium text-foreground">
