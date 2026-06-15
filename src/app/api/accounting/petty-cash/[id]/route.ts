@@ -50,7 +50,14 @@ const FULL_SELECT = {
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const updateItemSchema = z.object({
-  category: z.enum(['EMPLOYEE_EXPENSE', 'CLIENT_FUND']),
+  category: z.enum([
+    'ADDED_FUNDS', 'ADVANCES_TO_EMPLOYEES', 'ADVANCES_TO_JADE', 'BALANCING_FIGURE',
+    'BORROWED_FUNDS', 'CLIENT_FUND', 'DELIVERY_FEE', 'DISCREPANCIES', 'FUEL',
+    'LIAISON_COMMISSION', 'MEALS', 'NOTARY_FEES', 'OFFICE_EQUIPMENT', 'OFFICE_SUPPLIES',
+    'PARKING_FEE', 'PRINTING_EXPENSES', 'PROFESSIONAL_FEES', 'REPAIRS_AND_MAINTENANCE',
+    'SALARIES', 'SALES_COMMISSION', 'TAXES_AND_LICENSES', 'TELECOMMUNICATION',
+    'TRANSPORTATION', 'EMPLOYEE_EXPENSE',
+  ]),
   clientId: z.number().int().positive().optional(),
   description: z.string().min(1, 'Description is required'),
   amount: z.number().positive('Amount must be positive'),

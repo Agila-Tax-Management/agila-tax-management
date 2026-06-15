@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Download,
   Upload,
+  Info,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { PettyCashViewModal } from './PettyCashViewModal';
@@ -60,15 +61,17 @@ function downloadPcfTemplate() {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+// FIX 1: Added warning property to the type signature
 type PcfImportResult = {
   row: number;
   staffName: string;
   status: 'ok' | 'error' | 'skipped';
   pcfNo?: string;
   error?: string;
+  warning?: string; 
 };
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type PettyCashStatus =
   | 'DRAFT'
@@ -79,7 +82,31 @@ export type PettyCashStatus =
   | 'REJECTED'
   | 'VOID';
 
-export type PettyCashItemCategory = 'EMPLOYEE_EXPENSE' | 'CLIENT_FUND';
+export type PettyCashItemCategory = 
+  | 'ADDED_FUNDS'
+  | 'ADVANCES_TO_EMPLOYEES'
+  | 'ADVANCES_TO_JADE'
+  | 'BALANCING_FIGURE'
+  | 'BORROWED_FUNDS'
+  | 'CLIENT_FUNDS'
+  | 'DELIVERY_FEE'
+  | 'DISCREPANCIES'
+  | 'FUEL'
+  | 'LIAISON_COMMISSION'
+  | 'MEALS'
+  | 'NOTARY_FEES'
+  | 'OFFICE_EQUIPMENT'
+  | 'OFFICE_SUPPLIES'
+  | 'PARKING_FEE'
+  | 'PRINTING_EXPENSES'
+  | 'PROFESSIONAL_FEES'
+  | 'REPAIRS_AND_MAINTENANCE'
+  | 'SALARIES'
+  | 'SALES_COMMISSION'
+  | 'TAXES_AND_LICENSES'
+  | 'TELECOMMUNICATION'
+  | 'TRANSPORTATION'
+  | 'UNCATEGORIZED';
 
 export interface PettyCashItemRecord {
   id: number;
@@ -120,7 +147,7 @@ export interface PettyCashRecord {
   updatedAt: string;
 }
 
-// â”€â”€ Status badge styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Status badge styles ───────────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<string, string> = {
   DRAFT:      'bg-gray-100   text-gray-600',
@@ -131,8 +158,6 @@ const STATUS_STYLES: Record<string, string> = {
   REJECTED:   'bg-red-100    text-red-700',
   VOID:       'bg-gray-100   text-gray-500',
 };
-
-// â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // ── Client groups ────────────────────────────────────────────────────────────
 
@@ -160,7 +185,8 @@ function buildClientGroups(records: PettyCashRecord[]): ClientGroup[] {
     }
 
     for (const item of record.items) {
-      if (item.category === 'CLIENT_FUND' && item.client) {
+      // FIX 2: Updated string check to 'CLIENT_FUNDS'
+      if (item.category === 'CLIENT_FUNDS' && item.client) {
         const key = String(item.client.id);
         const existing = clientAmounts.get(key);
         clientAmounts.set(key, {
@@ -199,8 +225,9 @@ function getClientAmountForRecord(record: PettyCashRecord, groupKey: string): nu
   if (groupKey === 'emp') return record.totalEmployeeExpenses;
   const clientId = parseInt(groupKey, 10);
   if (record.client?.id === clientId) return record.totalClientFundUsed;
+  // FIX 3: Updated string check to 'CLIENT_FUNDS'
   return record.items
-    .filter((it) => it.category === 'CLIENT_FUND' && it.clientId === clientId)
+    .filter((it) => it.category === 'CLIENT_FUNDS' && it.clientId === clientId)
     .reduce((sum, it) => sum + it.amount, 0);
 }
 
@@ -249,7 +276,7 @@ export function PettyCashFund(): React.ReactNode {
   const [deleteCheque, setDeleteCheque] = useState<ChequeMonitoringRecord | null>(null);
   const [isDeletingCheque, setIsDeletingCheque] = useState(false);
 
-  // â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Data loading ─────────────────────────────────────────────────────────────
 
   const loadRecords = useCallback(async () => {
     setIsLoading(true);
@@ -323,7 +350,7 @@ export function PettyCashFund(): React.ReactNode {
     if (activeTab === 'cheque') void loadCheques();
   }, [activeTab, loadCheques]);
 
-  // â”€â”€ Filtered records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Filtered records ──────────────────────────────────────────────────────────
 
   const filtered = records.filter((r) => {
     const isDisbursed = ['DISBURSED', 'LIQUIDATED'].includes(r.status);
@@ -335,7 +362,8 @@ export function PettyCashFund(): React.ReactNode {
       r.pcfNo.toLowerCase().includes(q) ||
       r.purpose.toLowerCase().includes(q) ||
       (r.client?.businessName.toLowerCase().includes(q) ?? false) ||
-      r.items.some((it) => it.category === 'CLIENT_FUND' && it.client?.businessName.toLowerCase().includes(q)) ||
+      // FIX 4: Updated string check to 'CLIENT_FUNDS'
+      r.items.some((it) => it.category === 'CLIENT_FUNDS' && it.client?.businessName.toLowerCase().includes(q)) ||
       r.requestedBy.name.toLowerCase().includes(q)
     );
   });
@@ -365,7 +393,7 @@ export function PettyCashFund(): React.ReactNode {
   }, [bulkAction]);
 
 
-  // â”€â”€ Action handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Action handlers ───────────────────────────────────────────────────────────
 
   const handleApprove = async (id: string) => {
     setApprovingId(id);
@@ -484,7 +512,7 @@ export function PettyCashFund(): React.ReactNode {
     void loadRecords();
   };
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -676,7 +704,7 @@ export function PettyCashFund(): React.ReactNode {
                   </td>
                   <td className="px-4 py-3">
 
-                    {/* â”€â”€ Reject confirmation â”€â”€ */}
+                    {/* ── Reject confirmation ── */}
                     {activeTab === 'statement' ? (
                       <div className="flex items-center justify-center">
                         <button
@@ -715,7 +743,7 @@ export function PettyCashFund(): React.ReactNode {
                       </div>
 
                     ) : voidConfirmId === record.id ? (
-                      /* â”€â”€ Void confirmation â”€â”€ */
+                      /* ── Void confirmation ── */
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Void?</span>
                         <button
@@ -733,7 +761,7 @@ export function PettyCashFund(): React.ReactNode {
                       </div>
 
                     ) : deleteConfirmId === record.id ? (
-                      /* â”€â”€ Delete confirmation â”€â”€ */
+                      /* ── Delete confirmation ── */
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Delete?</span>
                         <button
@@ -751,7 +779,7 @@ export function PettyCashFund(): React.ReactNode {
                       </div>
 
                     ) : (
-                      /* â”€â”€ Normal action buttons â”€â”€ */
+                      /* ── Normal action buttons ── */
                       <div className="flex items-center justify-center gap-1 flex-wrap">
 
                         {/* View */}
@@ -763,7 +791,7 @@ export function PettyCashFund(): React.ReactNode {
                           <Eye size={14} />
                         </button>
 
-                        {/* Approve â€” PENDING only */}
+                        {/* Approve — PENDING only */}
                         {record.status === 'PENDING' && (
                           <button
                             onClick={() => handleApprove(record.id)}
@@ -779,7 +807,7 @@ export function PettyCashFund(): React.ReactNode {
                           </button>
                         )}
 
-                        {/* Disburse â€” APPROVED only */}
+                        {/* Disburse — APPROVED only */}
                         {record.status === 'APPROVED' && (
                           <button
                             onClick={() => handleApprove(record.id)}
@@ -795,7 +823,7 @@ export function PettyCashFund(): React.ReactNode {
                           </button>
                         )}
 
-                        {/* Reject â€” PENDING or APPROVED */}
+                        {/* Reject — PENDING or APPROVED */}
                         {['PENDING', 'APPROVED'].includes(record.status) && (
                           <button
                             onClick={() => setRejectState({ id: record.id, reason: '' })}
@@ -806,7 +834,7 @@ export function PettyCashFund(): React.ReactNode {
                           </button>
                         )}
 
-                        {/* Void â€” DRAFT, PENDING, or APPROVED */}
+                        {/* Void — DRAFT, PENDING, or APPROVED */}
                         {['DRAFT', 'PENDING', 'APPROVED'].includes(record.status) && (
                           <button
                             onClick={() => setVoidConfirmId(record.id)}
@@ -817,7 +845,7 @@ export function PettyCashFund(): React.ReactNode {
                           </button>
                         )}
 
-                        {/* Delete â€” VOID only (void first, then delete) */}
+                        {/* Delete — VOID only (void first, then delete) */}
                         {record.status === 'VOID' && (
                           <button
                             onClick={() => setDeleteConfirmId(record.id)}
@@ -1370,11 +1398,10 @@ export function PettyCashFund(): React.ReactNode {
                 )}
               </div>
 
-              {/* Records - one card per request, replicating RequestFundModal item layout */}
+              {/* Records */}
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
                 {currentGroup.records.map(r => (
                   <div key={r.id}>
-                    {/* Request sub-header */}
                     <div className="flex items-baseline justify-between gap-3 mb-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-foreground">{r.pcfNo}</span>
@@ -1387,7 +1414,6 @@ export function PettyCashFund(): React.ReactNode {
                       <span className="font-semibold text-foreground">Purpose: </span>
                       <span className="text-foreground">{r.purpose}</span>
                     </div>
-                    {/* Items table */}
                     <div className="border border-border rounded-xl overflow-hidden">
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50">
@@ -1401,8 +1427,8 @@ export function PettyCashFund(): React.ReactNode {
                         <tbody className="divide-y divide-border">
                           {r.items.map(item => (
                             <tr key={item.id} className="bg-card">
-                              <td className="px-3 py-2 text-foreground">
-                                {item.category === 'EMPLOYEE_EXPENSE' ? 'Employee Expense' : 'Client Fund'}
+                              <td className="px-3 py-2 text-foreground text-xs">
+                                {item.category.replace(/_/g, ' ')}
                               </td>
                               <td className="px-3 py-2 text-muted-foreground">
                                 {item.client?.businessName ?? <span className="text-muted-foreground/50">-</span>}
@@ -1426,7 +1452,6 @@ export function PettyCashFund(): React.ReactNode {
                     </div>
                   </div>
                 ))}
-                {/* Employee subtotal when multiple records */}
                 {currentGroup.records.length > 1 && (
                   <div className="flex justify-between items-center border-t-2 border-border pt-3">
                     <span className="text-sm font-bold text-foreground">Employee Total</span>
@@ -1502,10 +1527,23 @@ export function PettyCashFund(): React.ReactNode {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {importResults.map((r) => (
-                    <tr key={r.row}>
+                  {importResults.map((r, index) => (
+                    <tr key={`${r.row}-${index}`}>
                       <td className="py-2 text-muted-foreground">{r.row}</td>
-                      <td className="py-2 text-foreground font-medium">{r.staffName}</td>
+                      <td className="py-2 text-foreground font-medium whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          {r.staffName}
+                          {/* FIX 5: Added the dynamic warning icon indicator block safely */}
+                          {r.warning && (
+                            <div 
+                              title={r.warning} 
+                              className="text-yellow-500 cursor-help shrink-0 flex items-center"
+                            >
+                              <Info size={14} />
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-2 font-mono text-blue-600">{r.pcfNo ?? '—'}</td>
                       <td className="py-2">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${

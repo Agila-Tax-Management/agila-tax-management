@@ -7,7 +7,15 @@ import { z } from 'zod';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 import * as XLSX from 'xlsx';
 
-const VALID_CATEGORIES = ['EMPLOYEE_EXPENSE', 'CLIENT_FUND'] as const;
+// All 24 PettyCashItemCategory enum values — must match prisma schema exactly
+const VALID_CATEGORIES = [
+  'ADDED_FUNDS', 'ADVANCES_TO_EMPLOYEES', 'ADVANCES_TO_JADE', 'BALANCING_FIGURE',
+  'BORROWED_FUNDS', 'CLIENT_FUND', 'DELIVERY_FEE', 'DISCREPANCIES', 'FUEL',
+  'LIAISON_COMMISSION', 'MEALS', 'NOTARY_FEES', 'OFFICE_EQUIPMENT', 'OFFICE_SUPPLIES',
+  'PARKING_FEE', 'PRINTING_EXPENSES', 'PROFESSIONAL_FEES', 'REPAIRS_AND_MAINTENANCE',
+  'SALARIES', 'SALES_COMMISSION', 'TAXES_AND_LICENSES', 'TELECOMMUNICATION',
+  'TRANSPORTATION', 'EMPLOYEE_EXPENSE',
+] as const;
 
 const rowSchema = z.object({
   date: z
@@ -28,9 +36,21 @@ const rowSchema = z.object({
     .string()
     .optional()
     .transform((v) => {
-      if (!v) return 'EMPLOYEE_EXPENSE';
+      if (!v) return 'UNCATEGORIZED';
+      
+      // Clean up string: uppercase and replace spaces with underscores (e.g. "Meals" -> "MEALS", "Parking Fee" -> "PARKING_FEE")
       const upper = v.trim().toUpperCase().replace(/\s+/g, '_');
-      if (upper === 'CLIENT_FUND' || upper === 'CLIENT FUND') return 'CLIENT_FUND';
+      
+      // Normalise legacy / alternate spellings
+      if (upper === 'CLIENT_FUNDS') return 'CLIENT_FUND'; // legacy plural
+      if (upper === 'UNCATEGORIZED') return 'EMPLOYEE_EXPENSE'; // legacy fallback
+
+      // Check if it matches our 24 valid enums
+      if (VALID_CATEGORIES.includes(upper as any)) {
+        return upper;
+      }
+      
+      // Fallback if the excel has an unrecognised value
       return 'EMPLOYEE_EXPENSE';
     })
     .pipe(z.enum(VALID_CATEGORIES)),
@@ -59,7 +79,7 @@ export type PcfImportRowResult = {
   status: 'ok' | 'error' | 'skipped';
   pcfNo?: string;
   error?: string;
-  warning?: string; // Added to handle missing staff flags for the UI
+  warning?: string; 
 };
 
 function cleanCell(value: unknown): string | null {
@@ -129,7 +149,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       pcfTrackingNumber: cell(rawRow, 'PCF Tracking Number', 'pcfTrackingNumber'),
       staffName: cell(rawRow, 'Staff Name', 'staffName') ?? '',
       description: cell(rawRow, 'Description', 'description') ?? '',
-      category: cell(rawRow, 'Category', 'category') ?? 'EMPLOYEE_EXPENSE',
+      category: cell(rawRow, 'Category', 'category'), // Zod handles the fallback now
       received: cell(rawRow, 'Received', 'received') ?? '0',
       payment: cell(rawRow, 'Payment', 'payment') ?? '0',
       countedBy: cell(rawRow, 'Counted By', 'countedBy'),
@@ -172,7 +192,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     parsedRows.push({ ...parsed.data, rowNum });
   }
 
-  // Grouping
   const groups = new Map<string, ParsedRow[]>();
   for (const row of parsedRows) {
     const key = `${row.staffName.trim().toLowerCase()}|||${row.date}`;
@@ -193,18 +212,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   for (const [, groupRows] of groups) {
     const firstRow = groupRows[0]!;
     
-    // NEW: Explicitly track if the staff was found in the DB
     const dbStaffId = staffMap.get(firstRow.staffName.toLowerCase());
     const isStaffMissing = !dbStaffId;
     const requestedById = dbStaffId ?? session.user.id;
     
-    // Ensure the purpose records the original name since they aren't in the DB
     const purpose = firstRow.pcfTrackingNumber
       ? `Import: ${firstRow.pcfTrackingNumber} for ${firstRow.staffName}`
       : `Imported on ${firstRow.date} for ${firstRow.staffName}`;
 
     const items = groupRows.map((row) => ({
-      category: row.category as 'EMPLOYEE_EXPENSE' | 'CLIENT_FUND',
+      // 2. Safely type cast to the array of allowed types
+      category: row.category as (typeof VALID_CATEGORIES)[number],
       description: row.description,
       amount: row.payment > 0 ? row.payment : row.received > 0 ? row.received : 0.01,
       remarks: row.countedBy ? `Counted by: ${row.countedBy}` : null,
@@ -220,12 +238,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     let totalEmployeeCents = 0;
     let totalClientCents = 0;
+    
+    // 3. Tally logic: Only CLIENT_FUND goes to client totals. Everything else is employee/operational expenses.
     for (const item of validItems) {
       const cents = Math.round(item.amount * 100);
-      if (item.category === 'EMPLOYEE_EXPENSE') {
-        totalEmployeeCents += cents;
-      } else {
+      if (item.category === 'CLIENT_FUND') {
         totalClientCents += cents;
+      } else {
+        totalEmployeeCents += cents;
       }
     }
 
@@ -294,7 +314,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       importedCount++;
       for (const row of groupRows) {
-        // We push the success, but add the warning string if they were missing
         results.push({ 
           row: row.rowNum, 
           staffName: firstRow.staffName, 
