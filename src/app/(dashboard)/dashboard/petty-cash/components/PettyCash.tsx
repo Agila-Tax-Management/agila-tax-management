@@ -2,7 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Eye, Pencil, Trash2, Loader2, ArrowDownUp } from 'lucide-react';
+// Imported Info icon here
+import { Search, Plus, Eye, Pencil, Trash2, Loader2, ArrowDownUp, Info } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { authClient } from '@/lib/auth-client';
 import RequestFundModal from './RequestFundModal';
@@ -23,7 +24,6 @@ export type PettyCashItemCategory = 'EMPLOYEE_EXPENSE' | 'CLIENT_FUND';
 export interface PettyCashItemRecord {
   id: number;
   category: PettyCashItemCategory;
-  // For CLIENT_FUND items — which client's fund this draws from
   clientId: number | null;
   client: { id: number; businessName: string; clientNo: string | null } | null;
   clientFundBalanceSnapshot: number | null;
@@ -41,14 +41,12 @@ export interface PettyCashRecord {
   totalRequestedAmount: number;
   totalEmployeeExpenses: number;
   totalClientFundUsed: number;
-  // Legacy: snapshot from when PCF had a single header-level client. Null on new records.
   clientFundBalanceSnapshot: number | null;
   rejectionReason: string | null;
   custodianNotes: string | null;
   managerNotes: string | null;
   custodianApprovedAt: string | null;
   accountingManagerApprovedAt: string | null;
-  // Legacy: header-level client. Null on new records — client is now on each item.
   clientId: number | null;
   client: { id: number; businessName: string; clientNo: string | null } | null;
   requestedById: string;
@@ -223,80 +221,101 @@ export default function PettyCash() {
                 </td>
               </tr>
             ) : (
-              sorted.map((record) => (
-                <tr key={record.id} className="bg-card hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{record.pcfNo}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                    {new Date(record.date).toLocaleDateString('en-PH', {
-                      year: 'numeric', month: 'short', day: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-foreground max-w-xs truncate" title={record.purpose}>
-                    {record.purpose}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-foreground whitespace-nowrap">
-                    ₱{record.totalRequestedAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[record.status] ?? ''}`}>
-                      {record.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {confirmDeleteId === record.id ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="text-xs text-muted-foreground">Delete?</span>
-                        <button
-                          onClick={() => void handleDelete(record.id)}
-                          className="px-2 py-0.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition"
-                        >
-                          Yes
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-2 py-0.5 rounded-lg border border-border text-muted-foreground hover:text-foreground text-xs transition"
-                        >
-                          No
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => { setModalMode('view'); setSelectedRecord(record); setModalOpen(true); }}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
-                          title="View"
-                        >
-                          <Eye size={15} />
-                        </button>
-                        {canEdit(record) && (
-                          <button
-                            onClick={() => { setModalMode('edit'); setSelectedRecord(record); setModalOpen(true); }}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
-                            title="Edit"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                        )}
-                        {canDelete(record) && (
-                          <button
-                            onClick={() => setConfirmDeleteId(record.id)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
-                            title="Delete"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+              sorted.map((record) => {
+                // Inline validation block to see if the record name was decoupled on import
+                let isMissingEmployee = false;
+                if (record.purpose.includes(' for ')) {
+                  const parts = record.purpose.split(' for ');
+                  const fallbackName = parts[parts.length - 1]?.trim();
+                  if (fallbackName && fallbackName.toLowerCase() !== record.requestedBy?.name?.toLowerCase()) {
+                    isMissingEmployee = true;
+                  }
+                }
+
+                return (
+                  <tr key={record.id} className="bg-card hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-medium text-foreground">{record.pcfNo}</td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {new Date(record.date).toLocaleDateString('en-PH', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                      })}
+                    </td>
+                    <td className="px-4 py-3 text-foreground max-w-xs truncate" title={record.purpose}>
+                      {/* Added tooltip logic dynamically here */}
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className={isMissingEmployee ? "text-muted-foreground italic font-medium" : ""}>
+                          {record.purpose}
+                        </span>
+                        {isMissingEmployee && (
+                          <div title="This employee is not part of the company anymore" className="text-yellow-500 cursor-help shrink-0">
+                            <Info size={14} />
+                          </div>
                         )}
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-foreground whitespace-nowrap">
+                      ₱{record.totalRequestedAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[record.status] ?? ''}`}>
+                        {record.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {confirmDeleteId === record.id ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-xs text-muted-foreground">Delete?</span>
+                          <button
+                            onClick={() => void handleDelete(record.id)}
+                            className="px-2 py-0.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2 py-0.5 rounded-lg border border-border text-muted-foreground hover:text-foreground text-xs transition"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => { setModalMode('view'); setSelectedRecord(record); setModalOpen(true); }}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
+                            title="View"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          {canEdit(record) && (
+                            <button
+                              onClick={() => { setModalMode('edit'); setSelectedRecord(record); setModalOpen(true); }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
+                              title="Edit"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          )}
+                          {canDelete(record) && (
+                            <button
+                              onClick={() => setConfirmDeleteId(record.id)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                              title="Delete"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
-      {/* The key prop resets modal state on every open/mode/record change */}
       <RequestFundModal
         key={`${modalMode}-${selectedRecord?.id ?? 'new'}`}
         isOpen={modalOpen}
@@ -308,4 +327,3 @@ export default function PettyCash() {
     </div>
   );
 }
-

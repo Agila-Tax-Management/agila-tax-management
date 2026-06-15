@@ -15,7 +15,6 @@ const rowSchema = z.object({
     .min(1, 'Date is required')
     .refine((v) => !isNaN(Date.parse(v)), { message: 'Date must be a valid date' })
     .transform((v) => {
-      // Normalizes Excel dates (e.g., "1/5/26") into strict "YYYY-MM-DD"
       const d = new Date(v);
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -60,6 +59,7 @@ export type PcfImportRowResult = {
   status: 'ok' | 'error' | 'skipped';
   pcfNo?: string;
   error?: string;
+  warning?: string; // Added to handle missing staff flags for the UI
 };
 
 function cleanCell(value: unknown): string | null {
@@ -192,9 +192,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   for (const [, groupRows] of groups) {
     const firstRow = groupRows[0]!;
-    const requestedById = staffMap.get(firstRow.staffName.toLowerCase()) ?? session.user.id;
+    
+    // NEW: Explicitly track if the staff was found in the DB
+    const dbStaffId = staffMap.get(firstRow.staffName.toLowerCase());
+    const isStaffMissing = !dbStaffId;
+    const requestedById = dbStaffId ?? session.user.id;
+    
+    // Ensure the purpose records the original name since they aren't in the DB
     const purpose = firstRow.pcfTrackingNumber
-      ? `Import: ${firstRow.pcfTrackingNumber}`
+      ? `Import: ${firstRow.pcfTrackingNumber} for ${firstRow.staffName}`
       : `Imported on ${firstRow.date} for ${firstRow.staffName}`;
 
     const items = groupRows.map((row) => ({
@@ -229,7 +235,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     try {
       const created = await prisma.$transaction(async (tx) => {
-        // Broad deduplication check (Date, Requester, Purpose)
         const existing = await tx.pettyCash.findFirst({
           where: { requestedById, date: new Date(`${firstRow.date}T00:00:00`), purpose },
           select: { id: true },
@@ -238,18 +243,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         let finalPcfNo: string;
 
-        // NEW LOGIC: Use the tracking number from the sheet if it exists
         if (firstRow.pcfTrackingNumber) {
           finalPcfNo = firstRow.pcfTrackingNumber.trim();
           
-          // Double-check that this specific tracking number doesn't already exist in the DB
           const pcfExists = await tx.pettyCash.findFirst({
             where: { pcfNo: finalPcfNo },
             select: { id: true }
           });
           if (pcfExists) throw new Error(`Tracking number ${finalPcfNo} already exists in the system.`);
         } else {
-          // Fallback to auto-generation
           const latest = await tx.pettyCash.findFirst({
             where: { pcfNo: { startsWith: pcfPrefix } },
             orderBy: { pcfNo: 'desc' },
@@ -292,7 +294,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       importedCount++;
       for (const row of groupRows) {
-        results.push({ row: row.rowNum, staffName: firstRow.staffName, status: 'ok', pcfNo: created.pcfNo });
+        // We push the success, but add the warning string if they were missing
+        results.push({ 
+          row: row.rowNum, 
+          staffName: firstRow.staffName, 
+          status: 'ok', 
+          pcfNo: created.pcfNo,
+          ...(isStaffMissing && { warning: 'This employee is not part of the company anymore' })
+        });
       }
 
       logActivity({
