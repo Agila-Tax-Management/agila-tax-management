@@ -246,6 +246,14 @@ function _numInput(value: string, onChange: (v: string) => void, label: string) 
 
 // ─── Component ────────────────────────────────────────────────────
 
+function toLocalDateKey(input: Date | string) {
+  const d = new Date(input);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function PayslipEditor() {
   const { id: _periodId, payslipId } = useParams<{ id: string; payslipId: string }>();
   const router = useRouter();
@@ -563,20 +571,51 @@ export function PayslipEditor() {
 
   const periodDays = useMemo(() => {
     if (!payslip) return [];
-    const tsMap = new Map(timesheets.map((t) => [t.date.slice(0, 10), t]));
-    const scheduleDays = payslip.employee.employments[0]?.contracts[0]?.schedule?.days ?? [];
-    const workingDaySet = new Set(scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek));
-    const days: { date: Date; ts: TimesheetRecord | null; derivedStatus: string }[] = [];
+
+    // FIX: normalize timesheet keys safely
+    const tsMap = new Map(
+      timesheets.map((t) => [
+        toLocalDateKey(t.date),
+        t,
+      ])
+    );
+
+    const scheduleDays =
+      payslip.employee.employments[0]?.contracts[0]?.schedule?.days ?? [];
+
+    const workingDaySet = new Set(
+      scheduleDays
+        .filter((d) => d.isWorkingDay)
+        .map((d) => d.dayOfWeek)
+    );
+
+    const days: any[] = [];
+
     const start = new Date(`${payslip.payrollPeriod.startDate.slice(0, 10)}T00:00:00`);
     const end = new Date(`${payslip.payrollPeriod.endDate.slice(0, 10)}T00:00:00`);
+
     const cursor = new Date(start);
+
     while (cursor <= end) {
-      const key = cursor.toISOString().slice(0, 10);
+      const key = toLocalDateKey(cursor);
+
       const ts = tsMap.get(key) ?? null;
-      const derivedStatus = ts ? ts.status : (workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF');
-      days.push({ date: new Date(cursor), ts, derivedStatus });
+
+      const derivedStatus = ts
+        ? ts.status
+        : workingDaySet.has(cursor.getDay())
+          ? 'ABSENT'
+          : 'DAY_OFF';
+
+      days.push({
+        date: new Date(cursor),
+        ts,
+        derivedStatus,
+      });
+
       cursor.setDate(cursor.getDate() + 1);
     }
+
     return days;
   }, [payslip, timesheets]);
 
@@ -863,7 +902,7 @@ export function PayslipEditor() {
                   const noTsLabel = SS_LABEL[derivedStatus] ?? derivedStatus;
                   const noTsColor = SS_COLOR[derivedStatus] ?? 'text-muted-foreground';
                   return (
-                    <tr key={date.toISOString()} className={`hover:bg-muted/30 ${derivedStatus === 'DAY_OFF' ? 'opacity-40' : 'opacity-60'}`}>
+                    <tr key={toLocalDateKey(date)} className={`hover:bg-muted/30 ${derivedStatus === 'DAY_OFF' ? 'opacity-40' : 'opacity-60'}`}>
                       <td className="px-2 py-2 font-medium">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</td>
                       <td className="px-2 py-2 text-muted-foreground">{DS[date.getDay()]}</td>
                       <td className="px-2 py-2">—</td><td className="px-2 py-2">—</td>
