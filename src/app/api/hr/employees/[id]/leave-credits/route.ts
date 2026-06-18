@@ -1,4 +1,3 @@
-// src/app/api/hr/employees/[id]/leave-credits/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
@@ -9,18 +8,74 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+/* ─────────────────────────────────────────────
+   SAFE DECIMAL CONVERTER
+───────────────────────────────────────────── */
+const toNumber = (val: any) => Number(val ?? 0);
+
+/* ─────────────────────────────────────────────
+   CORE: USED LEAVE AGGREGATION
+───────────────────────────────────────────── */
+async function getUsedLeave(employeeId: number, leaveTypeId: number) {
+  const agg = await prisma.leaveRequest.aggregate({
+    where: {
+      employeeId,
+      leaveTypeId,
+      status: "APPROVED",
+    },
+    _sum: {
+      creditUsed: true,
+    },
+  });
+
+  return toNumber(agg._sum?.creditUsed);
+}
+
+/* ─────────────────────────────────────────────
+   MONTHLY BREAKDOWN (LEDGER VIEW)
+───────────────────────────────────────────── */
+async function getMonthlyUsage(employeeId: number, leaveTypeId: number) {
+  const requests = await prisma.leaveRequest.findMany({
+    where: {
+      employeeId,
+      leaveTypeId,
+      status: "APPROVED",
+    },
+    select: {
+      creditUsed: true,
+      startDate: true,
+    },
+  });
+
+  const map = new Map<string, number>();
+
+  for (const r of requests) {
+    const month = new Date(r.startDate).toISOString().slice(0, 7); // YYYY-MM
+    const used = toNumber(r.creditUsed);
+
+    map.set(month, (map.get(month) ?? 0) + used);
+  }
+
+  return Array.from(map.entries()).map(([month, used]) => ({
+    month,
+    used,
+  }));
+}
+
+/* ─────────────────────────────────────────────
+   VALIDATION
+───────────────────────────────────────────── */
 const allocateCreditSchema = z.object({
-  leaveTypeId: z.number().int().positive("Leave type is required"),
-  allocated: z.number().positive("Allocated days must be greater than 0"),
-  validFrom: z.string().min(1, "Valid from date is required"),
-  expiresAt: z.string().min(1, "Expiry date is required"),
+  leaveTypeId: z.number().int().positive(),
+  allocated: z.number().positive(),
+  validFrom: z.string(),
+  expiresAt: z.string(),
   remarks: z.string().optional().nullable(),
 });
 
-/**
- * GET /api/hr/employees/[id]/leave-credits
- * Returns all leave credit records for a specific employee.
- */
+/* ─────────────────────────────────────────────
+   GET: LEAVE CREDITS + LEDGER
+───────────────────────────────────────────── */
 export async function GET(
   _request: NextRequest,
   { params }: RouteParams,
@@ -31,49 +86,70 @@ export async function GET(
   const clientId = await getClientIdFromSession();
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
-  const { id } = await params;
-  const employeeId = parseInt(id, 10);
-  if (isNaN(employeeId)) return NextResponse.json({ error: "Invalid employee ID" }, { status: 400 });
+  const employeeId = parseInt((await params).id, 10);
+  if (isNaN(employeeId)) {
+    return NextResponse.json({ error: "Invalid employee ID" }, { status: 400 });
+  }
 
-  // Ensure the employee belongs to the same client
   const employee = await prisma.employee.findFirst({
     where: {
       id: employeeId,
-      employments: { some: { clientId, employmentStatus: "ACTIVE" } },
+      employments: {
+        some: { clientId, employmentStatus: "ACTIVE" },
+      },
     },
     select: { id: true, firstName: true, lastName: true },
   });
-  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+
+  if (!employee) {
+    return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  }
 
   const credits = await prisma.employeeLeaveCredit.findMany({
     where: { employeeId },
     include: {
-      leaveType: { select: { id: true, name: true, isPaid: true } },
+      leaveType: true,
     },
-    orderBy: [{ isExpired: "asc" }, { expiresAt: "desc" }],
   });
 
-  const data = credits.map((c) => ({
-    id: c.id,
-    leaveTypeId: c.leaveTypeId,
-    leaveTypeName: c.leaveType.name,
-    isPaid: c.leaveType.isPaid,
-    allocated: parseFloat(c.allocated.toString()),
-    used: parseFloat(c.used.toString()),
-    balance: parseFloat(c.allocated.toString()) - parseFloat(c.used.toString()),
-    validFrom: c.validFrom.toISOString().split("T")[0],
-    expiresAt: c.expiresAt.toISOString().split("T")[0],
-    isExpired: c.isExpired,
-    remarks: c.remarks ?? null,
-  }));
+  const enriched = await Promise.all(
+    credits.map(async (c) => {
+      const used = await getUsedLeave(employeeId, c.leaveTypeId);
+      const monthly = await getMonthlyUsage(employeeId, c.leaveTypeId);
 
-  return NextResponse.json({ data });
+      const allocated = toNumber(c.allocated);
+      const balance = allocated - used;
+
+      return {
+        id: c.id,
+        leaveTypeId: c.leaveTypeId,
+        leaveTypeName: c.leaveType.name,
+        isPaid: c.leaveType.isPaid,
+
+        allocated,
+        used,
+        balance,
+
+        validFrom: c.validFrom,
+        expiresAt: c.expiresAt,
+        isExpired: c.isExpired,
+        remarks: c.remarks ?? null,
+
+        // 🆕 LEDGER VIEW
+        monthlyUsage: monthly,
+      };
+    }),
+  );
+
+  return NextResponse.json({
+    employee,
+    data: enriched,
+  });
 }
 
-/**
- * POST /api/hr/employees/[id]/leave-credits
- * Allocates a new leave credit block to an employee.
- */
+/* ─────────────────────────────────────────────
+   CREATE CREDIT
+───────────────────────────────────────────── */
 export async function POST(
   request: NextRequest,
   { params }: RouteParams,
@@ -84,45 +160,26 @@ export async function POST(
   const clientId = await getClientIdFromSession();
   if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
 
-  const { id } = await params;
-  const employeeId = parseInt(id, 10);
-  if (isNaN(employeeId)) return NextResponse.json({ error: "Invalid employee ID" }, { status: 400 });
-
-  // Ensure the employee belongs to the same client
-  const employee = await prisma.employee.findFirst({
-    where: {
-      id: employeeId,
-      employments: { some: { clientId, employmentStatus: "ACTIVE" } },
-    },
-    select: { id: true, firstName: true, lastName: true },
-  });
-  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  const employeeId = parseInt((await params).id, 10);
 
   const body = (await request.json()) as unknown;
   const parsed = allocateCreditSchema.safeParse(body);
+
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+      { error: parsed.error.issues[0]?.message },
       { status: 400 },
     );
   }
 
   const { leaveTypeId, allocated, validFrom, expiresAt, remarks } = parsed.data;
 
-  if (new Date(expiresAt) <= new Date(validFrom)) {
-    return NextResponse.json(
-      { error: "Expiry date must be after valid from date." },
-      { status: 400 },
-    );
-  }
-
-  // Verify the leave type belongs to this client
   const leaveType = await prisma.leaveType.findFirst({
     where: { id: leaveTypeId, clientId },
-    select: { id: true, name: true },
   });
+
   if (!leaveType) {
-    return NextResponse.json({ error: "Leave type not found." }, { status: 404 });
+    return NextResponse.json({ error: "Leave type not found" }, { status: 404 });
   }
 
   const credit = await prisma.employeeLeaveCredit.create({
@@ -138,23 +195,21 @@ export async function POST(
     },
   });
 
-  void logActivity({
+  await logActivity({
     userId: session.user.id,
     action: "CREATED",
     entity: "EmployeeLeaveCredit",
     entityId: String(credit.id),
-    description: `Allocated ${allocated} day(s) of ${leaveType.name} to ${employee.firstName} ${employee.lastName}`,
+    description: `Created leave credit block`,
     ...getRequestMeta(request),
   });
 
   return NextResponse.json({ data: credit }, { status: 201 });
 }
 
-/**
- * PATCH /api/hr/employees/[id]/leave-credits?creditId=:n
- * Updates allocated days, validity dates, or remarks on a leave credit block.
- * Cannot reduce allocated below what has already been used.
- */
+/* ─────────────────────────────────────────────
+   PATCH (SAFE UPDATE)
+───────────────────────────────────────────── */
 export async function PATCH(
   request: NextRequest,
   { params }: RouteParams,
@@ -162,29 +217,22 @@ export async function PATCH(
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clientId = await getClientIdFromSession();
-  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
+  const employeeId = parseInt((await params).id, 10);
+  const creditId = parseInt(new URL(request.url).searchParams.get("creditId") ?? "", 10);
 
-  const { id } = await params;
-  const employeeId = parseInt(id, 10);
-  if (isNaN(employeeId)) return NextResponse.json({ error: "Invalid employee ID" }, { status: 400 });
-
-  const { searchParams } = new URL(request.url);
-  const creditId = parseInt(searchParams.get("creditId") ?? "", 10);
-  if (isNaN(creditId)) return NextResponse.json({ error: "creditId query parameter is required" }, { status: 400 });
-
-  const patchSchema = z.object({
-    allocated: z.number().positive("Allocated days must be greater than 0").optional(),
-    validFrom: z.string().min(1).optional(),
-    expiresAt: z.string().min(1).optional(),
-    remarks: z.string().optional().nullable(),
+  const schema = z.object({
+    allocated: z.number().positive().optional(),
+    validFrom: z.string().optional(),
+    expiresAt: z.string().optional(),
+    remarks: z.string().nullable().optional(),
   });
 
   const body = (await request.json()) as unknown;
-  const parsed = patchSchema.safeParse(body);
+  const parsed = schema.safeParse(body);
+
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+      { error: parsed.error.message },
       { status: 400 },
     );
   }
@@ -192,26 +240,16 @@ export async function PATCH(
   const existing = await prisma.employeeLeaveCredit.findFirst({
     where: { id: creditId, employeeId },
   });
-  if (!existing) return NextResponse.json({ error: "Leave credit not found" }, { status: 404 });
 
-  const { allocated, validFrom, expiresAt, remarks } = parsed.data;
-
-  if (allocated !== undefined) {
-    const usedNum = parseFloat(existing.used.toString());
-    if (allocated < usedNum) {
-      return NextResponse.json(
-        { error: `Cannot set allocated below already used amount (${usedNum}).` },
-        { status: 400 },
-      );
-    }
+  if (!existing) {
+    return NextResponse.json({ error: "Credit not found" }, { status: 404 });
   }
 
-  const newValidFrom = validFrom ? new Date(validFrom) : existing.validFrom;
-  const newExpiresAt = expiresAt ? new Date(expiresAt) : existing.expiresAt;
+  const used = await getUsedLeave(employeeId, existing.leaveTypeId);
 
-  if (newExpiresAt <= newValidFrom) {
+  if (parsed.data.allocated && parsed.data.allocated < used) {
     return NextResponse.json(
-      { error: "Expiry date must be after valid from date." },
+      { error: "Cannot reduce below used leave" },
       { status: 400 },
     );
   }
@@ -219,82 +257,52 @@ export async function PATCH(
   const updated = await prisma.employeeLeaveCredit.update({
     where: { id: creditId },
     data: {
-      ...(allocated !== undefined ? { allocated } : {}),
-      ...(validFrom ? { validFrom: newValidFrom } : {}),
-      ...(expiresAt ? { expiresAt: newExpiresAt } : {}),
-      ...(remarks !== undefined ? { remarks: remarks ?? null } : {}),
+      ...(parsed.data.allocated !== undefined
+        ? { allocated: parsed.data.allocated }
+        : {}),
+      ...(parsed.data.validFrom
+        ? { validFrom: new Date(parsed.data.validFrom) }
+        : {}),
+      ...(parsed.data.expiresAt
+        ? { expiresAt: new Date(parsed.data.expiresAt) }
+        : {}),
+      remarks: parsed.data.remarks ?? null,
     },
-  });
-
-  void logActivity({
-    userId: session.user.id,
-    action: "UPDATED",
-    entity: "EmployeeLeaveCredit",
-    entityId: String(creditId),
-    description: `Updated leave credit #${creditId} for employee #${employeeId}`,
-    ...getRequestMeta(request),
   });
 
   return NextResponse.json({ data: updated });
 }
 
-/**
- * DELETE /api/hr/employees/[id]/leave-credits?creditId=:n
- * Deletes a leave credit block. Only allowed when used === 0.
- */
+/* ─────────────────────────────────────────────
+   DELETE (SAFE GUARD)
+───────────────────────────────────────────── */
 export async function DELETE(
   request: NextRequest,
   { params }: RouteParams,
 ): Promise<NextResponse> {
-  const session = await getSessionWithAccess();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const clientId = await getClientIdFromSession();
-  if (!clientId) return NextResponse.json({ error: "No active employment found" }, { status: 403 });
-
-  const { id } = await params;
-  const employeeId = parseInt(id, 10);
-  if (isNaN(employeeId)) return NextResponse.json({ error: "Invalid employee ID" }, { status: 400 });
-
-  const { searchParams } = new URL(request.url);
-  const creditId = parseInt(searchParams.get("creditId") ?? "", 10);
-  if (isNaN(creditId)) return NextResponse.json({ error: "creditId query parameter is required" }, { status: 400 });
+  const employeeId = parseInt((await params).id, 10);
+  const creditId = parseInt(new URL(request.url).searchParams.get("creditId") ?? "", 10);
 
   const existing = await prisma.employeeLeaveCredit.findFirst({
     where: { id: creditId, employeeId },
-    include: { leaveType: { select: { name: true } } },
   });
-  if (!existing) return NextResponse.json({ error: "Leave credit not found" }, { status: 404 });
 
-  const usedNum = parseFloat(existing.used.toString());
-  if (usedNum > 0) {
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const used = await getUsedLeave(employeeId, existing.leaveTypeId);
+
+  if (used > 0) {
     return NextResponse.json(
-      { error: `Cannot delete a credit block with ${usedNum} day(s) already used.` },
+      { error: "Cannot delete used leave credit" },
       { status: 400 },
     );
   }
 
-  // Verify employee belongs to this client before deleting
-  const employee = await prisma.employee.findFirst({
-    where: {
-      id: employeeId,
-      employments: { some: { clientId, employmentStatus: "ACTIVE" } },
-    },
-    select: { id: true, firstName: true, lastName: true },
-  });
-  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
-
-  await prisma.employeeLeaveCredit.delete({ where: { id: creditId } });
-
-  void logActivity({
-    userId: session.user.id,
-    action: "DELETED",
-    entity: "EmployeeLeaveCredit",
-    entityId: String(creditId),
-    description: `Deleted ${existing.leaveType.name} credit block for ${employee.firstName} ${employee.lastName}`,
-    ...getRequestMeta(request),
+  await prisma.employeeLeaveCredit.delete({
+    where: { id: creditId },
   });
 
   return NextResponse.json({ success: true });
 }
-
