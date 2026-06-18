@@ -938,6 +938,135 @@ export function PayrollPeriodDetail() {
           </div>
         </div>
       )}
+
+      {requestType === 'LEAVE' && (
+        <div className="grid gap-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Leave Type</label>
+            <select
+              value={leaveTypeId}
+              onChange={(e) => setLeaveTypeId(e.target.value === '' ? '' : Number(e.target.value))}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Select leave type…</option>
+              {leaveTypes.map((lt) => (
+                <option key={lt.id} value={lt.id}>
+                  {lt.name} ({lt.isPaid ? 'Paid' : 'Unpaid'})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+              <input
+                type="date"
+                value={leaveStart}
+                onChange={(e) => setLeaveStart(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">End Date</label>
+              <input
+                type="date"
+                value={leaveEnd}
+                onChange={(e) => setLeaveEnd(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Credits Used (days)</label>
+            <input
+              type="number"
+              min="0.5"
+              step="0.5"
+              value={leaveCredits}
+              onChange={(e) => setLeaveCredits(e.target.value)}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+            <textarea
+              value={leaveReason}
+              onChange={(e) => setLeaveReason(e.target.value)}
+              rows={3}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+      )}
+
+      {requestType === 'OVERTIME' && (
+        <div className="grid gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Date</label>
+              <input
+                type="date"
+                value={otDate}
+                onChange={(e) => setOtDate(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">OT Type</label>
+              <select
+                value={otType}
+                onChange={(e) => setOtType(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="REGULAR_OT">Regular OT</option>
+                <option value="REST_DAY_OT">Rest Day OT</option>
+                <option value="HOLIDAY_OT">Holiday OT</option>
+                <option value="SPECIAL_HOLIDAY_OT">Special Holiday OT</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Time From</label>
+              <input
+                type="time"
+                value={otFrom}
+                onChange={(e) => setOtFrom(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Time To</label>
+              <input
+                type="time"
+                value={otTo}
+                onChange={(e) => setOtTo(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Total Hours</label>
+            <input
+              type="number"
+              min="0.5"
+              step="0.5"
+              value={otHours}
+              onChange={(e) => setOtHours(e.target.value)}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+            <textarea
+              value={otReason}
+              onChange={(e) => setOtReason(e.target.value)}
+              rows={3}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+      )}
     </div>
 
     {/* Footer */}

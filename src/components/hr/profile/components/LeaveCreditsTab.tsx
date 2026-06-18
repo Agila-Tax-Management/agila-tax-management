@@ -530,9 +530,11 @@ export function LeaveCreditsTab({ employeeId }: LeaveCreditsTabProps): React.Rea
             <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
               <div>
                 <p className="text-sm font-bold text-foreground">{editTarget.leaveTypeName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {editTarget.used.toFixed(2)} day(s) already used — cannot reduce below this
-                </p>
+                {editTarget.used > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {editTarget.used.toFixed(2)} day(s) already used — cannot reduce below this
+                  </p>
+                )}
               </div>
               <Badge variant={editTarget.isPaid ? 'success' : 'neutral'} className="ml-auto shrink-0">
                 {editTarget.isPaid ? 'Paid' : 'Unpaid'}
