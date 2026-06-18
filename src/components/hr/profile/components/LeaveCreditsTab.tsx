@@ -212,11 +212,11 @@ export function LeaveCreditsTab({ employeeId }: LeaveCreditsTabProps): React.Rea
     }
   };
 
-  // Handle leave type selection → prefill allocated from defaultDays
+  // Handle leave type selection → always prefill allocated from defaultDays
   const handleLeaveTypeChange = (typeId: string) => {
     set('leaveTypeId', typeId);
     const lt = leaveTypes.find((t) => String(t.id) === typeId);
-    if (lt && lt.defaultDays > 0 && !form.allocated) {
+    if (lt) {
       set('allocated', String(lt.defaultDays));
     }
   };

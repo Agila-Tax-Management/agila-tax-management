@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle, XCircle, RotateCcw, Loader2 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Button } from '@/components/UI/button';
 import { Modal } from '@/components/UI/Modal';
@@ -51,6 +51,8 @@ export function LeaveTypesSettingsTab(): React.ReactNode {
   const [deleteTarget, setDeleteTarget] = useState<LeaveTypeRecord | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
   const [form, setForm] = useState<LeaveTypeForm>(EMPTY_FORM);
 
   const fetchLeaveTypes = useCallback(async () => {
@@ -127,6 +129,24 @@ export function LeaveTypesSettingsTab(): React.ReactNode {
     }
   };
 
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      const res = await fetch('/api/hr/leave-types/reset-allocations', { method: 'POST' });
+      const json = await res.json() as { data?: { updated: number }; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Failed to reset');
+      success(
+        'Leave allocations reset',
+        `Updated ${json.data?.updated ?? 0} credit record(s) to their default days.`,
+      );
+      setResetDone(true);
+    } catch (err) {
+      error('Reset failed', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -154,9 +174,25 @@ export function LeaveTypesSettingsTab(): React.ReactNode {
               Define company leave policies and accrual rules.
             </p>
           </div>
-          <Button onClick={openCreate} className="gap-2 bg-rose-600 hover:bg-rose-700 text-white text-sm">
-            <Plus size={16} /> Add Leave Type
-          </Button>
+          <div className="flex items-center gap-2">
+            {!resetDone && (
+              <Button
+                onClick={() => void handleReset()}
+                disabled={resetting || leaveTypes.length === 0}
+                variant="ghost"
+                className="gap-2 text-sm text-muted-foreground border border-border hover:text-foreground"
+              >
+                {resetting ? (
+                  <><Loader2 size={15} className="animate-spin" /> Resetting…</>
+                ) : (
+                  <><RotateCcw size={15} /> Reset Allocation</>
+                )}
+              </Button>
+            )}
+            <Button onClick={openCreate} className="gap-2 bg-rose-600 hover:bg-rose-700 text-white text-sm">
+              <Plus size={16} /> Add Leave Type
+            </Button>
+          </div>
         </div>
 
         {loading ? (
