@@ -4,7 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import { computeTimesheetFields } from "@/lib/timesheet-calc";
+import { computeTimesheetFields, type DayType } from "@/lib/timesheet-calc";
 import { computeDoleOvertimePay, sumOtHours } from "@/lib/dole-overtime";
 import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from "@/lib/hr-settings-guard";
 import { getSSSEmployeeDeduction } from "@/lib/sss-contribution";
@@ -178,8 +178,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       payrollScheduleId,
       isActive: true,
       contract: {
+        status: 'ACTIVE',
         employment: {
           clientId,
+          employmentStatus: 'ACTIVE',
+          isPastRole: false,
           OR: [
             { hireDate: null },
             { hireDate: { lte: startDate } },
@@ -275,22 +278,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     advancesByEmp.set(adv.employeeId, arr);
   }
 
-  // ── Pre-transaction: re-compute timesheet rows with timeIn+timeOut but regularHours=0 ──
-  // This covers COA-corrected punches that were approved after payroll generation.
+  // Load holiday calendar for the period (needed for correct DOLE dayType per timesheet row)
+  const periodHolidays = await prisma.holiday.findMany({
+    where: { clientId, date: { gte: startDate, lte: endDate } },
+    select: { date: true, type: true },
+  });
+  const periodHolidayMap = new Map<string, string>(
+    periodHolidays.map((h) => [h.date.toISOString().slice(0, 10), h.type]),
+  );
+
+  // ── Pre-transaction: re-compute all punched timesheet rows ───────────────
+  // Always recompute (not just uncomputed rows) so that holiday/rest-day pay premiums
+  // are correctly applied even when rows were first saved with the default REGULAR dayType.
   const compensationByEmpId = new Map(
     compensations.map((c) => [c.contract.employment.employeeId, c]),
   );
   let timesheetRecalcCount = 0;
   for (const ts of timesheets) {
     if (!ts.timeIn || !ts.timeOut) continue;
-    // Skip rows already computed: regularHours > 0 = regular day done;
-    // dailyGrossPay > 0 = holiday/rest-day premium row already computed.
-    if (Number(ts.regularHours) > 0 || Number(ts.dailyGrossPay) > 0) continue;
 
     const emp = compensationByEmpId.get(ts.employeeId);
     const empSchedule = emp?.contract.schedule ?? null;
     const dow = ts.date.getDay();
     const scheduleDay = empSchedule?.days.find((d) => d.dayOfWeek === dow) ?? null;
+    const isRestDay = scheduleDay ? !scheduleDay.isWorkingDay : false;
+    const dateKey = ts.date.toISOString().slice(0, 10);
+    const holidayType = periodHolidayMap.get(dateKey) ?? null;
+
+    // Determine DOLE day type for correct pay multipliers
+    let dayType: DayType = 'REGULAR';
+    if (holidayType === 'REGULAR') {
+      dayType = isRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
+    } else if (holidayType === 'SPECIAL_NON_WORKING' || holidayType === 'LOCAL_HOLIDAY') {
+      dayType = isRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
+    } else if (holidayType === 'SPECIAL_WORKING') {
+      dayType = 'REGULAR';
+    } else if (isRestDay) {
+      dayType = 'REST_DAY';
+    }
 
     const computed = computeTimesheetFields(
       ts.timeIn,
@@ -302,6 +327,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         calculatedDailyRate: emp.calculatedDailyRate.toString(),
         payType: emp.payType,
       } : null,
+      dayType,
     );
 
     // Apply HR setting guards (strict OT zeroes punch OT; disable late/undertime zeroes deductions)
@@ -310,9 +336,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const guardFlags = flagsFromCache(hrSettingCache, ts.employeeId);
     const guarded = applyHrSettingGuards(computed, guardFlags, dRate, isVarPay);
     // Merge approved regular-day OT back in (guard may have zeroed punch-derived OT)
-    const approvedOtKey = `${ts.employeeId}_${ts.date.toISOString().slice(0, 10)}`;
+    const approvedOtKey = `${ts.employeeId}_${dateKey}`;
     const approvedRegOtHours = approvedOtByEmpDate.get(approvedOtKey) ?? 0;
     const finalRegOtHours = Math.max(guarded.regOtHours, approvedRegOtHours);
+
+    // Determine updated AttendanceStatus for holiday rows
+    const updatedStatus =
+      dayType === 'REGULAR_HOLIDAY' || dayType === 'REGULAR_HOLIDAY_REST'
+        ? ('REGULAR_HOLIDAY' as const)
+        : dayType === 'SPECIAL_HOLIDAY' || dayType === 'SPECIAL_HOLIDAY_REST'
+          ? ('SPECIAL_HOLIDAY' as const)
+          : undefined;
 
     await prisma.timesheet.update({
       where: { id: ts.id },
@@ -321,7 +355,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         lateMinutes: guarded.lateMinutes,
         undertimeMinutes: guarded.undertimeMinutes,
         regOtHours: finalRegOtHours,
+        rdHours: guarded.rdHours,
+        rdOtHours: guarded.rdOtHours,
+        shHours: guarded.shHours,
+        shOtHours: guarded.shOtHours,
+        shRdHours: guarded.shRdHours,
+        shRdOtHours: guarded.shRdOtHours,
+        rhHours: guarded.rhHours,
+        rhOtHours: guarded.rhOtHours,
+        rhRdHours: guarded.rhRdHours,
+        rhRdOtHours: guarded.rhRdOtHours,
         dailyGrossPay: guarded.dailyGrossPay,
+        ...(updatedStatus ? { status: updatedStatus } : {}),
       },
     });
     timesheetRecalcCount++;

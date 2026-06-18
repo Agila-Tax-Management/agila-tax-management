@@ -96,8 +96,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
         },
       },
     },
-    select: { calculatedDailyRate: true, payType: true },
+    select: {
+      calculatedDailyRate: true,
+      payType: true,
+      contract: {
+        select: {
+          schedule: {
+            select: {
+              days: { select: { dayOfWeek: true, isWorkingDay: true } },
+            },
+          },
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
+  });
+
+  // Fetch holiday for this date (needed for DOLE day type classification)
+  const holidayForDate = await prisma.holiday.findFirst({
+    where: { clientId, date: existing.date },
+    select: { type: true },
   });
 
   type UpdateInput = {
@@ -110,6 +128,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     lateMinutes?: number;
     undertimeMinutes?: number;
     regOtHours?: number;
+    rdHours?: number;
+    rdOtHours?: number;
+    shHours?: number;
+    shOtHours?: number;
+    shRdHours?: number;
+    shRdOtHours?: number;
+    rhHours?: number;
+    rhOtHours?: number;
+    rhRdHours?: number;
+    rhRdOtHours?: number;
     dailyGrossPay?: number;
   };
 
@@ -123,6 +151,23 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 
   // Recalculate derived fields if we have a full punch pair
   if (newTimeIn && newTimeOut) {
+    // Determine DOLE day type from holiday calendar + employee schedule rest-day status
+    const scheduleDays = compensation?.contract.schedule?.days ?? [];
+    const recordDow = existing.date.getDay();
+    const schedDayEntry = scheduleDays.find((d) => d.dayOfWeek === recordDow) ?? null;
+    const isRestDay = schedDayEntry ? !schedDayEntry.isWorkingDay : false;
+    const hType = holidayForDate?.type ?? null;
+    let patchDayType: 'REGULAR' | 'REST_DAY' | 'SPECIAL_HOLIDAY' | 'SPECIAL_HOLIDAY_REST' | 'REGULAR_HOLIDAY' | 'REGULAR_HOLIDAY_REST' = 'REGULAR';
+    if (hType === 'REGULAR') {
+      patchDayType = isRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
+    } else if (hType === 'SPECIAL_NON_WORKING' || hType === 'LOCAL_HOLIDAY') {
+      patchDayType = isRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
+    } else if (hType === 'SPECIAL_WORKING') {
+      patchDayType = 'REGULAR';
+    } else if (isRestDay) {
+      patchDayType = 'REST_DAY';
+    }
+
     const computed = computeTimesheetFields(
       newTimeIn,
       newTimeOut,
@@ -132,6 +177,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
       compensation
         ? { calculatedDailyRate: compensation.calculatedDailyRate.toString(), payType: compensation.payType }
         : null,
+      patchDayType,
     );
 
     const guardFlags = await resolveHrSettingFlags(clientId, existing.employeeId);
@@ -146,7 +192,24 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
     updateData.lateMinutes      = guarded.lateMinutes;
     updateData.undertimeMinutes = guarded.undertimeMinutes;
     updateData.regOtHours       = guarded.regOtHours;
+    updateData.rdHours          = guarded.rdHours;
+    updateData.rdOtHours        = guarded.rdOtHours;
+    updateData.shHours          = guarded.shHours;
+    updateData.shOtHours        = guarded.shOtHours;
+    updateData.shRdHours        = guarded.shRdHours;
+    updateData.shRdOtHours      = guarded.shRdOtHours;
+    updateData.rhHours          = guarded.rhHours;
+    updateData.rhOtHours        = guarded.rhOtHours;
+    updateData.rhRdHours        = guarded.rhRdHours;
+    updateData.rhRdOtHours      = guarded.rhRdOtHours;
     updateData.dailyGrossPay    = guarded.dailyGrossPay;
+
+    // Override status for holiday days when a full punch is present
+    if (patchDayType === 'REGULAR_HOLIDAY' || patchDayType === 'REGULAR_HOLIDAY_REST') {
+      updateData.status = 'REGULAR_HOLIDAY';
+    } else if (patchDayType === 'SPECIAL_HOLIDAY' || patchDayType === 'SPECIAL_HOLIDAY_REST') {
+      updateData.status = 'SPECIAL_HOLIDAY';
+    }
   }
 
   const updated = await prisma.timesheet.update({ where: { id }, data: updateData });

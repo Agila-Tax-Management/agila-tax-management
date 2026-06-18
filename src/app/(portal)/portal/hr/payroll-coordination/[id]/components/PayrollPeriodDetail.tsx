@@ -1,4 +1,3 @@
-// src/app/(portal)/portal/hr/payroll-coordination/[id]/components/PayrollPeriodDetail.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -89,6 +88,10 @@ export function PayrollPeriodDetail() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [approvingPayslip, setApprovingPayslip] = useState<string | null>(null);
   const [payingPayslip, setPayingPayslip] = useState<string | null>(null);
+  
+  // Batch approval state
+  const [selectedPayslips, setSelectedPayslips] = useState<Set<string>>(new Set());
+  const [approvingBatch, setApprovingBatch] = useState(false);
 
   const fetchPeriod = useCallback(async () => {
     setLoading(true);
@@ -100,6 +103,8 @@ export function PayrollPeriodDetail() {
         return;
       }
       setPeriod(json.data);
+      // Clear selection on refresh
+      setSelectedPayslips(new Set());
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
@@ -152,6 +157,24 @@ export function PayrollPeriodDetail() {
     }
   };
 
+  const handleBatchApprove = async () => {
+    if (selectedPayslips.size === 0) return;
+    setApprovingBatch(true);
+    try {
+      await Promise.all(
+        Array.from(selectedPayslips).map((psId) =>
+          fetch(`/api/hr/payslips/${psId}/approve`, { method: 'POST' })
+        )
+      );
+      success('Batch Approved', `Successfully approved ${selectedPayslips.size} payslips.`);
+      await fetchPeriod();
+    } catch {
+      error('Batch Approval Failed', 'An error occurred while approving payslips. Please try again.');
+    } finally {
+      setApprovingBatch(false);
+    }
+  };
+
   const markPayslipPaid = async (payslipId: string) => {
     setPayingPayslip(payslipId);
     try {
@@ -201,8 +224,26 @@ export function PayrollPeriodDetail() {
   const netTotal = period.payslips.reduce((s, ps) => s + Number(ps.netPay), 0);
   const dedTotal = period.payslips.reduce((s, ps) => s + Number(ps.totalDeductions), 0);
 
-  // Determine "Prepared by" from any payslip (they all share the same preparer)
   const preparedBy = period.payslips[0]?.preparedBy ?? null;
+
+  // Batch Selection logic
+  const approvablePayslips = period.payslips.filter((ps) => !ps.approvedAt);
+  const isAllApprovableSelected = approvablePayslips.length > 0 && selectedPayslips.size === approvablePayslips.length;
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedPayslips(new Set(approvablePayslips.map((ps) => ps.id)));
+    } else {
+      setSelectedPayslips(new Set());
+    }
+  };
+
+  const handleSelect = (id: string, checked: boolean) => {
+    const next = new Set(selectedPayslips);
+    if (checked) next.add(id);
+    else next.delete(id);
+    setSelectedPayslips(next);
+  };
 
   return (
     <div className="space-y-6">
@@ -224,7 +265,7 @@ export function PayrollPeriodDetail() {
             {preparedBy && <>&nbsp;·&nbsp;Prepared by: <span className="font-medium text-foreground">{preparedBy.name}</span></>}
           </p>
         </div>
-        <Badge variant={STATUS_VARIANT[period.status]} className="flex-shrink-0 mt-1">
+        <Badge variant={STATUS_VARIANT[period.status]} className="shrink-0 mt-1">
           {STATUS_LABEL[period.status]}
         </Badge>
       </div>
@@ -350,9 +391,21 @@ export function PayrollPeriodDetail() {
 
       {/* ── Payslips Table ── */}
       <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Users size={16} className="text-muted-foreground" />
-          <span className="text-sm font-bold text-foreground">Employee Payslips</span>
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Users size={16} className="text-muted-foreground" />
+            <span className="text-sm font-bold text-foreground">Employee Payslips</span>
+          </div>
+          {period.status === 'PROCESSING' && selectedPayslips.size > 0 && (
+            <Button 
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
+              onClick={() => { void handleBatchApprove(); }}
+              disabled={approvingBatch}
+            >
+              {approvingBatch ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              Approve Selected ({selectedPayslips.size})
+            </Button>
+          )}
         </div>
         {period.payslips.length === 0 ? (
           <div className="py-14 text-center text-sm text-muted-foreground">
@@ -363,6 +416,15 @@ export function PayrollPeriodDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
+                  <th className="w-10 px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-border cursor-pointer disabled:opacity-50"
+                      checked={isAllApprovableSelected}
+                      onChange={handleSelectAll}
+                      disabled={period.status !== 'PROCESSING' || approvablePayslips.length === 0}
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
                     Employee
                   </th>
@@ -389,6 +451,15 @@ export function PayrollPeriodDetail() {
               <tbody>
                 {period.payslips.map((ps) => (
                   <tr key={ps.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="rounded border-border cursor-pointer disabled:opacity-50"
+                        checked={selectedPayslips.has(ps.id)}
+                        onChange={(e) => handleSelect(ps.id, e.target.checked)}
+                        disabled={period.status !== 'PROCESSING' || ps.approvedAt !== null}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <p className="font-semibold text-foreground">
                         {ps.employee.firstName} {ps.employee.lastName}
@@ -485,6 +556,7 @@ export function PayrollPeriodDetail() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30">
+                  <td />
                   <td className="px-4 py-3 text-xs font-bold text-muted-foreground uppercase">
                     {total} employees
                   </td>

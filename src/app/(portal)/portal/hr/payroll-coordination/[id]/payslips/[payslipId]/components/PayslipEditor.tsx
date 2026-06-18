@@ -1,4 +1,3 @@
-// src/app/(portal)/portal/hr/payroll-coordination/[id]/payslips/[payslipId]/components/PayslipEditor.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -572,7 +571,6 @@ export function PayslipEditor() {
   const periodDays = useMemo(() => {
     if (!payslip) return [];
 
-    // FIX: normalize timesheet keys safely
     const tsMap = new Map(
       timesheets.map((t) => [
         toLocalDateKey(t.date),
@@ -927,7 +925,16 @@ export function PayslipEditor() {
                     <td className="px-2 py-2">{fmtTime(ts.lunchEnd)}</td>
                     <td className="px-2 py-2">{fmtTime(ts.timeOut)}</td>
                     <td className={`px-2 py-2 font-semibold ${statusColor}`}>{statusLabel}</td>
-                    <td className="px-2 py-2 text-right">{Number(ts.dailyGrossPay) > 0 ? fmt(Number(ts.dailyGrossPay)) : '—'}</td>
+                    
+                    {/* FIXED: Show Raw Daily Rate for regular days, and Premium Gross Amount for holiday/rest-days */}
+                    <td className="px-2 py-2 text-right">
+                      {(() => {
+                        const isRegularDay = Number(ts.regularHours) > 0;
+                        const amount = isRegularDay ? tableDailyRate : Number(ts.dailyGrossPay);
+                        return amount > 0 ? fmt(amount) : '—';
+                      })()}
+                    </td>
+                    
                     <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdOtHours)}</td>
@@ -977,12 +984,19 @@ export function PayslipEditor() {
               })}
               <tr className="bg-muted/50 border-t-2 border-border font-bold">
                 <td className="px-2 py-2 text-xs font-bold" colSpan={7}>TOTALS</td>
+                
+                {/* FIXED: Update TOTALS column to sum Raw Daily Wages + adjusted holiday amounts */}
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
-                    const total = timesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);
+                    const total = timesheets.reduce((s, t) => {
+                      const isRegularDay = Number(t.regularHours) > 0;
+                      const amount = isRegularDay ? tableDailyRate : Number(t.dailyGrossPay);
+                      return s + amount;
+                    }, 0);
                     return total > 0 ? fmt(total) : '—';
                   })()}
                 </td>
+                
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.regOtHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdHours), 0)))}</td>
                 <td className="px-2 py-2 text-right text-xs">{fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdOtHours), 0)))}</td>
