@@ -890,7 +890,7 @@ export function PayrollPeriodDetail() {
             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Request Type
             </label>
-            <div className="flex gap-2 mt-1.5">
+            <div className="flex gap-2 mt-2">
               {(['COA', 'LEAVE', 'OVERTIME'] as RequestType[]).map((t) => (
                 <button
                   key={t}
