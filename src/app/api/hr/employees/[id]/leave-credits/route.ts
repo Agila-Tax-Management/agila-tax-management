@@ -16,16 +16,20 @@ const toNumber = (val: any) => Number(val ?? 0);
 /* ─────────────────────────────────────────────
    CORE: USED LEAVE AGGREGATION
 ───────────────────────────────────────────── */
-async function getUsedLeave(employeeId: number, leaveTypeId: number) {
+async function getUsedLeave(
+  employeeId: number,
+  leaveTypeId: number,
+  validFrom: Date,
+  expiresAt: Date,
+) {
   const agg = await prisma.leaveRequest.aggregate({
     where: {
       employeeId,
       leaveTypeId,
       status: "APPROVED",
+      startDate: { gte: validFrom, lte: expiresAt },
     },
-    _sum: {
-      creditUsed: true,
-    },
+    _sum: { creditUsed: true },
   });
 
   return toNumber(agg._sum?.creditUsed);
@@ -34,12 +38,18 @@ async function getUsedLeave(employeeId: number, leaveTypeId: number) {
 /* ─────────────────────────────────────────────
    MONTHLY BREAKDOWN (LEDGER VIEW)
 ───────────────────────────────────────────── */
-async function getMonthlyUsage(employeeId: number, leaveTypeId: number) {
+async function getMonthlyUsage(
+  employeeId: number,
+  leaveTypeId: number,
+  validFrom: Date,
+  expiresAt: Date,
+) {
   const requests = await prisma.leaveRequest.findMany({
     where: {
       employeeId,
       leaveTypeId,
       status: "APPROVED",
+      startDate: { gte: validFrom, lte: expiresAt },
     },
     select: {
       creditUsed: true,
@@ -114,8 +124,8 @@ export async function GET(
 
   const enriched = await Promise.all(
     credits.map(async (c) => {
-      const used = await getUsedLeave(employeeId, c.leaveTypeId);
-      const monthly = await getMonthlyUsage(employeeId, c.leaveTypeId);
+      const used = await getUsedLeave(employeeId, c.leaveTypeId, c.validFrom, c.expiresAt);
+      const monthly = await getMonthlyUsage(employeeId, c.leaveTypeId, c.validFrom, c.expiresAt);
 
       const allocated = toNumber(c.allocated);
       const balance = allocated - used;
@@ -245,7 +255,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Credit not found" }, { status: 404 });
   }
 
-  const used = await getUsedLeave(employeeId, existing.leaveTypeId);
+  const used = await getUsedLeave(employeeId, existing.leaveTypeId, existing.validFrom, existing.expiresAt);
 
   if (parsed.data.allocated && parsed.data.allocated < used) {
     return NextResponse.json(
@@ -291,7 +301,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const used = await getUsedLeave(employeeId, existing.leaveTypeId);
+  const used = await getUsedLeave(employeeId, existing.leaveTypeId, existing.validFrom, existing.expiresAt);
 
   if (used > 0) {
     return NextResponse.json(
