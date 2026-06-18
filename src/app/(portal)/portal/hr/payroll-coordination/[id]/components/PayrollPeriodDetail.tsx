@@ -730,23 +730,6 @@ export function PayrollPeriodDetail() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {/* Recalculate from latest attendance */}
-                        {!ps.approvedAt && (period.status === 'DRAFT' || period.status === 'PROCESSING') && (
-                          <Button
-                            variant="ghost"
-                            className="h-7 px-2 text-xs gap-1 text-orange-600"
-                            disabled={recalculatingPayslip === String(ps.id)}
-                            onClick={() => { void recalculatePayslip(ps.id); }}
-                            title="Recalculate deductions from latest attendance"
-                          >
-                            {recalculatingPayslip === String(ps.id) ? (
-                              <Loader2 size={11} className="animate-spin" />
-                            ) : (
-                              <RefreshCw size={11} />
-                            )}
-                            Recalc
-                          </Button>
-                        )}
                         {/* Approve individual payslip */}
                         {!ps.approvedAt && period.status === 'PROCESSING' && (
                           <Button
@@ -955,8 +938,6 @@ export function PayrollPeriodDetail() {
           </div>
         </div>
       )}
-
-      {/* ... (Repeat similar padding/gap structure for LEAVE and OVERTIME sections) ... */}
     </div>
 
     {/* Footer */}
