@@ -426,29 +426,78 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       )
     : 0;
 
+  const suggestions = {
+    basicPay:               parseFloat(basicPay.toFixed(2)),
+    holidayPay:             parseFloat(holidayPay.toFixed(2)),
+    allowance:              parseFloat(allowance.toFixed(2)),
+    overtimePay:            parseFloat(overtimePay.toFixed(2)),
+    paidLeavePay:           parseFloat(paidLeavePay.toFixed(2)),
+    lateUndertimeDeduction: parseFloat(lateUndertimeDeduction.toFixed(2)),
+    sssDeduction:           parseFloat(sssDeduction.toFixed(2)),
+    philhealthDeduction:    parseFloat(philhealthDeduction.toFixed(2)),
+    pagibigDeduction:       parseFloat(pagibigDeduction.toFixed(2)),
+  };
+
+  // ── apply=true: commit suggestions directly to the payslip ─────────────
+  const { searchParams } = new URL(request.url);
+  const shouldApply = searchParams.get('apply') === 'true';
+
+  if (shouldApply) {
+    // Load loan/advance fields that recalculate doesn't touch
+    const existing = await prisma.payslip.findUnique({
+      where: { id },
+      select: { pagibigLoan: true, sssLoan: true, cashAdvanceRepayment: true },
+    });
+
+    const pagibigLoan      = Number(existing?.pagibigLoan ?? 0);
+    const sssLoan          = Number(existing?.sssLoan ?? 0);
+    const cashAdvRepayment = Number(existing?.cashAdvanceRepayment ?? 0);
+
+    const totalDeductions =
+      suggestions.sssDeduction +
+      suggestions.philhealthDeduction +
+      suggestions.pagibigDeduction +
+      suggestions.lateUndertimeDeduction +
+      pagibigLoan +
+      sssLoan +
+      cashAdvRepayment;
+
+    const grossPay = suggestions.basicPay + suggestions.holidayPay + suggestions.overtimePay + suggestions.paidLeavePay + suggestions.allowance;
+    const netPay = Math.max(0, grossPay - totalDeductions);
+
+    await prisma.payslip.update({
+      where: { id },
+      data: {
+        basicPay:               suggestions.basicPay,
+        holidayPay:             suggestions.holidayPay,
+        allowance:              suggestions.allowance,
+        overtimePay:            suggestions.overtimePay,
+        paidLeavePay:           suggestions.paidLeavePay,
+        lateUndertimeDeduction: suggestions.lateUndertimeDeduction,
+        sssDeduction:           suggestions.sssDeduction,
+        philhealthDeduction:    suggestions.philhealthDeduction,
+        pagibigDeduction:       suggestions.pagibigDeduction,
+        grossPay,
+        totalDeductions,
+        netPay,
+      },
+    });
+  }
+
   void logActivity({
     userId: session.user.id,
     action: 'UPDATED',
     entity: 'Payslip',
     entityId: id,
-    description: `Recalculated payslip ${id}: ${recalcCount} timesheet row(s) updated, ${otRequests.length} OT request(s), ${leaveRequests.length} leave request(s)`,
+    description: `Recalculated payslip ${id}${shouldApply ? ' and applied' : ''}: ${recalcCount} timesheet row(s) updated, ${otRequests.length} OT request(s), ${leaveRequests.length} leave request(s)`,
     ...getRequestMeta(request),
   });
 
   return NextResponse.json({
     data: {
       timesheets: updatedTimesheets,
-      suggestions: {
-        basicPay:                parseFloat(basicPay.toFixed(2)),
-        holidayPay:              parseFloat(holidayPay.toFixed(2)),
-        allowance:               parseFloat(allowance.toFixed(2)),
-        overtimePay:             parseFloat(overtimePay.toFixed(2)),
-        paidLeavePay:            parseFloat(paidLeavePay.toFixed(2)),
-        lateUndertimeDeduction:  parseFloat(lateUndertimeDeduction.toFixed(2)),
-        sssDeduction:            parseFloat(sssDeduction.toFixed(2)),
-        philhealthDeduction:     parseFloat(philhealthDeduction.toFixed(2)),
-        pagibigDeduction:        parseFloat(pagibigDeduction.toFixed(2)),
-      },
+      suggestions,
+      applied: shouldApply,
       meta: {
         recalcCount,
         recalcMessages,

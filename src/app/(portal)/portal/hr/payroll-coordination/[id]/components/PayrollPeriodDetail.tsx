@@ -15,18 +15,33 @@ import {
   ChevronRight,
   Banknote,
   ThumbsUp,
+  RefreshCw,
+  ChevronDown,
+  FilePlus,
+  X,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
+import { Modal } from '@/components/UI/Modal';
 import { useToast } from '@/context/ToastContext';
 
 // ─── Types ────────────────────────────────────────────────────────
 
 type PeriodStatus = 'DRAFT' | 'PROCESSING' | 'APPROVED' | 'PAID' | 'CLOSED';
+type RequestType = 'COA' | 'LEAVE' | 'OVERTIME';
+
+const COA_ACTION_TYPES = ['TIME_IN', 'LUNCH_START', 'LUNCH_END', 'TIME_OUT'] as const;
+type CoaActionType = (typeof COA_ACTION_TYPES)[number];
+
+interface LeaveType {
+  id: number;
+  name: string;
+  isPaid: boolean;
+}
 
 interface PayslipRow {
-  id: string | number; // Safely handle both DB returns
+  id: string | number;
   employee: {
     id: number;
     firstName: string;
@@ -36,6 +51,15 @@ interface PayslipRow {
   basicPay: string;
   allowance: string;
   grossPay: string;
+  // Deduction breakdown
+  sssDeduction: string;
+  philhealthDeduction: string;
+  pagibigDeduction: string;
+  withholdingTax: string;
+  lateUndertimeDeduction: string;
+  pagibigLoan: string;
+  sssLoan: string;
+  cashAdvanceRepayment: string;
   totalDeductions: string;
   netPay: string;
   approvedAt: string | null;
@@ -101,10 +125,42 @@ export function PayrollPeriodDetail() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [approvingPayslip, setApprovingPayslip] = useState<string | null>(null);
   const [payingPayslip, setPayingPayslip] = useState<string | null>(null);
+  const [recalculatingPayslip, setRecalculatingPayslip] = useState<string | null>(null);
+
+  // Expanded deduction rows
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Array state for reactivity, strictly using Strings
   const [selectedPayslips, setSelectedPayslips] = useState<string[]>([]);
   const [approvingBatch, setApprovingBatch] = useState(false);
+
+  // File-on-behalf modal
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [fileTarget, setFileTarget] = useState<{ employeeId: number; name: string } | null>(null);
+  const [requestType, setRequestType] = useState<RequestType>('COA');
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [filing, setFiling] = useState(false);
+
+  // COA form
+  const [coaDate, setCoaDate] = useState('');
+  const [coaAction, setCoaAction] = useState<CoaActionType>('TIME_IN');
+  const [coaTime, setCoaTime] = useState('');
+  const [coaReason, setCoaReason] = useState('');
+
+  // Leave form
+  const [leaveTypeId, setLeaveTypeId] = useState<number | ''>('');
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveCredits, setLeaveCredits] = useState('1');
+  const [leaveReason, setLeaveReason] = useState('');
+
+  // OT form
+  const [otDate, setOtDate] = useState('');
+  const [otType, setOtType] = useState('REGULAR_OT');
+  const [otFrom, setOtFrom] = useState('');
+  const [otTo, setOtTo] = useState('');
+  const [otHours, setOtHours] = useState('');
+  const [otReason, setOtReason] = useState('');
 
   const fetchPeriod = useCallback(async () => {
     setLoading(true);
@@ -204,6 +260,96 @@ export function PayrollPeriodDetail() {
       error('Network error', 'Could not reach the server');
     } finally {
       setPayingPayslip(null);
+    }
+  };
+
+  const recalculatePayslip = async (payslipId: string | number) => {
+    const safeId = String(payslipId);
+    setRecalculatingPayslip(safeId);
+    try {
+      const res = await fetch(`/api/hr/payslips/${safeId}/recalculate?apply=true`, { method: 'POST' });
+      const json: { error?: string } = await res.json();
+      if (!res.ok) {
+        error('Recalculate failed', json.error ?? 'Could not recalculate payslip');
+        return;
+      }
+      success('Recalculated', 'Payslip updated from latest attendance data.');
+      await fetchPeriod();
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setRecalculatingPayslip(null);
+    }
+  };
+
+  const toggleRow = (payslipId: string | number) => {
+    const key = String(payslipId);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const openFileModal = (employeeId: number, name: string) => {
+    setFileTarget({ employeeId, name });
+    setRequestType('COA');
+    setCoaDate(''); setCoaAction('TIME_IN'); setCoaTime(''); setCoaReason('');
+    setLeaveTypeId(''); setLeaveStart(''); setLeaveEnd(''); setLeaveCredits('1'); setLeaveReason('');
+    setOtDate(''); setOtType('REGULAR_OT'); setOtFrom(''); setOtTo(''); setOtHours(''); setOtReason('');
+    if (leaveTypes.length === 0) {
+      void (async () => {
+        try {
+          const res = await fetch('/api/hr/leave-types');
+          const json: { data?: LeaveType[] } = await res.json();
+          if (res.ok && json.data) setLeaveTypes(json.data);
+        } catch { /* silent */ }
+      })();
+    }
+    setFileModalOpen(true);
+  };
+
+  const submitFileRequest = async () => {
+    if (!fileTarget) return;
+    setFiling(true);
+    try {
+      let url = '';
+      let body: Record<string, unknown> = {};
+
+      if (requestType === 'COA') {
+        url = `/api/hr/employees/${fileTarget.employeeId}/file-coa`;
+        body = { dateAffected: coaDate, actionType: coaAction, timeValue: coaTime, reason: coaReason };
+      } else if (requestType === 'LEAVE') {
+        url = `/api/hr/employees/${fileTarget.employeeId}/file-leave`;
+        body = {
+          leaveTypeId: Number(leaveTypeId),
+          startDate: leaveStart,
+          endDate: leaveEnd,
+          creditUsed: parseFloat(leaveCredits),
+          reason: leaveReason,
+        };
+      } else {
+        url = `/api/hr/employees/${fileTarget.employeeId}/file-overtime`;
+        body = { date: otDate, type: otType, timeFrom: otFrom, timeTo: otTo, hours: parseFloat(otHours), reason: otReason };
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json: { error?: string } = await res.json();
+      if (!res.ok) {
+        error('Failed to file', json.error ?? 'An error occurred');
+        return;
+      }
+      success('Request filed', `${requestType} request submitted for ${fileTarget.name}.`);
+      setFileModalOpen(false);
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setFiling(false);
     }
   };
 
@@ -515,7 +661,8 @@ export function PayrollPeriodDetail() {
               </thead>
               <tbody>
                 {period.payslips.map((ps) => (
-                  <tr key={String(ps.id)} className="border-b border-border hover:bg-muted/30 transition-colors">
+                  <React.Fragment key={String(ps.id)}>
+                  <tr className="border-b border-border hover:bg-muted/30 transition-colors">
                     {period.status === 'PROCESSING' && (
                       <td className="px-4 py-3 text-center">
                         <input
@@ -540,8 +687,19 @@ export function PayrollPeriodDetail() {
                     <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
                       {fmt(Number(ps.grossPay))}
                     </td>
-                    <td className="px-4 py-3 text-right text-red-500">
-                      {fmt(Number(ps.totalDeductions))}
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(ps.id)}
+                        className="inline-flex items-center gap-1 text-red-500 hover:text-red-600 transition-colors"
+                        title="Show deduction breakdown"
+                      >
+                        {fmt(Number(ps.totalDeductions))}
+                        <ChevronDown
+                          size={12}
+                          className={`transition-transform ${expandedRows.has(String(ps.id)) ? 'rotate-180' : ''}`}
+                        />
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-foreground">
                       {fmt(Number(ps.netPay))}
@@ -572,6 +730,23 @@ export function PayrollPeriodDetail() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {/* Recalculate from latest attendance */}
+                        {!ps.approvedAt && (period.status === 'DRAFT' || period.status === 'PROCESSING') && (
+                          <Button
+                            variant="ghost"
+                            className="h-7 px-2 text-xs gap-1 text-orange-600"
+                            disabled={recalculatingPayslip === String(ps.id)}
+                            onClick={() => { void recalculatePayslip(ps.id); }}
+                            title="Recalculate deductions from latest attendance"
+                          >
+                            {recalculatingPayslip === String(ps.id) ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={11} />
+                            )}
+                            Recalc
+                          </Button>
+                        )}
                         {/* Approve individual payslip */}
                         {!ps.approvedAt && period.status === 'PROCESSING' && (
                           <Button
@@ -615,6 +790,16 @@ export function PayrollPeriodDetail() {
                             <Banknote size={11} /> Paid
                           </span>
                         )}
+                        {/* File request on behalf */}
+                        <Button
+                          variant="ghost"
+                          className="h-7 px-2 text-xs gap-1 text-violet-600"
+                          onClick={() => openFileModal(ps.employee.id, `${ps.employee.firstName} ${ps.employee.lastName}`)}
+                          title="File a COA, Leave, or OT request on behalf of this employee"
+                        >
+                          <FilePlus size={11} />
+                          File
+                        </Button>
                         <Button
                           variant="ghost"
                           className="h-7 px-2 text-xs gap-1"
@@ -631,6 +816,36 @@ export function PayrollPeriodDetail() {
                       </div>
                     </td>
                   </tr>
+                  {/* ── Deduction Breakdown Row ── */}
+                  {expandedRows.has(String(ps.id)) && (
+                    <tr className="bg-muted/20 border-b border-border">
+                      <td
+                        colSpan={period.status === 'PROCESSING' ? 8 : 7}
+                        className="px-6 py-3"
+                      >
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                          {[
+                            { label: 'SSS', value: ps.sssDeduction },
+                            { label: 'PhilHealth', value: ps.philhealthDeduction },
+                            { label: 'Pag-IBIG', value: ps.pagibigDeduction },
+                            { label: 'Withholding Tax', value: ps.withholdingTax },
+                            { label: 'Late / Undertime', value: ps.lateUndertimeDeduction },
+                            ...(Number(ps.pagibigLoan) > 0 ? [{ label: 'Pag-IBIG Loan', value: ps.pagibigLoan }] : []),
+                            ...(Number(ps.sssLoan) > 0 ? [{ label: 'SSS Loan', value: ps.sssLoan }] : []),
+                            ...(Number(ps.cashAdvanceRepayment) > 0 ? [{ label: 'Cash Advance', value: ps.cashAdvanceRepayment }] : []),
+                          ].map((d) => (
+                            <div key={d.label} className="flex justify-between gap-2 py-0.5 border-b border-border/50 last:border-0">
+                              <span className="text-muted-foreground">{d.label}</span>
+                              <span className={`font-medium tabular-nums ${Number(d.value) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                {fmt(Number(d.value))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
               <tfoot>
@@ -661,6 +876,228 @@ export function PayrollPeriodDetail() {
           </div>
         )}
       </Card>
+
+      {/* ── File Request Modal ── */}
+      <Modal
+        isOpen={fileModalOpen}
+        onClose={() => setFileModalOpen(false)}
+        title={`File Request — ${fileTarget?.name ?? ''}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          {/* Request type selector */}
+          <div>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Request Type
+            </label>
+            <div className="flex gap-2 mt-1.5">
+              {(['COA', 'LEAVE', 'OVERTIME'] as RequestType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setRequestType(t)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold border transition-colors ${
+                    requestType === t
+                      ? 'bg-foreground text-background border-foreground'
+                      : 'border-border text-muted-foreground hover:border-foreground/50'
+                  }`}
+                >
+                  {t === 'COA' ? 'Attendance Correction' : t === 'LEAVE' ? 'Leave' : 'Overtime'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* COA fields */}
+          {requestType === 'COA' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Date Affected</label>
+                  <input
+                    type="date"
+                    value={coaDate}
+                    onChange={(e) => setCoaDate(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Action</label>
+                  <select
+                    value={coaAction}
+                    onChange={(e) => setCoaAction(e.target.value as CoaActionType)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  >
+                    {COA_ACTION_TYPES.map((a) => (
+                      <option key={a} value={a}>{a.replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Correct Time (HH:MM)</label>
+                <input
+                  type="time"
+                  value={coaTime}
+                  onChange={(e) => setCoaTime(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                <textarea
+                  value={coaReason}
+                  onChange={(e) => setCoaReason(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Leave fields */}
+          {requestType === 'LEAVE' && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Leave Type</label>
+                <select
+                  value={leaveTypeId}
+                  onChange={(e) => setLeaveTypeId(Number(e.target.value))}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                >
+                  <option value="">Select leave type…</option>
+                  {leaveTypes.map((lt) => (
+                    <option key={lt.id} value={lt.id}>{lt.name}{lt.isPaid ? '' : ' (Unpaid)'}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+                  <input
+                    type="date"
+                    value={leaveStart}
+                    onChange={(e) => setLeaveStart(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">End Date</label>
+                  <input
+                    type="date"
+                    value={leaveEnd}
+                    onChange={(e) => setLeaveEnd(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Days Used</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={leaveCredits}
+                    onChange={(e) => setLeaveCredits(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                <textarea
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* OT fields */}
+          {requestType === 'OVERTIME' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Date</label>
+                  <input
+                    type="date"
+                    value={otDate}
+                    onChange={(e) => setOtDate(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">OT Type</label>
+                  <select
+                    value={otType}
+                    onChange={(e) => setOtType(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  >
+                    <option value="REGULAR_OT">Regular OT</option>
+                    <option value="REST_DAY_OT">Rest Day OT</option>
+                    <option value="HOLIDAY_OT">Holiday OT</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">From</label>
+                  <input
+                    type="time"
+                    value={otFrom}
+                    onChange={(e) => setOtFrom(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">To</label>
+                  <input
+                    type="time"
+                    value={otTo}
+                    onChange={(e) => setOtTo(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Hours</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={otHours}
+                    onChange={(e) => setOtHours(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                <textarea
+                  value={otReason}
+                  onChange={(e) => setOtReason(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => setFileModalOpen(false)} disabled={filing}>
+              <X size={14} className="mr-1" /> Cancel
+            </Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+              onClick={() => { void submitFileRequest(); }}
+              disabled={filing}
+            >
+              {filing ? <Loader2 size={14} className="animate-spin" /> : <FilePlus size={14} />}
+              Submit Request
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
