@@ -1059,8 +1059,9 @@ export function PayslipEditor() {
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
+                      {/* RH column: all employees entitled to 100% daily rate on unworked Regular Holidays */}
                       <td className="px-2 py-2 text-right">
-                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType === 'VARIABLE_PAY' ? fmt(tableDailyRate) : '—'}
+                        {derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : '—'}
                       </td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
@@ -1068,10 +1069,9 @@ export function PayslipEditor() {
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right text-red-500">—</td>
                       <td className="px-2 py-2 text-right text-amber-500">—</td>
+                      {/* Gross: RH = 100% daily rate; SH unworked = no pay */}
                       <td className="px-2 py-2 text-right font-bold text-emerald-600">
-                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType === 'VARIABLE_PAY'
-                          ? fmt(tableDailyRate)
-                          : '—'}
+                        {derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : '—'}
                       </td>
                     </tr>
                   );
@@ -1326,10 +1326,9 @@ export function PayslipEditor() {
                         Number(t.rhRdOtHours) * 3.38 * hr2;
                       return s + Number(t.dailyGrossPay) + otPay;
                     }, 0);
-                    const unworkedRhPay = tablePayType === 'VARIABLE_PAY'
-                      ? periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
-                          !t && ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0)
-                      : 0;
+                    // All employees are entitled to RH pay on unworked Regular Holidays
+                    const unworkedRhPay = periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
+                      !t && ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0);
                     const total = tsTotal + unworkedRhPay;
                     return total > 0
                       ? `₱${total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
