@@ -1196,7 +1196,9 @@ export function PayslipEditor() {
                           : isSH
                           ? tableDailyRate * 1.3
                           : Number(ts.dailyGrossPay);
-                        const rowGross = basePay + rowOtPay - lateDeduct - undertimeDeduct;
+                        // Gross = earnings before late/undertime deductions
+                        // (Late and Undertime are already shown in their own columns)
+                        const rowGross = basePay + rowOtPay;
                         return rowGross > 0
                           ? `₱${rowGross.toLocaleString('en-PH', {
                               minimumFractionDigits: 2,
