@@ -1188,9 +1188,14 @@ export function PayslipEditor() {
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
                           (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr2 +
                           Number(ts.rhRdOtHours) * 3.38 * hr2;
-                        // Holiday rows: use tableDailyRate as base (consistent with Reg Pay column)
+                        // Holiday rows: compute entitled base pay per PH labor law
                         // ts.dailyGrossPay may be 0 if the timesheet was processed before the holiday was marked
-                        const basePay = (isRH || isSH) ? tableDailyRate : Number(ts.dailyGrossPay);
+                        // RH worked = 200% (base + 100% premium); SH worked = 130% (base + 30% premium)
+                        const basePay = isRH
+                          ? tableDailyRate * 2
+                          : isSH
+                          ? tableDailyRate * 1.3
+                          : Number(ts.dailyGrossPay);
                         const rowGross = basePay + rowOtPay - lateDeduct - undertimeDeduct;
                         return rowGross > 0
                           ? `₱${rowGross.toLocaleString('en-PH', {
