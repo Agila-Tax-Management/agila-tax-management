@@ -1188,13 +1188,13 @@ export function PayslipEditor() {
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
                           (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr2 +
                           Number(ts.rhRdOtHours) * 3.38 * hr2;
-                        // Holiday rows: compute entitled base pay per PH labor law
-                        // ts.dailyGrossPay may be 0 if the timesheet was processed before the holiday was marked
-                        // RH worked = 200% (base + 100% premium); SH worked = 130% (base + 30% premium)
+                        // Holiday rows: use ts.dailyGrossPay (prorated by actual hours worked)
+                        // when the backend has computed it. Fall back to full-rate formula
+                        // only when dailyGrossPay is 0 (e.g. timesheet not yet recalculated).
                         const basePay = isRH
-                          ? tableDailyRate * 2
+                          ? (Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 2)
                           : isSH
-                          ? tableDailyRate * 1.3
+                          ? (Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 1.3)
                           : Number(ts.dailyGrossPay);
                         // Gross = earnings before late/undertime deductions
                         // (Late and Undertime are already shown in their own columns)
