@@ -289,8 +289,6 @@ export function PayslipDetailPage() {
   const [showCompModal, setShowCompModal] = useState(false);
   const [timesheets, setTimesheets] = useState<TimesheetRecord[]>([]);
   const [timesheetsLoading, setTimesheetsLoading] = useState(false);
-
-  // Holiday map state
   const [holidays, setHolidays] = useState<Record<string, string>>({});
 
   const fetchPayslip = useCallback(async () => {
@@ -457,7 +455,7 @@ export function PayslipDetailPage() {
       let derivedStatus = ts ? ts.status : workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
 
       const holidayType = holidays[key];
-      if (!ts && holidayType) {
+      if (holidayType) {
         derivedStatus = holidayType === 'REGULAR' ? 'REGULAR_HOLIDAY' : 'SPECIAL_HOLIDAY';
       }
 
@@ -470,6 +468,48 @@ export function PayslipDetailPage() {
     }
     return days;
   }, [payslip, timesheets, holidays]);
+
+  const dynamicDeductions = useMemo(() => {
+    let regularLateUnder = 0;
+    let holidayLateUnder = 0;
+
+    if (!payslip) return { regularLateUnder, holidayLateUnder };
+
+    const activeEmp = payslip.employee.employments[0] ?? null;
+    const activeCt = activeEmp?.contracts[0] ?? null;
+    const activeSchedule = activeCt?.schedule ?? null;
+    const activeComp = activeCt?.compensations[0] ?? null;
+    const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
+    const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
+
+    if (payslip.hrSetting?.disableLateUndertimeGlobal || tablePayType !== 'VARIABLE_PAY') {
+      return { regularLateUnder, holidayLateUnder };
+    }
+
+    periodDays.forEach(({ ts, date, derivedStatus }) => {
+      if (!ts) return;
+      const { lateDeduct, undertimeDeduct } = computeRowPay(
+        ts,
+        tableDailyRate,
+        tablePayType,
+        activeSchedule?.days,
+        date.getDay(),
+        false
+      );
+
+      const amount = lateDeduct + undertimeDeduct;
+      const isHoliday = derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY';
+
+      if (isHoliday) {
+        holidayLateUnder += amount;
+      } else {
+        regularLateUnder += amount;
+      }
+    });
+
+    return { regularLateUnder, holidayLateUnder };
+  }, [payslip, periodDays]);
+
 
   if (loading) {
     return (
@@ -507,16 +547,30 @@ export function PayslipDetailPage() {
     { label: 'Allowance', value: payslip.allowance },
   ].filter((r) => (Number(r.value) || 0) !== 0);
 
+  const backendLateUnder = Number(payslip.lateUndertimeDeduction) || 0;
+
   const deductionRows = [
     { label: 'SSS', value: payslip.sssDeduction },
     { label: 'PhilHealth', value: payslip.philhealthDeduction },
     { label: 'Pag-IBIG', value: payslip.pagibigDeduction },
     { label: 'Withholding Tax', value: payslip.withholdingTax },
-    { label: 'Late / Undertime', value: payslip.lateUndertimeDeduction },
+    { 
+      label: 'Late / Undertime', 
+      value: backendLateUnder > 0 ? payslip.lateUndertimeDeduction : dynamicDeductions.regularLateUnder.toString() 
+    },
+    { 
+      label: 'Holiday Late / Undertime', 
+      value: dynamicDeductions.holidayLateUnder.toString() 
+    },
     { label: 'SSS Loan', value: payslip.sssLoan },
     { label: 'Pag-IBIG Loan', value: payslip.pagibigLoan },
     { label: 'Cash Advance', value: payslip.cashAdvanceRepayment },
-  ].filter((r) => (Number(r.value) || 0) !== 0);
+  ].filter((r) => {
+    if (r.label === 'Late / Undertime' || r.label === 'Holiday Late / Undertime') {
+      return true;
+    }
+    return (Number(r.value) || 0) !== 0;
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -892,18 +946,24 @@ export function PayslipDetailPage() {
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
+                      <td className="px-2 py-2 text-right">
+                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType === 'VARIABLE_PAY' ? fmt(tableDailyRate) : '—'}
+                      </td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right text-red-500">—</td>
                       <td className="px-2 py-2 text-right text-amber-500">—</td>
-                      <td className="px-2 py-2 text-right font-bold text-emerald-600">—</td>
+                      <td className="px-2 py-2 text-right font-bold text-emerald-600">
+                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType === 'VARIABLE_PAY'
+                          ? fmt(tableDailyRate)
+                          : '—'}
+                      </td>
                     </tr>
                   );
                 }
-                const statusLabel = SS_LABEL[ts.status] ?? ts.status;
-                const statusColor = SS_COLOR[ts.status] ?? 'text-muted-foreground';
+                const statusLabel = SS_LABEL[derivedStatus] ?? SS_LABEL[ts.status] ?? ts.status;
+                const statusColor = SS_COLOR[derivedStatus] ?? SS_COLOR[ts.status] ?? 'text-muted-foreground';
                 const { lateDeduct, undertimeDeduct } = computeRowPay(
                   ts,
                   tableDailyRate,
@@ -925,20 +985,35 @@ export function PayslipDetailPage() {
                     <td className={`px-2 py-2 font-semibold ${statusColor}`}>{statusLabel}</td>
                     <td className="px-2 py-2 text-right">
                       {(() => {
+                        if (derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') {
+                          return tableDailyRate > 0 ? fmt(tableDailyRate) : '—';
+                        }
                         const isRegularDay = Number(ts.regularHours) > 0;
                         const amount = isRegularDay ? tableDailyRate : Number(ts.dailyGrossPay);
                         return amount > 0 ? fmt(amount) : '—';
                       })()}
                     </td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
+                    <td className="px-2 py-2 text-right">
+                      {derivedStatus === 'REGULAR_HOLIDAY' ? '—' : fmtHours(ts.regOtHours)}
+                    </td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shRdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shRdOtHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rhHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rhOtHours)}</td>
+                    <td className="px-2 py-2 text-right">
+                      {derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : fmtHours(ts.rhHours)}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {(() => {
+                        if (derivedStatus === 'REGULAR_HOLIDAY') {
+                          const pay = (Number(ts.rhOtHours) + Number(ts.regOtHours)) * 2.60 * (tableDailyRate / 8);
+                          return pay > 0 ? fmt(parseFloat(pay.toFixed(2))) : '—';
+                        }
+                        return fmtHours(ts.rhOtHours);
+                      })()}
+                    </td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdOtHours)}</td>
                     <td className="px-2 py-2 text-right text-red-500">
@@ -954,14 +1029,15 @@ export function PayslipDetailPage() {
                     <td className="px-2 py-2 text-right font-bold text-emerald-600">
                       {(() => {
                         const hr2 = tableDailyRate / 8;
+                        const isRH = derivedStatus === 'REGULAR_HOLIDAY';
                         const rowOtPay =
-                          Number(ts.regOtHours) * 1.25 * hr2 +
+                          (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr2) +
                           Number(ts.rdOtHours) * 1.69 * hr2 +
                           Number(ts.shOtHours) * 1.69 * hr2 +
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
-                          Number(ts.rhOtHours) * 2.60 * hr2 +
+                          (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr2 +
                           Number(ts.rhRdOtHours) * 3.38 * hr2;
-                        const rowGross = Number(ts.dailyGrossPay) + rowOtPay;
+                        const rowGross = Number(ts.dailyGrossPay) + rowOtPay - lateDeduct - undertimeDeduct;
                         return rowGross > 0
                           ? `₱${rowGross.toLocaleString('en-PH', {
                               minimumFractionDigits: 2,
@@ -988,7 +1064,8 @@ export function PayslipDetailPage() {
                   })()}
                 </td>
                 <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.regOtHours), 0)))}
+                  {fmtHours(String(periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
+                    t && ds !== 'REGULAR_HOLIDAY' ? s + Number(t.regOtHours) : s, 0)))}
                 </td>
                 <td className="px-2 py-2 text-right text-xs">
                   {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdHours), 0)))}
@@ -1009,10 +1086,22 @@ export function PayslipDetailPage() {
                   {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.shRdOtHours), 0)))}
                 </td>
                 <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhHours), 0)))}
+                  {(() => {
+                    const total = periodDays.reduce((s, { derivedStatus: ds }) =>
+                      ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0);
+                    return total > 0 ? fmt(total) : '—';
+                  })()}
                 </td>
                 <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhOtHours), 0)))}
+                  {(() => {
+                    const hr = tableDailyRate / 8;
+                    const total = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
+                      if (!t) return s;
+                      const rhOt = Number(t.rhOtHours) + (ds === 'REGULAR_HOLIDAY' ? Number(t.regOtHours) : 0);
+                      return s + rhOt * 2.60 * hr;
+                    }, 0);
+                    return total > 0 ? fmt(parseFloat(total.toFixed(2))) : '—';
+                  })()}
                 </td>
                 <td className="px-2 py-2 text-right text-xs">
                   {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdHours), 0)))}
@@ -1065,7 +1154,7 @@ export function PayslipDetailPage() {
                 <td className="px-2 py-2 text-right text-emerald-600">
                   {(() => {
                     const hr2 = tableDailyRate / 8;
-                    const total = timesheets.reduce((s, t) => {
+                    const tsTotal = timesheets.reduce((s, t) => {
                       const otPay =
                         Number(t.regOtHours) * 1.25 * hr2 +
                         Number(t.rdOtHours) * 1.69 * hr2 +
@@ -1075,6 +1164,12 @@ export function PayslipDetailPage() {
                         Number(t.rhRdOtHours) * 3.38 * hr2;
                       return s + Number(t.dailyGrossPay) + otPay;
                     }, 0);
+                    // Add mandated pay for unworked regular holidays (VARIABLE_PAY only)
+                    const unworkedRhPay = tablePayType === 'VARIABLE_PAY'
+                      ? periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
+                          !t && ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0)
+                      : 0;
+                    const total = tsTotal + unworkedRhPay;
                     return total > 0
                       ? `₱${total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
                       : '—';

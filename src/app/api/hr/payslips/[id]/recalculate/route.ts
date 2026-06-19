@@ -9,7 +9,7 @@ import {
   getPhilHealthEmployeeDeduction,
   getPagibigEmployeeDeduction,
 } from '@/lib/government-contributions';
-import { computeDoleOvertimePay } from '@/lib/dole-overtime';
+import { computeDoleOvertimePay, computeHolidayPay } from '@/lib/dole-overtime';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
 interface RouteParams {
@@ -354,7 +354,11 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const basicPay =
     payType === 'FIXED_PAY'
       ? monthlyRate / freqDiv
-      : updatedTimesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);
+      // VARIABLE_PAY: only regular working days (premium days go into holidayPay).
+      : updatedTimesheets.reduce(
+          (s, t) => (Number(t.regularHours) > 0 ? s + Number(t.dailyGrossPay) : s),
+          0,
+        );
 
   // Allowance: respect allowanceOnFirstCutoffOnly flag
   const allowanceOnFirstCutoffOnly = compensation?.allowanceOnFirstCutoffOnly ?? true;
@@ -371,10 +375,23 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     return (h ?? 0) * 60 + (m ?? 0);
   };
 
-  // Holiday premium pay: basicPay now sums dailyGrossPay which already embeds all
-  // holiday and rest-day multipliers via computeTimesheetFields(). No separate component
-  // needed — setting to 0 prevents double-counting for all pay types.
-  const holidayPay = 0;
+  // Holiday pay per Philippine Labor Code Art. 94 + DOLE Rules:
+  //   VARIABLE_PAY: sum of worked premium-day dailyGrossPay (rest days, special holidays,
+  //     regular holidays already computed at DOLE multipliers) PLUS mandated 100% daily
+  //     rate for each unworked regular holiday in the period (Labor Code Art. 94).
+  //     basicPay now contains only regular-day pay so this appears as a visible line item.
+  //   FIXED_PAY: basicPay = full periodic salary (1× for every day); holidayPay captures
+  //     the additional premium earned by working on rest days / holiday days:
+  //       Rest day +30%, Special holiday +30%, Special+rest day +50%,
+  //       Regular holiday +100%, Regular holiday+rest day +160%.
+  const holidayPay = computeHolidayPay(
+    updatedTimesheets,
+    holidayMap,
+    payType,
+    dailyRate,
+    startDate,
+    endDate,
+  );
 
   // Late / undertime deduction: per-minute penalty on punched days only.
   //   VARIABLE_PAY → already baked into dailyGrossPay per row (0 here).

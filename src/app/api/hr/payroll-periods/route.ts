@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
 import { computeTimesheetFields, type DayType } from "@/lib/timesheet-calc";
-import { computeDoleOvertimePay, sumOtHours } from "@/lib/dole-overtime";
+import { computeDoleOvertimePay, sumOtHours, computeHolidayPay } from "@/lib/dole-overtime";
 import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from "@/lib/hr-settings-guard";
 import { getSSSEmployeeDeduction } from "@/lib/sss-contribution";
 import {
@@ -216,8 +216,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       shRdOtHours: true,
       rhOtHours: true,
       rhRdOtHours: true,
+      rdHours: true,
       shHours: true,
+      shRdHours: true,
       rhHours: true,
+      rhRdHours: true,
       lateMinutes: true,
       undertimeMinutes: true,
       dailyGrossPay: true,
@@ -347,8 +350,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         shRdOtHours: true,
         rhOtHours: true,
         rhRdOtHours: true,
+        rdHours: true,
         shHours: true,
+        shRdHours: true,
         rhHours: true,
+        rhRdHours: true,
         lateMinutes: true,
         undertimeMinutes: true,
         dailyGrossPay: true,
@@ -405,7 +411,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       const basicPay = comp.payType === 'FIXED_PAY'
         ? monthlyRate / freqDiv
-        : empTs.reduce((s, ts) => s + Number(ts.dailyGrossPay), 0);
+        // VARIABLE_PAY: only regular working days; premium days go into holidayPay.
+        : empTs.reduce(
+            (s, ts) => (Number(ts.regularHours) > 0 ? s + Number(ts.dailyGrossPay) : s),
+            0,
+          );
+
+      // Holiday pay per Philippine Labor Code Art. 94 + DOLE Rules:
+      //   VARIABLE_PAY: worked premium-day pay + unworked regular holidays (mandated 100%).
+      //   FIXED_PAY: additional premium for worked holidays / rest days beyond base salary.
+      const holidayPay = computeHolidayPay(
+        empTs,
+        periodHolidayMap,
+        comp.payType,
+        dailyRate,
+        startDate,
+        endDate,
+      );
 
       const overtimePay = computeDoleOvertimePay(empTs, dailyRate);
       const paidLeavePay = (leaveByEmp.get(employeeId) ?? 0) * dailyRate;
@@ -443,7 +465,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }, 0).toFixed(2),
       );
 
-      const grossPay = basicPay + allowance + overtimePay + paidLeavePay;
+      const grossPay = basicPay + holidayPay + allowance + overtimePay + paidLeavePay;
 
       const sssDeduction = comp.deductSss ? getSSSEmployeeDeduction(monthlyRate, freq) : 0;
       const philhealthDeduction = comp.deductPhilhealth ? getPhilHealthEmployeeDeduction(monthlyRate, freq) : 0;
@@ -469,6 +491,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           totalLateMins,
           totalUndertimeMins,
           basicPay,
+          holidayPay,
           allowance,
           overtimePay,
           paidLeavePay,
