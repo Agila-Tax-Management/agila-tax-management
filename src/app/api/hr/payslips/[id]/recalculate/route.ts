@@ -374,10 +374,22 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const lateUndertimeDeduction = regularLateUnder + regularHolidayLateUnder + specialHolidayLateUnder;
   const overtimePay = computeDoleOvertimePay(updatedTimesheets, dailyRate);
 
-  const paidLeavePay = leaveRequests.reduce(
-    (s, lr) => s + Number(lr.creditUsed) * dailyRate,
-    0,
-  );
+  const paidLeavePay = leaveRequests.reduce((s, lr) => {
+    // Clamp the leave range to this payroll period — a leave of Jun 15–18 on a
+    // Jun 1–15 payroll should only count Jun 15 (1 day), not the full 4 days.
+    const overlapStart = new Date(Math.max(lr.startDate.getTime(), startDate.getTime()));
+    const overlapEnd   = new Date(Math.min(lr.endDate.getTime(),   endDate.getTime()));
+
+    // Count working days in the overlap (skip rest days per the employee's schedule)
+    let days = 0;
+    const cursor = new Date(overlapStart);
+    while (cursor <= overlapEnd) {
+      if (!restDaySet.has(cursor.getUTCDay())) days++;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    return s + days * dailyRate;
+  }, 0);
 
   const sssDeduction = compensation?.deductSss
     ? getSSSEmployeeDeduction(monthlyRate, freq)
