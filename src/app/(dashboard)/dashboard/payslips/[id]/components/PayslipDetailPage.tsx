@@ -565,12 +565,10 @@ export function PayslipDetailPage() {
     { label: 'SSS Loan', value: payslip.sssLoan },
     { label: 'Pag-IBIG Loan', value: payslip.pagibigLoan },
     { label: 'Cash Advance', value: payslip.cashAdvanceRepayment },
-  ].filter((r) => {
-    if (r.label === 'Late / Undertime' || r.label === 'Holiday Late / Undertime') {
-      return true;
-    }
-    return (Number(r.value) || 0) !== 0;
-  });
+  ].filter((r) => (Number(r.value) || 0) !== 0);
+
+  const liveTotalDeductions = deductionRows.reduce((s, r) => s + (Number(r.value) || 0), 0);
+  const liveNetPay = Math.max(0, (Number(payslip.grossPay) || 0) - liveTotalDeductions);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -1295,7 +1293,7 @@ export function PayslipDetailPage() {
             <div className="flex justify-between px-3 py-2 bg-red-50">
               <span className="text-xs font-bold text-red-700">Total Deductions</span>
               <span className="text-xs font-black text-red-700">
-                {fmt(payslip.totalDeductions)}
+                {fmt(liveTotalDeductions)}
               </span>
             </div>
           </div>
@@ -1308,7 +1306,7 @@ export function PayslipDetailPage() {
           Net Pay
         </span>
         <span className="text-3xl font-black text-blue-700 dark:text-blue-300">
-          {fmt(payslip.netPay)}
+          {fmt(liveNetPay)}
         </span>
       </div>
     </div>
