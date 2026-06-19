@@ -182,15 +182,10 @@ const fmtHours = (h: string | number): string => {
   return n === 0 ? '—' : n.toFixed(2);
 };
 
-// ─── Updated Helpers ───
-
 function toMin(hhmm: string | null | undefined): number {
-  // If value is null, undefined, or empty, return 0
   if (!hhmm) return 0;
-  
   const parts = hhmm.split(':');
   if (parts.length !== 2) return 0;
-  
   const h = Number(parts[0]);
   const m = Number(parts[1]);
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
@@ -208,8 +203,7 @@ function computeRowPay(
   
   const sd = scheduleDays?.find((d) => d.dayOfWeek === dayOfWeek) ?? null;
   
-  // Safe defaults if schedule values are missing/null
-  const schedStart = sd?.startTime ? toMin(sd.startTime) : 8 * 60; // Default 8am
+  const schedStart = sd?.startTime ? toMin(sd.startTime) : 9 * 60; // Default 9am
   const schedEnd = sd?.endTime ? toMin(sd.endTime) : 17 * 60;     // Default 5pm
   const brkStart = sd?.breakStart ? toMin(sd.breakStart) : null;
   const brkEnd = sd?.breakEnd ? toMin(sd.breakEnd) : null;
@@ -219,14 +213,10 @@ function computeRowPay(
     : 60;
     
   const scheduledWorkMin = Math.max(1, schedEnd - schedStart - breakMin);
-  const isVariable = payType === 'VARIABLE_PAY';
   
-  const lateDeduct = isVariable
-    ? parseFloat(((ts.lateMinutes / scheduledWorkMin) * dailyRate).toFixed(2))
-    : 0;
-  const undertimeDeduct = isVariable
-    ? parseFloat(((ts.undertimeMinutes / scheduledWorkMin) * dailyRate).toFixed(2))
-    : 0;
+  // Late metrics apply directly to both FIXED_PAY and VARIABLE_PAY base rates
+  const lateDeduct = parseFloat(((ts.lateMinutes / scheduledWorkMin) * dailyRate).toFixed(2));
+  const undertimeDeduct = parseFloat(((ts.undertimeMinutes / scheduledWorkMin) * dailyRate).toFixed(2));
     
   return { lateDeduct, undertimeDeduct };
 }
@@ -296,11 +286,9 @@ export function PayslipEditor() {
   const [approving, setApproving] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Holiday map state
   const [holidays, setHolidays] = useState<Record<string, string>>({});
 
-  // Editable deduction/earning fields
+  // Editable fields
   const [basicPay, setBasicPay] = useState('0');
   const [holidayPay, setHolidayPay] = useState('0');
   const [overtimePay, setOvertimePay] = useState('0');
@@ -391,7 +379,83 @@ export function PayslipEditor() {
     void fetchHolidays();
   }, [fetchHolidays]);
 
-  // Live-computed display totals
+  const periodDays = useMemo(() => {
+    if (!payslip) return [];
+    
+    const tsMap = new Map(timesheets.map((t) => [toLocalDateKey(t.date), t]));
+    const scheduleDays = payslip.employee.employments[0]?.contracts[0]?.schedule?.days ?? [];
+    const workingDaySet = new Set(
+      scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek)
+    );
+    
+    const days: any[] = [];
+    const start = new Date(`${payslip.payrollPeriod.startDate.slice(0, 10)}T00:00:00`);
+    const end = new Date(`${payslip.payrollPeriod.endDate.slice(0, 10)}T00:00:00`);
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+      const key = toLocalDateKey(cursor);
+      const ts = tsMap.get(key) ?? null;
+      let derivedStatus = ts ? ts.status : workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
+
+      const holidayType = holidays[key];
+      if (holidayType) {
+        derivedStatus = holidayType === 'REGULAR' ? 'REGULAR_HOLIDAY' : 'SPECIAL_HOLIDAY';
+      }
+
+      days.push({
+        date: new Date(cursor),
+        ts,
+        derivedStatus,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }, [payslip, timesheets, holidays]);
+
+  const dynamicDeductions = useMemo(() => {
+    let regularLateUnder = 0;
+    let regularHolidayLateUnder = 0;
+    let specialHolidayLateUnder = 0;
+
+    if (!payslip) return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
+
+    const activeEmp = payslip.employee.employments[0] ?? null;
+    const activeCt = activeEmp?.contracts[0] ?? null;
+    const activeSchedule = activeCt?.schedule ?? null;
+    const activeComp = activeCt?.compensations[0] ?? null;
+    const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
+    const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
+
+    if (payslip.hrSetting?.disableLateUndertimeGlobal) {
+      return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
+    }
+
+    periodDays.forEach(({ ts, date, derivedStatus }) => {
+      if (!ts) return;
+      const { lateDeduct, undertimeDeduct } = computeRowPay(
+        ts,
+        tableDailyRate,
+        tablePayType,
+        activeSchedule?.days,
+        date.getDay(),
+        false
+      );
+
+      const amount = lateDeduct + undertimeDeduct;
+
+      if (derivedStatus === 'REGULAR_HOLIDAY') {
+        regularHolidayLateUnder += amount;
+      } else if (derivedStatus === 'SPECIAL_HOLIDAY') {
+        specialHolidayLateUnder += amount;
+      } else {
+        regularLateUnder += amount;
+      }
+    });
+
+    return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
+  }, [payslip, periodDays]);
+
   const liveGross =
     Number(basicPay) +
     Number(holidayPay) +
@@ -399,12 +463,16 @@ export function PayslipEditor() {
     Number(paidLeavePay) +
     Number(allowance);
 
+  const displayLateUnder = Number(lateUnder) > 0 ? lateUnder : dynamicDeductions.regularLateUnder.toString();
+
   const liveDed =
     Number(sss) +
     Number(philhealth) +
     Number(pagibig) +
     Number(tax) +
-    Number(lateUnder) +
+    Number(displayLateUnder) +
+    dynamicDeductions.regularHolidayLateUnder +
+    dynamicDeductions.specialHolidayLateUnder +
     Number(pagibigLoan) +
     Number(sssLoan) +
     Number(cashAdv);
@@ -461,7 +529,7 @@ export function PayslipEditor() {
         import('@react-pdf/renderer'),
         import('@/components/hr/PayslipPDF'),
       ]);
-      const React = (await import('react')).default;
+      const ReactInstance = (await import('react')).default;
       const emp = payslip.employee.employments[0];
       const pdfPayslip = {
         id: payslip.id,
@@ -496,7 +564,7 @@ export function PayslipEditor() {
         approvedBy: payslip.approvedBy,
         acknowledgedBy: payslip.acknowledgedBy,
       };
-      const el = React.createElement(PayslipPDF, { payslip: pdfPayslip }) as Parameters<typeof pdf>[0];
+      const el = ReactInstance.createElement(PayslipPDF, { payslip: pdfPayslip }) as Parameters<typeof pdf>[0];
       const blob = await pdf(el).toBlob();
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
@@ -599,42 +667,6 @@ export function PayslipEditor() {
     }
   };
 
-  const periodDays = useMemo(() => {
-    if (!payslip) return [];
-    
-    const tsMap = new Map(timesheets.map((t) => [toLocalDateKey(t.date), t]));
-    const scheduleDays = payslip.employee.employments[0]?.contracts[0]?.schedule?.days ?? [];
-    
-    const workingDaySet = new Set(
-      scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek)
-    );
-    
-    const days: any[] = [];
-    const start = new Date(`${payslip.payrollPeriod.startDate.slice(0, 10)}T00:00:00`);
-    const end = new Date(`${payslip.payrollPeriod.endDate.slice(0, 10)}T00:00:00`);
-    const cursor = new Date(start);
-
-    while (cursor <= end) {
-      const key = toLocalDateKey(cursor);
-      const ts = tsMap.get(key) ?? null;
-      
-      let derivedStatus = ts ? ts.status : workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
-
-      const holidayType = holidays[key];
-      if (holidayType) {
-        derivedStatus = holidayType === 'REGULAR' ? 'REGULAR_HOLIDAY' : 'SPECIAL_HOLIDAY';
-      }
-
-      days.push({
-        date: new Date(cursor),
-        ts,
-        derivedStatus,
-      });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return days;
-  }, [payslip, timesheets, holidays]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 gap-2 text-muted-foreground">
@@ -655,10 +687,33 @@ export function PayslipEditor() {
     );
   }
 
-  const tableComp = payslip.employee.employments[0]?.contracts[0]?.compensations[0] ?? null;
-  const tableSchedule = payslip.employee.employments[0]?.contracts[0]?.schedule ?? null;
-  const tableDailyRate = Number(tableComp?.calculatedDailyRate ?? 0);
-  const tablePayType = tableComp?.payType ?? 'FIXED_PAY';
+  // ─── Hoisted Variables ──────────────────────────────────────────
+  const activeEmp = payslip.employee.employments[0] ?? null;
+  const activeCt = activeEmp?.contracts[0] ?? null;
+  const hireDate = activeEmp?.hireDate ?? null;
+  const activeSchedule = activeCt?.schedule ?? null;
+  const activeComp = activeCt?.compensations[0] ?? null;
+  const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
+  const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
+  // ────────────────────────────────────────────────────────────────
+
+  // Whitelist layouts: Key items never disappear even if value is 0
+  const deductionGridItems = [
+    { label: 'SSS', value: sss },
+    { label: 'PhilHealth', value: philhealth },
+    { label: 'Pag-IBIG', value: pagibig },
+    { label: 'Withholding Tax', value: tax },
+    { label: 'Late / Undertime', value: displayLateUnder },
+    { label: 'Regular Holiday Late / Undertime', value: dynamicDeductions.regularHolidayLateUnder.toString() },
+    { label: 'Special Holiday Late / Undertime', value: dynamicDeductions.specialHolidayLateUnder.toString() },
+    { label: 'SSS Loan', value: sssLoan },
+    { label: 'Pag-IBIG Loan', value: pagibigLoan },
+    { label: 'Cash Advance', value: cashAdv },
+  ].filter((r) => {
+    const whitelist = ['SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding Tax', 'Late / Undertime'];
+    if (whitelist.includes(r.label)) return true;
+    return (Number(r.value) || 0) !== 0; // Holiday Lates will hide naturally if they evaluate to 0
+  });
 
   return (
     <div className="space-y-6">
@@ -689,229 +744,218 @@ export function PayslipEditor() {
       </div>
 
       {/* ── Employee Information ── */}
-      {(() => {
-        const activeEmp = payslip.employee.employments[0] ?? null;
-        const activeCt = activeEmp?.contracts[0] ?? null;
-        const hireDate = activeEmp?.hireDate ?? null;
-        const activeSchedule = activeCt?.schedule ?? null;
-        const activeComp = activeCt?.compensations[0] ?? null;
-        return (
-          <>
-            <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-                <Briefcase size={15} className="text-muted-foreground" />
-                <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
-                  Employee Information
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                    Personal
-                  </p>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Name</p>
-                    <p className="font-semibold text-foreground">
-                      {payslip.employee.firstName} {payslip.employee.lastName}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Employee No.</p>
-                    <p className="font-semibold text-foreground">
-                      {payslip.employee.employeeNo ?? '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Hire Date</p>
-                    <p className="font-semibold text-foreground">
-                      {hireDate ? fmtDate(hireDate) : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Position</p>
-                    <p className="font-semibold text-foreground">
-                      {activeEmp?.position?.title ?? '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Department</p>
-                    <p className="font-semibold text-foreground">
-                      {activeEmp?.department?.name ?? '—'}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                    Payroll
-                  </p>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Agreed Salary Rate</p>
-                    <p className="font-semibold text-foreground">
-                      {activeComp ? fmt(Number(activeComp.baseRate)) : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Payslip Status</p>
-                    <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]} className="mt-0.5">
-                      {STATUS_LABEL[payslip.payrollPeriod.status]}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Pay Type</p>
-                    <p className="font-semibold text-foreground">
-                      {activeComp ? PAY_TYPE_LABEL[activeComp.payType] ?? activeComp.payType : '—'}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                    Approval
-                  </p>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Work Schedule</p>
-                    <button
-                      onClick={() => setShowScheduleModal(true)}
-                      className="text-blue-600 underline text-sm font-semibold hover:text-blue-700"
-                    >
-                      {activeSchedule ? activeSchedule.name : 'View'}
-                    </button>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Compensation</p>
-                    <button
-                      onClick={() => setShowCompModal(true)}
-                      className="text-blue-600 underline text-sm font-semibold hover:text-blue-700"
-                    >
-                      View
-                    </button>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Approved by</p>
-                    <p className="font-semibold text-foreground">
-                      {payslip.approvedBy?.name ?? '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Acknowledged by</p>
-                    <p className="font-semibold text-foreground">
-                      {payslip.acknowledgedBy?.name ?? '—'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+          <Briefcase size={15} className="text-muted-foreground" />
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+            Employee Information
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Personal
+            </p>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Name</p>
+              <p className="font-semibold text-foreground">
+                {payslip.employee.firstName} {payslip.employee.lastName}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Employee No.</p>
+              <p className="font-semibold text-foreground">
+                {payslip.employee.employeeNo ?? '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Hire Date</p>
+              <p className="font-semibold text-foreground">
+                {hireDate ? fmtDate(hireDate) : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Position</p>
+              <p className="font-semibold text-foreground">
+                {activeEmp?.position?.title ?? '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Department</p>
+              <p className="font-semibold text-foreground">
+                {activeEmp?.department?.name ?? '—'}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Payroll
+            </p>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Agreed Salary Rate</p>
+              <p className="font-semibold text-foreground">
+                {activeComp ? fmt(Number(activeComp.baseRate)) : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Payslip Status</p>
+              <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]} className="mt-0.5">
+                {STATUS_LABEL[payslip.payrollPeriod.status]}
+              </Badge>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Pay Type</p>
+              <p className="font-semibold text-foreground">
+                {activeComp ? PAY_TYPE_LABEL[activeComp.payType] ?? activeComp.payType : '—'}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Approval
+            </p>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Work Schedule</p>
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                className="text-blue-600 underline text-sm font-semibold hover:text-blue-700"
+              >
+                {activeSchedule ? activeSchedule.name : 'View'}
+              </button>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Compensation</p>
+              <button
+                onClick={() => setShowCompModal(true)}
+                className="text-blue-600 underline text-sm font-semibold hover:text-blue-700"
+              >
+                View
+              </button>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Approved by</p>
+              <p className="font-semibold text-foreground">
+                {payslip.approvedBy?.name ?? '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Acknowledged by</p>
+              <p className="font-semibold text-foreground">
+                {payslip.acknowledgedBy?.name ?? '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
-            <Modal
-              isOpen={showScheduleModal}
-              onClose={() => setShowScheduleModal(false)}
-              title="Work Schedule"
-              size="lg"
-            >
-              {activeSchedule ? (
-                <div className="p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Building2 size={14} className="text-muted-foreground" />
-                    <p className="font-bold text-foreground">{activeSchedule.name}</p>
-                    {activeSchedule.timezone && (
-                      <span className="text-xs text-muted-foreground">
-                        ({activeSchedule.timezone})
-                      </span>
-                    )}
-                  </div>
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-muted/50 border-b border-border">
-                          {['Day', 'Start', 'End', 'Break Start', 'Break End', 'Working'].map((h) => (
-                            <th
-                              key={h}
-                              className="px-3 py-2 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {activeSchedule.days.map((day) => (
-                          <tr key={day.dayOfWeek} className={day.isWorkingDay ? '' : 'opacity-50'}>
-                            <td className="px-3 py-2 font-semibold text-foreground">
-                              {DOW[day.dayOfWeek] ?? day.dayOfWeek}
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {day.isWorkingDay ? day.startTime : '—'}
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {day.isWorkingDay ? day.endTime : '—'}
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {day.breakStart ?? '—'}
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {day.breakEnd ?? '—'}
-                            </td>
-                            <td className="px-3 py-2">
-                              <span
-                                className={
-                                  day.isWorkingDay
-                                    ? 'text-emerald-600 font-semibold'
-                                    : 'text-muted-foreground'
-                                }
-                              >
-                                {day.isWorkingDay ? 'Yes' : 'Rest'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <p className="p-5 text-sm text-muted-foreground">No work schedule assigned.</p>
+      <Modal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        title="Work Schedule"
+        size="lg"
+      >
+        {activeSchedule ? (
+          <div className="p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Building2 size={14} className="text-muted-foreground" />
+              <p className="font-bold text-foreground">{activeSchedule.name}</p>
+              {activeSchedule.timezone && (
+                <span className="text-xs text-muted-foreground">
+                  ({activeSchedule.timezone})
+                </span>
               )}
-            </Modal>
-
-            <Modal
-              isOpen={showCompModal}
-              onClose={() => setShowCompModal(false)}
-              title="Compensation Details"
-              size="md"
-            >
-              {activeComp ? (
-                <div className="p-5 space-y-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DollarSign size={14} className="text-muted-foreground" />
-                    <p className="text-sm font-bold text-foreground">Active Compensation</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      ['Base Rate', fmt(Number(activeComp.baseRate))],
-                      ['Allowance Rate', fmt(Number(activeComp.allowanceRate))],
-                      ['Pay Type', PAY_TYPE_LABEL[activeComp.payType] ?? activeComp.payType],
-                      ['Rate Type', RATE_TYPE_LABEL[activeComp.rateType] ?? activeComp.rateType],
-                      ['Frequency', FREQ_LABEL[activeComp.frequency] ?? activeComp.frequency],
-                      ['Daily Rate', fmt(Number(activeComp.calculatedDailyRate))],
-                      ['Monthly Rate', fmt(Number(activeComp.calculatedMonthlyRate))],
-                    ].map(([label, value]) => (
-                      <div key={label} className="p-3 bg-muted/40 rounded-lg">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          {label}
-                        </p>
-                        <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
-                      </div>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    {['Day', 'Start', 'End', 'Break Start', 'Break End', 'Working'].map((h) => (
+                      <th
+                        key={h}
+                        className="px-3 py-2 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
+                      >
+                        {h}
+                      </th>
                     ))}
-                  </div>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {activeSchedule.days.map((day) => (
+                    <tr key={day.dayOfWeek} className={day.isWorkingDay ? '' : 'opacity-50'}>
+                      <td className="px-3 py-2 font-semibold text-foreground">
+                        {DOW[day.dayOfWeek] ?? day.dayOfWeek}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {day.isWorkingDay ? day.startTime : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {day.isWorkingDay ? day.endTime : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {day.breakStart ?? '—'}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {day.breakEnd ?? '—'}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={
+                            day.isWorkingDay
+                              ? 'text-emerald-600 font-semibold'
+                              : 'text-muted-foreground'
+                          }
+                        >
+                          {day.isWorkingDay ? 'Yes' : 'Rest'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="p-5 text-sm text-muted-foreground">No work schedule assigned.</p>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={showCompModal}
+        onClose={() => setShowCompModal(false)}
+        title="Compensation Details"
+        size="md"
+      >
+        {activeComp ? (
+          <div className="p-5 space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign size={14} className="text-muted-foreground" />
+              <p className="text-sm font-bold text-foreground">Active Compensation</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['Base Rate', fmt(Number(activeComp.baseRate))],
+                ['Allowance Rate', fmt(Number(activeComp.allowanceRate))],
+                ['Pay Type', PAY_TYPE_LABEL[activeComp.payType] ?? activeComp.payType],
+                ['Rate Type', RATE_TYPE_LABEL[activeComp.rateType] ?? activeComp.rateType],
+                ['Frequency', FREQ_LABEL[activeComp.frequency] ?? activeComp.frequency],
+                ['Daily Rate', fmt(Number(activeComp.calculatedDailyRate))],
+                ['Monthly Rate', fmt(Number(activeComp.calculatedMonthlyRate))],
+              ].map(([label, value]) => (
+                <div key={label} className="p-3 bg-muted/40 rounded-lg">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    {label}
+                  </p>
+                  <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
                 </div>
-              ) : (
-                <p className="p-5 text-sm text-muted-foreground">
-                  No active compensation record found.
-                </p>
-              )}
-            </Modal>
-          </>
-        );
-      })()}
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="p-5 text-sm text-muted-foreground">
+            No active compensation record found.
+          </p>
+        )}
+      </Modal>
 
       {/* ── Daily Breakdown ── */}
       <Card className="overflow-hidden">
@@ -1038,7 +1082,7 @@ export function PayslipEditor() {
                   ts,
                   tableDailyRate,
                   tablePayType,
-                  tableSchedule?.days,
+                  activeSchedule?.days,
                   date.getDay(),
                   payslip.hrSetting?.disableLateUndertimeGlobal ?? false
                 );
@@ -1052,7 +1096,15 @@ export function PayslipEditor() {
                     <td className="px-2 py-2">{fmtTime(ts.lunchStart)}</td>
                     <td className="px-2 py-2">{fmtTime(ts.lunchEnd)}</td>
                     <td className="px-2 py-2">{fmtTime(ts.timeOut)}</td>
-                    <td className={`px-2 py-2 font-semibold ${statusColor}`}>{statusLabel}</td>
+                    <td className={`px-2 py-2 font-semibold ${statusColor}`}>
+                      <span>{statusLabel}</span>
+                      {(derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') &&
+                        ts.status !== 'REGULAR_HOLIDAY' && ts.status !== 'SPECIAL_HOLIDAY' && (
+                          <span className="block text-[9px] font-normal text-muted-foreground">
+                            {SS_LABEL[ts.status] ?? ts.status}
+                          </span>
+                        )}
+                    </td>
                     <td className="px-2 py-2 text-right">
                       {(() => {
                         if (derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') {
@@ -1101,23 +1153,34 @@ export function PayslipEditor() {
                       })()}
                     </td>
                     <td className="px-2 py-2 text-right text-red-500">
-                      {lateDeduct > 0
-                        ? `-${fmt(lateDeduct)}`
-                        : ts.lateMinutes > 0
-                        ? `${ts.lateMinutes}m`
-                        : '—'}
+                      {lateDeduct > 0 ? (
+                        <span>
+                          <span>-{fmt(lateDeduct)}</span>
+                          {(derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') && (
+                            <span className="block text-[9px] font-normal text-muted-foreground">
+                              {derivedStatus === 'REGULAR_HOLIDAY' ? 'RH' : 'SH'}
+                            </span>
+                          )}
+                        </span>
+                      ) : '—'}
                     </td>
                     <td className="px-2 py-2 text-right text-amber-500">
-                      {undertimeDeduct > 0
-                        ? `-${fmt(undertimeDeduct)}`
-                        : ts.undertimeMinutes > 0
-                        ? `${ts.undertimeMinutes}m`
-                        : '—'}
+                      {undertimeDeduct > 0 ? (
+                        <span>
+                          <span>-{fmt(undertimeDeduct)}</span>
+                          {(derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') && (
+                            <span className="block text-[9px] font-normal text-muted-foreground">
+                              {derivedStatus === 'REGULAR_HOLIDAY' ? 'RH' : 'SH'}
+                            </span>
+                          )}
+                        </span>
+                      ) : '—'}
                     </td>
                     <td className="px-2 py-2 text-right font-bold text-emerald-600">
                       {(() => {
                         const hr2 = tableDailyRate / 8;
                         const isRH = derivedStatus === 'REGULAR_HOLIDAY';
+                        const isSH = derivedStatus === 'SPECIAL_HOLIDAY';
                         const rowOtPay =
                           (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr2) +
                           Number(ts.rdOtHours) * 1.69 * hr2 +
@@ -1125,7 +1188,10 @@ export function PayslipEditor() {
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
                           (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr2 +
                           Number(ts.rhRdOtHours) * 3.38 * hr2;
-                        const rowGross = Number(ts.dailyGrossPay) + rowOtPay - lateDeduct - undertimeDeduct;
+                        // Holiday rows: use tableDailyRate as base (consistent with Reg Pay column)
+                        // ts.dailyGrossPay may be 0 if the timesheet was processed before the holiday was marked
+                        const basePay = (isRH || isSH) ? tableDailyRate : Number(ts.dailyGrossPay);
+                        const rowGross = basePay + rowOtPay - lateDeduct - undertimeDeduct;
                         return rowGross > 0
                           ? `₱${rowGross.toLocaleString('en-PH', {
                               minimumFractionDigits: 2,
@@ -1215,17 +1281,13 @@ export function PayslipEditor() {
                 </td>
                 <td className="px-2 py-2 text-right text-red-500">
                   {(() => {
-                    if (tablePayType !== 'VARIABLE_PAY') {
-                      const total = timesheets.reduce((s, t) => s + t.lateMinutes, 0);
-                      return total > 0 ? `${total}m` : '—';
-                    }
                     const total = periodDays.reduce((s, { ts: t, date: d }) => {
                       if (!t) return s;
                       const { lateDeduct: ld } = computeRowPay(
                         t,
                         tableDailyRate,
                         tablePayType,
-                        tableSchedule?.days,
+                        activeSchedule?.days,
                         d.getDay(),
                         payslip.hrSetting?.disableLateUndertimeGlobal ?? false
                       );
@@ -1236,17 +1298,13 @@ export function PayslipEditor() {
                 </td>
                 <td className="px-2 py-2 text-right text-amber-500">
                   {(() => {
-                    if (tablePayType !== 'VARIABLE_PAY') {
-                      const total = timesheets.reduce((s, t) => s + t.undertimeMinutes, 0);
-                      return total > 0 ? `${total}m` : '—';
-                    }
                     const total = periodDays.reduce((s, { ts: t, date: d }) => {
                       if (!t) return s;
                       const { undertimeDeduct: ud } = computeRowPay(
                         t,
                         tableDailyRate,
                         tablePayType,
-                        tableSchedule?.days,
+                        activeSchedule?.days,
                         d.getDay(),
                         payslip.hrSetting?.disableLateUndertimeGlobal ?? false
                       );
@@ -1268,7 +1326,6 @@ export function PayslipEditor() {
                         Number(t.rhRdOtHours) * 3.38 * hr2;
                       return s + Number(t.dailyGrossPay) + otPay;
                     }, 0);
-                    // Add mandated pay for unworked regular holidays (VARIABLE_PAY only)
                     const unworkedRhPay = tablePayType === 'VARIABLE_PAY'
                       ? periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
                           !t && ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0)
@@ -1412,21 +1469,14 @@ export function PayslipEditor() {
             </h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              ['SSS', sss],
-              ['PhilHealth', philhealth],
-              ['Pag-IBIG', pagibig],
-              ['Withholding Tax', tax],
-              ['Late / Undertime', lateUnder],
-              ['SSS Loan', sssLoan],
-              ['Pag-IBIG Loan', pagibigLoan],
-              ['Cash Advance', cashAdv],
-            ].map(([label, val]) => (
-              <div key={label}>
+            {deductionGridItems.map((r) => (
+              <div key={r.label}>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {label}
+                  {r.label}
                 </p>
-                <p className="text-sm font-semibold text-foreground">{fmt(Number(val))}</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {fmt(Number(r.value))}
+                </p>
               </div>
             ))}
           </div>
