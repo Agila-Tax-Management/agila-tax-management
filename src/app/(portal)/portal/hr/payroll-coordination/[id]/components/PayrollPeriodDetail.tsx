@@ -19,7 +19,9 @@ import {
   ChevronDown,
   FilePlus,
   X,
+  AlertTriangle,
 } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -119,6 +121,10 @@ export function PayrollPeriodDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { success, error } = useToast();
+  const { data: session } = authClient.useSession();
+
+  const sessionUser = session?.user as { role?: string } | undefined;
+  const isAdmin = sessionUser?.role === 'ADMIN' || sessionUser?.role === 'SUPER_ADMIN';
 
   const [period, setPeriod] = useState<PeriodDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +132,10 @@ export function PayrollPeriodDetail() {
   const [approvingPayslip, setApprovingPayslip] = useState<string | null>(null);
   const [payingPayslip, setPayingPayslip] = useState<string | null>(null);
   const [recalculatingPayslip, setRecalculatingPayslip] = useState<string | null>(null);
+
+  // Revert approval confirmation modal
+  const [revertModalOpen, setRevertModalOpen] = useState(false);
+  const [revertConfirmText, setRevertConfirmText] = useState('');
 
   // Expanded deduction rows
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -263,53 +273,6 @@ export function PayrollPeriodDetail() {
     }
   };
 
-  const recalculatePayslip = async (payslipId: string | number) => {
-    const safeId = String(payslipId);
-    setRecalculatingPayslip(safeId);
-    try {
-      const res = await fetch(`/api/hr/payslips/${safeId}/recalculate?apply=true`, { method: 'POST' });
-      const json: { error?: string } = await res.json();
-      if (!res.ok) {
-        error('Recalculate failed', json.error ?? 'Could not recalculate payslip');
-        return;
-      }
-      success('Recalculated', 'Payslip updated from latest attendance data.');
-      await fetchPeriod();
-    } catch {
-      error('Network error', 'Could not reach the server');
-    } finally {
-      setRecalculatingPayslip(null);
-    }
-  };
-
-  const toggleRow = (payslipId: string | number) => {
-    const key = String(payslipId);
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const openFileModal = (employeeId: number, name: string) => {
-    setFileTarget({ employeeId, name });
-    setRequestType('COA');
-    setCoaDate(''); setCoaAction('TIME_IN'); setCoaTime(''); setCoaReason('');
-    setLeaveTypeId(''); setLeaveStart(''); setLeaveEnd(''); setLeaveCredits('1'); setLeaveReason('');
-    setOtDate(''); setOtType('REGULAR_OT'); setOtFrom(''); setOtTo(''); setOtHours(''); setOtReason('');
-    if (leaveTypes.length === 0) {
-      void (async () => {
-        try {
-          const res = await fetch('/api/hr/leave-types');
-          const json: { data?: LeaveType[] } = await res.json();
-          if (res.ok && json.data) setLeaveTypes(json.data);
-        } catch { /* silent */ }
-      })();
-    }
-    setFileModalOpen(true);
-  };
-
   const submitFileRequest = async () => {
     if (!fileTarget) return;
     setFiling(true);
@@ -351,6 +314,34 @@ export function PayrollPeriodDetail() {
     } finally {
       setFiling(false);
     }
+  };
+
+  const toggleRow = (payslipId: string | number) => {
+    const key = String(payslipId);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const openFileModal = (employeeId: number, name: string) => {
+    setFileTarget({ employeeId, name });
+    setRequestType('COA');
+    setCoaDate(''); setCoaAction('TIME_IN'); setCoaTime(''); setCoaReason('');
+    setLeaveTypeId(''); setLeaveStart(''); setLeaveEnd(''); setLeaveCredits('1'); setLeaveReason('');
+    setOtDate(''); setOtType('REGULAR_OT'); setOtFrom(''); setOtTo(''); setOtHours(''); setOtReason('');
+    if (leaveTypes.length === 0) {
+      void (async () => {
+        try {
+          const res = await fetch('/api/hr/leave-types');
+          const json: { data?: LeaveType[] } = await res.json();
+          if (res.ok && json.data) setLeaveTypes(json.data);
+        } catch { /* silent */ }
+      })();
+    }
+    setFileModalOpen(true);
   };
 
   if (loading) {
@@ -565,16 +556,19 @@ export function PayrollPeriodDetail() {
                   </span>
                 )}
               </Button>
-              <Button
-                variant="outline"
-                className="gap-2"
-                disabled={updatingStatus}
-                onClick={() => {
-                  void updateStatus('PROCESSING');
-                }}
-              >
-                <RotateCcw size={15} /> Revert to Processing
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="gap-2 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                  disabled={updatingStatus}
+                  onClick={() => {
+                    setRevertConfirmText('');
+                    setRevertModalOpen(true);
+                  }}
+                >
+                  <RotateCcw size={15} /> Revert to Processing
+                </Button>
+              )}
             </>
           )}
           {period.status === 'PAID' && (
@@ -1081,6 +1075,62 @@ export function PayrollPeriodDetail() {
       >
         {filing ? <Loader2 size={16} className="animate-spin" /> : <FilePlus size={16} />}
         Submit Request
+      </Button>
+    </div>
+  </div>
+</Modal>
+
+{/* ── Revert Approval Confirmation Modal ── */}
+<Modal
+  isOpen={revertModalOpen}
+  onClose={() => setRevertModalOpen(false)}
+  title="Revert Payroll Approval"
+  size="sm"
+>
+  <div className="p-2 space-y-4">
+    {/* Warning banner */}
+    <div className="flex gap-3 rounded-lg bg-red-50 border border-red-200 p-3">
+      <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+      <div className="text-sm text-red-700">
+        <p className="font-bold mb-1">This action cannot be undone easily.</p>
+        <p>Reverting will move this payroll period back to <strong>Processing</strong>. Employees will no longer be able to see or acknowledge their payslips until the period is re-approved.</p>
+      </div>
+    </div>
+
+    {/* Confirmation input */}
+    <div>
+      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+        Type <span className="text-red-600 font-black">REVERT</span> to confirm
+      </label>
+      <input
+        type="text"
+        value={revertConfirmText}
+        onChange={(e) => setRevertConfirmText(e.target.value)}
+        placeholder="REVERT"
+        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/40 font-mono"
+        autoComplete="off"
+      />
+    </div>
+
+    {/* Footer */}
+    <div className="flex justify-end gap-3 pt-2 border-t border-border">
+      <Button
+        variant="outline"
+        onClick={() => setRevertModalOpen(false)}
+        disabled={updatingStatus}
+      >
+        Cancel
+      </Button>
+      <Button
+        className="gap-2 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+        disabled={revertConfirmText !== 'REVERT' || updatingStatus}
+        onClick={async () => {
+          setRevertModalOpen(false);
+          await updateStatus('PROCESSING');
+        }}
+      >
+        {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+        Confirm Revert
       </Button>
     </div>
   </div>
