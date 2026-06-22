@@ -140,6 +140,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
  * Body: { action: 'IN' | 'OUT' | 'LUNCH_START' | 'LUNCH_END' }
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+// 1. Session Verification
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -148,20 +149,57 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     "113.19.181.57", // Converge Wifi
   ];*/
 
- const forwarded = request.headers.get("x-forwarded-for");
+  // 2. Production-Grade Client IP Capture
+  const forwarded = request.headers.get("x-forwarded-for");
   const realIp = request.headers.get("x-real-ip");
 
-  const clientIP =
-    (forwarded?.split(",")[0] || realIp || "").trim();
+  let clientIP = "";
+  if (forwarded) {
+    clientIP = forwarded.split(",")[0].trim();
+  } else if (realIp) {
+    clientIP = realIp.trim();
+  }
 
-  if (!ALLOWED_OFFICE_IPS.includes(clientIP)) {
-    return NextResponse.json(
-      {
-        error: "Time in/out is only allowed from office WiFi",
-        ip: clientIP,
-      },
-      { status: 403 }
-    );
+  // Normalize IPv6-mapped IPv4 representations common in production edge environments
+  if (clientIP.startsWith("::ffff:")) {
+    clientIP = clientIP.substring(7);
+  }
+
+  // Bypass checks for local development environments
+  const isLocalhost = clientIP === "127.0.0.1" || clientIP === "::1" || clientIP === "localhost";
+
+  if (!isLocalhost) {
+    try {
+      // 3. Dynamic ISP Verification via API (Bypasses Static IP tracking)
+      const ispResponse = await fetch(`http://ip-api.com{clientIP}?fields=status,isp,org`);
+      
+      if (ispResponse.ok) {
+        const ipData = await ispResponse.json() as { status: string; isp: string; org: string };
+
+        if (ipData.status === "success") {
+          const providerInfo = `${ipData.isp} ${ipData.org}`.toLowerCase();
+          
+          // Match standard string identities for PLDT and Converge ICT networks
+          const isPLDT = providerInfo.includes("pldt") || providerInfo.includes("philippine long distance");
+          const isConverge = providerInfo.includes("converge") || providerInfo.includes("comclark");
+
+          if (!isPLDT && !isConverge) {
+            return NextResponse.json(
+              {
+                error: "Time in/out is only allowed from office WiFi (PLDT/Converge)",
+                detectedIsp: ipData.isp,
+                ip: clientIP,
+              },
+              { status: 403 }
+            );
+          }
+        }
+      }
+    } catch (error) {
+      // Fail-secure or Fail-safe: choose whether to block or allow if the third-party lookup API fails
+      console.error("ISP verification failed:", error);
+      // return NextResponse.json({ error: "Network verification unavailable" }, { status: 500 });
+    }
   }
 
   const body = (await request.json()) as { action?: string };
@@ -305,6 +343,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const compensation = activeContract.compensations[0] ?? null;
 
+    // Detect holiday on the record's date to apply correct DOLE day premiums
+    const holidayOnDate = await prisma.holiday.findFirst({
+      where: { clientId: activeEmployment.clientId, date: record.date },
+      select: { type: true },
+    });
+    const isRestDaySchedule = scheduleDayRaw ? !scheduleDayRaw.isWorkingDay : false;
+    const clockOutHolidayType = holidayOnDate?.type ?? null;
+    let clockOutDayType: 'REGULAR' | 'REST_DAY' | 'SPECIAL_HOLIDAY' | 'SPECIAL_HOLIDAY_REST' | 'REGULAR_HOLIDAY' | 'REGULAR_HOLIDAY_REST' = 'REGULAR';
+    if (clockOutHolidayType === 'REGULAR') {
+      clockOutDayType = isRestDaySchedule ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
+    } else if (clockOutHolidayType === 'SPECIAL_NON_WORKING' || clockOutHolidayType === 'LOCAL_HOLIDAY') {
+      clockOutDayType = isRestDaySchedule ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
+    } else if (clockOutHolidayType === 'SPECIAL_WORKING') {
+      clockOutDayType = 'REGULAR';
+    } else if (isRestDaySchedule) {
+      clockOutDayType = 'REST_DAY';
+    }
+
     const computed = computeTimesheetFields(
       record.timeIn,
       now,
@@ -317,12 +373,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             payType: compensation.payType,
           }
         : null,
+      clockOutDayType,
     );
 
     const isVariable = (compensation?.payType ?? '') === 'VARIABLE_PAY';
     const dailyRateNum = Number(compensation?.calculatedDailyRate ?? 0);
     const guardFlags = await resolveHrSettingFlags(activeEmployment.clientId, employee.id);
     const guarded = applyHrSettingGuards(computed, guardFlags, dailyRateNum, isVariable);
+
+    // Map DOLE day type to the correct AttendanceStatus
+    const clockOutStatus: 'PRESENT' | 'REGULAR_HOLIDAY' | 'SPECIAL_HOLIDAY' =
+      clockOutDayType === 'REGULAR_HOLIDAY' || clockOutDayType === 'REGULAR_HOLIDAY_REST'
+        ? 'REGULAR_HOLIDAY'
+        : clockOutDayType === 'SPECIAL_HOLIDAY' || clockOutDayType === 'SPECIAL_HOLIDAY_REST'
+          ? 'SPECIAL_HOLIDAY'
+          : 'PRESENT';
 
     record = await prisma.timesheet.update({
       where: { id: record.id },
@@ -332,8 +397,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         lateMinutes: guarded.lateMinutes,
         undertimeMinutes: guarded.undertimeMinutes,
         regOtHours: guarded.regOtHours,
+        rdHours: guarded.rdHours,
+        rdOtHours: guarded.rdOtHours,
+        shHours: guarded.shHours,
+        shOtHours: guarded.shOtHours,
+        shRdHours: guarded.shRdHours,
+        shRdOtHours: guarded.shRdOtHours,
+        rhHours: guarded.rhHours,
+        rhOtHours: guarded.rhOtHours,
+        rhRdHours: guarded.rhRdHours,
+        rhRdOtHours: guarded.rhRdOtHours,
         dailyGrossPay: guarded.dailyGrossPay,
-        status: 'PRESENT',
+        status: clockOutStatus,
       },
     });
   }

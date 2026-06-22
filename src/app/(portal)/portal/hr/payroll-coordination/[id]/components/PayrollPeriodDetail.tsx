@@ -1,4 +1,3 @@
-// src/app/(portal)/portal/hr/payroll-coordination/[id]/components/PayrollPeriodDetail.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -44,7 +43,7 @@ interface LeaveType {
 }
 
 interface PayslipRow {
-  id: string;
+  id: string | number;
   employee: {
     id: number;
     firstName: string;
@@ -54,6 +53,15 @@ interface PayslipRow {
   basicPay: string;
   allowance: string;
   grossPay: string;
+  // Deduction breakdown
+  sssDeduction: string;
+  philhealthDeduction: string;
+  pagibigDeduction: string;
+  withholdingTax: string;
+  lateUndertimeDeduction: string;
+  pagibigLoan: string;
+  sssLoan: string;
+  cashAdvanceRepayment: string;
   totalDeductions: string;
   netPay: string;
   approvedAt: string | null;
@@ -100,8 +108,11 @@ const fmtDate = (d: string) =>
 
 const fmtDateTime = (d: string) =>
   new Date(d).toLocaleString('en-PH', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 
 // ─── Component ────────────────────────────────────────────────────
@@ -171,6 +182,7 @@ export function PayrollPeriodDetail() {
         return;
       }
       setPeriod(json.data);
+      setSelectedPayslips([]); // Clear array on refresh
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
@@ -205,10 +217,11 @@ export function PayrollPeriodDetail() {
     }
   };
 
-  const approvePayslip = async (payslipId: string) => {
-    setApprovingPayslip(payslipId);
+  const approvePayslip = async (payslipId: string | number) => {
+    const safeId = String(payslipId);
+    setApprovingPayslip(safeId);
     try {
-      const res = await fetch(`/api/hr/payslips/${payslipId}/approve`, { method: 'POST' });
+      const res = await fetch(`/api/hr/payslips/${safeId}/approve`, { method: 'POST' });
       const json: { error?: string } = await res.json();
       if (!res.ok) {
         error('Failed to approve', json.error ?? 'Could not approve payslip');
@@ -223,10 +236,29 @@ export function PayrollPeriodDetail() {
     }
   };
 
-  const markPayslipPaid = async (payslipId: string) => {
-    setPayingPayslip(payslipId);
+  const handleBatchApprove = async () => {
+    if (selectedPayslips.length === 0) return;
+    setApprovingBatch(true);
     try {
-      const res = await fetch(`/api/hr/payslips/${payslipId}/paid`, { method: 'POST' });
+      await Promise.all(
+        selectedPayslips.map((psId) =>
+          fetch(`/api/hr/payslips/${psId}/approve`, { method: 'POST' })
+        )
+      );
+      success('Batch Approved', `Successfully approved ${selectedPayslips.length} payslips.`);
+      await fetchPeriod();
+    } catch {
+      error('Batch Approval Failed', 'An error occurred while approving payslips. Please try again.');
+    } finally {
+      setApprovingBatch(false);
+    }
+  };
+
+  const markPayslipPaid = async (payslipId: string | number) => {
+    const safeId = String(payslipId);
+    setPayingPayslip(safeId);
+    try {
+      const res = await fetch(`/api/hr/payslips/${safeId}/paid`, { method: 'POST' });
       const json: { error?: string } = await res.json();
       if (!res.ok) {
         error('Failed to mark paid', json.error ?? 'Could not mark payslip as paid');
@@ -314,9 +346,28 @@ export function PayrollPeriodDetail() {
   const grossTotal = period.payslips.reduce((s, ps) => s + Number(ps.grossPay), 0);
   const netTotal = period.payslips.reduce((s, ps) => s + Number(ps.netPay), 0);
   const dedTotal = period.payslips.reduce((s, ps) => s + Number(ps.totalDeductions), 0);
-
-  // Determine "Prepared by" from any payslip (they all share the same preparer)
   const preparedBy = period.payslips[0]?.preparedBy ?? null;
+
+  const approvablePayslips = period.payslips.filter((ps) => !ps.approvedAt);
+  const isAllApprovableSelected =
+    approvablePayslips.length > 0 && selectedPayslips.length === approvablePayslips.length;
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedPayslips(approvablePayslips.map((ps) => String(ps.id)));
+    } else {
+      setSelectedPayslips([]);
+    }
+  };
+
+  const handleSelect = (id: string | number, checked: boolean) => {
+    const safeId = String(id);
+    if (checked) {
+      setSelectedPayslips((prev) => [...prev, safeId]);
+    } else {
+      setSelectedPayslips((prev) => prev.filter((x) => x !== safeId));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -335,7 +386,11 @@ export function PayrollPeriodDetail() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {fmtDate(period.startDate)} – {fmtDate(period.endDate)}
             &nbsp;·&nbsp;Payout: {fmtDate(period.payoutDate)}
-            {preparedBy && <>&nbsp;·&nbsp;Prepared by: <span className="font-medium text-foreground">{preparedBy.name}</span></>}
+            {preparedBy && (
+              <>
+                &nbsp;·&nbsp;Prepared by: <span className="font-medium text-foreground">{preparedBy.name}</span>
+              </>
+            )}
           </p>
         </div>
         <Badge variant={STATUS_VARIANT[period.status]} className="shrink-0 mt-1">
@@ -353,7 +408,9 @@ export function PayrollPeriodDetail() {
         ].map((s) => (
           <Card key={s.label} className="p-4">
             <p className={`text-lg font-black ${s.color}`}>{s.value}</p>
-            <p className="text-[10px] text-muted-foreground uppercase font-bold mt-1">{s.label}</p>
+            <p className="text-[10px] text-muted-foreground uppercase font-bold mt-1">
+              {s.label}
+            </p>
           </Card>
         ))}
       </div>
@@ -366,13 +423,20 @@ export function PayrollPeriodDetail() {
               <ThumbsUp size={15} className="text-muted-foreground" />
               <span className="text-sm font-bold text-foreground">Approval Progress</span>
             </div>
-            <span className="text-sm font-bold text-foreground">{approved}/{total}</span>
+            <span className="text-sm font-bold text-foreground">
+              {approved}/{total}
+            </span>
           </div>
           <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500 bg-blue-500" style={{ width: `${approvedPercent}%` }} />
+            <div
+              className="h-full rounded-full transition-all duration-500 bg-blue-500"
+              style={{ width: `${approvedPercent}%` }}
+            />
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            {approved === total && total > 0 ? 'All payslips approved.' : `${total - approved} payslip${total - approved !== 1 ? 's' : ''} pending approval.`}
+            {approved === total && total > 0
+              ? 'All payslips approved.'
+              : `${total - approved} payslip${total - approved !== 1 ? 's' : ''} pending approval.`}
           </p>
         </Card>
         <Card className="p-4">
@@ -381,13 +445,20 @@ export function PayrollPeriodDetail() {
               <CheckCheck size={16} className="text-muted-foreground" />
               <span className="text-sm font-bold text-foreground">Employee Acknowledgment</span>
             </div>
-            <span className="text-sm font-bold text-foreground">{acknowledged}/{total}</span>
+            <span className="text-sm font-bold text-foreground">
+              {acknowledged}/{total}
+            </span>
           </div>
           <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500 bg-emerald-500" style={{ width: `${ackPercent}%` }} />
+            <div
+              className="h-full rounded-full transition-all duration-500 bg-emerald-500"
+              style={{ width: `${ackPercent}%` }}
+            />
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            {allAcknowledged ? 'All employees have acknowledged their payslips.' : `${total - acknowledged} employee${total - acknowledged !== 1 ? 's have' : ' has'} not yet acknowledged.`}
+            {allAcknowledged
+              ? 'All employees have acknowledged their payslips.'
+              : `${total - acknowledged} employee${total - acknowledged !== 1 ? 's have' : ' has'} not yet acknowledged.`}
           </p>
         </Card>
       </div>
@@ -399,7 +470,9 @@ export function PayrollPeriodDetail() {
             <Button
               className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
               disabled={updatingStatus}
-              onClick={() => { void updateStatus('PROCESSING'); }}
+              onClick={() => {
+                void updateStatus('PROCESSING');
+              }}
             >
               {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
               Start Processing
@@ -410,16 +483,24 @@ export function PayrollPeriodDetail() {
               <Button
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={updatingStatus}
-                onClick={() => { void updateStatus('APPROVED'); }}
+                onClick={() => {
+                  void updateStatus('APPROVED');
+                }}
               >
-                {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} />}
+                {updatingStatus ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={15} />
+                )}
                 Approve All
               </Button>
               <Button
                 variant="outline"
                 className="gap-2"
                 disabled={updatingStatus}
-                onClick={() => { void updateStatus('DRAFT'); }}
+                onClick={() => {
+                  void updateStatus('DRAFT');
+                }}
               >
                 <PauseCircle size={15} /> Back to Draft
               </Button>
@@ -430,13 +511,21 @@ export function PayrollPeriodDetail() {
               <Button
                 className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50"
                 disabled={updatingStatus || !allAcknowledged}
-                onClick={() => { void updateStatus('PAID'); }}
+                onClick={() => {
+                  void updateStatus('PAID');
+                }}
                 title={allAcknowledged ? 'Mark as Paid' : 'All employees must acknowledge first'}
               >
-                {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} />}
+                {updatingStatus ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={15} />
+                )}
                 Mark as Paid
                 {!allAcknowledged && (
-                  <span className="text-xs opacity-80 ml-1">({acknowledged}/{total} acked)</span>
+                  <span className="text-xs opacity-80 ml-1">
+                    ({acknowledged}/{total} acked)
+                  </span>
                 )}
               </Button>
               {isAdmin && (
@@ -459,7 +548,9 @@ export function PayrollPeriodDetail() {
               variant="outline"
               className="gap-2"
               disabled={updatingStatus}
-              onClick={() => { void updateStatus('CLOSED'); }}
+              onClick={() => {
+                void updateStatus('CLOSED');
+              }}
             >
               <RotateCcw size={15} /> Close Period
             </Button>
@@ -469,9 +560,27 @@ export function PayrollPeriodDetail() {
 
       {/* ── Payslips Table ── */}
       <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Users size={16} className="text-muted-foreground" />
-          <span className="text-sm font-bold text-foreground">Employee Payslips</span>
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Users size={16} className="text-muted-foreground" />
+            <span className="text-sm font-bold text-foreground">Employee Payslips</span>
+          </div>
+          {period.status === 'PROCESSING' && selectedPayslips.length > 0 && (
+            <Button
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
+              onClick={() => {
+                void handleBatchApprove();
+              }}
+              disabled={approvingBatch}
+            >
+              {approvingBatch ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <CheckCircle size={14} />
+              )}
+              Approve Selected ({selectedPayslips.length})
+            </Button>
+          )}
         </div>
         {period.payslips.length === 0 ? (
           <div className="py-14 text-center text-sm text-muted-foreground">
@@ -482,13 +591,24 @@ export function PayrollPeriodDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
+                  {period.status === 'PROCESSING' && (
+                    <th className="w-10 px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                        checked={isAllApprovableSelected}
+                        onChange={handleSelectAll}
+                        disabled={approvablePayslips.length === 0}
+                      />
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
                     Employee
                   </th>
                   <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">
                     Gross Pay
                   </th>
-                  <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">
+                  <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
                     Deductions
                   </th>
                   <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
@@ -507,20 +627,45 @@ export function PayrollPeriodDetail() {
               </thead>
               <tbody>
                 {period.payslips.map((ps) => (
-                  <tr key={ps.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                  <React.Fragment key={String(ps.id)}>
+                  <tr className="border-b border-border hover:bg-muted/30 transition-colors">
+                    {period.status === 'PROCESSING' && (
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                          checked={selectedPayslips.includes(String(ps.id))}
+                          onChange={(e) => handleSelect(ps.id, e.target.checked)}
+                          disabled={ps.approvedAt !== null}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <p className="font-semibold text-foreground">
                         {ps.employee.firstName} {ps.employee.lastName}
                       </p>
                       {ps.employee.employeeNo && (
-                        <p className="text-[11px] text-muted-foreground">{ps.employee.employeeNo}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {ps.employee.employeeNo}
+                        </p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
                       {fmt(Number(ps.grossPay))}
                     </td>
-                    <td className="px-4 py-3 text-right text-red-500 hidden md:table-cell">
-                      {fmt(Number(ps.totalDeductions))}
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(ps.id)}
+                        className="inline-flex items-center gap-1 text-red-500 hover:text-red-600 transition-colors"
+                        title="Show deduction breakdown"
+                      >
+                        {fmt(Number(ps.totalDeductions))}
+                        <ChevronDown
+                          size={12}
+                          className={`transition-transform ${expandedRows.has(String(ps.id)) ? 'rotate-180' : ''}`}
+                        />
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-foreground">
                       {fmt(Number(ps.netPay))}
@@ -556,40 +701,60 @@ export function PayrollPeriodDetail() {
                           <Button
                             variant="ghost"
                             className="h-7 px-2 text-xs gap-1 text-blue-600"
-                            disabled={approvingPayslip === ps.id}
-                            onClick={() => { void approvePayslip(ps.id); }}
+                            disabled={approvingPayslip === String(ps.id)}
+                            onClick={() => {
+                              void approvePayslip(ps.id);
+                            }}
                           >
-                            {approvingPayslip === ps.id
-                              ? <Loader2 size={11} className="animate-spin" />
-                              : <ThumbsUp size={11} />}
+                            {approvingPayslip === String(ps.id) ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <ThumbsUp size={11} />
+                            )}
                             Approve
                           </Button>
                         )}
                         {/* Mark individual payslip paid */}
-                        {ps.approvedAt && ps.acknowledgedAt && ps.disbursedStatus !== 'COMPLETED' && (
-                          <Button
-                            variant="ghost"
-                            className="h-7 px-2 text-xs gap-1 text-emerald-700"
-                            disabled={payingPayslip === ps.id}
-                            onClick={() => { void markPayslipPaid(ps.id); }}
-                          >
-                            {payingPayslip === ps.id
-                              ? <Loader2 size={11} className="animate-spin" />
-                              : <Banknote size={11} />}
-                            Mark Paid
-                          </Button>
-                        )}
+                        {ps.approvedAt &&
+                          ps.acknowledgedAt &&
+                          ps.disbursedStatus !== 'COMPLETED' && (
+                            <Button
+                              variant="ghost"
+                              className="h-7 px-2 text-xs gap-1 text-emerald-700"
+                              disabled={payingPayslip === String(ps.id)}
+                              onClick={() => {
+                                void markPayslipPaid(ps.id);
+                              }}
+                            >
+                              {payingPayslip === String(ps.id) ? (
+                                <Loader2 size={11} className="animate-spin" />
+                              ) : (
+                                <Banknote size={11} />
+                              )}
+                              Mark Paid
+                            </Button>
+                          )}
                         {ps.disbursedStatus === 'COMPLETED' && (
                           <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
                             <Banknote size={11} /> Paid
                           </span>
                         )}
+                        {/* File request on behalf */}
+                        <Button
+                          variant="ghost"
+                          className="h-7 px-2 text-xs gap-1 text-violet-600"
+                          onClick={() => openFileModal(ps.employee.id, `${ps.employee.firstName} ${ps.employee.lastName}`)}
+                          title="File a COA, Leave, or OT request on behalf of this employee"
+                        >
+                          <FilePlus size={11} />
+                          File
+                        </Button>
                         <Button
                           variant="ghost"
                           className="h-7 px-2 text-xs gap-1"
                           onClick={() =>
                             router.push(
-                              `/portal/hr/payroll-coordination/${period.id}/payslips/${ps.id}`,
+                              `/portal/hr/payroll-coordination/${period.id}/payslips/${ps.id}`
                             )
                           }
                         >
@@ -600,17 +765,48 @@ export function PayrollPeriodDetail() {
                       </div>
                     </td>
                   </tr>
+                  {/* ── Deduction Breakdown Row ── */}
+                  {expandedRows.has(String(ps.id)) && (
+                    <tr className="bg-muted/20 border-b border-border">
+                      <td
+                        colSpan={period.status === 'PROCESSING' ? 8 : 7}
+                        className="px-6 py-3"
+                      >
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                          {[
+                            { label: 'SSS', value: ps.sssDeduction },
+                            { label: 'PhilHealth', value: ps.philhealthDeduction },
+                            { label: 'Pag-IBIG', value: ps.pagibigDeduction },
+                            { label: 'Withholding Tax', value: ps.withholdingTax },
+                            { label: 'Late / Undertime', value: ps.lateUndertimeDeduction },
+                            ...(Number(ps.pagibigLoan) > 0 ? [{ label: 'Pag-IBIG Loan', value: ps.pagibigLoan }] : []),
+                            ...(Number(ps.sssLoan) > 0 ? [{ label: 'SSS Loan', value: ps.sssLoan }] : []),
+                            ...(Number(ps.cashAdvanceRepayment) > 0 ? [{ label: 'Cash Advance', value: ps.cashAdvanceRepayment }] : []),
+                          ].map((d) => (
+                            <div key={d.label} className="flex justify-between gap-2 py-0.5 border-b border-border/50 last:border-0">
+                              <span className="text-muted-foreground">{d.label}</span>
+                              <span className={`font-medium tabular-nums ${Number(d.value) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                {fmt(Number(d.value))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30">
+                  {period.status === 'PROCESSING' && <td />}
                   <td className="px-4 py-3 text-xs font-bold text-muted-foreground uppercase">
                     {total} employees
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-muted-foreground hidden md:table-cell">
                     {fmt(grossTotal)}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-red-500 hidden md:table-cell">
+                  <td className="px-4 py-3 text-right text-sm font-bold text-red-500">
                     {fmt(dedTotal)}
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-black text-foreground">

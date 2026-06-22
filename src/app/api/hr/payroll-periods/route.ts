@@ -1,11 +1,10 @@
-﻿// src/app/api/hr/payroll-periods/route.ts
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
-import { computeTimesheetFields } from "@/lib/timesheet-calc";
-import { computeDoleOvertimePay, sumOtHours } from "@/lib/dole-overtime";
+import { computeTimesheetFields, type DayType } from "@/lib/timesheet-calc";
+import { computeDoleOvertimePay, sumOtHours, computeHolidayPay } from "@/lib/dole-overtime";
 import { loadHrSettingCache, flagsFromCache, applyHrSettingGuards } from "@/lib/hr-settings-guard";
 import { getSSSEmployeeDeduction } from "@/lib/sss-contribution";
 import {
@@ -13,17 +12,7 @@ import {
   getPagibigEmployeeDeduction,
 } from "@/lib/government-contributions";
 
-/**
- * Resolves a configured end-of-period day against the actual calendar.
- * Handles EOM: configuredDay=31 → 28/29 for February, 30 for April, etc.
- *
- * @param year        - Calendar year
- * @param month1based - 1-indexed month (1=January … 12=December)
- * @param configuredDay - The day stored in PayrollSchedule (31 = "End of Month")
- */
 function resolveEndDay(year: number, month1based: number, configuredDay: number): number {
-  // new Date(year, month1based, 0) is day-0 of the next JS-month, which equals
-  // the last calendar day of month1based (1-indexed). e.g. new Date(2026, 2, 0) → Feb 28 2026
   const lastDayOfMonth = new Date(year, month1based, 0).getDate();
   return Math.min(configuredDay, lastDayOfMonth);
 }
@@ -35,10 +24,6 @@ const generateSchema = z.object({
   month: z.number().int().min(1).max(12),
 });
 
-/**
- * GET /api/hr/payroll-periods
- * Returns all payroll periods for the current client with aggregated payslip totals.
- */
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -75,22 +60,13 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ data: result });
 }
 
-/**
- * POST /api/hr/payroll-periods
- * Generates a new payroll period and creates DRAFT payslips for all employees
- * assigned to the given schedule. Handles EOM, cash advances, and all
- * DOLE-compliant government deductions in a single atomic transaction.
- *
- * Body: { payrollScheduleId, periodNumber (1|2), year, month }
- */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   if (
     session.user.role !== "SUPER_ADMIN" &&
-    session.user.role !== "ADMIN" &&
-    !session.portalAccess?.HR?.canWrite
+    session.user.role !== "ADMIN"
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -115,7 +91,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { payrollScheduleId, periodNumber, year, month } = parsed.data;
 
-  // Verify the schedule belongs to this client and is active
   const schedule = await prisma.payrollSchedule.findFirst({
     where: { id: payrollScheduleId, clientId, isActive: true },
   });
@@ -126,13 +101,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Resolve the correct start/end/payout day configs for the requested period
-  const startDay =
-    periodNumber === 1 ? schedule.firstPeriodStartDay : (schedule.secondPeriodStartDay ?? null);
-  const endDayConfig =
-    periodNumber === 1 ? schedule.firstPeriodEndDay : (schedule.secondPeriodEndDay ?? null);
-  const payoutDayConfig =
-    periodNumber === 1 ? schedule.firstPayoutDay : (schedule.secondPayoutDay ?? null);
+  const startDay = periodNumber === 1 ? schedule.firstPeriodStartDay : (schedule.secondPeriodStartDay ?? null);
+  const endDayConfig = periodNumber === 1 ? schedule.firstPeriodEndDay : (schedule.secondPeriodEndDay ?? null);
+  const payoutDayConfig = periodNumber === 1 ? schedule.firstPayoutDay : (schedule.secondPayoutDay ?? null);
 
   if (startDay === null || endDayConfig === null || payoutDayConfig === null) {
     return NextResponse.json(
@@ -141,12 +112,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Resolve actual calendar dates, handling EOM
   const resolvedEndDay = resolveEndDay(year, month, endDayConfig);
   const startDate = new Date(Date.UTC(year, month - 1, startDay));
   const endDate = new Date(Date.UTC(year, month - 1, resolvedEndDay));
 
-  // Payout date: if payoutDay < startDay, the payout falls in the next month
   let payoutMonth = month;
   let payoutYear = year;
   if (payoutDayConfig < startDay) {
@@ -159,7 +128,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const resolvedPayoutDay = resolveEndDay(payoutYear, payoutMonth, payoutDayConfig);
   const payoutDate = new Date(Date.UTC(payoutYear, payoutMonth - 1, resolvedPayoutDay));
 
-  // Guard against duplicate periods for the same schedule + date range
   const existing = await prisma.payrollPeriod.findFirst({
     where: { payrollScheduleId, startDate, endDate },
   });
@@ -170,19 +138,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Fetch all active compensations linked to this schedule (employees of this client).
-  // Only include employees whose hire date is on or before the period start date
-  // (employees hired after the period start are excluded from this payroll run).
+  // FIX: Employee filter correctly includes mid-period hires (lte: endDate)
   const compensations = await prisma.employeeCompensation.findMany({
     where: {
       payrollScheduleId,
       isActive: true,
       contract: {
+        status: 'ACTIVE',
         employment: {
           clientId,
+          employmentStatus: 'ACTIVE',
+          isPastRole: false,
+          employee: { softDelete: false },
           OR: [
             { hireDate: null },
-            { hireDate: { lte: startDate } },
+            { hireDate: { lte: endDate } }, 
           ],
         },
       },
@@ -208,7 +178,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const employeeIds = [...new Set(compensations.map((c) => c.contract.employment.employeeId))];
 
-  // Load HR setting guards and approved OT map once — applied during pre-transaction recalc
   const hrSettingCache = await loadHrSettingCache(clientId);
   const approvedOtRequests = await prisma.overtimeRequest.findMany({
     where: {
@@ -219,7 +188,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
     select: { employeeId: true, date: true, type: true, hours: true },
   });
-  // Map: `${employeeId}_${dateKey}` → total approved regular-day OT hours
+
   const approvedOtByEmpDate = new Map<string, number>();
   for (const otr of approvedOtRequests) {
     if (otr.type.toLowerCase().includes('rest')) continue;
@@ -227,7 +196,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     approvedOtByEmpDate.set(key, (approvedOtByEmpDate.get(key) ?? 0) + parseFloat(otr.hours.toString()));
   }
 
-  // Fetch timesheet records for the period
   const timesheets = await prisma.timesheet.findMany({
     where: {
       employeeId: { in: employeeIds },
@@ -248,15 +216,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       shRdOtHours: true,
       rhOtHours: true,
       rhRdOtHours: true,
+      rdHours: true,
       shHours: true,
+      shRdHours: true,
       rhHours: true,
+      rhRdHours: true,
       lateMinutes: true,
       undertimeMinutes: true,
       dailyGrossPay: true,
     },
   });
 
-  // Index timesheets by employeeId for O(1) lookups
   const timesheetsByEmp = new Map<number, typeof timesheets>();
   for (const ts of timesheets) {
     const arr = timesheetsByEmp.get(ts.employeeId) ?? [];
@@ -264,7 +234,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     timesheetsByEmp.set(ts.employeeId, arr);
   }
 
-  // Fetch active cash advances for these employees
   const cashAdvances = await prisma.cashAdvance.findMany({
     where: { employeeId: { in: employeeIds }, status: "ACTIVE" },
   });
@@ -275,22 +244,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     advancesByEmp.set(adv.employeeId, arr);
   }
 
-  // ── Pre-transaction: re-compute timesheet rows with timeIn+timeOut but regularHours=0 ──
-  // This covers COA-corrected punches that were approved after payroll generation.
+  // FIX: Type-safe holiday query satisfying required Int schema rules
+  const periodHolidays = await prisma.holiday.findMany({
+    where: { 
+      clientId,
+      date: { gte: startDate, lte: endDate } 
+    },
+    select: { date: true, type: true },
+  });
+  const periodHolidayMap = new Map<string, string>(
+    periodHolidays.map((h) => [h.date.toISOString().slice(0, 10), h.type]),
+  );
+
   const compensationByEmpId = new Map(
     compensations.map((c) => [c.contract.employment.employeeId, c]),
   );
+  
   let timesheetRecalcCount = 0;
   for (const ts of timesheets) {
     if (!ts.timeIn || !ts.timeOut) continue;
-    // Skip rows already computed: regularHours > 0 = regular day done;
-    // dailyGrossPay > 0 = holiday/rest-day premium row already computed.
-    if (Number(ts.regularHours) > 0 || Number(ts.dailyGrossPay) > 0) continue;
 
     const emp = compensationByEmpId.get(ts.employeeId);
     const empSchedule = emp?.contract.schedule ?? null;
     const dow = ts.date.getDay();
     const scheduleDay = empSchedule?.days.find((d) => d.dayOfWeek === dow) ?? null;
+    const isRestDay = scheduleDay ? !scheduleDay.isWorkingDay : false;
+    const dateKey = ts.date.toISOString().slice(0, 10);
+    const holidayType = periodHolidayMap.get(dateKey) ?? null;
+
+    let dayType: DayType = 'REGULAR';
+    if (holidayType === 'REGULAR') {
+      dayType = isRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
+    } else if (holidayType === 'SPECIAL_NON_WORKING' || holidayType === 'LOCAL_HOLIDAY') {
+      dayType = isRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
+    } else if (holidayType === 'SPECIAL_WORKING') {
+      dayType = 'REGULAR';
+    } else if (isRestDay) {
+      dayType = 'REST_DAY';
+    }
 
     const computed = computeTimesheetFields(
       ts.timeIn,
@@ -298,21 +289,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ts.lunchStart,
       ts.lunchEnd,
       scheduleDay,
-      emp ? {
-        calculatedDailyRate: emp.calculatedDailyRate.toString(),
-        payType: emp.payType,
-      } : null,
+      emp ? { calculatedDailyRate: emp.calculatedDailyRate.toString(), payType: emp.payType } : null,
+      dayType,
     );
 
-    // Apply HR setting guards (strict OT zeroes punch OT; disable late/undertime zeroes deductions)
     const isVarPay = emp?.payType === 'VARIABLE_PAY';
     const dRate = Number(emp?.calculatedDailyRate ?? 0);
     const guardFlags = flagsFromCache(hrSettingCache, ts.employeeId);
     const guarded = applyHrSettingGuards(computed, guardFlags, dRate, isVarPay);
-    // Merge approved regular-day OT back in (guard may have zeroed punch-derived OT)
-    const approvedOtKey = `${ts.employeeId}_${ts.date.toISOString().slice(0, 10)}`;
+    
+    const approvedOtKey = `${ts.employeeId}_${dateKey}`;
     const approvedRegOtHours = approvedOtByEmpDate.get(approvedOtKey) ?? 0;
     const finalRegOtHours = Math.max(guarded.regOtHours, approvedRegOtHours);
+
+    const updatedStatus =
+      dayType === 'REGULAR_HOLIDAY' || dayType === 'REGULAR_HOLIDAY_REST' ? ('REGULAR_HOLIDAY' as const)
+      : dayType === 'SPECIAL_HOLIDAY' || dayType === 'SPECIAL_HOLIDAY_REST' ? ('SPECIAL_HOLIDAY' as const)
+      : undefined;
 
     await prisma.timesheet.update({
       where: { id: ts.id },
@@ -321,20 +314,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         lateMinutes: guarded.lateMinutes,
         undertimeMinutes: guarded.undertimeMinutes,
         regOtHours: finalRegOtHours,
+        rdHours: guarded.rdHours,
+        rdOtHours: guarded.rdOtHours,
+        shHours: guarded.shHours,
+        shOtHours: guarded.shOtHours,
+        shRdHours: guarded.shRdHours,
+        shRdOtHours: guarded.shRdOtHours,
+        rhHours: guarded.rhHours,
+        rhOtHours: guarded.rhOtHours,
+        rhRdHours: guarded.rhRdHours,
+        rhRdOtHours: guarded.rhRdOtHours,
         dailyGrossPay: guarded.dailyGrossPay,
+        ...(updatedStatus ? { status: updatedStatus } : {}),
       },
     });
     timesheetRecalcCount++;
   }
 
-  // Re-fetch timesheets if any rows were updated
   let finalTimesheets = timesheets;
   if (timesheetRecalcCount > 0) {
     finalTimesheets = await prisma.timesheet.findMany({
-      where: {
-        employeeId: { in: employeeIds },
-        date: { gte: startDate, lte: endDate },
-      },
+      where: { employeeId: { in: employeeIds }, date: { gte: startDate, lte: endDate } },
       select: {
         id: true,
         employeeId: true,
@@ -350,8 +350,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         shRdOtHours: true,
         rhOtHours: true,
         rhRdOtHours: true,
+        rdHours: true,
         shHours: true,
+        shRdHours: true,
         rhHours: true,
+        rhRdHours: true,
         lateMinutes: true,
         undertimeMinutes: true,
         dailyGrossPay: true,
@@ -359,7 +362,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  // Re-index final timesheets by employeeId
   const finalTimesheetsByEmp = new Map<number, typeof finalTimesheets>();
   for (const ts of finalTimesheets) {
     const arr = finalTimesheetsByEmp.get(ts.employeeId) ?? [];
@@ -367,7 +369,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     finalTimesheetsByEmp.set(ts.employeeId, arr);
   }
 
-  // Fetch approved paid leave requests that overlap the period
   const leaveRequests = await prisma.leaveRequest.findMany({
     where: {
       employeeId: { in: employeeIds },
@@ -377,29 +378,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       endDate: { gte: startDate },
       leaveType: { isPaid: true },
     },
-    select: {
-      employeeId: true,
-      creditUsed: true,
-    },
+    select: { employeeId: true, startDate: true, endDate: true },
   });
 
-  // Index paid leave credits by employeeId
   const leaveByEmp = new Map<number, number>();
   for (const lr of leaveRequests) {
-    leaveByEmp.set(lr.employeeId, (leaveByEmp.get(lr.employeeId) ?? 0) + Number(lr.creditUsed));
+    // Clamp the leave to the payroll period — a leave of Jun 15–18 on a Jun 1–15
+    // period must only count Jun 15 (1 day); Jun 16–18 belongs to the next period.
+    const overlapStart = new Date(Math.max(lr.startDate.getTime(), startDate.getTime()));
+    const overlapEnd   = new Date(Math.min(lr.endDate.getTime(),   endDate.getTime()));
+
+    const comp = compensationByEmpId.get(lr.employeeId);
+    const restDays = new Set<number>(
+      comp?.contract.schedule?.days
+        .filter((d) => !d.isWorkingDay)
+        .map((d) => d.dayOfWeek) ?? [],
+    );
+
+    let days = 0;
+    const cursor = new Date(overlapStart);
+    while (cursor <= overlapEnd) {
+      if (!restDays.has(cursor.getDay())) days++;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    leaveByEmp.set(lr.employeeId, (leaveByEmp.get(lr.employeeId) ?? 0) + days);
   }
 
-  // Run in a single atomic transaction
   const period = await prisma.$transaction(async (tx) => {
     const newPeriod = await tx.payrollPeriod.create({
-      data: {
-        clientId,
-        payrollScheduleId,
-        startDate,
-        endDate,
-        payoutDate,
-        status: "DRAFT",
-      },
+      data: { clientId, payrollScheduleId, startDate, endDate, payoutDate, status: "DRAFT" },
     });
 
     for (const comp of compensations) {
@@ -411,7 +419,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const dailyRate = Number(comp.calculatedDailyRate);
       const allowanceRate = Number(comp.allowanceRate);
 
-      // Allowance: respect allowanceOnFirstCutoffOnly flag
       const isFirstCutoff = startDate.getUTCDate() === schedule.firstPeriodStartDay;
       const allowanceOnFirstCutoffOnly = comp.allowanceOnFirstCutoffOnly ?? true;
       let allowance: number;
@@ -421,57 +428,75 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         allowance = allowanceRate / freqDiv;
       }
 
-      // Basic pay:
-      //   FIXED_PAY  → full periodic salary regardless of attendance.
-      //   VARIABLE_PAY → sum actual dailyGrossPay from timesheet (reflects absences
-      //                  and late/undertime deductions; absent days have no row).
-      const basicPay =
-        comp.payType === 'FIXED_PAY'
-          ? monthlyRate / freqDiv
-          : empTs.reduce((s, ts) => s + Number(ts.dailyGrossPay), 0);
+      const basicPay = comp.payType === 'FIXED_PAY'
+        ? monthlyRate / freqDiv
+        // VARIABLE_PAY: only regular working days; premium days go into holidayPay.
+        : empTs.reduce(
+            (s, ts) => (Number(ts.regularHours) > 0 ? s + Number(ts.dailyGrossPay) : s),
+            0,
+          );
 
-      // Overtime pay: DOLE-compliant per OT type using approved timesheet OT hours
+      // Holiday pay per Philippine Labor Code Art. 94 + DOLE Rules:
+      //   VARIABLE_PAY: worked premium-day pay + unworked regular holidays (mandated 100%).
+      //   FIXED_PAY: additional premium for worked holidays / rest days beyond base salary.
+      const holidayPay = computeHolidayPay(
+        empTs,
+        periodHolidayMap,
+        comp.payType,
+        dailyRate,
+        startDate,
+        endDate,
+      );
+
       const overtimePay = computeDoleOvertimePay(empTs, dailyRate);
-
-      // Paid leave pay: approved paid leave credits × dailyRate
       const paidLeavePay = (leaveByEmp.get(employeeId) ?? 0) * dailyRate;
 
-      // Frozen hour summaries for the payslip audit trail
       const totalRegularHours = empTs.reduce((s, ts) => s + Number(ts.regularHours), 0);
       const totalOvertimeHours = sumOtHours(empTs);
-      const totalHolidayHours = empTs.reduce(
-        (s, ts) => s + Number(ts.shHours) + Number(ts.rhHours),
-        0,
-      );
+      const totalHolidayHours = empTs.reduce((s, ts) => s + Number(ts.shHours) + Number(ts.rhHours), 0);
       const totalLateMins = empTs.reduce((s, ts) => s + ts.lateMinutes, 0);
       const totalUndertimeMins = empTs.reduce((s, ts) => s + ts.undertimeMinutes, 0);
       const totalRegularDays = empTs.filter((ts) => Number(ts.regularHours) > 0).length;
 
-      const grossPay = basicPay + allowance + overtimePay + paidLeavePay;
-
-      // Government deductions (only if enabled on the employee's compensation)
-      const sssDeduction = comp.deductSss
-        ? getSSSEmployeeDeduction(monthlyRate, freq)
-        : 0;
-      const philhealthDeduction = comp.deductPhilhealth
-        ? getPhilHealthEmployeeDeduction(monthlyRate, freq)
-        : 0;
-      const pagibigDeduction = comp.deductPagibig
-        ? getPagibigEmployeeDeduction(
-            monthlyRate,
-            comp.pagibigType as 'REGULAR' | 'MINIMUM',
-            freq,
-          )
-        : 0;
-
-      // Cash advance repayment: sum all active installment amounts for this employee
-      const empAdvances = advancesByEmp.get(employeeId) ?? [];
-      const cashAdvanceRepayment = empAdvances.reduce(
-        (s, adv) => s + Number(adv.installmentAmount),
-        0,
+      // ── Late / undertime deduction ──────────────────────────────────────────
+      // Derive scheduled work minutes from the employee's work schedule (default 480 = 8 h).
+      // For FIXED_PAY: late/undertime reduces pay (it is not already baked in).
+      // For VARIABLE_PAY: late/undertime is already deducted inside dailyGrossPay —
+      //   we only store the value for display; it does NOT reduce grossPay again.
+      const empScheduleDays = comp.contract.schedule?.days ?? [];
+      const scheduledWorkMinByDow = new Map<number, number>(
+        empScheduleDays.map((d) => {
+          const start = d.startTime ? Number(d.startTime.split(':')[0]) * 60 + Number(d.startTime.split(':')[1]) : 8 * 60;
+          const end = d.endTime ? Number(d.endTime.split(':')[0]) * 60 + Number(d.endTime.split(':')[1]) : 17 * 60;
+          const brkS = d.breakStart ? Number(d.breakStart.split(':')[0]) * 60 + Number(d.breakStart.split(':')[1]) : null;
+          const brkE = d.breakEnd ? Number(d.breakEnd.split(':')[0]) * 60 + Number(d.breakEnd.split(':')[1]) : null;
+          const brk = brkS !== null && brkE !== null && brkE > brkS ? brkE - brkS : 60;
+          return [d.dayOfWeek, Math.max(1, end - start - brk)];
+        }),
       );
 
-      const totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + cashAdvanceRepayment;
+      const lateUndertimeDeduction = Number(
+        empTs.reduce((s, ts) => {
+          const mins = ts.lateMinutes + ts.undertimeMinutes;
+          if (mins <= 0) return s;
+          const scheduledMin = scheduledWorkMinByDow.get(ts.date.getDay()) ?? 480;
+          return s + (mins / scheduledMin) * dailyRate;
+        }, 0).toFixed(2),
+      );
+
+      const grossPay = basicPay + holidayPay + allowance + overtimePay + paidLeavePay;
+
+      const sssDeduction = comp.deductSss ? getSSSEmployeeDeduction(monthlyRate, freq) : 0;
+      const philhealthDeduction = comp.deductPhilhealth ? getPhilHealthEmployeeDeduction(monthlyRate, freq) : 0;
+      const pagibigDeduction = comp.deductPagibig ? getPagibigEmployeeDeduction(monthlyRate, comp.pagibigType as 'REGULAR' | 'MINIMUM', freq) : 0;
+
+      const empAdvances = advancesByEmp.get(employeeId) ?? [];
+      const cashAdvanceRepayment = empAdvances.reduce((s, adv) => s + Number(adv.installmentAmount), 0);
+
+      // For FIXED_PAY the late/undertime must reduce net pay explicitly.
+      // For VARIABLE_PAY it is already reflected in basicPay (dailyGrossPay sum).
+      const lateUndertimeForTotal = comp.payType === 'FIXED_PAY' ? lateUndertimeDeduction : 0;
+      const totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + cashAdvanceRepayment + lateUndertimeForTotal;
       const netPay = Math.max(0, grossPay - totalDeductions);
 
       const payslip = await tx.payslip.create({
@@ -485,6 +510,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           totalLateMins,
           totalUndertimeMins,
           basicPay,
+          holidayPay,
           allowance,
           overtimePay,
           paidLeavePay,
@@ -493,6 +519,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           philhealthDeduction,
           pagibigDeduction,
           cashAdvanceRepayment,
+          lateUndertimeDeduction,
           totalDeductions,
           netPay,
           preparedById: session.user.id,
@@ -500,24 +527,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       });
 
-      // Create the repayment ledger entries and update each advance's remaining balance
       for (const adv of empAdvances) {
         const amount = Number(adv.installmentAmount);
         await tx.cashAdvanceDeduction.create({
-          data: {
-            cashAdvanceId: adv.id,
-            payslipId: payslip.id,
-            amountDeducted: amount,
-          },
+          data: { cashAdvanceId: adv.id, payslipId: payslip.id, amountDeducted: amount },
         });
 
         const newBalance = Math.max(0, Number(adv.remainingBalance) - amount);
         await tx.cashAdvance.update({
           where: { id: adv.id },
-          data: {
-            remainingBalance: newBalance,
-            status: newBalance <= 0 ? "COMPLETED" : "ACTIVE",
-          },
+          data: { remainingBalance: newBalance, status: newBalance <= 0 ? "COMPLETED" : "ACTIVE" },
         });
       }
     }

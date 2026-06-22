@@ -199,7 +199,12 @@ export function computeTimesheetFields(
       }
     }
   } else {
-    // ── Premium / holiday days: 8-hour threshold, no late/undertime ───────
+    // ── Premium / holiday days: 8-hour threshold ──────────────────────────
+    // Late/undertime IS still tracked for fixed schedules on holiday days —
+    // e.g. an employee on an 8-5 schedule who punches in at 10 AM on a Regular
+    // Holiday is 2 hours late. The dailyGrossPay is prorated by actual hours
+    // worked (baseHours), which naturally reflects the late arrival.
+    //
     // DOLE base-pay multipliers for the first 8 hours:
     //   REST_DAY             → 1.30
     //   SPECIAL_HOLIDAY      → 1.30
@@ -216,6 +221,14 @@ export function computeTimesheetFields(
     };
     // OT pay for premium days is computed externally via computeDoleOvertimePay()
     // using the rdOtHours / shOtHours / rhOtHours etc. buckets populated below.
+
+    // Compute late/undertime against the fixed schedule (same logic as REGULAR days)
+    if (!isFlexible && schedStartMin > 0) {
+      const timeInMin  = timeIn.getUTCHours()  * 60 + timeIn.getUTCMinutes();
+      const timeOutMin = timeOut.getUTCHours() * 60 + timeOut.getUTCMinutes();
+      lateMinutes      = Math.max(0, timeInMin  - schedStartMin);
+      undertimeMinutes = Math.max(0, schedEndMin - timeOutMin);
+    }
 
     const stdMin = 8 * 60; // 8-hour standard on premium days
     const baseHours = parseFloat((Math.min(workedMin, stdMin) / 60).toFixed(2));

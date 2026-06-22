@@ -69,8 +69,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 
   if (
     session.user.role !== "SUPER_ADMIN" &&
-    session.user.role !== "ADMIN" &&
-    !session.portalAccess?.HR?.canWrite
+    session.user.role !== "ADMIN"
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

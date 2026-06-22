@@ -9,7 +9,7 @@ import {
   getPhilHealthEmployeeDeduction,
   getPagibigEmployeeDeduction,
 } from '@/lib/government-contributions';
-import { computeDoleOvertimePay } from '@/lib/dole-overtime';
+import { computeDoleOvertimePay, computeHolidayPay } from '@/lib/dole-overtime';
 import { logActivity, getRequestMeta } from '@/lib/activity-log';
 
 interface RouteParams {
@@ -21,16 +21,6 @@ interface RouteParams {
  *
  * Refreshes all derived fields for a payslip's timesheet records and returns
  * suggested earning values aligned with the generation logic.
- *
- * Steps performed:
- *  1. Re-run computeTimesheetFields on every timesheet row in the period that has
- *     both timeIn + timeOut but still shows regularHours = 0 (e.g. the row was
- *     created/patched by a COA approval AFTER payroll generation).
- *  2. Aggregate approved OvertimeRequest hours for the period → suggest overtimePay.
- *  3. Aggregate approved paid LeaveRequest credits for the period → suggest paidLeavePay.
- *  4. Recompute basicPay and allowance from current compensation (matching generation logic).
- *  5. Recompute government deductions from current compensation flags.
- *  6. Return updated timesheets + all suggestions + audit meta.
  */
 export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
@@ -109,19 +99,14 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     select: { date: true, type: true },
   });
 
-  // Build a lookup: ISO date string → holiday type
   const holidayMap = new Map<string, string>(
     holidays.map((h) => [h.date.toISOString().slice(0, 10), h.type]),
   );
 
-  // Build rest-day set from schedule (days where isWorkingDay = false)
   const restDaySet = new Set<number>(
     schedule?.days.filter((d) => !d.isWorkingDay).map((d) => d.dayOfWeek) ?? [],
   );
 
-  // ── Pre-fetch approved OT requests for the period ────────────────────────
-  // Fetched early so the recalc loop can preserve approved OT hours rather than
-  // overwriting them with punch-derived values.
   const otRequests = await prisma.overtimeRequest.findMany({
     where: {
       employeeId,
@@ -132,7 +117,6 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     select: { date: true, type: true, hours: true },
   });
 
-  // Build a map: dateKey → accumulated approved OT info for fast lookup
   type ApprovedOtEntry = { regOtHours: number; hasRestDayOt: boolean };
   const approvedOtMap = new Map<string, ApprovedOtEntry>();
   for (const otr of otRequests) {
@@ -150,19 +134,11 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     }
   }
 
-  // Pre-compute daily rate (used in punch-row recalc and OT-only row handling below)
   const dailyRate = Number(compensation?.calculatedDailyRate ?? 0);
-
-  // ── Load HrSetting guard flags for this employee ─────────────────────────
-  // Strict OT: zeros punch-derived OT buckets; approved OT requests merge back in after.
-  // Disable late/undertime: zeros lateMinutes + undertimeMinutes and restores dailyGrossPay.
   const guardFlags = await resolveHrSettingFlags(clientId, employeeId);
   const isVariable = (compensation?.payType ?? 'FIXED_PAY') === 'VARIABLE_PAY';
 
   // ── 3. Recalculate ALL rows that have timeIn + timeOut ───────────────────
-  // Covers: COA-corrected rows added after generation, rows where dailyGrossPay
-  // was never computed (e.g. punched before this field existed), rows where
-  // compensation changed since last compute, and rows on rest/holiday days.
   const recalcMessages: string[] = [];
   let recalcCount = 0;
 
@@ -175,14 +151,12 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     const isRestDay = restDaySet.has(dow);
     const holidayType = holidayMap.get(dateKey) ?? null;
 
-    // Determine DOLE day type
     let dayType: DayType = 'REGULAR';
     if (holidayType === 'REGULAR') {
       dayType = isRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
     } else if (holidayType === 'SPECIAL_NON_WORKING' || holidayType === 'LOCAL_HOLIDAY') {
       dayType = isRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
     } else if (holidayType === 'SPECIAL_WORKING') {
-      // Special working day: treated as regular (no premium pay)
       dayType = 'REGULAR';
     } else if (isRestDay) {
       dayType = 'REST_DAY';
@@ -203,15 +177,8 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       dayType,
     );
 
-    // Apply HR setting guards:
-    //  - strictOvertimeApproval → zeroes punch-derived OT (approved OT merges in after)
-    //  - disableLateUndertimeGlobal → zeroes late/undertime minutes + adjusts dailyGrossPay
     const guarded = applyHrSettingGuards(computed, guardFlags, dailyRate, isVariable);
 
-    // ── Merge approved OT hours with punch-derived values ──────────────────
-    // Approved OT requests are the authoritative source for OT hour counts.
-    // Regular OT: take the max of guarded vs approved (approved OT overrides strict mode).
-    // Rest-day OT: preserve rdHours/rdOtHours already written by the OT approval handler.
     const approvedOt = approvedOtMap.get(dateKey);
     const writeRegOtHours = approvedOt && !approvedOt.hasRestDayOt
       ? Math.max(guarded.regOtHours, approvedOt.regOtHours)
@@ -219,7 +186,6 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     const writeRdHours   = approvedOt?.hasRestDayOt ? Number(ts.rdHours)   : guarded.rdHours;
     const writeRdOtHours = approvedOt?.hasRestDayOt ? Number(ts.rdOtHours) : guarded.rdOtHours;
 
-    // Unpaid leave: employee is punched (COA-corrected) but earns no base pay for the day
     const writeDailyGrossPay = ts.status === 'UNPAID_LEAVE' ? 0 : guarded.dailyGrossPay;
 
     await prisma.timesheet.update({
@@ -250,12 +216,9 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   }
 
   // ── 3b. Compute dailyGrossPay for OT-only rows (no punch) ────────────────
-  // Rows created by rest-day/holiday OT approvals have premium hour buckets set
-  // but no timeIn/timeOut, so they are skipped by the loop above. Set their
-  // dailyGrossPay to the base premium portion so holidayPay and basicPay are accurate.
   const OT_BASE_MULT: Record<DayType, number> = {
-    REGULAR:              1.00,
-    REST_DAY:             1.30,
+    REGULAR:        1.00,
+    REST_DAY:       1.30,
     SPECIAL_HOLIDAY:      1.30,
     SPECIAL_HOLIDAY_REST: 1.50,
     REGULAR_HOLIDAY:      2.00,
@@ -263,7 +226,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   };
 
   for (const ts of timesheets) {
-    if (ts.timeIn || ts.timeOut) continue; // punch rows already handled above
+    if (ts.timeIn || ts.timeOut) continue;
 
     const hasPremiumHours =
       Number(ts.rdHours)    > 0 || Number(ts.rdOtHours)    > 0 ||
@@ -282,16 +245,15 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     let otDayType: DayType = 'REST_DAY';
     if (otHolidayType === 'REGULAR') {
       otDayType = otIsRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
-    } else if (otHolidayType === 'SPECIAL_NON_WORKING' || otHolidayType === 'LOCAL_HOLIDAY') {
+    } else if (otHolidayType === 'SPECIAL_NON_WORKSPACE' || otHolidayType === 'SPECIAL_NON_WORKING' || otHolidayType === 'LOCAL_HOLIDAY') {
       otDayType = otIsRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
     } else if (otIsRestDay) {
       otDayType = 'REST_DAY';
     }
 
-    // Pro-rate base premium pay by actual hours in the premium bucket (up to 8)
     const baseHoursOnRow =
-      Number(ts.rdHours)   + Number(ts.shHours)   +
-      Number(ts.shRdHours) + Number(ts.rhHours)   + Number(ts.rhRdHours);
+      Number(ts.rdHours)    + Number(ts.shHours)    +
+      Number(ts.shRdHours) + Number(ts.rhHours)    + Number(ts.rhRdHours);
     const otOnlyGrossPay = dailyRate > 0 && baseHoursOnRow > 0
       ? parseFloat(((dailyRate / 8) * baseHoursOnRow * OT_BASE_MULT[otDayType]).toFixed(2))
       : 0;
@@ -311,8 +273,6 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     orderBy: { date: 'asc' },
   });
 
-  // ── 5. OT requests already fetched before the recalc loop ────────────────
-  // ── 6. Approved paid leave requests that overlap the period ─────────────
   const leaveRequests = await prisma.leaveRequest.findMany({
     where: {
       employeeId,
@@ -331,7 +291,6 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   });
 
   // ── 7. Compute all suggested values ─────────────────────────────────────
-  // ── Determine first-cutoff status for allowance split ─────────────────
   let isFirstCutoff = true;
   if (payslip.payrollPeriod.payrollScheduleId) {
     const ps = await prisma.payrollSchedule.findFirst({
@@ -347,16 +306,14 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const freq = (compensation?.frequency ?? 'TWICE_A_MONTH') as 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
   const freqDiv = freq === 'ONCE_A_MONTH' ? 1 : freq === 'TWICE_A_MONTH' ? 2 : 4;
 
-  // Basic pay:
-  //   FIXED_PAY  → full periodic salary regardless of attendance.
-  //   VARIABLE_PAY → sum actual dailyGrossPay from timesheet (reflects absences
-  //                  and late/undertime deductions; absent days have no row).
   const basicPay =
     payType === 'FIXED_PAY'
       ? monthlyRate / freqDiv
-      : updatedTimesheets.reduce((s, t) => s + Number(t.dailyGrossPay), 0);
+      : updatedTimesheets.reduce(
+          (s, t) => (Number(t.regularHours) > 0 ? s + Number(t.dailyGrossPay) : s),
+          0,
+        );
 
-  // Allowance: respect allowanceOnFirstCutoffOnly flag
   const allowanceOnFirstCutoffOnly = compensation?.allowanceOnFirstCutoffOnly ?? true;
   let allowance: number;
   if (allowanceOnFirstCutoffOnly && freq !== 'ONCE_A_MONTH') {
@@ -365,53 +322,75 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     allowance = allowanceRate / freqDiv;
   }
 
-  // Helper to parse "HH:MM" → minutes since midnight (local to this scope)
   const parseHHMM = (hhmm: string): number => {
     const [h, m] = hhmm.split(':').map(Number);
     return (h ?? 0) * 60 + (m ?? 0);
   };
 
-  // Holiday premium pay: basicPay now sums dailyGrossPay which already embeds all
-  // holiday and rest-day multipliers via computeTimesheetFields(). No separate component
-  // needed — setting to 0 prevents double-counting for all pay types.
-  const holidayPay = 0;
+  const holidayPay = computeHolidayPay(
+    updatedTimesheets,
+    holidayMap,
+    payType,
+    dailyRate,
+    startDate,
+    endDate,
+  );
 
-  // Late / undertime deduction: per-minute penalty on punched days only.
-  //   VARIABLE_PAY → already baked into dailyGrossPay per row (0 here).
-  //   FIXED_PAY    → (lateMin + undertimeMin) / scheduledWorkMin × dailyRate per punched row.
-  // Absent days and UNPAID_LEAVE days are already excluded from basicPay
-  // (no row / dailyGrossPay = 0), so no additional full-day deduction is needed.
-  const lateUndertimeDeduction = (() => {
-    if (payType === 'VARIABLE_PAY') return 0;
-    let total = 0;
+  // ── Late / Undertime Deduction Splitting Loop ────────────────────────────
+  let regularLateUnder = 0;
+  let regularHolidayLateUnder = 0;
+  let specialHolidayLateUnder = 0;
+
+  if (payType !== 'VARIABLE_PAY' && !guardFlags.disableLateUndertimeGlobal) {
     for (const t of updatedTimesheets) {
       if (!t.timeIn || !t.timeOut) continue;
       const deductMin = Number(t.lateMinutes) + Number(t.undertimeMinutes);
       if (deductMin <= 0) continue;
+
       const tDow = (t.date as Date).getDay();
       const sd = schedule?.days.find((d) => d.dayOfWeek === tDow) ?? null;
-      const sStart = sd?.startTime ? parseHHMM(sd.startTime) : 8 * 60;
-      const sEnd   = sd?.endTime   ? parseHHMM(sd.endTime)   : 17 * 60;
-      const brkMin =
-        sd?.breakStart && sd?.breakEnd
+      const sStart = sd?.startTime ? parseHHMM(sd.startTime) : 9 * 60; // 9am standard shift base
+      const sEnd   = sd?.endTime   ? parseHHMM(sd.endTime)   : 17 * 60; // 5pm standard shift base
+      const brkMin = sd?.breakStart && sd?.breakEnd
           ? parseHHMM(sd.breakEnd) - parseHHMM(sd.breakStart)
           : 60;
+          
       const schedMin = Math.max(1, sEnd - sStart - brkMin);
-      total += (deductMin / schedMin) * dailyRate;
-    }
-    return total;
-  })();
+      const rowDeduct = (deductMin / schedMin) * dailyRate;
 
-  // Overtime pay: DOLE-compliant per OT type using approved timesheet OT hours
+      const dateKey = t.date.toISOString().slice(0, 10);
+      const hType = holidayMap.get(dateKey) ?? null;
+
+      if (hType === 'REGULAR') {
+        regularHolidayLateUnder += rowDeduct;
+      } else if (hType === 'SPECIAL_NON_WORKING' || hType === 'LOCAL_HOLIDAY') {
+        specialHolidayLateUnder += rowDeduct;
+      } else {
+        regularLateUnder += rowDeduct;
+      }
+    }
+  }
+
+  const lateUndertimeDeduction = regularLateUnder + regularHolidayLateUnder + specialHolidayLateUnder;
   const overtimePay = computeDoleOvertimePay(updatedTimesheets, dailyRate);
 
-  // Paid leave pay: sum of approved paid leave credits used × dailyRate
-  const paidLeavePay = leaveRequests.reduce(
-    (s, lr) => s + Number(lr.creditUsed) * dailyRate,
-    0,
-  );
+  const paidLeavePay = leaveRequests.reduce((s, lr) => {
+    // Clamp the leave range to this payroll period — a leave of Jun 15–18 on a
+    // Jun 1–15 payroll should only count Jun 15 (1 day), not the full 4 days.
+    const overlapStart = new Date(Math.max(lr.startDate.getTime(), startDate.getTime()));
+    const overlapEnd   = new Date(Math.min(lr.endDate.getTime(),   endDate.getTime()));
 
-  // Government contributions from current compensation flags
+    // Count working days in the overlap (skip rest days per the employee's schedule)
+    let days = 0;
+    const cursor = new Date(overlapStart);
+    while (cursor <= overlapEnd) {
+      if (!restDaySet.has(cursor.getUTCDay())) days++;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    return s + days * dailyRate;
+  }, 0);
+
   const sssDeduction = compensation?.deductSss
     ? getSSSEmployeeDeduction(monthlyRate, freq)
     : 0;
@@ -426,29 +405,80 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       )
     : 0;
 
+  const suggestions = {
+    basicPay:               parseFloat(basicPay.toFixed(2)),
+    holidayPay:             parseFloat(holidayPay.toFixed(2)),
+    allowance:              parseFloat(allowance.toFixed(2)),
+    overtimePay:            parseFloat(overtimePay.toFixed(2)),
+    paidLeavePay:           parseFloat(paidLeavePay.toFixed(2)),
+    lateUndertimeDeduction: parseFloat(lateUndertimeDeduction.toFixed(2)),
+    regularLateUndertime:   parseFloat(regularLateUnder.toFixed(2)),
+    regularHolidayLateUnder: parseFloat(regularHolidayLateUnder.toFixed(2)),
+    specialHolidayLateUnder: parseFloat(specialHolidayLateUnder.toFixed(2)),
+    sssDeduction:           parseFloat(sssDeduction.toFixed(2)),
+    philhealthDeduction:    parseFloat(philhealthDeduction.toFixed(2)),
+    pagibigDeduction:       parseFloat(pagibigDeduction.toFixed(2)),
+  };
+
+  // ── apply=true: commit suggestions directly to the payslip ─────────────
+  const { searchParams } = new URL(request.url);
+  const shouldApply = searchParams.get('apply') === 'true';
+
+  if (shouldApply) {
+    const existing = await prisma.payslip.findUnique({
+      where: { id },
+      select: { pagibigLoan: true, sssLoan: true, cashAdvanceRepayment: true },
+    });
+
+    const pagibigLoan      = Number(existing?.pagibigLoan ?? 0);
+    const sssLoan          = Number(existing?.sssLoan ?? 0);
+    const cashAdvRepayment = Number(existing?.cashAdvanceRepayment ?? 0);
+
+    const totalDeductions =
+      suggestions.sssDeduction +
+      suggestions.philhealthDeduction +
+      suggestions.pagibigDeduction +
+      suggestions.lateUndertimeDeduction +
+      pagibigLoan +
+      sssLoan +
+      cashAdvRepayment;
+
+    const grossPay = suggestions.basicPay + suggestions.holidayPay + suggestions.overtimePay + suggestions.paidLeavePay + suggestions.allowance;
+    const netPay = Math.max(0, grossPay - totalDeductions);
+
+    await prisma.payslip.update({
+      where: { id },
+      data: {
+        basicPay:               suggestions.basicPay,
+        holidayPay:             suggestions.holidayPay,
+        allowance:              suggestions.allowance,
+        overtimePay:            suggestions.overtimePay,
+        paidLeavePay:           suggestions.paidLeavePay,
+        lateUndertimeDeduction: suggestions.lateUndertimeDeduction,
+        sssDeduction:           suggestions.sssDeduction,
+        philhealthDeduction:    suggestions.philhealthDeduction,
+        pagibigDeduction:       suggestions.pagibigDeduction,
+        grossPay,
+        totalDeductions,
+        netPay,
+      },
+    });
+  }
+
   void logActivity({
     userId: session.user.id,
     action: 'UPDATED',
     entity: 'Payslip',
     entityId: id,
-    description: `Recalculated payslip ${id}: ${recalcCount} timesheet row(s) updated, ${otRequests.length} OT request(s), ${leaveRequests.length} leave request(s)`,
+    description: `Recalculated payslip ${id}${shouldApply ? ' and applied' : ''}: ${recalcCount} timesheet row(s) updated, ${otRequests.length} OT request(s), ${leaveRequests.length} leave request(s)`,
     ...getRequestMeta(request),
   });
 
   return NextResponse.json({
     data: {
       timesheets: updatedTimesheets,
-      suggestions: {
-        basicPay:                parseFloat(basicPay.toFixed(2)),
-        holidayPay:              parseFloat(holidayPay.toFixed(2)),
-        allowance:               parseFloat(allowance.toFixed(2)),
-        overtimePay:             parseFloat(overtimePay.toFixed(2)),
-        paidLeavePay:            parseFloat(paidLeavePay.toFixed(2)),
-        lateUndertimeDeduction:  parseFloat(lateUndertimeDeduction.toFixed(2)),
-        sssDeduction:            parseFloat(sssDeduction.toFixed(2)),
-        philhealthDeduction:     parseFloat(philhealthDeduction.toFixed(2)),
-        pagibigDeduction:        parseFloat(pagibigDeduction.toFixed(2)),
-      },
+      suggestions,
+      applied: shouldApply,
       meta: {
         recalcCount,
         recalcMessages,

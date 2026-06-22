@@ -1,4 +1,3 @@
-// src/app/api/hr/attendance/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionWithAccess, getClientIdFromSession } from '@/lib/session';
@@ -16,21 +15,12 @@ const patchSchema = z.object({
   timeOut:    z.string().regex(timeRegex, 'Must be HH:MM').nullable().optional(),
 });
 
-/** Build a full UTC Date from a YYYY-MM-DD string and a HH:MM time string. */
 function buildUtcDate(dateStr: string, timeStr: string): Date {
   return new Date(`${dateStr}T${timeStr}:00.000Z`);
 }
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
+interface RouteParams { params: Promise<{ id: string }>; }
 
-/**
- * PATCH /api/hr/attendance/[id]
- * Edit time punch fields on a Timesheet row.
- * Recalculates derived fields (regularHours, lateMinutes, etc.) when
- * both timeIn and timeOut are present after the update.
- */
 export async function PATCH(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -51,20 +41,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 
   const { timeIn: tiStr, lunchStart: lsStr, lunchEnd: leStr, timeOut: toStr } = parsed.data;
 
-  // Verify the timesheet belongs to this client
   const existing = await prisma.timesheet.findUnique({
     where: { id },
-    select: {
-      id: true,
-      clientId: true,
-      employeeId: true,
-      date: true,
-      timeIn: true,
-      lunchStart: true,
-      lunchEnd: true,
-      timeOut: true,
-      status: true,
-    },
+    select: { id: true, clientId: true, employeeId: true, date: true, timeIn: true, lunchStart: true, lunchEnd: true, timeOut: true, status: true },
   });
 
   if (!existing) return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 });
@@ -72,90 +51,94 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 
   const dateStr = existing.date.toISOString().slice(0, 10);
 
-  // Build new datetime values (undefined input = keep existing; null string = clear)
   const newTimeIn     = tiStr !== undefined ? (tiStr ? buildUtcDate(dateStr, tiStr) : null) : existing.timeIn;
   const newLunchStart = lsStr !== undefined ? (lsStr ? buildUtcDate(dateStr, lsStr) : null) : existing.lunchStart;
   const newLunchEnd   = leStr !== undefined ? (leStr ? buildUtcDate(dateStr, leStr) : null) : existing.lunchEnd;
   const newTimeOut    = toStr !== undefined ? (toStr ? buildUtcDate(dateStr, toStr) : null) : existing.timeOut;
 
-  // Determine updated attendance status
   let newStatus = existing.status;
   if (newTimeIn && newTimeOut) newStatus = 'PRESENT';
   else if (newTimeIn ?? newTimeOut) newStatus = 'INCOMPLETE';
 
-  // Fetch employee compensation for recalculation
-  // Chain: EmployeeCompensation → EmployeeContract → EmployeeEmployment (employeeId + clientId)
   const compensation = await prisma.employeeCompensation.findFirst({
-    where: {
-      isActive: true,
-      contract: {
-        employment: {
-          employeeId: existing.employeeId,
-          clientId,
-          isPastRole: false,
-        },
-      },
-    },
-    select: { calculatedDailyRate: true, payType: true },
+    where: { isActive: true, contract: { employment: { employeeId: existing.employeeId, clientId, isPastRole: false } } },
+    select: { calculatedDailyRate: true, payType: true, contract: { select: { schedule: { select: { days: { select: { dayOfWeek: true, isWorkingDay: true } } } } } } },
     orderBy: { createdAt: 'desc' },
   });
 
+  // FIX: Type-safe holiday query
+  const holidayForDate = await prisma.holiday.findFirst({
+    where: { 
+      clientId, 
+      date: existing.date 
+    },
+    select: { type: true },
+  });
+
   type UpdateInput = {
-    timeIn: Date | null;
-    lunchStart: Date | null;
-    lunchEnd: Date | null;
-    timeOut: Date | null;
-    status: typeof newStatus;
-    regularHours?: number;
-    lateMinutes?: number;
-    undertimeMinutes?: number;
-    regOtHours?: number;
-    dailyGrossPay?: number;
+    timeIn: Date | null; lunchStart: Date | null; lunchEnd: Date | null; timeOut: Date | null; status: typeof newStatus;
+    regularHours?: number; lateMinutes?: number; undertimeMinutes?: number; regOtHours?: number; rdHours?: number;
+    rdOtHours?: number; shHours?: number; shOtHours?: number; shRdHours?: number; shRdOtHours?: number; rhHours?: number;
+    rhOtHours?: number; rhRdHours?: number; rhRdOtHours?: number; dailyGrossPay?: number;
   };
 
-  const updateData: UpdateInput = {
-    timeIn: newTimeIn,
-    lunchStart: newLunchStart,
-    lunchEnd: newLunchEnd,
-    timeOut: newTimeOut,
-    status: newStatus,
-  };
+  const updateData: UpdateInput = { timeIn: newTimeIn, lunchStart: newLunchStart, lunchEnd: newLunchEnd, timeOut: newTimeOut, status: newStatus };
 
-  // Recalculate derived fields if we have a full punch pair
   if (newTimeIn && newTimeOut) {
+    const scheduleDays = compensation?.contract.schedule?.days ?? [];
+    const recordDow = existing.date.getDay();
+    const schedDayEntry = scheduleDays.find((d) => d.dayOfWeek === recordDow) ?? null;
+    const isRestDay = schedDayEntry ? !schedDayEntry.isWorkingDay : false;
+    const hType = holidayForDate?.type ?? null;
+    
+    let patchDayType: 'REGULAR' | 'REST_DAY' | 'SPECIAL_HOLIDAY' | 'SPECIAL_HOLIDAY_REST' | 'REGULAR_HOLIDAY' | 'REGULAR_HOLIDAY_REST' = 'REGULAR';
+    if (hType === 'REGULAR') {
+      patchDayType = isRestDay ? 'REGULAR_HOLIDAY_REST' : 'REGULAR_HOLIDAY';
+    } else if (hType === 'SPECIAL_NON_WORKING' || hType === 'LOCAL_HOLIDAY') {
+      patchDayType = isRestDay ? 'SPECIAL_HOLIDAY_REST' : 'SPECIAL_HOLIDAY';
+    } else if (hType === 'SPECIAL_WORKING') {
+      patchDayType = 'REGULAR';
+    } else if (isRestDay) {
+      patchDayType = 'REST_DAY';
+    }
+
     const computed = computeTimesheetFields(
-      newTimeIn,
-      newTimeOut,
-      newLunchStart,
-      newLunchEnd,
-      null, // use default schedule (08:00–17:00)
-      compensation
-        ? { calculatedDailyRate: compensation.calculatedDailyRate.toString(), payType: compensation.payType }
-        : null,
+      newTimeIn, newTimeOut, newLunchStart, newLunchEnd, null, 
+      compensation ? { calculatedDailyRate: compensation.calculatedDailyRate.toString(), payType: compensation.payType } : null,
+      patchDayType,
     );
 
     const guardFlags = await resolveHrSettingFlags(clientId, existing.employeeId);
-    const guarded = applyHrSettingGuards(
-      computed,
-      guardFlags,
-      parseFloat((compensation?.calculatedDailyRate ?? 0).toString()),
-      compensation?.payType === 'VARIABLE_PAY',
-    );
+    const guarded = applyHrSettingGuards(computed, guardFlags, parseFloat((compensation?.calculatedDailyRate ?? 0).toString()), compensation?.payType === 'VARIABLE_PAY');
 
     updateData.regularHours     = guarded.regularHours;
     updateData.lateMinutes      = guarded.lateMinutes;
     updateData.undertimeMinutes = guarded.undertimeMinutes;
     updateData.regOtHours       = guarded.regOtHours;
+    updateData.rdHours          = guarded.rdHours;
+    updateData.rdOtHours        = guarded.rdOtHours;
+    updateData.shHours          = guarded.shHours;
+    updateData.shOtHours        = guarded.shOtHours;
+    updateData.shRdHours        = guarded.shRdHours;
+    updateData.shRdOtHours      = guarded.shRdOtHours;
+    updateData.rhHours          = guarded.rhHours;
+    updateData.rhOtHours        = guarded.rhOtHours;
+    updateData.rhRdHours        = guarded.rhRdHours;
+    updateData.rhRdOtHours      = guarded.rhRdOtHours;
     updateData.dailyGrossPay    = guarded.dailyGrossPay;
+
+    if (patchDayType === 'REGULAR_HOLIDAY' || patchDayType === 'REGULAR_HOLIDAY_REST') {
+      updateData.status = 'REGULAR_HOLIDAY';
+    } else if (patchDayType === 'SPECIAL_HOLIDAY' || patchDayType === 'SPECIAL_HOLIDAY_REST') {
+      updateData.status = 'SPECIAL_HOLIDAY';
+    }
   }
 
   const updated = await prisma.timesheet.update({ where: { id }, data: updateData });
 
   void logActivity({
     userId: session.user.id,
-    action: 'UPDATED',
-    entity: 'Timesheet',
-    entityId: updated.id,
+    action: 'UPDATED', entity: 'Timesheet', entityId: updated.id,
     description: `Updated attendance punches for employee ${existing.employeeId} on ${dateStr}`,
     ...getRequestMeta(request),
   });
@@ -163,10 +146,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   return NextResponse.json({ data: { id: updated.id } });
 }
 
-/**
- * DELETE /api/hr/attendance/[id]
- * Deletes a Timesheet row by ID.
- */
 export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -188,9 +167,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
 
   void logActivity({
     userId: session.user.id,
-    action: 'DELETED',
-    entity: 'Timesheet',
-    entityId: id,
+    action: 'DELETED', entity: 'Timesheet', entityId: id,
     description: `Deleted attendance record for employee ${existing.employeeId} on ${existing.date.toISOString().slice(0, 10)}`,
     ...getRequestMeta(request),
   });

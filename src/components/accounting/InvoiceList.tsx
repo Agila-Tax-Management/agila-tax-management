@@ -12,8 +12,49 @@ import {
   Search, FileText, Plus,
   CheckCircle2, Clock, AlertTriangle, XCircle, CircleDot,
   Eye, Printer, Pencil, Copy, Trash2,
+  Download, Upload, X,
 } from 'lucide-react';
 import type { InvoiceRecord, InvoiceStats } from '@/types/accounting.types';
+
+/* ── Template download ───────────────────────────────────────────── */
+function downloadInvoiceTemplate() {
+  const headers = [
+    'Client Business Name',
+    'Due Date',
+    'Description',
+    'Quantity',
+    'Unit Price',
+    'Category',
+    'Is Vatable',
+    'Notes',
+  ];
+  const example = [
+    'Acme Corp',
+    '2026-07-31',
+    'Monthly Tax Filing Service',
+    '1',
+    '3500',
+    'SERVICE_FEE',
+    'No',
+    'Q3 filing',
+  ];
+  const csv = [headers.join(','), example.join(',')].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'invoice-import-template.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+type ImportResult = {
+  row: number;
+  clientName: string;
+  status: 'ok' | 'error' | 'skipped';
+  invoiceNumber?: string;
+  error?: string;
+};
 
 async function openInvoicePDF(invoice: InvoiceRecord) {
   const [{ pdf }, { InvoicePDF }] = await Promise.all([
@@ -88,6 +129,11 @@ export function InvoiceList() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState<string | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
+
+  // Import state
+  const importFileRef = React.useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState<ImportResult[] | null>(null);
 
   // Reset page on filter change (adjust during render)
   const [prevFilters, setPrevFilters] = useState({ search, statusFilter });
@@ -182,6 +228,32 @@ export function InvoiceList() {
     }
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setIsImporting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/accounting/invoices/import', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { toastError('Import failed', data.error ?? 'An error occurred.'); return; }
+      setImportResults(data.data.results as ImportResult[]);
+      const { imported, errors } = data.data as { imported: number; errors: number };
+      if (errors === 0) {
+        success('Import complete', `${imported} invoice(s) created as drafts.`);
+      } else {
+        toastError('Import partial', `${imported} created, ${errors} row(s) had errors.`);
+      }
+      void loadInvoices(page, search, statusFilter);
+    } catch {
+      toastError('Import failed', 'An unexpected error occurred.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
@@ -190,13 +262,35 @@ export function InvoiceList() {
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">Invoices</h2>
           <p className="text-sm text-slate-500 font-medium">Manage and track all client invoices.</p>
         </div>
-        <Button
-          variant="default"
-          onClick={() => router.push('/portal/accounting-and-finance/invoices/new')}
-          className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
-        >
-          <Plus size={16} /> New Invoice
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={downloadInvoiceTemplate}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <Download size={13} /> Template
+          </button>
+          <button
+            onClick={() => importFileRef.current?.click()}
+            disabled={isImporting}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            <Upload size={13} /> {isImporting ? 'Importing…' : 'Import'}
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={(e) => void handleImportFile(e)}
+          />
+          <Button
+            variant="default"
+            onClick={() => router.push('/portal/accounting-and-finance/invoices/new')}
+            className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+          >
+            <Plus size={16} /> New Invoice
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -367,7 +461,56 @@ export function InvoiceList() {
           </div>
         )}
       </Modal>
+
+      {/* Import Results */}
+      {importResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setImportResults(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="text-base font-black text-slate-900">Import Results</h2>
+              <button onClick={() => setImportResults(null)} className="p-1 rounded-lg hover:bg-slate-100 transition">
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left border-b border-slate-100">
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Row</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Client</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Invoice #</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Status</th>
+                    <th className="pb-2 font-black text-slate-400 uppercase tracking-widest">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {importResults.map((r) => (
+                    <tr key={r.row} className="py-1">
+                      <td className="py-2 text-slate-500">{r.row}</td>
+                      <td className="py-2 text-slate-700 font-medium">{r.clientName}</td>
+                      <td className="py-2 font-mono text-amber-700">{r.invoiceNumber ?? '—'}</td>
+                      <td className="py-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          r.status === 'ok' ? 'bg-emerald-100 text-emerald-700' :
+                          r.status === 'skipped' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>{r.status}</span>
+                      </td>
+                      <td className="py-2 text-slate-400">{r.error ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100">
+              <Button variant="outline" className="w-full" onClick={() => setImportResults(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
