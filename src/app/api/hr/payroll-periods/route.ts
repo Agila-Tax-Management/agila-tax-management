@@ -378,31 +378,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       endDate: { gte: startDate },
       leaveType: { isPaid: true },
     },
-    select: { employeeId: true, startDate: true, endDate: true },
+    select: { employeeId: true, creditUsed: true },
   });
 
   const leaveByEmp = new Map<number, number>();
   for (const lr of leaveRequests) {
-    // Clamp the leave to the payroll period — a leave of Jun 15–18 on a Jun 1–15
-    // period must only count Jun 15 (1 day); Jun 16–18 belongs to the next period.
-    const overlapStart = new Date(Math.max(lr.startDate.getTime(), startDate.getTime()));
-    const overlapEnd   = new Date(Math.min(lr.endDate.getTime(),   endDate.getTime()));
-
-    const comp = compensationByEmpId.get(lr.employeeId);
-    const restDays = new Set<number>(
-      comp?.contract.schedule?.days
-        .filter((d) => !d.isWorkingDay)
-        .map((d) => d.dayOfWeek) ?? [],
-    );
-
-    let days = 0;
-    const cursor = new Date(overlapStart);
-    while (cursor <= overlapEnd) {
-      if (!restDays.has(cursor.getDay())) days++;
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    leaveByEmp.set(lr.employeeId, (leaveByEmp.get(lr.employeeId) ?? 0) + days);
+    leaveByEmp.set(lr.employeeId, (leaveByEmp.get(lr.employeeId) ?? 0) + Number(lr.creditUsed));
   }
 
   const period = await prisma.$transaction(async (tx) => {
