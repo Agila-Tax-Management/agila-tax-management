@@ -316,6 +316,34 @@ export function PayrollPeriodDetail() {
     }
   };
 
+  const toggleRow = (payslipId: string | number) => {
+    const key = String(payslipId);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const openFileModal = (employeeId: number, name: string) => {
+    setFileTarget({ employeeId, name });
+    setRequestType('COA');
+    setCoaDate(''); setCoaAction('TIME_IN'); setCoaTime(''); setCoaReason('');
+    setLeaveTypeId(''); setLeaveStart(''); setLeaveEnd(''); setLeaveCredits('1'); setLeaveReason('');
+    setOtDate(''); setOtType('REGULAR_OT'); setOtFrom(''); setOtTo(''); setOtHours(''); setOtReason('');
+    if (leaveTypes.length === 0) {
+      void (async () => {
+        try {
+          const res = await fetch('/api/hr/leave-types');
+          const json: { data?: LeaveType[] } = await res.json();
+          if (res.ok && json.data) setLeaveTypes(json.data);
+        } catch { /* silent */ }
+      })();
+    }
+    setFileModalOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 gap-2 text-muted-foreground">

@@ -142,12 +142,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 export async function POST(request: NextRequest): Promise<NextResponse> {
 // 1. Session Verification
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const ALLOWED_OFFICE_IPS = [
-    '49.145.37.126', // PLDT Wifi
-    '113.19.181.57', // Converge Wifi
-  ];
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // 2. Production-Grade Client IP Capture
   const forwarded = request.headers.get("x-forwarded-for");
