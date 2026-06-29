@@ -433,11 +433,13 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     const pagibigLoan      = Number(existing?.pagibigLoan ?? 0);
     const sssLoan          = Number(existing?.sssLoan ?? 0);
     const cashAdvRepayment = Number(existing?.cashAdvanceRepayment ?? 0);
+    const withholdingTax = 0; // or compute it
 
     const totalDeductions =
       suggestions.sssDeduction +
       suggestions.philhealthDeduction +
       suggestions.pagibigDeduction +
+      withholdingTax +
       suggestions.lateUndertimeDeduction +
       pagibigLoan +
       sssLoan +
@@ -459,6 +461,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
         philhealthDeduction:    suggestions.philhealthDeduction,
         pagibigDeduction:       suggestions.pagibigDeduction,
         grossPay,
+        withholdingTax,
         totalDeductions,
         netPay,
       },
