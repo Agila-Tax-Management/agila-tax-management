@@ -129,9 +129,9 @@ export function PayrollPeriodDetail() {
   const [period, setPeriod] = useState<PeriodDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // <-- Added Refresh State
   const [approvingPayslip, setApprovingPayslip] = useState<string | null>(null);
   const [payingPayslip, setPayingPayslip] = useState<string | null>(null);
-  const [recalculatingPayslip, setRecalculatingPayslip] = useState<string | null>(null);
 
   // Revert approval confirmation modal
   const [revertModalOpen, setRevertModalOpen] = useState(false);
@@ -193,6 +193,28 @@ export function PayrollPeriodDetail() {
   useEffect(() => {
     void fetchPeriod();
   }, [fetchPeriod]);
+
+  // ─── Recalculate Handler ───
+  const handleRefreshCalculations = async () => {
+    if (!period) return;
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/hr/payroll-periods/${period.id}/recalculate`, {
+        method: 'POST',
+      });
+      const json: { error?: string } = await res.json();
+      if (!res.ok) {
+        error('Failed to recalculate', json.error ?? 'Could not recalculate payroll period');
+        return;
+      }
+      success('Recalculated Successfully', 'All payslips and deductions have been refreshed.');
+      await fetchPeriod(); // Re-fetch the newly calculated data
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const updateStatus = async (newStatus: PeriodStatus) => {
     if (!period) return;
@@ -371,11 +393,27 @@ export function PayrollPeriodDetail() {
   const ackPercent = total > 0 ? Math.round((acknowledged / total) * 100) : 0;
   const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0;
 
-  const grossTotal = period.payslips.reduce((s, ps) => s + Number(ps.grossPay), 0);
-  const netTotal = period.payslips.reduce((s, ps) => s + Number(ps.netPay), 0);
-  const dedTotal = period.payslips.reduce((s, ps) => s + Number(ps.totalDeductions), 0);
-  const preparedBy = period.payslips[0]?.preparedBy ?? null;
+  const grossTotal = period.payslips.reduce((s, ps) => s + Number(ps.grossPay || 0), 0);
+  
+  // Calculate reliable deductions directly based on individual breakdown if the parent field is missing
+  const dedTotal = period.payslips.reduce((s, ps) => {
+    const calcDeds = Number(ps.totalDeductions) || (
+      Number(ps.sssDeduction || 0) +
+      Number(ps.philhealthDeduction || 0) +
+      Number(ps.pagibigDeduction || 0) +
+      Number(ps.withholdingTax || 0) +
+      Number(ps.lateUndertimeDeduction || 0) +
+      Number(ps.pagibigLoan || 0) +
+      Number(ps.sssLoan || 0) +
+      Number(ps.cashAdvanceRepayment || 0)
+    );
+    return s + calcDeds;
+  }, 0);
 
+  // Guarantee Net Total is exactly Gross - Deductions
+  const netTotal = grossTotal - dedTotal;
+
+  const preparedBy = period.payslips[0]?.preparedBy ?? null;
   const approvablePayslips = period.payslips.filter((ps) => !ps.approvedAt);
   const isAllApprovableSelected =
     approvablePayslips.length > 0 && selectedPayslips.length === approvablePayslips.length;
@@ -493,11 +531,11 @@ export function PayrollPeriodDetail() {
 
       {/* ── Status Actions ── */}
       {period.status !== 'CLOSED' && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {period.status === 'DRAFT' && (
             <Button
               className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={updatingStatus}
+              disabled={updatingStatus || isRefreshing}
               onClick={() => {
                 void updateStatus('PROCESSING');
               }}
@@ -510,7 +548,7 @@ export function PayrollPeriodDetail() {
             <>
               <Button
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                disabled={updatingStatus}
+                disabled={updatingStatus || isRefreshing}
                 onClick={() => {
                   void updateStatus('APPROVED');
                 }}
@@ -525,7 +563,7 @@ export function PayrollPeriodDetail() {
               <Button
                 variant="outline"
                 className="gap-2"
-                disabled={updatingStatus}
+                disabled={updatingStatus || isRefreshing}
                 onClick={() => {
                   void updateStatus('DRAFT');
                 }}
@@ -534,6 +572,21 @@ export function PayrollPeriodDetail() {
               </Button>
             </>
           )}
+          
+          {/* ── RECALCULATE BUTTON ── */}
+          {isAdmin && (period.status === 'DRAFT' || period.status === 'PROCESSING') && (
+            <Button
+              variant="outline"
+              className="gap-2 text-violet-600 border-violet-200 hover:bg-violet-50 hover:border-violet-300 ml-auto"
+              disabled={updatingStatus || isRefreshing}
+              onClick={() => { void handleRefreshCalculations(); }}
+              title="Refresh timesheets and recalculate all payslips"
+            >
+              {isRefreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Recalculate Calculations
+            </Button>
+          )}
+
           {period.status === 'APPROVED' && (
             <>
               <Button
@@ -599,7 +652,7 @@ export function PayrollPeriodDetail() {
               onClick={() => {
                 void handleBatchApprove();
               }}
-              disabled={approvingBatch}
+              disabled={approvingBatch || isRefreshing}
             >
               {approvingBatch ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -633,9 +686,6 @@ export function PayrollPeriodDetail() {
                   <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
                     Employee
                   </th>
-                  <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">
-                    Gross Pay
-                  </th>
                   <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
                     Deductions
                   </th>
@@ -653,186 +703,197 @@ export function PayrollPeriodDetail() {
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {period.payslips.map((ps) => (
-                  <React.Fragment key={String(ps.id)}>
-                  <tr className="border-b border-border hover:bg-muted/30 transition-colors">
-                    {period.status === 'PROCESSING' && (
-                      <td className="px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
-                          checked={selectedPayslips.includes(String(ps.id))}
-                          onChange={(e) => handleSelect(ps.id, e.target.checked)}
-                          disabled={ps.approvedAt !== null}
-                        />
-                      </td>
-                    )}
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-foreground">
-                        {ps.employee.firstName} {ps.employee.lastName}
-                      </p>
-                      {ps.employee.employeeNo && (
-                        <p className="text-[11px] text-muted-foreground">
-                          {ps.employee.employeeNo}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
-                      {fmt(Number(ps.grossPay))}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => toggleRow(ps.id)}
-                        className="inline-flex items-center gap-1 text-red-500 hover:text-red-600 transition-colors"
-                        title="Show deduction breakdown"
-                      >
-                        {fmt(Number(ps.totalDeductions))}
-                        <ChevronDown
-                          size={12}
-                          className={`transition-transform ${expandedRows.has(String(ps.id)) ? 'rotate-180' : ''}`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-foreground">
-                      {fmt(Number(ps.netPay))}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {ps.approvedAt ? (
-                        <span className="inline-flex items-center gap-1 text-blue-600 font-semibold text-xs">
-                          <ThumbsUp size={12} /> Approved
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">Pending</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {ps.acknowledgedAt ? (
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-xs">
-                            <CheckCircle size={13} />
-                            Acknowledged
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {fmtDateTime(ps.acknowledgedAt)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">Pending</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {/* Approve individual payslip */}
-                        {!ps.approvedAt && period.status === 'PROCESSING' && (
-                          <Button
-                            variant="ghost"
-                            className="h-7 px-2 text-xs gap-1 text-blue-600"
-                            disabled={approvingPayslip === String(ps.id)}
-                            onClick={() => {
-                              void approvePayslip(ps.id);
-                            }}
-                          >
-                            {approvingPayslip === String(ps.id) ? (
-                              <Loader2 size={11} className="animate-spin" />
-                            ) : (
-                              <ThumbsUp size={11} />
-                            )}
-                            Approve
-                          </Button>
+              <tbody className={isRefreshing ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+                {period.payslips.map((ps) => {
+                  // Fallback calculation to enforce accuracy if API response is zeroed or missing the scalar sum
+                  const calcDeductions = Number(ps.totalDeductions) || (
+                    Number(ps.sssDeduction || 0) +
+                    Number(ps.philhealthDeduction || 0) +
+                    Number(ps.pagibigDeduction || 0) +
+                    Number(ps.withholdingTax || 0) +
+                    Number(ps.lateUndertimeDeduction || 0) +
+                    Number(ps.pagibigLoan || 0) +
+                    Number(ps.sssLoan || 0) +
+                    Number(ps.cashAdvanceRepayment || 0)
+                  );
+                  
+                  // Strictly enforce Net Pay
+                  const calcNetPay = Number(ps.grossPay || 0) - calcDeductions;
+
+                  return (
+                    <React.Fragment key={String(ps.id)}>
+                      <tr className="border-b border-border hover:bg-muted/30 transition-colors">
+                        {period.status === 'PROCESSING' && (
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                              checked={selectedPayslips.includes(String(ps.id))}
+                              onChange={(e) => handleSelect(ps.id, e.target.checked)}
+                              disabled={ps.approvedAt !== null}
+                            />
+                          </td>
                         )}
-                        {/* Mark individual payslip paid */}
-                        {ps.approvedAt &&
-                          ps.acknowledgedAt &&
-                          ps.disbursedStatus !== 'COMPLETED' && (
-                            <Button
-                              variant="ghost"
-                              className="h-7 px-2 text-xs gap-1 text-emerald-700"
-                              disabled={payingPayslip === String(ps.id)}
-                              onClick={() => {
-                                void markPayslipPaid(ps.id);
-                              }}
-                            >
-                              {payingPayslip === String(ps.id) ? (
-                                <Loader2 size={11} className="animate-spin" />
-                              ) : (
-                                <Banknote size={11} />
-                              )}
-                              Mark Paid
-                            </Button>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-foreground">
+                            {ps.employee.firstName} {ps.employee.lastName}
+                          </p>
+                          {ps.employee.employeeNo && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {ps.employee.employeeNo}
+                            </p>
                           )}
-                        {ps.disbursedStatus === 'COMPLETED' && (
-                          <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                            <Banknote size={11} /> Paid
-                          </span>
-                        )}
-                        {/* File request on behalf */}
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2 text-xs gap-1 text-violet-600"
-                          onClick={() => openFileModal(ps.employee.id, `${ps.employee.firstName} ${ps.employee.lastName}`)}
-                          title="File a COA, Leave, or OT request on behalf of this employee"
-                        >
-                          <FilePlus size={11} />
-                          File
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2 text-xs gap-1"
-                          onClick={() =>
-                            router.push(
-                              `/portal/hr/payroll-coordination/${period.id}/payslips/${ps.id}`
-                            )
-                          }
-                        >
-                          <Edit size={12} />
-                          View
-                          <ChevronRight size={12} className="text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                  {/* ── Deduction Breakdown Row ── */}
-                  {expandedRows.has(String(ps.id)) && (
-                    <tr className="bg-muted/20 border-b border-border">
-                      <td
-                        colSpan={period.status === 'PROCESSING' ? 8 : 7}
-                        className="px-6 py-3"
-                      >
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs">
-                          {[
-                            { label: 'SSS', value: ps.sssDeduction },
-                            { label: 'PhilHealth', value: ps.philhealthDeduction },
-                            { label: 'Pag-IBIG', value: ps.pagibigDeduction },
-                            { label: 'Withholding Tax', value: ps.withholdingTax },
-                            { label: 'Late / Undertime', value: ps.lateUndertimeDeduction },
-                            ...(Number(ps.pagibigLoan) > 0 ? [{ label: 'Pag-IBIG Loan', value: ps.pagibigLoan }] : []),
-                            ...(Number(ps.sssLoan) > 0 ? [{ label: 'SSS Loan', value: ps.sssLoan }] : []),
-                            ...(Number(ps.cashAdvanceRepayment) > 0 ? [{ label: 'Cash Advance', value: ps.cashAdvanceRepayment }] : []),
-                          ].map((d) => (
-                            <div key={d.label} className="flex justify-between gap-2 py-0.5 border-b border-border/50 last:border-0">
-                              <span className="text-muted-foreground">{d.label}</span>
-                              <span className={`font-medium tabular-nums ${Number(d.value) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                {fmt(Number(d.value))}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleRow(ps.id)}
+                            className="inline-flex items-center gap-1 text-red-500 hover:text-red-600 transition-colors"
+                            title="Show deduction breakdown"
+                          >
+                            {fmt(calcDeductions)}
+                            <ChevronDown
+                              size={12}
+                              className={`transition-transform ${expandedRows.has(String(ps.id)) ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">
+                          {fmt(calcNetPay)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {ps.approvedAt ? (
+                            <span className="inline-flex items-center gap-1 text-blue-600 font-semibold text-xs">
+                              <ThumbsUp size={12} /> Approved
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {ps.acknowledgedAt ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-xs">
+                                <CheckCircle size={13} />
+                                Acknowledged
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {fmtDateTime(ps.acknowledgedAt)}
                               </span>
                             </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </React.Fragment>
-                ))}
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            {/* Approve individual payslip */}
+                            {!ps.approvedAt && period.status === 'PROCESSING' && (
+                              <Button
+                                variant="ghost"
+                                className="h-7 px-2 text-xs gap-1 text-blue-600"
+                                disabled={approvingPayslip === String(ps.id)}
+                                onClick={() => {
+                                  void approvePayslip(ps.id);
+                                }}
+                              >
+                                {approvingPayslip === String(ps.id) ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <ThumbsUp size={11} />
+                                )}
+                                Approve
+                              </Button>
+                            )}
+                            {/* Mark individual payslip paid */}
+                            {ps.approvedAt &&
+                              ps.acknowledgedAt &&
+                              ps.disbursedStatus !== 'COMPLETED' && (
+                                <Button
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs gap-1 text-emerald-700"
+                                  disabled={payingPayslip === String(ps.id)}
+                                  onClick={() => {
+                                    void markPayslipPaid(ps.id);
+                                  }}
+                                >
+                                  {payingPayslip === String(ps.id) ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    <Banknote size={11} />
+                                  )}
+                                  Mark Paid
+                                </Button>
+                              )}
+                            {ps.disbursedStatus === 'COMPLETED' && (
+                              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                                <Banknote size={11} /> Paid
+                              </span>
+                            )}
+                            {/* File request on behalf */}
+                            <Button
+                              variant="ghost"
+                              className="h-7 px-2 text-xs gap-1 text-violet-600"
+                              onClick={() => openFileModal(ps.employee.id, `${ps.employee.firstName} ${ps.employee.lastName}`)}
+                              title="File a COA, Leave, or OT request on behalf of this employee"
+                            >
+                              <FilePlus size={11} />
+                              File
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="h-7 px-2 text-xs gap-1"
+                              onClick={() =>
+                                router.push(
+                                  `/portal/hr/payroll-coordination/${period.id}/payslips/${ps.id}`
+                                )
+                              }
+                            >
+                              <Edit size={12} />
+                              View
+                              <ChevronRight size={12} className="text-muted-foreground" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* ── Deduction Breakdown Row ── */}
+                      {expandedRows.has(String(ps.id)) && (
+                        <tr className="bg-muted/20 border-b border-border">
+                          <td
+                            colSpan={period.status === 'PROCESSING' ? 7 : 6}
+                            className="px-6 py-3"
+                          >
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                              {[
+                                { label: 'SSS', value: ps.sssDeduction },
+                                { label: 'PhilHealth', value: ps.philhealthDeduction },
+                                { label: 'Pag-IBIG', value: ps.pagibigDeduction },
+                                { label: 'Withholding Tax', value: ps.withholdingTax },
+                                { label: 'Late / Undertime', value: ps.lateUndertimeDeduction },
+                                ...(Number(ps.pagibigLoan) > 0 ? [{ label: 'Pag-IBIG Loan', value: ps.pagibigLoan }] : []),
+                                ...(Number(ps.sssLoan) > 0 ? [{ label: 'SSS Loan', value: ps.sssLoan }] : []),
+                                ...(Number(ps.cashAdvanceRepayment) > 0 ? [{ label: 'Cash Advance', value: ps.cashAdvanceRepayment }] : []),
+                              ].map((d) => (
+                                <div key={d.label} className="flex justify-between gap-2 py-0.5 border-b border-border/50 last:border-0">
+                                  <span className="text-muted-foreground">{d.label}</span>
+                                  <span className={`font-medium tabular-nums ${Number(d.value) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                    {fmt(Number(d.value))}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30">
                   {period.status === 'PROCESSING' && <td />}
                   <td className="px-4 py-3 text-xs font-bold text-muted-foreground uppercase">
                     {total} employees
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-muted-foreground hidden md:table-cell">
-                    {fmt(grossTotal)}
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-red-500">
                     {fmt(dedTotal)}
@@ -854,287 +915,287 @@ export function PayrollPeriodDetail() {
         )}
       </Card>
 
-{/* ── File Request Modal ── */}
-<Modal
-  isOpen={fileModalOpen}
-  onClose={() => setFileModalOpen(false)}
-  title={`File Request — ${fileTarget?.name ?? ''}`}
-  size="md"
->
-  <div className="p-2 space-y-6">
-    {/* Request type selector */}
-    <div>
-      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-        Request Type
-      </label>
-      <div className="flex gap-2 mt-2">
-        {(['COA', 'LEAVE', 'OVERTIME'] as RequestType[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setRequestType(t)}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
-              requestType === t
-                ? 'bg-foreground text-background border-foreground shadow-sm'
-                : 'border-border text-muted-foreground hover:bg-muted hover:border-foreground/20'
-            }`}
-          >
-            {t === 'COA' ? 'Attendance Correction' : t === 'LEAVE' ? 'Leave' : 'Overtime'}
-          </button>
-        ))}
-      </div>
-    </div>
-
-    {/* Form Section Container */}
-    <div className="space-y-4">
-      {requestType === 'COA' && (
-        <div className="grid gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">Date Affected</label>
-              <input
-                type="date"
-                value={coaDate}
-                onChange={(e) => setCoaDate(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">Action</label>
-              <select
-                value={coaAction}
-                onChange={(e) => setCoaAction(e.target.value as CoaActionType)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {COA_ACTION_TYPES.map((a) => (
-                  <option key={a} value={a}>{a.replace('_', ' ')}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+      {/* ── File Request Modal ── */}
+      <Modal
+        isOpen={fileModalOpen}
+        onClose={() => setFileModalOpen(false)}
+        title={`File Request — ${fileTarget?.name ?? ''}`}
+        size="md"
+      >
+        <div className="p-2 space-y-6">
+          {/* Request type selector */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Correct Time</label>
-            <input
-              type="time"
-              value={coaTime}
-              onChange={(e) => setCoaTime(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Reason</label>
-            <textarea
-              value={coaReason}
-              onChange={(e) => setCoaReason(e.target.value)}
-              rows={3}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </div>
-      )}
-
-      {requestType === 'LEAVE' && (
-        <div className="grid gap-4">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Leave Type</label>
-            <select
-              value={leaveTypeId}
-              onChange={(e) => setLeaveTypeId(e.target.value === '' ? '' : Number(e.target.value))}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Select leave type…</option>
-              {leaveTypes.map((lt) => (
-                <option key={lt.id} value={lt.id}>
-                  {lt.name} ({lt.isPaid ? 'Paid' : 'Unpaid'})
-                </option>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Request Type
+            </label>
+            <div className="flex gap-2 mt-2">
+              {(['COA', 'LEAVE', 'OVERTIME'] as RequestType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setRequestType(t)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
+                    requestType === t
+                      ? 'bg-foreground text-background border-foreground shadow-sm'
+                      : 'border-border text-muted-foreground hover:bg-muted hover:border-foreground/20'
+                  }`}
+                >
+                  {t === 'COA' ? 'Attendance Correction' : t === 'LEAVE' ? 'Leave' : 'Overtime'}
+                </button>
               ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
-              <input
-                type="date"
-                value={leaveStart}
-                onChange={(e) => setLeaveStart(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">End Date</label>
-              <input
-                type="date"
-                value={leaveEnd}
-                onChange={(e) => setLeaveEnd(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
             </div>
           </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Credits Used (days)</label>
-            <input
-              type="number"
-              min="0.5"
-              step="0.5"
-              value={leaveCredits}
-              onChange={(e) => setLeaveCredits(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+
+          {/* Form Section Container */}
+          <div className="space-y-4">
+            {requestType === 'COA' && (
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Date Affected</label>
+                    <input
+                      type="date"
+                      value={coaDate}
+                      onChange={(e) => setCoaDate(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Action</label>
+                    <select
+                      value={coaAction}
+                      onChange={(e) => setCoaAction(e.target.value as CoaActionType)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {COA_ACTION_TYPES.map((a) => (
+                        <option key={a} value={a}>{a.replace('_', ' ')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Correct Time</label>
+                  <input
+                    type="time"
+                    value={coaTime}
+                    onChange={(e) => setCoaTime(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                  <textarea
+                    value={coaReason}
+                    onChange={(e) => setCoaReason(e.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+            )}
+
+            {requestType === 'LEAVE' && (
+              <div className="grid gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Leave Type</label>
+                  <select
+                    value={leaveTypeId}
+                    onChange={(e) => setLeaveTypeId(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select leave type…</option>
+                    {leaveTypes.map((lt) => (
+                      <option key={lt.id} value={lt.id}>
+                        {lt.name} ({lt.isPaid ? 'Paid' : 'Unpaid'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+                    <input
+                      type="date"
+                      value={leaveStart}
+                      onChange={(e) => setLeaveStart(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">End Date</label>
+                    <input
+                      type="date"
+                      value={leaveEnd}
+                      onChange={(e) => setLeaveEnd(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Credits Used (days)</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={leaveCredits}
+                    onChange={(e) => setLeaveCredits(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                  <textarea
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+            )}
+
+            {requestType === 'OVERTIME' && (
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Date</label>
+                    <input
+                      type="date"
+                      value={otDate}
+                      onChange={(e) => setOtDate(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">OT Type</label>
+                    <select
+                      value={otType}
+                      onChange={(e) => setOtType(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="REGULAR_OT">Regular OT</option>
+                      <option value="REST_DAY_OT">Rest Day OT</option>
+                      <option value="HOLIDAY_OT">Holiday OT</option>
+                      <option value="SPECIAL_HOLIDAY_OT">Special Holiday OT</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Time From</label>
+                    <input
+                      type="time"
+                      value={otFrom}
+                      onChange={(e) => setOtFrom(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Time To</label>
+                    <input
+                      type="time"
+                      value={otTo}
+                      onChange={(e) => setOtTo(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Total Hours</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={otHours}
+                    onChange={(e) => setOtHours(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                  <textarea
+                    value={otReason}
+                    onChange={(e) => setOtReason(e.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+            )}
           </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Reason</label>
-            <textarea
-              value={leaveReason}
-              onChange={(e) => setLeaveReason(e.target.value)}
-              rows={3}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button variant="outline" onClick={() => setFileModalOpen(false)} disabled={filing}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+              onClick={() => { void submitFileRequest(); }}
+              disabled={filing}
+            >
+              {filing ? <Loader2 size={16} className="animate-spin" /> : <FilePlus size={16} />}
+              Submit Request
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {requestType === 'OVERTIME' && (
-        <div className="grid gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">Date</label>
-              <input
-                type="date"
-                value={otDate}
-                onChange={(e) => setOtDate(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">OT Type</label>
-              <select
-                value={otType}
-                onChange={(e) => setOtType(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="REGULAR_OT">Regular OT</option>
-                <option value="REST_DAY_OT">Rest Day OT</option>
-                <option value="HOLIDAY_OT">Holiday OT</option>
-                <option value="SPECIAL_HOLIDAY_OT">Special Holiday OT</option>
-              </select>
+      {/* ── Revert Approval Confirmation Modal ── */}
+      <Modal
+        isOpen={revertModalOpen}
+        onClose={() => setRevertModalOpen(false)}
+        title="Revert Payroll Approval"
+        size="sm"
+      >
+        <div className="p-2 space-y-4">
+          {/* Warning banner */}
+          <div className="flex gap-3 rounded-lg bg-red-50 border border-red-200 p-3">
+            <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-red-700">
+              <p className="font-bold mb-1">This action cannot be undone easily.</p>
+              <p>Reverting will move this payroll period back to <strong>Processing</strong>. Employees will no longer be able to see or acknowledge their payslips until the period is re-approved.</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">Time From</label>
-              <input
-                type="time"
-                value={otFrom}
-                onChange={(e) => setOtFrom(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">Time To</label>
-              <input
-                type="time"
-                value={otTo}
-                onChange={(e) => setOtTo(e.target.value)}
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          </div>
+
+          {/* Confirmation input */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Total Hours</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Type <span className="text-red-600 font-black">REVERT</span> to confirm
+            </label>
             <input
-              type="number"
-              min="0.5"
-              step="0.5"
-              value={otHours}
-              onChange={(e) => setOtHours(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              type="text"
+              value={revertConfirmText}
+              onChange={(e) => setRevertConfirmText(e.target.value)}
+              placeholder="REVERT"
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/40 font-mono"
+              autoComplete="off"
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Reason</label>
-            <textarea
-              value={otReason}
-              onChange={(e) => setOtReason(e.target.value)}
-              rows={3}
-              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              onClick={() => setRevertModalOpen(false)}
+              disabled={updatingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="gap-2 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+              disabled={revertConfirmText !== 'REVERT' || updatingStatus}
+              onClick={async () => {
+                setRevertModalOpen(false);
+                await updateStatus('PROCESSING');
+              }}
+            >
+              {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+              Confirm Revert
+            </Button>
           </div>
         </div>
-      )}
-    </div>
-
-    {/* Footer */}
-    <div className="flex justify-end gap-3 pt-4 border-t border-border">
-      <Button variant="outline" onClick={() => setFileModalOpen(false)} disabled={filing}>
-        Cancel
-      </Button>
-      <Button
-        className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
-        onClick={() => { void submitFileRequest(); }}
-        disabled={filing}
-      >
-        {filing ? <Loader2 size={16} className="animate-spin" /> : <FilePlus size={16} />}
-        Submit Request
-      </Button>
-    </div>
-  </div>
-</Modal>
-
-{/* ── Revert Approval Confirmation Modal ── */}
-<Modal
-  isOpen={revertModalOpen}
-  onClose={() => setRevertModalOpen(false)}
-  title="Revert Payroll Approval"
-  size="sm"
->
-  <div className="p-2 space-y-4">
-    {/* Warning banner */}
-    <div className="flex gap-3 rounded-lg bg-red-50 border border-red-200 p-3">
-      <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
-      <div className="text-sm text-red-700">
-        <p className="font-bold mb-1">This action cannot be undone easily.</p>
-        <p>Reverting will move this payroll period back to <strong>Processing</strong>. Employees will no longer be able to see or acknowledge their payslips until the period is re-approved.</p>
-      </div>
-    </div>
-
-    {/* Confirmation input */}
-    <div>
-      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-        Type <span className="text-red-600 font-black">REVERT</span> to confirm
-      </label>
-      <input
-        type="text"
-        value={revertConfirmText}
-        onChange={(e) => setRevertConfirmText(e.target.value)}
-        placeholder="REVERT"
-        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/40 font-mono"
-        autoComplete="off"
-      />
-    </div>
-
-    {/* Footer */}
-    <div className="flex justify-end gap-3 pt-2 border-t border-border">
-      <Button
-        variant="outline"
-        onClick={() => setRevertModalOpen(false)}
-        disabled={updatingStatus}
-      >
-        Cancel
-      </Button>
-      <Button
-        className="gap-2 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-        disabled={revertConfirmText !== 'REVERT' || updatingStatus}
-        onClick={async () => {
-          setRevertModalOpen(false);
-          await updateStatus('PROCESSING');
-        }}
-      >
-        {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
-        Confirm Revert
-      </Button>
-    </div>
-  </div>
-</Modal>
+      </Modal>
     </div>
   );
 }

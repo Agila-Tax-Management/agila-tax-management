@@ -55,11 +55,6 @@ interface GenerateCandidate {
 
 // ─── Date Helpers ─────────────────────────────────────────────────
 
-/**
- * Resolves a configured day against the actual last day of the given month.
- * Handles EOM: 31 → 28/29 for February, 30 for April, etc.
- * month is 1-indexed (1 = January).
- */
 function resolveEndDay(year: number, month: number, configuredDay: number): number {
   const lastDayOfMonth = new Date(year, month, 0).getDate();
   return Math.min(configuredDay, lastDayOfMonth);
@@ -74,10 +69,6 @@ const MONTH_SHORT = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/**
- * Builds all generate-able period candidates for a given schedule over the past N months.
- * Each candidate carries whether the period already exists in the generated list.
- */
 function computeCandidates(
   schedule: PayrollScheduleItem,
   existingPeriods: { payrollScheduleId: string | null; startDate: string; endDate: string }[],
@@ -349,9 +340,11 @@ export function PayrollCoordination() {
     });
   }, [periods, search, statusFilter]);
 
-  const totalGross = filtered.reduce((s, p) => s + p.grossPayTotal, 0);
-  const totalNet = filtered.reduce((s, p) => s + p.netPayTotal, 0);
-  const totalDed = filtered.reduce((s, p) => s + p.totalDeductionsSum, 0);
+  // ── OVERRIDE MATH: Force Net Pay to equal Gross - Deductions ──
+  const totalGross = filtered.reduce((s, p) => s + Number(p.grossPayTotal || 0), 0);
+  const totalDed = filtered.reduce((s, p) => s + Number(p.totalDeductionsSum || 0), 0);
+  const totalNet = Math.max(0, totalGross - totalDed);
+  
   const paidCount = filtered.filter((p) => p.status === 'PAID').length;
 
   // ─── Render ───────────────────────────────────────────────────
@@ -456,147 +449,152 @@ export function PayrollCoordination() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-border hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-black text-foreground text-sm">
-                        {fmtDate(p.startDate)} – {fmtDate(p.endDate)}
-                      </p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <CalendarDays size={11} />
-                        {p.payrollSchedule?.name ?? '—'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
-                      {fmtDate(p.payoutDate)}
-                    </td>
-                    <td className="px-4 py-3 text-center hidden sm:table-cell">
-                      <span className="text-sm font-semibold text-foreground">{p.employeeCount}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-muted-foreground hidden lg:table-cell">
-                      {fmt(p.grossPayTotal)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm font-bold text-foreground">
-                      {fmt(p.netPayTotal)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={STATUS_VARIANT[p.status]}>{STATUS_LABEL[p.status]}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {p.status === 'DRAFT' && (
-                          <>
+                {filtered.map((p) => {
+                  // Override individual row Net Pay as well
+                  const rowCalcNetPay = Math.max(0, Number(p.grossPayTotal || 0) - Number(p.totalDeductionsSum || 0));
+
+                  return (
+                    <tr
+                      key={p.id}
+                      className="border-b border-border hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <p className="font-black text-foreground text-sm">
+                          {fmtDate(p.startDate)} – {fmtDate(p.endDate)}
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <CalendarDays size={11} />
+                          {p.payrollSchedule?.name ?? '—'}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
+                        {fmtDate(p.payoutDate)}
+                      </td>
+                      <td className="px-4 py-3 text-center hidden sm:table-cell">
+                        <span className="text-sm font-semibold text-foreground">{p.employeeCount}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-muted-foreground hidden lg:table-cell">
+                        {fmt(p.grossPayTotal)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-foreground">
+                        {fmt(rowCalcNetPay)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={STATUS_VARIANT[p.status]}>{STATUS_LABEL[p.status]}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {p.status === 'DRAFT' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                className="h-8 px-2.5 gap-1.5 text-xs text-blue-600"
+                                onClick={() => setConfirmModal({
+                                  periodId: p.id,
+                                  targetStatus: 'PROCESSING',
+                                  title: 'Start Processing',
+                                  message: `Move "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}" to Processing? You will be able to review and edit individual payslips.`,
+                                  btnClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+                                  icon: <Play size={14} />,
+                                })}
+                                title="Start Processing"
+                              >
+                                <Play size={14} /> Process
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  setDeleteConfirmText('');
+                                  setDeleteModal({ periodId: p.id, label: `${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}` });
+                                }}
+                                title="Delete period"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </>
+                          )}
+                          {p.status === 'PROCESSING' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                className="h-8 px-2.5 gap-1.5 text-xs text-emerald-600"
+                                onClick={() => setConfirmModal({
+                                  periodId: p.id,
+                                  targetStatus: 'APPROVED',
+                                  title: 'Approve All Payslips',
+                                  message: `Approve all payslips for "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}"? Any unapproved payslips will be bulk-approved and released to employees for acknowledgment.`,
+                                  btnClass: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                                  icon: <CheckCircle size={14} />,
+                                })}
+                                title="Approve All"
+                              >
+                                <CheckCircle size={14} /> Approve All
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                className="h-8 px-2.5 gap-1.5 text-xs text-amber-600"
+                                onClick={() => setConfirmModal({
+                                  periodId: p.id,
+                                  targetStatus: 'DRAFT',
+                                  title: 'Revert to Draft',
+                                  message: `Revert "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}" back to Draft? Employees will lose visibility of any approved payslips.`,
+                                  btnClass: 'bg-amber-600 hover:bg-amber-700 text-white',
+                                  icon: <PauseCircle size={14} />,
+                                })}
+                                title="Revert to Draft"
+                              >
+                                <PauseCircle size={14} /> Revert
+                              </Button>
+                            </>
+                          )}
+                          {p.status === 'APPROVED' && (
                             <Button
                               variant="ghost"
-                              className="h-8 px-2.5 gap-1.5 text-xs text-blue-600"
+                              className="h-8 px-2.5 gap-1.5 text-xs text-emerald-700"
                               onClick={() => setConfirmModal({
                                 periodId: p.id,
-                                targetStatus: 'PROCESSING',
-                                title: 'Start Processing',
-                                message: `Move "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}" to Processing? You will be able to review and edit individual payslips.`,
-                                btnClass: 'bg-blue-600 hover:bg-blue-700 text-white',
-                                icon: <Play size={14} />,
-                              })}
-                              title="Start Processing"
-                            >
-                              <Play size={14} /> Process
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => {
-                                setDeleteConfirmText('');
-                                setDeleteModal({ periodId: p.id, label: `${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}` });
-                              }}
-                              title="Delete period"
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </>
-                        )}
-                        {p.status === 'PROCESSING' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              className="h-8 px-2.5 gap-1.5 text-xs text-emerald-600"
-                              onClick={() => setConfirmModal({
-                                periodId: p.id,
-                                targetStatus: 'APPROVED',
-                                title: 'Approve All Payslips',
-                                message: `Approve all payslips for "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}"? Any unapproved payslips will be bulk-approved and released to employees for acknowledgment.`,
-                                btnClass: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                                targetStatus: 'PAID',
+                                title: 'Mark All as Paid',
+                                message: `Mark all payslips as Paid for "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}"? All employees must have acknowledged their payslips first.`,
+                                btnClass: 'bg-emerald-700 hover:bg-emerald-800 text-white',
                                 icon: <CheckCircle size={14} />,
                               })}
-                              title="Approve All"
+                              title="Mark All Paid"
                             >
-                              <CheckCircle size={14} /> Approve All
+                              <CheckCircle size={14} /> Mark Paid
                             </Button>
+                          )}
+                          {p.status === 'PAID' && (
                             <Button
                               variant="ghost"
-                              className="h-8 px-2.5 gap-1.5 text-xs text-amber-600"
+                              className="h-8 px-2.5 gap-1.5 text-xs text-muted-foreground"
                               onClick={() => setConfirmModal({
                                 periodId: p.id,
-                                targetStatus: 'DRAFT',
-                                title: 'Revert to Draft',
-                                message: `Revert "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}" back to Draft? Employees will lose visibility of any approved payslips.`,
-                                btnClass: 'bg-amber-600 hover:bg-amber-700 text-white',
-                                icon: <PauseCircle size={14} />,
+                                targetStatus: 'CLOSED',
+                                title: 'Close Period',
+                                message: `Close payroll period "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}"? This will archive the period.`,
+                                btnClass: 'bg-gray-600 hover:bg-gray-700 text-white',
+                                icon: <RotateCcw size={14} />,
                               })}
-                              title="Revert to Draft"
+                              title="Close Period"
                             >
-                              <PauseCircle size={14} /> Revert
+                              <RotateCcw size={14} /> Close
                             </Button>
-                          </>
-                        )}
-                        {p.status === 'APPROVED' && (
+                          )}
                           <Button
                             variant="ghost"
-                            className="h-8 px-2.5 gap-1.5 text-xs text-emerald-700"
-                            onClick={() => setConfirmModal({
-                              periodId: p.id,
-                              targetStatus: 'PAID',
-                              title: 'Mark All as Paid',
-                              message: `Mark all payslips as Paid for "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}"? All employees must have acknowledged their payslips first.`,
-                              btnClass: 'bg-emerald-700 hover:bg-emerald-800 text-white',
-                              icon: <CheckCircle size={14} />,
-                            })}
-                            title="Mark All Paid"
+                            className="h-10 w-10 p-0 ml-1"
+                            onClick={() => router.push(`/portal/hr/payroll-coordination/${p.id}`)}
+                            title="View Payslips"
                           >
-                            <CheckCircle size={14} /> Mark Paid
+                            <ChevronRight size={18} className="text-muted-foreground" />
                           </Button>
-                        )}
-                        {p.status === 'PAID' && (
-                          <Button
-                            variant="ghost"
-                            className="h-8 px-2.5 gap-1.5 text-xs text-muted-foreground"
-                            onClick={() => setConfirmModal({
-                              periodId: p.id,
-                              targetStatus: 'CLOSED',
-                              title: 'Close Period',
-                              message: `Close payroll period "${fmtDate(p.startDate)} – ${fmtDate(p.endDate)}"? This will archive the period.`,
-                              btnClass: 'bg-gray-600 hover:bg-gray-700 text-white',
-                              icon: <RotateCcw size={14} />,
-                            })}
-                            title="Close Period"
-                          >
-                            <RotateCcw size={14} /> Close
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          className="h-10 w-10 p-0 ml-1"
-                          onClick={() => router.push(`/portal/hr/payroll-coordination/${p.id}`)}
-                          title="View Payslips"
-                        >
-                          <ChevronRight size={18} className="text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-14 text-center text-muted-foreground text-sm">
