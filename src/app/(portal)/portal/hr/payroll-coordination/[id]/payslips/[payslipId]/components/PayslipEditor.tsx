@@ -18,6 +18,7 @@ import {
   ThumbsUp,
   RefreshCw,
   Info,
+  ChevronDown,
 } from 'lucide-react';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
@@ -28,6 +29,10 @@ import { useToast } from '@/context/ToastContext';
 // ─── Types ────────────────────────────────────────────────────────
 
 type PeriodStatus = 'DRAFT' | 'PROCESSING' | 'APPROVED' | 'PAID' | 'CLOSED';
+type RequestType = 'COA' | 'LEAVE' | 'OVERTIME';
+
+const COA_ACTION_TYPES = ['TIME_IN', 'LUNCH_START', 'LUNCH_END', 'TIME_OUT'] as const;
+type CoaActionType = (typeof COA_ACTION_TYPES)[number];
 
 interface WorkScheduleDay {
   dayOfWeek: number;
@@ -204,7 +209,7 @@ function computeRowPay(
   const sd = scheduleDays?.find((d) => d.dayOfWeek === dayOfWeek) ?? null;
   
   const schedStart = sd?.startTime ? toMin(sd.startTime) : 9 * 60; // Default 9am
-  const schedEnd = sd?.endTime ? toMin(sd.endTime) : 17 * 60;     // Default 5pm
+  const schedEnd = sd?.endTime ? toMin(sd.endTime) : 17 * 60;      // Default 5pm
   const brkStart = sd?.breakStart ? toMin(sd.breakStart) : null;
   const brkEnd = sd?.breakEnd ? toMin(sd.breakEnd) : null;
   
@@ -214,7 +219,6 @@ function computeRowPay(
     
   const scheduledWorkMin = Math.max(1, schedEnd - schedStart - breakMin);
   
-  // Late metrics apply directly to both FIXED_PAY and VARIABLE_PAY base rates
   const lateDeduct = parseFloat(((ts.lateMinutes / scheduledWorkMin) * dailyRate).toFixed(2));
   const undertimeDeduct = parseFloat(((ts.undertimeMinutes / scheduledWorkMin) * dailyRate).toFixed(2));
     
@@ -338,6 +342,8 @@ export function PayslipEditor() {
     void fetchPayslip();
   }, [fetchPayslip]);
 
+  
+
   const fetchTimesheets = useCallback(async () => {
     setTimesheetsLoading(true);
     try {
@@ -379,11 +385,12 @@ export function PayslipEditor() {
     void fetchHolidays();
   }, [fetchHolidays]);
 
+  // Safe mapping of structure elements to avoid missing relation crashes
   const periodDays = useMemo(() => {
     if (!payslip) return [];
     
     const tsMap = new Map(timesheets.map((t) => [toLocalDateKey(t.date), t]));
-    const scheduleDays = payslip.employee.employments[0]?.contracts[0]?.schedule?.days ?? [];
+    const scheduleDays = payslip?.employee?.employments?.[0]?.contracts?.[0]?.schedule?.days ?? [];
     const workingDaySet = new Set(
       scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek)
     );
@@ -420,10 +427,10 @@ export function PayslipEditor() {
 
     if (!payslip) return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
 
-    const activeEmp = payslip.employee.employments[0] ?? null;
-    const activeCt = activeEmp?.contracts[0] ?? null;
+    const activeEmp = payslip?.employee?.employments?.[0] ?? null;
+    const activeCt = activeEmp?.contracts?.[0] ?? null;
     const activeSchedule = activeCt?.schedule ?? null;
-    const activeComp = activeCt?.compensations[0] ?? null;
+    const activeComp = activeCt?.compensations?.[0] ?? null;
     const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
     const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
 
@@ -456,23 +463,29 @@ export function PayslipEditor() {
     return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
   }, [payslip, periodDays]);
 
-  const liveGross =
-    Number(basicPay) +
-    Number(holidayPay) +
-    Number(overtimePay) +
-    Number(paidLeavePay) +
-    Number(allowance);
+  // FIX 1: Ensure total calculated late captures ALL sources if it's 0 (pre-refresh)
+  const computedTotalLateUnder = 
+    dynamicDeductions.regularLateUnder + 
+    dynamicDeductions.regularHolidayLateUnder + 
+    dynamicDeductions.specialHolidayLateUnder;
 
-  const displayLateUnder = Number(lateUnder) > 0 ? lateUnder : dynamicDeductions.regularLateUnder.toString();
+  const displayLateUnder = Number(lateUnder) > 0 ? Number(lateUnder) : computedTotalLateUnder;
 
+// Paid Leave Pay is informational only.
+// It is already included in Regular Pay.
+const liveGross =
+  Number(basicPay) +
+  Number(holidayPay) +
+  Number(overtimePay) +
+  Number(allowance);
+
+  // FIX 2: Safely calculate liveDed without duplicating the holiday late parameters!
   const liveDed =
     Number(sss) +
     Number(philhealth) +
     Number(pagibig) +
     Number(tax) +
-    Number(displayLateUnder) +
-    dynamicDeductions.regularHolidayLateUnder +
-    dynamicDeductions.specialHolidayLateUnder +
+    displayLateUnder + 
     Number(pagibigLoan) +
     Number(sssLoan) +
     Number(cashAdv);
@@ -688,31 +701,29 @@ export function PayslipEditor() {
   }
 
   // ─── Hoisted Variables ──────────────────────────────────────────
-  const activeEmp = payslip.employee.employments[0] ?? null;
-  const activeCt = activeEmp?.contracts[0] ?? null;
+  const activeEmp = payslip?.employee?.employments?.[0] ?? null;
+  const activeCt = activeEmp?.contracts?.[0] ?? null;
   const hireDate = activeEmp?.hireDate ?? null;
   const activeSchedule = activeCt?.schedule ?? null;
-  const activeComp = activeCt?.compensations[0] ?? null;
+  const activeComp = activeCt?.compensations?.[0] ?? null;
   const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
   const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
   // ────────────────────────────────────────────────────────────────
 
-  // Whitelist layouts: Key items never disappear even if value is 0
+  // FIX 3: Remove double mapping in deduction array
   const deductionGridItems = [
     { label: 'SSS', value: sss },
     { label: 'PhilHealth', value: philhealth },
     { label: 'Pag-IBIG', value: pagibig },
     { label: 'Withholding Tax', value: tax },
     { label: 'Late / Undertime', value: displayLateUnder },
-    { label: 'Regular Holiday Late / Undertime', value: dynamicDeductions.regularHolidayLateUnder.toString() },
-    { label: 'Special Holiday Late / Undertime', value: dynamicDeductions.specialHolidayLateUnder.toString() },
     { label: 'SSS Loan', value: sssLoan },
     { label: 'Pag-IBIG Loan', value: pagibigLoan },
     { label: 'Cash Advance', value: cashAdv },
   ].filter((r) => {
     const whitelist = ['SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding Tax', 'Late / Undertime'];
     if (whitelist.includes(r.label)) return true;
-    return (Number(r.value) || 0) !== 0; // Holiday Lates will hide naturally if they evaluate to 0
+    return (Number(r.value) || 0) !== 0;
   });
 
   return (
@@ -1059,35 +1070,39 @@ export function PayslipEditor() {
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
-                      {/* RH column: all employees entitled to 100% daily rate on unworked Regular Holidays */}
                       <td className="px-2 py-2 text-right">
-                        {derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : '—'}
+                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType !== 'FIXED_PAY' ? fmt(tableDailyRate) : '—'}
                       </td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right text-red-500">—</td>
-                      <td className="px-2 py-2 text-right text-amber-500">—</td>
-                      {/* Gross: RH = 100% daily rate; SH unworked = no pay */}
-                      <td className="px-2 py-2 text-right font-bold text-emerald-600">
-                        {derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : '—'}
+                      <td className="px-2 py-2 text-right text-muted-foreground">—</td>
+                      <td className="px-2 py-2 text-right font-medium">
+                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType !== 'FIXED_PAY' ? fmt(tableDailyRate) : '—'}
                       </td>
                     </tr>
                   );
                 }
-                const statusLabel = SS_LABEL[derivedStatus] ?? SS_LABEL[ts.status] ?? ts.status;
-                const statusColor = SS_COLOR[derivedStatus] ?? SS_COLOR[ts.status] ?? 'text-muted-foreground';
+                
                 const { lateDeduct, undertimeDeduct } = computeRowPay(
                   ts,
                   tableDailyRate,
                   tablePayType,
                   activeSchedule?.days,
                   date.getDay(),
-                  payslip.hrSetting?.disableLateUndertimeGlobal ?? false
+                  false
                 );
+
+                const statusLabel = SS_LABEL[derivedStatus] ?? SS_LABEL[ts.status] ?? ts.status;
+                const statusColor = SS_COLOR[derivedStatus] ?? SS_COLOR[ts.status] ?? 'text-muted-foreground';
+
                 return (
-                  <tr key={ts.id} className="hover:bg-muted/30">
+                  <tr
+                    key={String(ts.id)}
+                    className="border-b border-border hover:bg-muted/30 transition-colors"
+                  >
                     <td className="px-2 py-2 font-medium">
                       {date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
                     </td>
@@ -1098,26 +1113,11 @@ export function PayslipEditor() {
                     <td className="px-2 py-2">{fmtTime(ts.timeOut)}</td>
                     <td className={`px-2 py-2 font-semibold ${statusColor}`}>
                       <span>{statusLabel}</span>
-                      {(derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') &&
-                        ts.status !== 'REGULAR_HOLIDAY' && ts.status !== 'SPECIAL_HOLIDAY' && (
-                          <span className="block text-[9px] font-normal text-muted-foreground">
-                            {SS_LABEL[ts.status] ?? ts.status}
-                          </span>
-                        )}
                     </td>
                     <td className="px-2 py-2 text-right">
-                      {(() => {
-                        if (derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') {
-                          return tableDailyRate > 0 ? fmt(tableDailyRate) : '—';
-                        }
-                        const isRegularDay = Number(ts.regularHours) > 0;
-                        const amount = isRegularDay ? tableDailyRate : Number(ts.dailyGrossPay);
-                        return amount > 0 ? fmt(amount) : '—';
-                      })()}
+                      {tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY' ? '—' : fmt(Number(ts.dailyGrossPay))}
                     </td>
-                    <td className="px-2 py-2 text-right">
-                      {derivedStatus === 'REGULAR_HOLIDAY' ? '—' : fmtHours(ts.regOtHours)}
-                    </td>
+                    <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shHours)}</td>
@@ -1125,17 +1125,9 @@ export function PayslipEditor() {
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shRdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.shRdOtHours)}</td>
                     <td className="px-2 py-2 text-right">
-                      {derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : fmtHours(ts.rhHours)}
+                      {tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : fmtHours(ts.rhHours)}
                     </td>
-                    <td className="px-2 py-2 text-right">
-                      {(() => {
-                        if (derivedStatus === 'REGULAR_HOLIDAY') {
-                          const pay = (Number(ts.rhOtHours) + Number(ts.regOtHours)) * 2.60 * (tableDailyRate / 8);
-                          return pay > 0 ? fmt(parseFloat(pay.toFixed(2))) : '—';
-                        }
-                        return fmtHours(ts.rhOtHours);
-                      })()}
-                    </td>
+                    <td className="px-2 py-2 text-right">{fmtHours(ts.rhOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdOtHours)}</td>
                     <td className="px-2 py-2 text-right text-blue-600 font-semibold">
@@ -1153,34 +1145,17 @@ export function PayslipEditor() {
                       })()}
                     </td>
                     <td className="px-2 py-2 text-right text-red-500">
-                      {lateDeduct > 0 ? (
-                        <span>
-                          <span>-{fmt(lateDeduct)}</span>
-                          {(derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') && (
-                            <span className="block text-[9px] font-normal text-muted-foreground">
-                              {derivedStatus === 'REGULAR_HOLIDAY' ? 'RH' : 'SH'}
-                            </span>
-                          )}
-                        </span>
-                      ) : '—'}
+                      {lateDeduct > 0 ? `-${fmt(lateDeduct)}` : '—'}
                     </td>
                     <td className="px-2 py-2 text-right text-amber-500">
-                      {undertimeDeduct > 0 ? (
-                        <span>
-                          <span>-{fmt(undertimeDeduct)}</span>
-                          {(derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY') && (
-                            <span className="block text-[9px] font-normal text-muted-foreground">
-                              {derivedStatus === 'REGULAR_HOLIDAY' ? 'RH' : 'SH'}
-                            </span>
-                          )}
-                        </span>
-                      ) : '—'}
+                      {undertimeDeduct > 0 ? `-${fmt(undertimeDeduct)}` : '—'}
                     </td>
                     <td className="px-2 py-2 text-right font-bold text-emerald-600">
                       {(() => {
                         const hr2 = tableDailyRate / 8;
                         const isRH = derivedStatus === 'REGULAR_HOLIDAY';
                         const isSH = derivedStatus === 'SPECIAL_HOLIDAY';
+                        
                         const rowOtPay =
                           (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr2) +
                           Number(ts.rdOtHours) * 1.69 * hr2 +
@@ -1188,22 +1163,24 @@ export function PayslipEditor() {
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
                           (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr2 +
                           Number(ts.rhRdOtHours) * 3.38 * hr2;
-                        // Holiday rows: use ts.dailyGrossPay (prorated by actual hours worked)
-                        // when the backend has computed it. Fall back to full-rate formula
-                        // only when dailyGrossPay is 0 (e.g. timesheet not yet recalculated).
-                        const basePay = isRH
-                          ? (Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 2)
-                          : isSH
-                          ? (Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 1.3)
-                          : Number(ts.dailyGrossPay);
-                        // Gross = earnings before late/undertime deductions
-                        // (Late and Undertime are already shown in their own columns)
+                        
+                        // FIX 4: Correct row Gross computation for Fixed vs Variable Pay metrics
+                        let basePay = 0;
+                        if (isRH) {
+                          basePay =
+                            tablePayType === 'FIXED_PAY'
+                              ? tableDailyRate
+                              : Number(ts.dailyGrossPay) > 0
+                                ? Number(ts.dailyGrossPay)
+                                : tableDailyRate * 2;
+                        } else if (isSH) {
+                          basePay = Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 2;
+                        } else {
+                          basePay = Number(ts.dailyGrossPay);
+                        }
+                        
                         const rowGross = basePay + rowOtPay;
-                        return rowGross > 0
-                          ? `₱${rowGross.toLocaleString('en-PH', {
-                              minimumFractionDigits: 2,
-                            })}`
-                          : '—';
+                        return rowGross > 0 ? fmt(parseFloat(rowGross.toFixed(2))) : '—';
                       })()}
                     </td>
                   </tr>
@@ -1216,8 +1193,7 @@ export function PayslipEditor() {
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
                     const total = timesheets.reduce((s, t) => {
-                      const isRegularDay = Number(t.regularHours) > 0;
-                      const amount = isRegularDay ? tableDailyRate : Number(t.dailyGrossPay);
+                      const amount = tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY' ? 0 : Number(t.dailyGrossPay);
                       return s + amount;
                     }, 0);
                     return total > 0 ? fmt(total) : '—';
@@ -1247,8 +1223,12 @@ export function PayslipEditor() {
                 </td>
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
-                    const total = periodDays.reduce((s, { derivedStatus: ds }) =>
-                      ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0);
+                    const total = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
+                      if (tablePayType === 'FIXED_PAY' && ds === 'REGULAR_HOLIDAY' && t) {
+                        return s + tableDailyRate;
+                      }
+                      return ds === 'REGULAR_HOLIDAY' && !t ? s + tableDailyRate : s;
+                    }, 0);
                     return total > 0 ? fmt(total) : '—';
                   })()}
                 </td>
@@ -1286,60 +1266,55 @@ export function PayslipEditor() {
                     return total > 0 ? fmt(parseFloat(total.toFixed(2))) : '—';
                   })()}
                 </td>
-                <td className="px-2 py-2 text-right text-red-500">
+                <td className="px-2 py-2 text-right text-xs text-red-500">
                   {(() => {
                     const total = periodDays.reduce((s, { ts: t, date: d }) => {
                       if (!t) return s;
-                      const { lateDeduct: ld } = computeRowPay(
-                        t,
-                        tableDailyRate,
-                        tablePayType,
-                        activeSchedule?.days,
-                        d.getDay(),
-                        payslip.hrSetting?.disableLateUndertimeGlobal ?? false
-                      );
+                      const { lateDeduct: ld } = computeRowPay(t, tableDailyRate, tablePayType, activeSchedule?.days, d.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
                       return s + ld;
                     }, 0);
                     return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
                   })()}
                 </td>
-                <td className="px-2 py-2 text-right text-amber-500">
+                <td className="px-2 py-2 text-right text-xs text-amber-500">
                   {(() => {
                     const total = periodDays.reduce((s, { ts: t, date: d }) => {
                       if (!t) return s;
-                      const { undertimeDeduct: ud } = computeRowPay(
-                        t,
-                        tableDailyRate,
-                        tablePayType,
-                        activeSchedule?.days,
-                        d.getDay(),
-                        payslip.hrSetting?.disableLateUndertimeGlobal ?? false
-                      );
+                      const { undertimeDeduct: ud } = computeRowPay(t, tableDailyRate, tablePayType, activeSchedule?.days, d.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
                       return s + ud;
                     }, 0);
                     return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
                   })()}
                 </td>
-                <td className="px-2 py-2 text-right text-emerald-600">
+                <td className="px-2 py-2 text-right text-xs text-emerald-600">
                   {(() => {
                     const hr2 = tableDailyRate / 8;
                     const tsTotal = timesheets.reduce((s, t) => {
+                      const periodMap = new Map(
+                        periodDays
+                          .filter(p => p.ts)
+                          .map(p => [p.ts!.id, p.derivedStatus])
+                      );
+
+                      const isRH = periodMap.get(t.id) === 'REGULAR_HOLIDAY';
+                      
+                      const basePay = isRH
+                        ? (tablePayType === 'FIXED_PAY' ? tableDailyRate : Number(t.dailyGrossPay))
+                        : Number(t.dailyGrossPay);
+                        
                       const otPay =
-                        Number(t.regOtHours) * 1.25 * hr2 +
+                        (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr2) +
                         Number(t.rdOtHours) * 1.69 * hr2 +
                         Number(t.shOtHours) * 1.69 * hr2 +
                         Number(t.shRdOtHours) * 1.95 * hr2 +
-                        Number(t.rhOtHours) * 2.60 * hr2 +
+                        (Number(t.rhOtHours) + (isRH ? Number(t.regOtHours) : 0)) * 2.60 * hr2 +
                         Number(t.rhRdOtHours) * 3.38 * hr2;
-                      return s + Number(t.dailyGrossPay) + otPay;
+                      return s + basePay + otPay;
                     }, 0);
-                    // All employees are entitled to RH pay on unworked Regular Holidays
                     const unworkedRhPay = periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
                       !t && ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0);
                     const total = tsTotal + unworkedRhPay;
-                    return total > 0
-                      ? `₱${total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                      : '—';
+                    return total > 0 ? fmt(total) : '—';
                   })()}
                 </td>
               </tr>
@@ -1408,8 +1383,7 @@ export function PayslipEditor() {
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
           <RotateCcw size={14} />
           <span>
-            This payroll is <strong>Approved</strong>. To edit deductions, revert to Processing
-            first.
+            This payroll is <strong>Approved</strong>. To edit deductions, revert to Processing first.
           </span>
           <Button
             variant="outline"
@@ -1518,7 +1492,7 @@ export function PayslipEditor() {
             onClick={() => {
               void handleRefreshAndSave();
             }}
-            title="Re-check all timesheets (including COA corrections), apply approved OT at DOLE-compliant rates, apply paid and unpaid leave, recompute government deductions, and save"
+            title="Re-check all timesheets, apply approved OT, recompute government deductions, and save"
           >
             {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             Refresh &amp; Save
