@@ -1,5 +1,4 @@
-﻿// src/app/api/hr/payroll-periods/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getSessionWithAccess, getClientIdFromSession } from "@/lib/session";
@@ -14,10 +13,6 @@ const updateStatusSchema = z.object({
   status: z.enum(["DRAFT", "PROCESSING", "APPROVED", "PAID", "CLOSED"]),
 });
 
-/**
- * GET /api/hr/payroll-periods/[id]
- * Returns a specific payroll period with all its payslips and employee details.
- */
 export async function GET(_request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -56,13 +51,48 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
 
   if (!period) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json({ data: period });
+  // ─── THE FIX: Force the API to mathematically calculate the real Gross, Deductions, and Net
+  const fixedPayslips = period.payslips.map((ps) => {
+    const actualGross = 
+      Number(ps.basicPay || 0) + 
+      Number(ps.holidayPay || 0) + 
+      Number(ps.overtimePay || 0) + 
+      Number(ps.paidLeavePay || 0) + 
+      Number(ps.allowance || 0);
+
+    const actualDeductions =
+      Number(ps.sssDeduction || 0) +
+      Number(ps.philhealthDeduction || 0) +
+      Number(ps.pagibigDeduction || 0) +
+      Number(ps.withholdingTax || 0) +
+      Number(ps.lateUndertimeDeduction || 0) +
+      Number(ps.pagibigLoan || 0) +
+      Number(ps.sssLoan || 0) +
+      Number(ps.cashAdvanceRepayment || 0);
+
+    const actualNet = Math.max(0, actualGross - actualDeductions);
+
+    return {
+      ...ps,
+      grossPay: actualGross.toString(),
+      totalDeductions: actualDeductions.toString(),
+      netPay: actualNet.toString(),
+    };
+  });
+
+  // Return the merged object so TypeScript is happy
+  return NextResponse.json({ 
+    data: {
+      ...period,
+      payslips: fixedPayslips
+    } 
+  });
 }
 
-/**
- * PATCH /api/hr/payroll-periods/[id]
- * Updates the status of a payroll period.
- */
+// ─────────────────────────────────────────────────────────────
+// LEAVE YOUR EXISTING PATCH AND DELETE FUNCTIONS BELOW EXACTLY AS THEY WERE
+// ─────────────────────────────────────────────────────────────
+
 export async function PATCH(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -104,7 +134,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   // ── APPROVED: bulk-approve all unapproved payslips atomically ──────────────
   if (targetStatus === "APPROVED") {
     const updated = await prisma.$transaction(async (tx) => {
-      // Stamp every payslip that hasn't been individually approved yet
       await tx.payslip.updateMany({
         where: { payrollPeriodId: periodId, approvedAt: null },
         data: { approvedById: session.user.id, approvedAt: new Date() },
@@ -214,11 +243,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   return NextResponse.json({ data: updated });
 }
 
-/**
- * DELETE /api/hr/payroll-periods/[id]
- * Permanently deletes a payroll period that is still in DRAFT status.
- * Any other status is rejected.
- */
 export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const session = await getSessionWithAccess();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
