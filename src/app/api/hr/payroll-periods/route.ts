@@ -79,11 +79,13 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     data: periods.map((period) => {
+      // Safely aggregate gross pay
       const grossPayTotal = period.payslips.reduce(
         (sum, p) => sum + Number(p.grossPay || 0),
         0
       );
 
+      // Safely aggregate deductions by pulling from explicit sub-fields
       const totalDeductionsSum = period.payslips.reduce((sum, p) => {
         const itemizedSum =
           Number(p.sssDeduction || 0) +
@@ -99,6 +101,7 @@ export async function GET(request: NextRequest) {
         return sum + trueDeduction;
       }, 0);
 
+      // Force strictly correct Net Pay directly before sending to frontend
       const netPayTotal = Math.max(0, grossPayTotal - totalDeductionsSum);
 
       return {
