@@ -471,12 +471,11 @@ export function PayslipEditor() {
 
   const displayLateUnder = Number(lateUnder) > 0 ? Number(lateUnder) : computedTotalLateUnder;
 
-// Paid Leave Pay is informational only.
-// It is already included in Regular Pay.
 const liveGross =
   Number(basicPay) +
   Number(holidayPay) +
   Number(overtimePay) +
+  Number(paidLeavePay) +
   Number(allowance);
 
   // FIX 2: Safely calculate liveDed without duplicating the holiday late parameters!
@@ -490,7 +489,7 @@ const liveGross =
     Number(sssLoan) +
     Number(cashAdv);
 
-  const liveNet = Math.max(0, liveGross - liveDed);
+  const liveNet = liveGross - liveDed;
 
   const canEdit =
     payslip !== null &&
