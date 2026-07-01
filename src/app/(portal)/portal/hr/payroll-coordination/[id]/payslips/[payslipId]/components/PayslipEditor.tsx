@@ -287,6 +287,7 @@ export function PayslipEditor() {
   const [showCompModal, setShowCompModal] = useState(false);
   const [timesheets, setTimesheets] = useState<TimesheetRecord[]>([]);
   const [timesheetsLoading, setTimesheetsLoading] = useState(false);
+  const [leaveRequests, setLeaveRequests] = useState<{ startDate: string; endDate: string; leaveType: { isPaid: boolean } }[]>([]);
   const [approving, setApproving] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -348,9 +349,10 @@ export function PayslipEditor() {
     setTimesheetsLoading(true);
     try {
       const res = await fetch(`/api/hr/payslips/${payslipId}/timesheet`);
-      const json: { data?: TimesheetRecord[]; error?: string } = await res.json();
+      const json: { data?: TimesheetRecord[]; leaveRequests?: { startDate: string; endDate: string; leaveType: { isPaid: boolean } }[]; error?: string } = await res.json();
       if (res.ok && json.data) {
         setTimesheets(json.data);
+        setLeaveRequests(json.leaveRequests ?? []);
       }
     } catch {
       // ignore
@@ -394,6 +396,19 @@ export function PayslipEditor() {
     const workingDaySet = new Set(
       scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek)
     );
+
+    // Build a set of leave-covered date keys for days without a timesheet punch
+    const leaveDateMap = new Map<string, 'PAID_LEAVE' | 'UNPAID_LEAVE'>();
+    for (const lr of leaveRequests) {
+      const leaveStart = new Date(`${lr.startDate.slice(0, 10)}T00:00:00`);
+      const leaveEnd   = new Date(`${lr.endDate.slice(0, 10)}T00:00:00`);
+      const leaveStatus = lr.leaveType.isPaid ? 'PAID_LEAVE' : 'UNPAID_LEAVE';
+      const c = new Date(leaveStart);
+      while (c <= leaveEnd) {
+        leaveDateMap.set(toLocalDateKey(c), leaveStatus);
+        c.setDate(c.getDate() + 1);
+      }
+    }
     
     const days: any[] = [];
     const start = new Date(`${payslip.payrollPeriod.startDate.slice(0, 10)}T00:00:00`);
@@ -403,10 +418,20 @@ export function PayslipEditor() {
     while (cursor <= end) {
       const key = toLocalDateKey(cursor);
       const ts = tsMap.get(key) ?? null;
-      let derivedStatus = ts ? ts.status : workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
+
+      // Use ts.status if present, else check leave records, else absent/day-off
+      let derivedStatus: string;
+      if (ts) {
+        derivedStatus = ts.status;
+      } else if (leaveDateMap.has(key)) {
+        derivedStatus = leaveDateMap.get(key)!;
+      } else {
+        derivedStatus = workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
+      }
 
       const holidayType = holidays[key];
-      if (holidayType) {
+      const isLeaveStatus = derivedStatus === 'PAID_LEAVE' || derivedStatus === 'UNPAID_LEAVE';
+      if (holidayType && !isLeaveStatus) {
         derivedStatus = holidayType === 'REGULAR' ? 'REGULAR_HOLIDAY' : 'SPECIAL_HOLIDAY';
       }
 
@@ -418,7 +443,7 @@ export function PayslipEditor() {
       cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [payslip, timesheets, holidays]);
+  }, [payslip, timesheets, holidays, leaveRequests]);
 
   const dynamicDeductions = useMemo(() => {
     let regularLateUnder = 0;
@@ -1061,7 +1086,9 @@ const liveGross =
                       <td className="px-2 py-2">—</td>
                       <td className="px-2 py-2">—</td>
                       <td className={`px-2 py-2 font-semibold ${noTsColor}`}>{noTsLabel}</td>
-                      <td className="px-2 py-2 text-right">—</td>
+                      <td className="px-2 py-2 text-right">
+                        {derivedStatus === 'PAID_LEAVE' ? fmt(tableDailyRate) : '—'}
+                      </td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
@@ -1079,7 +1106,7 @@ const liveGross =
                       <td className="px-2 py-2 text-right text-red-500">—</td>
                       <td className="px-2 py-2 text-right text-muted-foreground">—</td>
                       <td className="px-2 py-2 text-right font-medium">
-                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType !== 'FIXED_PAY' ? fmt(tableDailyRate) : '—'}
+                        {(derivedStatus === 'REGULAR_HOLIDAY' && tablePayType !== 'FIXED_PAY') || derivedStatus === 'PAID_LEAVE' ? fmt(tableDailyRate) : '—'}
                       </td>
                     </tr>
                   );
