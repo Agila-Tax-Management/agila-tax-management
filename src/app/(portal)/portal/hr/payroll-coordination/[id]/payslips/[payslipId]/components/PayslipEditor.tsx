@@ -505,7 +505,8 @@ export function PayslipEditor() {
     if (!t) return s;
     if (_payType === 'FIXED_PAY' && ds === 'REGULAR_HOLIDAY') return s;
     if (_payType !== 'FIXED_PAY' && Number(t.rdHours) > 0) return s;
-    return s + Number(t.dailyGrossPay);
+    // Use gross daily rate — deductions are captured separately in liveDed
+    return s + (_otHr * 8);
   }, 0);
 
   // For FIXED_PAY: use the DB-stored basicPay (the agreed salary, not timesheet-derived)
@@ -1171,7 +1172,7 @@ const liveGross =
                       <span>{statusLabel}</span>
                     </td>
                     <td className="px-2 py-2 text-right">
-                      {(tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(ts.rdHours) > 0) ? '—' : fmt(Number(ts.dailyGrossPay))}
+                      {(tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(ts.rdHours) > 0) ? '—' : fmt(tableDailyRate)}
                     </td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
@@ -1237,9 +1238,10 @@ const liveGross =
                                 ? Number(ts.dailyGrossPay)
                                 : tableDailyRate * 2;
                         } else if (isSH) {
-                          basePay = Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 2;
+                          basePay = Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 1.30;
                         } else {
-                          basePay = Number(ts.dailyGrossPay);
+                          // Regular working day: gross daily rate, no deductions in table
+                          basePay = tableDailyRate;
                         }
                         
                         const rowGross = basePay + rowOtPay;
@@ -1256,7 +1258,7 @@ const liveGross =
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
                     const total = timesheets.reduce((s, t) => {
-                      const amount = (tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0) ? 0 : Number(t.dailyGrossPay);
+                      const amount = (tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0) ? 0 : tableDailyRate;
                       return s + amount;
                     }, 0);
                     return total > 0 ? fmt(total) : '—';
@@ -1361,6 +1363,7 @@ const liveGross =
                       );
 
                       const isRH = periodMap.get(t.id) === 'REGULAR_HOLIDAY';
+                      const isSH = periodMap.get(t.id) === 'SPECIAL_HOLIDAY';
                       const isRD = tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0;
                       
                       // Rest day: basePay = 0 — gross is RDOT pay only (PH law)
@@ -1369,7 +1372,9 @@ const liveGross =
                         ? 0
                         : isRH
                           ? (tablePayType === 'FIXED_PAY' ? tableDailyRate : Number(t.dailyGrossPay))
-                          : Number(t.dailyGrossPay);
+                          : isSH
+                            ? Number(t.dailyGrossPay)
+                            : tableDailyRate; // Regular day: gross rate, no deductions in table
                         
                       const otPay =
                         (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr2) +
