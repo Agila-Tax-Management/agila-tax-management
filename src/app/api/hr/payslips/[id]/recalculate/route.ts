@@ -306,23 +306,23 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const freq = (compensation?.frequency ?? 'TWICE_A_MONTH') as 'ONCE_A_MONTH' | 'TWICE_A_MONTH' | 'WEEKLY';
   const freqDiv = freq === 'ONCE_A_MONTH' ? 1 : freq === 'TWICE_A_MONTH' ? 2 : 4;
 
-  // Basic Pay should match the total Regular Pay shown in the Daily Breakdown.
-  // Exclude holiday rows because Holiday Pay is computed separately.
-const basicPay = updatedTimesheets.reduce((sum, ts) => {
-  const dateKey = ts.date.toISOString().slice(0, 10);
-  const holidayType = holidayMap.get(dateKey);
-
-  // Skip holiday rows because Holiday Pay is a separate earnings item.
-  if (
-    holidayType === 'REGULAR' ||
-    holidayType === 'SPECIAL_NON_WORKING' ||
-    holidayType === 'LOCAL_HOLIDAY'
-  ) {
-    return sum;
-  }
-
-  return sum + Number(ts.dailyGrossPay ?? 0);
-}, 0);
+  // Basic Pay:
+  // FIXED_PAY → agreed periodic salary (not timesheet-derived; avoids zero when no timesheets)
+  // VARIABLE_PAY → sum of dailyGrossPay for non-holiday worked rows
+const basicPay = payType === 'FIXED_PAY'
+  ? monthlyRate / freqDiv
+  : updatedTimesheets.reduce((sum, ts) => {
+      const dateKey = ts.date.toISOString().slice(0, 10);
+      const holidayType = holidayMap.get(dateKey);
+      if (
+        holidayType === 'REGULAR' ||
+        holidayType === 'SPECIAL_NON_WORKING' ||
+        holidayType === 'LOCAL_HOLIDAY'
+      ) {
+        return sum;
+      }
+      return sum + Number(ts.dailyGrossPay ?? 0);
+    }, 0);
 
   const allowanceOnFirstCutoffOnly = compensation?.allowanceOnFirstCutoffOnly ?? true;
   let allowance: number;

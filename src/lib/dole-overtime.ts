@@ -156,7 +156,10 @@ export function computeHolidayPay(
     for (const ts of timesheets) {
       const dateKey = ts.date.toISOString().slice(0, 10);
       tsDateKeys.add(dateKey);
-      if (Number(ts.regularHours) === 0 && Number(ts.dailyGrossPay) > 0) {
+      // Only include rows that fall on a holiday — pure rest-day (RDOT) rows are
+      // captured in OT Pay (rdHours × 1.30) and must not be double-counted here.
+      const isHolidayRow = holidayMap.has(dateKey);
+      if (Number(ts.regularHours) === 0 && Number(ts.dailyGrossPay) > 0 && isHolidayRow) {
         premiumWorkedPay += Number(ts.dailyGrossPay);
       }
     }
@@ -181,7 +184,7 @@ export function computeHolidayPay(
   // basicPay already includes 1× (100%) for every day, so we only add the excess.
   let premium = 0;
   for (const ts of timesheets) {
-    premium += Number(ts.rdHours)   * hourlyRate * 0.30; // rest day: +30%
+    // rdHours (rest-day premium) moved to OT Pay — excluded here to avoid double-counting
     premium += Number(ts.shHours)   * hourlyRate * 0.30; // special holiday: +30%
     premium += Number(ts.shRdHours) * hourlyRate * 0.50; // special holiday + rest day: +50%
     premium += Number(ts.rhHours)   * hourlyRate * 1.00; // regular holiday: +100%

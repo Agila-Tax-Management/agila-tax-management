@@ -202,16 +202,18 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
         allowance = allowanceRate / freqDiv;
       }
 
-      // Same formula as per-payslip recalculate: sum dailyGrossPay, skip holiday rows
-      // (holiday pay is a separate earnings item computed by computeHolidayPay)
-      const basicPay = empTs.reduce((sum, ts) => {
-        const dateKey = ts.date.toISOString().slice(0, 10);
-        const hType = periodHolidayMap.get(dateKey);
-        if (hType === 'REGULAR' || hType === 'SPECIAL_NON_WORKING' || hType === 'LOCAL_HOLIDAY') {
-          return sum;
-        }
-        return sum + Number(ts.dailyGrossPay ?? 0);
-      }, 0);
+      // FIXED_PAY → agreed periodic salary (never zero even without timesheets)
+      // VARIABLE_PAY → sum dailyGrossPay from non-holiday worked rows
+      const basicPay = comp.payType === 'FIXED_PAY'
+        ? monthlyRate / freqDiv
+        : empTs.reduce((sum, ts) => {
+            const dateKey = ts.date.toISOString().slice(0, 10);
+            const hType = periodHolidayMap.get(dateKey);
+            if (hType === 'REGULAR' || hType === 'SPECIAL_NON_WORKING' || hType === 'LOCAL_HOLIDAY') {
+              return sum;
+            }
+            return sum + Number(ts.dailyGrossPay ?? 0);
+          }, 0);
 
       const holidayPay = computeHolidayPay(empTs, periodHolidayMap, comp.payType, dailyRate, startDate, endDate);
       const overtimePay = computeDoleOvertimePay(empTs, dailyRate);
