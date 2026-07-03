@@ -1141,7 +1141,7 @@ const liveGross =
                       <span>{statusLabel}</span>
                     </td>
                     <td className="px-2 py-2 text-right">
-                      {(tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY') || Number(ts.rdHours) > 0 ? '—' : fmt(Number(ts.dailyGrossPay))}
+                      {(tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(ts.rdHours) > 0) ? '—' : fmt(Number(ts.dailyGrossPay))}
                     </td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
@@ -1194,7 +1194,8 @@ const liveGross =
                         
                         // FIX 4: Correct row Gross computation for Fixed vs Variable Pay metrics
                         // Rest day (rdHours > 0): basePay = 0 — gross is RDOT pay only (PH law)
-                        const isRD = Number(ts.rdHours) > 0;
+                        // Fixed pay is exempt — salary is always the agreed amount
+                        const isRD = tablePayType !== 'FIXED_PAY' && Number(ts.rdHours) > 0;
                         let basePay = 0;
                         if (isRD) {
                           basePay = 0;
@@ -1225,7 +1226,7 @@ const liveGross =
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
                     const total = timesheets.reduce((s, t) => {
-                      const amount = (tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY') || Number(t.rdHours) > 0 ? 0 : Number(t.dailyGrossPay);
+                      const amount = (tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0) ? 0 : Number(t.dailyGrossPay);
                       return s + amount;
                     }, 0);
                     return total > 0 ? fmt(total) : '—';
@@ -1330,9 +1331,10 @@ const liveGross =
                       );
 
                       const isRH = periodMap.get(t.id) === 'REGULAR_HOLIDAY';
-                      const isRD = Number(t.rdHours) > 0;
+                      const isRD = tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0;
                       
                       // Rest day: basePay = 0 — gross is RDOT pay only (PH law)
+                      // Fixed pay is exempt — salary is always the agreed amount
                       const basePay = isRD
                         ? 0
                         : isRH
