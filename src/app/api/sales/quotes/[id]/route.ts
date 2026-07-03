@@ -1,7 +1,7 @@
 // src/app/api/sales/quotes/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import prisma from "@/lib/db";
 import { getSessionWithAccess } from "@/lib/session";
 import { logActivity, getRequestMeta } from "@/lib/activity-log";
@@ -131,20 +131,43 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
   }
 
   try {
-    const quote = await prisma.$transaction(async (tx) => {
-      if (parsed.data.lineItems) {
-        // Recalculate totals
-        let subTotal = 0;
-        let vatTotal = 0;
-        for (const li of parsed.data.lineItems) {
-          const lineTotal = li.negotiatedRate * li.quantity;
-          subTotal += lineTotal;
-          if (li.isVatable) vatTotal += lineTotal * 0.12;
+    const { quote, autoInvoiceNumber } = await prisma.$transaction(async (tx) => {
+      // ── Step 1: Update the quote ──────────────────────────────
+      const quote = await (async () => {
+        if (parsed.data.lineItems) {
+          let subTotal = 0;
+          let vatTotal = 0;
+          for (const li of parsed.data.lineItems) {
+            const lineTotal = li.negotiatedRate * li.quantity;
+            subTotal += lineTotal;
+            if (li.isVatable) vatTotal += lineTotal * 0.12;
+          }
+          const grandTotal = subTotal + vatTotal;
+          await tx.quoteLineItem.deleteMany({ where: { quoteId: id } });
+          return tx.quote.update({
+            where: { id },
+            data: {
+              ...(parsed.data.status ? { status: parsed.data.status } : {}),
+              ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+              ...(parsed.data.validUntil !== undefined
+                ? { validUntil: parsed.data.validUntil ? new Date(parsed.data.validUntil) : null }
+                : {}),
+              subTotal,
+              grandTotal,
+              lineItems: {
+                create: parsed.data.lineItems.map((li) => ({
+                  serviceId: li.serviceId,
+                  sourcePackageId: li.sourcePackageId ?? null,
+                  customName: li.customName ?? null,
+                  quantity: li.quantity,
+                  negotiatedRate: li.negotiatedRate,
+                  isVatable: li.isVatable,
+                })),
+              },
+            },
+            include: QUOTE_INCLUDE,
+          });
         }
-        const grandTotal = subTotal + vatTotal;
-
-        await tx.quoteLineItem.deleteMany({ where: { quoteId: id } });
-
         return tx.quote.update({
           where: { id },
           data: {
@@ -153,34 +176,83 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
             ...(parsed.data.validUntil !== undefined
               ? { validUntil: parsed.data.validUntil ? new Date(parsed.data.validUntil) : null }
               : {}),
-            subTotal,
-            grandTotal,
-            lineItems: {
-              create: parsed.data.lineItems.map((li) => ({
-                serviceId: li.serviceId,
-                sourcePackageId: li.sourcePackageId ?? null,
-                customName: li.customName ?? null,
-                quantity: li.quantity,
-                negotiatedRate: li.negotiatedRate,
-                isVatable: li.isVatable,
-              })),
-            },
           },
           include: QUOTE_INCLUDE,
         });
+      })();
+
+      // ── Step 2: Auto-create invoice when quote is ACCEPTED for a lead ──
+      let autoInvoiceNumber: string | null = null;
+      if (parsed.data.status === "ACCEPTED" && existing.leadId != null) {
+        const existingInv = await tx.invoice.findFirst({
+          where: { leadId: existing.leadId },
+          select: { id: true },
+        });
+        if (!existingInv && quote.lineItems.length > 0) {
+          const year = new Date().getFullYear();
+          const prefix = `INV-${year}-`;
+          const latest = await tx.invoice.findFirst({
+            where: { invoiceNumber: { startsWith: prefix } },
+            orderBy: { invoiceNumber: "desc" },
+            select: { invoiceNumber: true },
+          });
+          let nextSeq = 1;
+          if (latest) {
+            const parts = latest.invoiceNumber.split("-");
+            const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+            if (!isNaN(lastSeq)) nextSeq = lastSeq + 1;
+          }
+          const invoiceNumber = `${prefix}${String(nextSeq).padStart(4, "0")}`;
+
+          let invSubTotal = 0;
+          let invTaxAmount = 0;
+          const invoiceItems = quote.lineItems.map((li) => {
+            const unitPrice = Number(li.negotiatedRate);
+            const qty = li.quantity;
+            const lineTotal = unitPrice * qty;
+            const lineTax = li.isVatable ? lineTotal * 0.12 : 0;
+            invSubTotal += lineTotal;
+            invTaxAmount += lineTax;
+            return {
+              description: li.customName ?? li.service.name,
+              quantity: qty,
+              unitPrice,
+              total: lineTotal,
+              isVatable: li.isVatable,
+              category: "SERVICE_FEE" as const,
+            };
+          });
+          const totalAmount = invSubTotal + invTaxAmount;
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 30);
+
+          await tx.invoice.create({
+            data: {
+              invoiceNumber,
+              leadId: existing.leadId,
+              quoteId: id,
+              status: "UNPAID",
+              dueDate,
+              subTotal: invSubTotal,
+              taxAmount: invTaxAmount,
+              discountAmount: 0,
+              totalAmount,
+              balanceDue: totalAmount,
+              terms: "Net 30",
+              items: { create: invoiceItems },
+            },
+          });
+
+          await tx.lead.update({
+            where: { id: existing.leadId },
+            data: { isCreatedInvoice: true },
+          });
+
+          autoInvoiceNumber = invoiceNumber;
+        }
       }
 
-      return tx.quote.update({
-        where: { id },
-        data: {
-          ...(parsed.data.status ? { status: parsed.data.status } : {}),
-          ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
-          ...(parsed.data.validUntil !== undefined
-            ? { validUntil: parsed.data.validUntil ? new Date(parsed.data.validUntil) : null }
-            : {}),
-        },
-        include: QUOTE_INCLUDE,
-      });
+      return { quote, autoInvoiceNumber };
     });
 
     revalidateTag('sales-quotes', 'max');
@@ -193,6 +265,16 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<N
         oldValue: existing.status,
         newValue: `Quote ${existing.quoteNumber} → ${parsed.data.status}`,
       });
+    }
+
+    if (autoInvoiceNumber && existing.leadId != null) {
+      void logLeadHistory({
+        leadId: existing.leadId,
+        actorId: session.user.id,
+        changeType: "INVOICE_GENERATED",
+        newValue: `Auto-generated invoice ${autoInvoiceNumber} on quote acceptance`,
+      });
+      revalidatePath("/portal/accounting-and-finance/billing");
     }
 
     void logActivity({

@@ -17,7 +17,7 @@ type BusinessEntity =
   | 'COOPERATIVE';
 
 const BUSINESS_ENTITY_OPTIONS: { value: BusinessEntity; label: string }[] = [
-  { value: 'INDIVIDUAL', label: 'Individual' },
+  { value: 'INDIVIDUAL', label: 'Professional' },
   { value: 'SOLE_PROPRIETORSHIP', label: 'Sole Proprietorship' },
   { value: 'PARTNERSHIP', label: 'Partnership' },
   { value: 'CORPORATION', label: 'Corporation' },
@@ -77,7 +77,7 @@ export function ProvisionAccountModal({
           .filter(Boolean)
           .join(' '),
         email: '',
-        password: '',
+        password: '123456789',
         businessName: lead.businessName ?? '',
         businessEntity: inferBusinessEntity(lead.businessType),
       });

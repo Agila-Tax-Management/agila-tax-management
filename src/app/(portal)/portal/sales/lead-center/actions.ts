@@ -75,7 +75,7 @@ export async function provisionLeadAccountAction(
             include: {
               lineItems: {
                 include: {
-                  service: { select: { id: true, billingType: true } },
+                  service: { select: { id: true, billingType: true, name: true } },
                 },
               },
             },
@@ -207,14 +207,81 @@ export async function provisionLeadAccountAction(
         data: { clientId: newClient.id },
       });
 
+      // ── Step 1f: Auto-create invoice from accepted quote (if none exists) ──
+      let invoiceAutoCreated = false;
+      if (migratedCount.count === 0 && acceptedQuote && acceptedQuote.lineItems.length > 0) {
+        const existingInvoice = await tx.invoice.findFirst({
+          where: { leadId },
+          select: { id: true },
+        });
+        if (!existingInvoice) {
+          const invYear = new Date().getFullYear();
+          const invPrefix = `INV-${invYear}-`;
+          const latestInv = await tx.invoice.findFirst({
+            where: { invoiceNumber: { startsWith: invPrefix } },
+            orderBy: { invoiceNumber: 'desc' },
+            select: { invoiceNumber: true },
+          });
+          let nextInvSeq = 1;
+          if (latestInv) {
+            const parts = latestInv.invoiceNumber.split('-');
+            const lastSeq = parseInt(parts[parts.length - 1]!, 10);
+            if (!isNaN(lastSeq)) nextInvSeq = lastSeq + 1;
+          }
+          const invoiceNumber = `${invPrefix}${String(nextInvSeq).padStart(4, '0')}`;
+
+          let subTotal = 0;
+          let taxAmount = 0;
+          const invoiceItems = acceptedQuote.lineItems.map((li) => {
+            const unitPrice = Number(li.negotiatedRate);
+            const qty = typeof li.quantity === 'number' ? li.quantity : 1;
+            const lineTotal = unitPrice * qty;
+            const lineTax = li.isVatable ? lineTotal * 0.12 : 0;
+            subTotal += lineTotal;
+            taxAmount += lineTax;
+            return {
+              description: li.customName ?? li.service.name,
+              quantity: qty,
+              unitPrice,
+              total: lineTotal,
+              isVatable: li.isVatable,
+              category: 'SERVICE_FEE' as const,
+            };
+          });
+          const totalAmount = subTotal + taxAmount;
+          const invDueDate = new Date();
+          invDueDate.setDate(invDueDate.getDate() + 30);
+
+          await tx.invoice.create({
+            data: {
+              invoiceNumber,
+              leadId,
+              clientId: newClient.id,
+              quoteId: acceptedQuote.id,
+              status: 'UNPAID',
+              dueDate: invDueDate,
+              subTotal,
+              taxAmount,
+              discountAmount: 0,
+              totalAmount,
+              balanceDue: totalAmount,
+              terms: 'Net 30',
+              notes: `Initial invoice for ${businessName}`,
+              items: { create: invoiceItems },
+            },
+          });
+
+          invoiceAutoCreated = true;
+        }
+      }
+
       // ── Step 2: Update the lead record ────────────────────────
       await tx.lead.update({
         where: { id: leadId },
         data: {
           isAccountCreated: true,
           convertedClientId: newClient.id,
-          // Set isCreatedInvoice if any invoices were migrated
-          isCreatedInvoice: migratedCount.count > 0 ? true : undefined,
+          isCreatedInvoice: invoiceAutoCreated || migratedCount.count > 0 ? true : undefined,
         },
       });
 
