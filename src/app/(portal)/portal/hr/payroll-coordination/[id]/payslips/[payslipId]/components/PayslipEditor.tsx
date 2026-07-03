@@ -1041,8 +1041,8 @@ const liveGross =
                   'Status',
                   'Reg Pay',
                   'Reg OT',
-                  'RD',
-                  'RD OT',
+                  'RDOT',
+                  'RDOT Excess',
                   'SH',
                   'SH OT',
                   'SH RD',
@@ -1162,6 +1162,7 @@ const liveGross =
                         const isRH = derivedStatus === 'REGULAR_HOLIDAY';
                         const pay =
                           (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr) +
+                          Number(ts.rdHours) * 1.30 * hr +
                           Number(ts.rdOtHours) * 1.69 * hr +
                           Number(ts.shOtHours) * 1.69 * hr +
                           Number(ts.shRdOtHours) * 1.95 * hr +
@@ -1184,6 +1185,7 @@ const liveGross =
                         
                         const rowOtPay =
                           (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr2) +
+                          Number(ts.rdHours) * 1.30 * hr2 +
                           Number(ts.rdOtHours) * 1.69 * hr2 +
                           Number(ts.shOtHours) * 1.69 * hr2 +
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
@@ -1283,6 +1285,7 @@ const liveGross =
                       const isRH = ds === 'REGULAR_HOLIDAY';
                       return s +
                         (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr) +
+                        Number(t.rdHours) * 1.30 * hr +
                         Number(t.rdOtHours) * 1.69 * hr +
                         Number(t.shOtHours) * 1.69 * hr +
                         Number(t.shRdOtHours) * 1.95 * hr +
@@ -1330,6 +1333,7 @@ const liveGross =
                         
                       const otPay =
                         (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr2) +
+                        Number(t.rdHours) * 1.30 * hr2 +
                         Number(t.rdOtHours) * 1.69 * hr2 +
                         Number(t.shOtHours) * 1.69 * hr2 +
                         Number(t.shRdOtHours) * 1.95 * hr2 +
