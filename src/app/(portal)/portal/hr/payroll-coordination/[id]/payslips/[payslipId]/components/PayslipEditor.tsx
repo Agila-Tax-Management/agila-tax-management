@@ -496,10 +496,40 @@ export function PayslipEditor() {
 
   const displayLateUnder = Number(lateUnder) > 0 ? Number(lateUnder) : computedTotalLateUnder;
 
+  // Live pay values — computed from the table columns so earnings always match the table
+  const _payType = payslip?.employee?.employments?.[0]?.contracts?.[0]?.compensations?.[0]?.payType ?? 'FIXED_PAY';
+  const _otHr = Number(payslip?.employee?.employments?.[0]?.contracts?.[0]?.compensations?.[0]?.calculatedDailyRate ?? 0) / 8;
+
+  // Reg Pay total — mirrors the Reg Pay column (excludes rest-day rows for non-fixed-pay)
+  const liveRegPay = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
+    if (!t) return s;
+    if (_payType === 'FIXED_PAY' && ds === 'REGULAR_HOLIDAY') return s;
+    if (_payType !== 'FIXED_PAY' && Number(t.rdHours) > 0) return s;
+    return s + Number(t.dailyGrossPay);
+  }, 0);
+
+  // For FIXED_PAY: use the DB-stored basicPay (the agreed salary, not timesheet-derived)
+  // For VARIABLE_PAY: use liveRegPay from the table so RDOT is not double-counted
+  const displayBasicPay = _payType === 'FIXED_PAY' ? Number(basicPay) : liveRegPay;
+
+  // OT Pay total — mirrors the OT Pay column (includes RDOT, excludes holiday base pay)
+  const liveOtTotal = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
+    if (!t) return s;
+    const isRH = ds === 'REGULAR_HOLIDAY';
+    return s +
+      (isRH ? 0 : Number(t.regOtHours) * 1.25 * _otHr) +
+      Number(t.rdHours) * (_payType === 'FIXED_PAY' ? 0.30 : 1.30) * _otHr +
+      Number(t.rdOtHours) * 1.69 * _otHr +
+      Number(t.shOtHours) * 1.69 * _otHr +
+      Number(t.shRdOtHours) * 1.95 * _otHr +
+      (Number(t.rhOtHours) + (isRH ? Number(t.regOtHours) : 0)) * 2.60 * _otHr +
+      Number(t.rhRdOtHours) * 3.38 * _otHr;
+  }, 0);
+
 const liveGross =
-  Number(basicPay) +
+  displayBasicPay +
   Number(holidayPay) +
-  Number(overtimePay) +
+  liveOtTotal +
   Number(paidLeavePay) +
   Number(allowance);
 
@@ -1162,7 +1192,7 @@ const liveGross =
                         const isRH = derivedStatus === 'REGULAR_HOLIDAY';
                         const pay =
                           (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr) +
-                          Number(ts.rdHours) * 1.30 * hr +
+                          Number(ts.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr +
                           Number(ts.rdOtHours) * 1.69 * hr +
                           Number(ts.shOtHours) * 1.69 * hr +
                           Number(ts.shRdOtHours) * 1.95 * hr +
@@ -1185,7 +1215,7 @@ const liveGross =
                         
                         const rowOtPay =
                           (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr2) +
-                          Number(ts.rdHours) * 1.30 * hr2 +
+                          Number(ts.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr2 +
                           Number(ts.rdOtHours) * 1.69 * hr2 +
                           Number(ts.shOtHours) * 1.69 * hr2 +
                           Number(ts.shRdOtHours) * 1.95 * hr2 +
@@ -1290,7 +1320,7 @@ const liveGross =
                       const isRH = ds === 'REGULAR_HOLIDAY';
                       return s +
                         (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr) +
-                        Number(t.rdHours) * 1.30 * hr +
+                        Number(t.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr +
                         Number(t.rdOtHours) * 1.69 * hr +
                         Number(t.shOtHours) * 1.69 * hr +
                         Number(t.shRdOtHours) * 1.95 * hr +
@@ -1343,7 +1373,7 @@ const liveGross =
                         
                       const otPay =
                         (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr2) +
-                        Number(t.rdHours) * 1.30 * hr2 +
+                        Number(t.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr2 +
                         Number(t.rdOtHours) * 1.69 * hr2 +
                         Number(t.shOtHours) * 1.69 * hr2 +
                         Number(t.shRdOtHours) * 1.95 * hr2 +
@@ -1458,9 +1488,9 @@ const liveGross =
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              ['Basic Pay', basicPay],
+              ['Basic Pay', String(parseFloat(displayBasicPay.toFixed(2)))],
               ['Holiday Pay', holidayPay],
-              ['Overtime Pay', overtimePay],
+              ['OT Pay', String(parseFloat(liveOtTotal.toFixed(2)))],
               ['Paid Leave Pay', paidLeavePay],
               ['Allowance', allowance],
             ].map(([label, val]) => (
