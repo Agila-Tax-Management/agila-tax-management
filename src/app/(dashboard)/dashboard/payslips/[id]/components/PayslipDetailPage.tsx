@@ -289,6 +289,7 @@ export function PayslipDetailPage() {
   const [showCompModal, setShowCompModal] = useState(false);
   const [timesheets, setTimesheets] = useState<TimesheetRecord[]>([]);
   const [timesheetsLoading, setTimesheetsLoading] = useState(false);
+  const [leaveRequests, setLeaveRequests] = useState<{ startDate: string; endDate: string; leaveType: { isPaid: boolean } }[]>([]);
   const [holidays, setHolidays] = useState<Record<string, string>>({});
 
   const fetchPayslip = useCallback(async () => {
@@ -316,9 +317,10 @@ export function PayslipDetailPage() {
     setTimesheetsLoading(true);
     try {
       const res = await fetch(`/api/employee/payslips/${id}/timesheet`);
-      const json: { data?: TimesheetRecord[]; error?: string } = await res.json();
+      const json: { data?: TimesheetRecord[]; leaveRequests?: { startDate: string; endDate: string; leaveType: { isPaid: boolean } }[]; error?: string } = await res.json();
       if (res.ok && json.data) {
         setTimesheets(json.data);
+        setLeaveRequests(json.leaveRequests ?? []);
       }
     } catch {
       // Ignore
@@ -442,6 +444,19 @@ export function PayslipDetailPage() {
     const workingDaySet = new Set(
       scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek)
     );
+
+    // Build a map of leave-covered date keys for days without a timesheet punch
+    const leaveDateMap = new Map<string, 'PAID_LEAVE' | 'UNPAID_LEAVE'>();
+    for (const lr of leaveRequests) {
+      const leaveStart = new Date(`${lr.startDate.slice(0, 10)}T00:00:00`);
+      const leaveEnd   = new Date(`${lr.endDate.slice(0, 10)}T00:00:00`);
+      const leaveStatus = lr.leaveType.isPaid ? 'PAID_LEAVE' : 'UNPAID_LEAVE';
+      const c = new Date(leaveStart);
+      while (c <= leaveEnd) {
+        leaveDateMap.set(toLocalDateKey(c), leaveStatus);
+        c.setDate(c.getDate() + 1);
+      }
+    }
     
     const days: { date: Date; ts: TimesheetRecord | null; derivedStatus: string }[] = [];
     const start = new Date(`${payslip.payrollPeriod.startDate.slice(0, 10)}T00:00:00`);
@@ -451,11 +466,20 @@ export function PayslipDetailPage() {
     while (cursor <= end) {
       const key = toLocalDateKey(cursor);
       const ts = tsMap.get(key) ?? null;
-      
-      let derivedStatus = ts ? ts.status : workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
+
+      // Use ts.status if present, else check leave records, else absent/day-off
+      let derivedStatus: string;
+      if (ts) {
+        derivedStatus = ts.status;
+      } else if (leaveDateMap.has(key)) {
+        derivedStatus = leaveDateMap.get(key)!;
+      } else {
+        derivedStatus = workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
+      }
 
       const holidayType = holidays[key];
-      if (holidayType) {
+      const isLeaveStatus = derivedStatus === 'PAID_LEAVE' || derivedStatus === 'UNPAID_LEAVE';
+      if (holidayType && !isLeaveStatus) {
         derivedStatus = holidayType === 'REGULAR' ? 'REGULAR_HOLIDAY' : 'SPECIAL_HOLIDAY';
       }
 
@@ -467,49 +491,7 @@ export function PayslipDetailPage() {
       cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  }, [payslip, timesheets, holidays]);
-
-  const dynamicDeductions = useMemo(() => {
-    let regularLateUnder = 0;
-    let holidayLateUnder = 0;
-
-    if (!payslip) return { regularLateUnder, holidayLateUnder };
-
-    const activeEmp = payslip.employee.employments[0] ?? null;
-    const activeCt = activeEmp?.contracts[0] ?? null;
-    const activeSchedule = activeCt?.schedule ?? null;
-    const activeComp = activeCt?.compensations[0] ?? null;
-    const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
-    const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
-
-    if (payslip.hrSetting?.disableLateUndertimeGlobal || tablePayType !== 'VARIABLE_PAY') {
-      return { regularLateUnder, holidayLateUnder };
-    }
-
-    periodDays.forEach(({ ts, date, derivedStatus }) => {
-      if (!ts) return;
-      const { lateDeduct, undertimeDeduct } = computeRowPay(
-        ts,
-        tableDailyRate,
-        tablePayType,
-        activeSchedule?.days,
-        date.getDay(),
-        false
-      );
-
-      const amount = lateDeduct + undertimeDeduct;
-      const isHoliday = derivedStatus === 'REGULAR_HOLIDAY' || derivedStatus === 'SPECIAL_HOLIDAY';
-
-      if (isHoliday) {
-        holidayLateUnder += amount;
-      } else {
-        regularLateUnder += amount;
-      }
-    });
-
-    return { regularLateUnder, holidayLateUnder };
-  }, [payslip, periodDays]);
-
+  }, [payslip, timesheets, holidays, leaveRequests]);
 
   if (loading) {
     return (
@@ -547,28 +529,30 @@ export function PayslipDetailPage() {
     { label: 'Allowance', value: payslip.allowance },
   ].filter((r) => (Number(r.value) || 0) !== 0);
 
-  const backendLateUnder = Number(payslip.lateUndertimeDeduction) || 0;
-
   const deductionRows = [
     { label: 'SSS', value: payslip.sssDeduction },
     { label: 'PhilHealth', value: payslip.philhealthDeduction },
     { label: 'Pag-IBIG', value: payslip.pagibigDeduction },
     { label: 'Withholding Tax', value: payslip.withholdingTax },
-    { 
-      label: 'Late / Undertime', 
-      value: backendLateUnder > 0 ? payslip.lateUndertimeDeduction : dynamicDeductions.regularLateUnder.toString() 
-    },
-    { 
-      label: 'Holiday Late / Undertime', 
-      value: dynamicDeductions.holidayLateUnder.toString() 
-    },
+    { label: 'Late / Undertime', value: payslip.lateUndertimeDeduction },
     { label: 'SSS Loan', value: payslip.sssLoan },
     { label: 'Pag-IBIG Loan', value: payslip.pagibigLoan },
     { label: 'Cash Advance', value: payslip.cashAdvanceRepayment },
-  ].filter((r) => (Number(r.value) || 0) !== 0);
+  ].filter((r) => {
+    const whitelist = ['SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding Tax', 'Late / Undertime'];
+    if (whitelist.includes(r.label)) return true;
+    return (Number(r.value) || 0) !== 0;
+  });
+
+  const liveGross =
+    Number(payslip.basicPay || 0) +
+    Number(payslip.holidayPay || 0) +
+    Number(payslip.overtimePay || 0) +
+    Number(payslip.paidLeavePay || 0) +
+    Number(payslip.allowance || 0);
 
   const liveTotalDeductions = deductionRows.reduce((s, r) => s + (Number(r.value) || 0), 0);
-  const liveNetPay = Math.max(0, (Number(payslip.grossPay) || 0) - liveTotalDeductions);
+  const liveNetPay = liveGross - liveTotalDeductions;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -936,7 +920,9 @@ export function PayslipDetailPage() {
                       <td className="px-2 py-2">—</td>
                       <td className="px-2 py-2">—</td>
                       <td className={`px-2 py-2 font-semibold ${noTsColor}`}>{noTsLabel}</td>
-                      <td className="px-2 py-2 text-right">—</td>
+                      <td className="px-2 py-2 text-right">
+                        {derivedStatus === 'PAID_LEAVE' ? fmt(tableDailyRate) : '—'}
+                      </td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
                       <td className="px-2 py-2 text-right">—</td>
@@ -953,7 +939,7 @@ export function PayslipDetailPage() {
                       <td className="px-2 py-2 text-right text-red-500">—</td>
                       <td className="px-2 py-2 text-right text-amber-500">—</td>
                       <td className="px-2 py-2 text-right font-bold text-emerald-600">
-                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType === 'VARIABLE_PAY'
+                        {(derivedStatus === 'REGULAR_HOLIDAY' && tablePayType === 'VARIABLE_PAY') || derivedStatus === 'PAID_LEAVE'
                           ? fmt(tableDailyRate)
                           : '—'}
                       </td>
@@ -1262,7 +1248,7 @@ export function PayslipDetailPage() {
             )}
             <div className="flex justify-between px-3 py-2 bg-emerald-50">
               <span className="text-xs font-bold text-emerald-700">Gross Pay</span>
-              <span className="text-xs font-black text-emerald-700">{fmt(payslip.grossPay)}</span>
+              <span className="text-xs font-black text-emerald-700">{fmt(liveGross)}</span>
             </div>
           </div>
         </Card>
@@ -1302,10 +1288,10 @@ export function PayslipDetailPage() {
 
       {/* ── Net Pay ── */}
       <div className="flex items-center justify-between p-5 rounded-xl bg-blue-50 border border-blue-200 dark:border-blue-700">
-        <span className="text-sm font-bold text-blue-800 dark:text-blue-200 uppercase tracking-wide">
+        <span className="text-sm font-bold text-blue-800  uppercase tracking-wide">
           Net Pay
         </span>
-        <span className="text-3xl font-black text-blue-700 dark:text-blue-300">
+        <span className="text-3xl font-black text-blue-700">
           {fmt(liveNetPay)}
         </span>
       </div>

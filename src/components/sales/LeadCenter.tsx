@@ -1,4 +1,4 @@
-// src/components/sales/LeadCenter.tsx
+﻿// src/components/sales/LeadCenter.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, JSX } from 'react';
@@ -81,12 +81,23 @@ export function LeadCenter(): React.ReactNode {
     void fetchAccess();
   }, []);
 
-  const fetchStatuses = useCallback(async () => {
-    const res = await fetch('/api/admin/settings/sales/lead-statuses');
-    if (!res.ok) return;
-    const json = (await res.json()) as { data: LeadStatus[] };
-    setStatuses((json.data ?? []).sort((a, b) => a.sequence - b.sequence));
-  }, []);
+const fetchStatuses = useCallback(async () => {
+  const res = await fetch('/api/admin/settings/sales/lead-statuses');
+
+  if (!res.ok) return;
+
+  const json = (await res.json()) as {
+    data: LeadStatus[];
+  };
+
+  const allowedStatuses = ['New', 'Accepted', 'Rejected'];
+
+  setStatuses(
+    (json.data ?? [])
+      .filter((status) => allowedStatuses.includes(status.name))
+      .sort((a, b) => a.sequence - b.sequence),
+  );
+}, []);
 
   const fetchLeads = useCallback(async () => {
     const res = await fetch('/api/sales/leads');
@@ -290,6 +301,7 @@ export function LeadCenter(): React.ReactNode {
         <div className="flex-1 overflow-x-auto pb-4 -mx-2 px-2">
           <div className="inline-flex gap-4 min-w-full">
             {statuses.map((status) => {
+              if (!['New', 'Accepted', 'Rejected'].includes(status.name)) return null;
               const colLeads = filteredLeads.filter((l) => l.statusId === status.id);
               const isOver = dragOverCol === status.id;
               return (
@@ -381,39 +393,90 @@ export function LeadCenter(): React.ReactNode {
                               </span>
                             )}
                             {(() => {
-                              const hasAcceptedQuote = lead.quotes.some((q) => q.status === 'ACCEPTED');
-                              const tsaSigned = lead.isSignedTSA;
-                              const hasInvoice = (lead.invoices?.length ?? 0) > 0;
-                              const anyPaidInvoice = lead.invoices?.some((inv) => inv.status === 'PAID') ?? false;
+                              const hasAcceptedQuote =
+                                lead.quotes.some((q) => q.status === 'ACCEPTED');
+
+                              const hasInvoice =
+                                (lead.invoices?.length ?? 0) > 0;
+
+                              const anyPaidInvoice =
+                                lead.invoices?.some((inv) => inv.status === 'PAID') ?? false;
+
+                              const leadInfoComplete = Boolean(
+                                lead.firstName &&
+                                lead.lastName &&
+                                lead.contactNumber &&
+                                lead.businessName &&
+                                lead.businessType &&
+                                lead.leadSource,
+                              );
 
                               if (lead.isCreatedJobOrder) {
                                 return (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
-                                    <CheckCircle2 size={9} className="shrink-0" /> Converted
+                                    <CheckCircle2 size={9} className="shrink-0" />
+                                    Converted
                                   </span>
                                 );
                               }
-                              if (lead.isAccountCreated && tsaSigned && anyPaidInvoice) {
+
+                              if (
+                                lead.isAccountCreated &&
+                                anyPaidInvoice
+                              ) {
                                 return (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:text-blue-400 text-[10px] font-semibold">
-                                    <Clock size={9} className="shrink-0" /> Ready for Turn Over
+                                    <Clock size={9} className="shrink-0" />
+                                    Ready for Job Order
                                   </span>
                                 );
                               }
-                              if (tsaSigned && hasInvoice && !anyPaidInvoice) {
+
+                              if (
+                                hasInvoice &&
+                                !anyPaidInvoice
+                              ) {
                                 return (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:text-amber-400 text-[10px] font-semibold">
-                                    <Clock size={9} className="shrink-0" /> Waiting for Payment
+                                    <Clock size={9} className="shrink-0" />
+                                    Waiting for Payment
                                   </span>
                                 );
                               }
-                              if (hasAcceptedQuote && !tsaSigned) {
+
+                              if (
+                                hasAcceptedQuote &&
+                                !hasInvoice
+                              ) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 dark:text-cyan-400 text-[10px] font-semibold">
+                                    <Clock size={9} className="shrink-0" />
+                                    Create Invoice
+                                  </span>
+                                );
+                              }
+
+                              if (
+                                leadInfoComplete &&
+                                !hasAcceptedQuote
+                              ) {
                                 return (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:text-purple-400 text-[10px] font-semibold">
-                                    <Clock size={9} className="shrink-0" /> Contract Signing
+                                    <Clock size={9} className="shrink-0" />
+                                    Waiting for Quotation
                                   </span>
                                 );
                               }
+
+                              if (!leadInfoComplete) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:text-orange-400 text-[10px] font-semibold">
+                                    <Clock size={9} className="shrink-0" />
+                                    Complete Information
+                                  </span>
+                                );
+                              }
+
                               return null;
                             })()}
                           </div>

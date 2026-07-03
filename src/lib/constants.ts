@@ -5,17 +5,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const LEAD_STATUSES = [
-  { id: '1',  name: 'New',                 color: 'bg-blue-600' },
-  { id: '2',  name: 'Contacted',           color: 'bg-sky-500' },
-  { id: '3',  name: 'Qualified',           color: 'bg-emerald-500' },
-  { id: '4',  name: 'Proposal',            color: 'bg-amber-500' },
-  { id: '5',  name: 'Negotiation',         color: 'bg-orange-500' },
-  { id: '6',  name: 'Closed Won',          color: 'bg-green-600' },
-  { id: '7',  name: 'Account Creation',   color: 'bg-violet-500' },
-  { id: '8',  name: 'Contract Signing',    color: 'bg-indigo-500' },
-  { id: '9',  name: 'Waiting for Payment', color: 'bg-yellow-500' },
-  { id: '10', name: 'Turnover',            color: 'bg-teal-600' },
-  { id: '11', name: 'Lost',                color: 'bg-red-500' },
+  { id: '1', name: 'New',      color: 'bg-blue-600' },
+  { id: '2', name: 'Accepted', color: 'bg-green-600' },
+  { id: '3', name: 'Rejected', color: 'bg-red-500' },
 ];
 
 export const MOCK_AGENTS = [

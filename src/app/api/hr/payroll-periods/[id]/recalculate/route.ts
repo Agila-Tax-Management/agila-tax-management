@@ -202,9 +202,16 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
         allowance = allowanceRate / freqDiv;
       }
 
-      const basicPay = comp.payType === 'FIXED_PAY'
-        ? monthlyRate / freqDiv
-        : empTs.reduce((s, ts) => (Number(ts.regularHours) > 0 ? s + Number(ts.dailyGrossPay) : s), 0);
+      // Same formula as per-payslip recalculate: sum dailyGrossPay, skip holiday rows
+      // (holiday pay is a separate earnings item computed by computeHolidayPay)
+      const basicPay = empTs.reduce((sum, ts) => {
+        const dateKey = ts.date.toISOString().slice(0, 10);
+        const hType = periodHolidayMap.get(dateKey);
+        if (hType === 'REGULAR' || hType === 'SPECIAL_NON_WORKING' || hType === 'LOCAL_HOLIDAY') {
+          return sum;
+        }
+        return sum + Number(ts.dailyGrossPay ?? 0);
+      }, 0);
 
       const holidayPay = computeHolidayPay(empTs, periodHolidayMap, comp.payType, dailyRate, startDate, endDate);
       const overtimePay = computeDoleOvertimePay(empTs, dailyRate);
@@ -261,8 +268,17 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       
       const lateUndertimeForTotal = comp.payType === 'FIXED_PAY' ? lateUndertimeDeduction : 0;
       
-      const totalDeductions = sssDeduction + philhealthDeduction + pagibigDeduction + withholdingTax + lateUndertimeForTotal + pagibigLoan + sssLoan + cashAdvanceRepayment;
-      const netPay = Math.max(0, grossPay - totalDeductions);
+      // Force totalDeductions using every individual field — mirrors PayslipEditor liveDed exactly
+      const totalDeductions =
+        sssDeduction +
+        philhealthDeduction +
+        pagibigDeduction +
+        withholdingTax +
+        lateUndertimeDeduction +   // always include, not gated by payType
+        pagibigLoan +
+        sssLoan +
+        cashAdvanceRepayment;
+      const netPay = grossPay - totalDeductions;
 
       // Execution updates
       await prisma.payslip.update({

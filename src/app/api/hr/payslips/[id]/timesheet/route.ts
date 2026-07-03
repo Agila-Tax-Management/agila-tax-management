@@ -30,16 +30,31 @@ export async function GET(_request: NextRequest, { params }: RouteParams): Promi
 
   if (!payslip) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const timesheets = await prisma.timesheet.findMany({
-    where: {
-      employeeId: payslip.employeeId,
-      date: {
-        gte: payslip.payrollPeriod.startDate,
-        lte: payslip.payrollPeriod.endDate,
+  const [timesheets, leaveRequests] = await Promise.all([
+    prisma.timesheet.findMany({
+      where: {
+        employeeId: payslip.employeeId,
+        date: {
+          gte: payslip.payrollPeriod.startDate,
+          lte: payslip.payrollPeriod.endDate,
+        },
       },
-    },
-    orderBy: { date: 'asc' },
-  });
+      orderBy: { date: 'asc' },
+    }),
+    prisma.leaveRequest.findMany({
+      where: {
+        employeeId: payslip.employeeId,
+        status: 'APPROVED',
+        startDate: { lte: payslip.payrollPeriod.endDate },
+        endDate: { gte: payslip.payrollPeriod.startDate },
+      },
+      select: {
+        startDate: true,
+        endDate: true,
+        leaveType: { select: { isPaid: true } },
+      },
+    }),
+  ]);
 
-  return NextResponse.json({ data: timesheets });
+  return NextResponse.json({ data: timesheets, leaveRequests });
 }
