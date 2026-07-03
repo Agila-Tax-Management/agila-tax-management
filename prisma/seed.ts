@@ -991,18 +991,9 @@ async function main(): Promise<void> {
 
   // ── 9. Seed Lead Pipeline Statuses ────────────────────────────────
   const LEAD_STATUSES = [
-    { name: "New",                  color: "#3b82f6", sequence: 1,  isDefault: true,  isOnboarding: false, isConverted: false },
-    { name: "Contacted",            color: "#0ea5e9", sequence: 2,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Qualified",            color: "#10b981", sequence: 3,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Proposal",             color: "#f59e0b", sequence: 4,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Negotiation",          color: "#f97316", sequence: 5,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Closed Won",           color: "#16a34a", sequence: 6,  isDefault: false, isOnboarding: false, isConverted: false },
-    { name: "Account Creation",     color: "#8b5cf6", sequence: 7,  isDefault: false, isOnboarding: true,  isConverted: false },
-    { name: "Contract Signing",     color: "#6366f1", sequence: 8,  isDefault: false, isOnboarding: true,  isConverted: false },
-    { name: "Waiting for Payment",  color: "#eab308", sequence: 9,  isDefault: false, isOnboarding: true,  isConverted: false },
-    { name: "Job Order",            color: "#f97316", sequence: 10, isDefault: false, isOnboarding: true,  isConverted: false },
-    { name: "Turn Over",            color: "#0d9488", sequence: 11, isDefault: false, isOnboarding: false, isConverted: true  },
-    { name: "Lost",                 color: "#ef4444", sequence: 12, isDefault: false, isOnboarding: false, isConverted: false },
+    { name: "New",      color: "#3b82f6", sequence: 1, isDefault: true,  isOnboarding: false, isConverted: false },
+    { name: "Accepted", color: "#16a34a", sequence: 2, isDefault: false, isOnboarding: true,  isConverted: false },
+    { name: "Rejected", color: "#ef4444", sequence: 3, isDefault: false, isOnboarding: false, isConverted: false },
   ];
 
   for (const status of LEAD_STATUSES) {

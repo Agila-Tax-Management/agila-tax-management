@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Loader2, User, Trash2, Save, ChevronDown, UserPlus, CheckCircle2,
-  Clock, FileText, Plus, FilePen, Receipt,
+  FileText, Plus, FilePen, Receipt,
 } from 'lucide-react';
 import Image from 'next/image';
 import { Modal } from '@/components/UI/Modal';
@@ -558,71 +558,10 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
             )}
           </div>
 
-          {/* ── Pipeline Documents — TSA ───────────────────────────────── */}
-          <div className="border-t border-border pt-5">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-                Pipeline Documents
-              </h4>
-              {!hasActiveNonVoidedTSA && acceptedQuote && (
-                <button
-                  type="button"
-                  onClick={() => { setSelectedTsa(null); setIsTsaOpen(true); }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-[#25238e] hover:opacity-75 transition-opacity"
-                >
-                  <Plus size={13} /> New TSA
-                </button>
-              )}
-            </div>
-
-            {appliedLead.tsaContracts?.length === 0 || !appliedLead.tsaContracts ? (
-              <p className="text-xs text-muted-foreground italic">
-                {acceptedQuote ? 'No TSA yet. Click "New TSA" to create one.' : 'Requires an accepted quotation before creating a TSA.'}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {appliedLead.tsaContracts.map((tsa) => {
-                  const statusCls =
-                    tsa.status === 'SIGNED' ? 'bg-emerald-100 text-emerald-700'
-                    : tsa.status === 'VOID' ? 'bg-red-100 text-red-600'
-                    : tsa.status === 'DRAFT' ? 'bg-slate-100 text-slate-700'
-                    : 'bg-amber-100 text-amber-700';
-                  return (
-                    <div key={tsa.id} className="rounded-xl border border-border bg-card px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <FileText size={14} className="text-muted-foreground shrink-0" />
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">{tsa.referenceNumber}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(tsa.documentDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${statusCls}`}>
-                            {tsa.status.replace(/_/g, ' ')}
-                          </span>
-                          {tsa.status !== 'VOID' && (
-                            <Button
-                              variant="outline"
-                              onClick={() => { setSelectedTsa(tsa); setIsTsaOpen(true); }}
-                              className="text-xs py-1 px-2.5 h-auto"
-                            >
-                              Manage
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Invoice status row — visible when invoice was already created */}
-            {lead.isCreatedInvoice && primaryInvoice && (
-              <div className={`mt-3 rounded-xl border px-4 py-3 flex items-center gap-3 ${
+          {/* Invoice Status ─────────────────────────────────────────── */}
+          {lead.isCreatedInvoice && primaryInvoice && (
+            <div className="border-t border-border pt-5">
+              <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${
                 invoicePaid
                   ? 'border-emerald-200 bg-emerald-50'
                   : 'border-amber-200 bg-amber-50'
@@ -642,8 +581,8 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                   {primaryInvoice.status}
                 </span>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Footer actions */}
           <div className="flex items-center gap-2 pt-3 border-t border-border">
@@ -659,59 +598,33 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
               </Button>
             )}
             <div className="flex items-center gap-2 ml-auto">
-              {/* Create Account — available once a quote is accepted */}
-              {acceptedQuote && !lead.isAccountCreated && (
-                <Button
-                  onClick={handleCreateAccount}
-                  disabled={saving || deleting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                >
-                  <UserPlus size={14} className="mr-2" />
-                  Create Account
-                </Button>
+              {/* Completed — job order created and account provisioned */}
+              {lead.isAccountCreated && lead.isCreatedJobOrder && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
+                  <CheckCircle2 size={13} /> Turned Over
+                  {(fullLead ?? lead).jobOrders?.[0] && (
+                    <button
+                      type="button"
+                      className="ml-1.5 underline underline-offset-2 hover:text-violet-900 dark:hover:text-violet-200 transition-colors"
+                      onClick={() => {
+                        const joId = (fullLead ?? lead).jobOrders?.[0]?.id;
+                        if (!joId) return;
+                        void fetch(`/api/sales/job-orders/${joId}`)
+                          .then((r) => r.json() as Promise<{ data: JobOrderRecord }>)
+                          .then(({ data }) => {
+                            setViewingJobOrder(data);
+                            setIsJobOrderViewOpen(true);
+                          });
+                      }}
+                    >
+                      View &rarr;
+                    </button>
+                  )}
+                </span>
               )}
 
-              {/* Pipeline status indicator — shown when account is created */}
-              {lead.isAccountCreated && (
-                lead.isCreatedJobOrder ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-100 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 text-xs font-semibold">
-                    <CheckCircle2 size={13} /> Job Order Created
-                    {(fullLead ?? lead).jobOrders?.[0] && (
-                      <button
-                        type="button"
-                        className="ml-1.5 underline underline-offset-2 hover:text-violet-900 dark:hover:text-violet-200 transition-colors"
-                        onClick={() => {
-                          const joId = (fullLead ?? lead).jobOrders?.[0]?.id;
-                          if (!joId) return;
-                          void fetch(`/api/sales/job-orders/${joId}`)
-                            .then((r) => r.json() as Promise<{ data: JobOrderRecord }>)
-                            .then(({ data }) => {
-                              setViewingJobOrder(data);
-                              setIsJobOrderViewOpen(true);
-                            });
-                        }}
-                      >
-                        View &rarr;
-                      </button>
-                    )}
-                  </span>
-                ) : invoicePaid ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 text-xs font-semibold">
-                    <Clock size={13} /> Ready for Turn Over
-                  </span>
-                ) : lead.isCreatedInvoice ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-                    <Clock size={13} /> Waiting for Payment
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-slate-50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-semibold">
-                    <Clock size={13} /> {lead.isSignedTSA ? 'TSA Signed — Pending Invoice' : 'Account Created'}
-                  </span>
-                )
-              )}
-
-              {/* Create Job Order — shown once invoice is paid */}
-              {lead.isAccountCreated && lead.isSignedTSA && invoicePaid && !lead.isCreatedJobOrder && (
+              {/* Step 3: Create Job Order — once invoice is paid */}
+              {invoicePaid && !lead.isCreatedJobOrder && (
                 <Button
                   onClick={() => setIsJobOrderOpen(true)}
                   disabled={saving || deleting}
@@ -719,6 +632,18 @@ export function LeadDetailModal({ isOpen, onClose, lead, statuses, onUpdated, on
                 >
                   <FileText size={14} className="mr-2" />
                   Create Job Order
+                </Button>
+              )}
+
+              {/* Step 4: Create Account — after job order is created */}
+              {lead.isCreatedJobOrder && !lead.isAccountCreated && (
+                <Button
+                  onClick={handleCreateAccount}
+                  disabled={saving || deleting}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <UserPlus size={14} className="mr-2" />
+                  Create Account
                 </Button>
               )}
               <Button

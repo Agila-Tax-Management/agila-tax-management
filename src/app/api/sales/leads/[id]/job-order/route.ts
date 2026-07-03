@@ -89,9 +89,6 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  if (!lead.isAccountCreated) {
-    return NextResponse.json({ error: "Account must be created before generating a job order." }, { status: 400 });
-  }
   if (lead.isCreatedJobOrder) {
     return NextResponse.json({ error: "A job order has already been created for this lead." }, { status: 409 });
   }
