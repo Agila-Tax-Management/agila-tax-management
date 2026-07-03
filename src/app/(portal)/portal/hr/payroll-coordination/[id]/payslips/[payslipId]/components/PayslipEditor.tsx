@@ -1141,7 +1141,7 @@ const liveGross =
                       <span>{statusLabel}</span>
                     </td>
                     <td className="px-2 py-2 text-right">
-                      {tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY' ? '—' : fmt(Number(ts.dailyGrossPay))}
+                      {(tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY') || Number(ts.rdHours) > 0 ? '—' : fmt(Number(ts.dailyGrossPay))}
                     </td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
                     <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
@@ -1221,7 +1221,7 @@ const liveGross =
                 <td className="px-2 py-2 text-right text-xs">
                   {(() => {
                     const total = timesheets.reduce((s, t) => {
-                      const amount = tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY' ? 0 : Number(t.dailyGrossPay);
+                      const amount = (tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY') || Number(t.rdHours) > 0 ? 0 : Number(t.dailyGrossPay);
                       return s + amount;
                     }, 0);
                     return total > 0 ? fmt(total) : '—';
