@@ -1193,8 +1193,12 @@ const liveGross =
                           Number(ts.rhRdOtHours) * 3.38 * hr2;
                         
                         // FIX 4: Correct row Gross computation for Fixed vs Variable Pay metrics
+                        // Rest day (rdHours > 0): basePay = 0 — gross is RDOT pay only (PH law)
+                        const isRD = Number(ts.rdHours) > 0;
                         let basePay = 0;
-                        if (isRH) {
+                        if (isRD) {
+                          basePay = 0;
+                        } else if (isRH) {
                           basePay =
                             tablePayType === 'FIXED_PAY'
                               ? tableDailyRate
@@ -1326,10 +1330,14 @@ const liveGross =
                       );
 
                       const isRH = periodMap.get(t.id) === 'REGULAR_HOLIDAY';
+                      const isRD = Number(t.rdHours) > 0;
                       
-                      const basePay = isRH
-                        ? (tablePayType === 'FIXED_PAY' ? tableDailyRate : Number(t.dailyGrossPay))
-                        : Number(t.dailyGrossPay);
+                      // Rest day: basePay = 0 — gross is RDOT pay only (PH law)
+                      const basePay = isRD
+                        ? 0
+                        : isRH
+                          ? (tablePayType === 'FIXED_PAY' ? tableDailyRate : Number(t.dailyGrossPay))
+                          : Number(t.dailyGrossPay);
                         
                       const otPay =
                         (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr2) +
