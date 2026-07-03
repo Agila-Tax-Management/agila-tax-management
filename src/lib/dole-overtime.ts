@@ -148,19 +148,21 @@ export function computeHolidayPay(
   const hourlyRate = dailyRate / 8;
 
   if (payType === 'VARIABLE_PAY') {
-    // Sum dailyGrossPay for ALL worked premium days (rest days + any holiday type).
-    // These rows have regularHours = 0 but a non-zero dailyGrossPay set by
-    // computeTimesheetFields with the correct DOLE multiplier.
+    // Explicit holiday pay rates (PH Labor Code):
+    //   Regular holiday worked   → 200% of daily rate (reg pay × 2)
+    //   Special holiday worked   → 130% of daily rate
+    // Rest-day (RDOT) rows are captured in OT Pay and excluded here.
     let premiumWorkedPay = 0;
     const tsDateKeys = new Set<string>();
     for (const ts of timesheets) {
       const dateKey = ts.date.toISOString().slice(0, 10);
       tsDateKeys.add(dateKey);
-      // Only include rows that fall on a holiday — pure rest-day (RDOT) rows are
-      // captured in OT Pay (rdHours × 1.30) and must not be double-counted here.
-      const isHolidayRow = holidayMap.has(dateKey);
-      if (Number(ts.regularHours) === 0 && Number(ts.dailyGrossPay) > 0 && isHolidayRow) {
-        premiumWorkedPay += Number(ts.dailyGrossPay);
+      const holidayType = holidayMap.get(dateKey);
+      if (!holidayType || !ts.timeIn || !ts.timeOut) continue; // not a worked holiday row
+      if (holidayType === 'REGULAR') {
+        premiumWorkedPay += dailyRate * 2; // 200%
+      } else if (holidayType === 'SPECIAL_NON_WORKING' || holidayType === 'LOCAL_HOLIDAY') {
+        premiumWorkedPay += dailyRate * 1.30; // 130%
       }
     }
 
