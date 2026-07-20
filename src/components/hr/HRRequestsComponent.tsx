@@ -343,9 +343,16 @@ export function HRRequestsComponent() {
     return `${COA_ACTION_LABEL[req.actionType] ?? req.actionType} · ${req.dateAffected}`;
   };
 
+  // Stored timestamps use "fake UTC" (PH wall-clock time recorded directly in the
+  // UTC slot), so read UTC accessors — local accessors would shift by the
+  // browser's timezone offset.
   const formatTime = (isoTime: string) => {
     const d = new Date(isoTime);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const h24 = d.getUTCHours();
+    const m = d.getUTCMinutes();
+    const period = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 || 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
   };
 
   return (

@@ -75,11 +75,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { dateAffected, actionType, timeValue, reason } = parsed.data;
 
   // Combine dateAffected + timeValue into a proper DateTime for the @db.Time field.
-  // The employee enters local PHT time (UTC+8), so subtract 8 hours to store as UTC.
+  // Stored timestamps use "fake UTC" (PH wall-clock time recorded directly in the
+  // UTC slot, no real offset math) — the same convention used by buildUtcDate()
+  // in the attendance routes and by the timesheet clock-in endpoint. Applying a
+  // real UTC offset here would desync this value from the timesheet punch it
+  // later gets copied into on approval.
   const baseDate = new Date(dateAffected);
   const [h, m] = timeValue.split(":").map(Number);
   const timeDt = new Date(baseDate);
-  timeDt.setUTCHours((h ?? 0) - 8, m ?? 0, 0, 0);
+  timeDt.setUTCHours(h ?? 0, m ?? 0, 0, 0);
 
   const coaRequest = await prisma.coaRequest.create({
     data: {
