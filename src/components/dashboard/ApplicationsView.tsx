@@ -18,10 +18,17 @@ const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 };
+// Stored timestamps use "fake UTC" (PH wall-clock time recorded directly in the
+// UTC slot), so read UTC accessors — local accessors would shift by the
+// browser's timezone offset.
 const fmtTime = (iso: string) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const h24 = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 };
 
 // ── Types ─────────────────────────────────────────────────────────────
