@@ -527,20 +527,27 @@ export function PayslipEditor() {
       Number(t.rhRdOtHours) * 3.38 * _otHr;
   }, 0);
 
-const liveGross =
-  displayBasicPay +
-  Number(holidayPay) +
-  liveOtTotal +
-  Number(paidLeavePay) +
-  Number(allowance);
+  // Earnings/deductions/net pay are derived from the persisted payslip snapshot,
+  // using the same formula the server applies in PATCH /api/hr/payslips/[id]
+  // (grossPay = basicPay + holidayPay + overtimePay + paidLeavePay + allowance).
+  // This keeps the figures shown here in sync with the payroll coordination list
+  // and the exported PDF, which both read the saved fields. Click "Refresh & Save"
+  // to recompute these from current timesheets, OT requests, and leave requests.
+  const displayOtPay = Number(overtimePay);
 
-  // FIX 2: Safely calculate liveDed without duplicating the holiday late parameters!
+  const liveGross =
+    displayBasicPay +
+    Number(holidayPay) +
+    displayOtPay +
+    Number(paidLeavePay) +
+    Number(allowance);
+
   const liveDed =
     Number(sss) +
     Number(philhealth) +
     Number(pagibig) +
     Number(tax) +
-    displayLateUnder + 
+    displayLateUnder +
     Number(pagibigLoan) +
     Number(sssLoan) +
     Number(cashAdv);
@@ -1495,7 +1502,7 @@ const liveGross =
             {[
               ['Basic Pay', String(parseFloat(displayBasicPay.toFixed(2)))],
               ['Holiday Pay', holidayPay],
-              ['OT Pay', String(parseFloat(liveOtTotal.toFixed(2)))],
+              ['OT Pay', String(parseFloat(displayOtPay.toFixed(2)))],
               ['Paid Leave Pay', paidLeavePay],
               ['Allowance', allowance],
             ].map(([label, val]) => (

@@ -91,7 +91,6 @@ const TYPE_LABEL: Record<RequestType, string> = {
   OVERTIME: 'Overtime',
   COA: 'COA',
 };
-
 const TYPE_COLOR: Record<RequestType, string> = {
   LEAVE: 'bg-blue-100 text-blue-700',
   OVERTIME: 'bg-amber-100 text-amber-700',
@@ -480,7 +479,7 @@ export function HRRequestsComponent() {
                         {TYPE_LABEL[req.type]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell max-w-[220px] truncate">
+                    <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell max-w-55truncate">
                       {getSummary(req)}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground hidden lg:table-cell">
