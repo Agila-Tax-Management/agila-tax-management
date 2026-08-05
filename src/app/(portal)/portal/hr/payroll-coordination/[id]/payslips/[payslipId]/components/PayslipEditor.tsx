@@ -1,25 +1,27 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Loader2,
-  RotateCcw,
+  Play,
   CheckCircle,
-  FileText,
-  User,
-  Calendar,
-  CreditCard,
-  Briefcase,
-  Building2,
-  DollarSign,
+  PauseCircle,
+  RotateCcw,
+  Loader2,
+  Users,
+  CheckCheck,
+  Edit,
+  ChevronRight,
   Banknote,
   ThumbsUp,
   RefreshCw,
-  Info,
   ChevronDown,
+  FilePlus,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
 import { Card } from '@/components/UI/Card';
 import { Badge } from '@/components/UI/Badge';
 import { Button } from '@/components/UI/button';
@@ -34,91 +36,24 @@ type RequestType = 'COA' | 'LEAVE' | 'OVERTIME';
 const COA_ACTION_TYPES = ['TIME_IN', 'LUNCH_START', 'LUNCH_END', 'TIME_OUT'] as const;
 type CoaActionType = (typeof COA_ACTION_TYPES)[number];
 
-interface WorkScheduleDay {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  isWorkingDay: boolean;
-  breakStart: string | null;
-  breakEnd: string | null;
+interface LeaveType {
+  id: number;
+  name: string;
+  isPaid: boolean;
 }
 
-interface ActiveCompensation {
-  baseRate: string;
-  allowanceRate: string;
-  payType: string;
-  rateType: string;
-  frequency: string;
-  calculatedDailyRate: string;
-  calculatedMonthlyRate: string;
-  deductSss: boolean;
-  deductPhilhealth: boolean;
-  deductPagibig: boolean;
-  pagibigType: string;
-}
-
-interface TimesheetRecord {
-  id: string;
-  date: string;
-  status: string;
-  timeIn: string | null;
-  lunchStart: string | null;
-  lunchEnd: string | null;
-  timeOut: string | null;
-  lateMinutes: number;
-  undertimeMinutes: number;
-  regularHours: string;
-  regOtHours: string;
-  rdHours: string;
-  rdOtHours: string;
-  shHours: string;
-  shOtHours: string;
-  shRdHours: string;
-  shRdOtHours: string;
-  rhHours: string;
-  rhOtHours: string;
-  rhRdHours: string;
-  rhRdOtHours: string;
-  dailyGrossPay: string;
-}
-
-interface PayslipDetail {
-  id: string;
-  employeeId: number;
+interface PayslipRow {
+  id: string | number;
   employee: {
     id: number;
     firstName: string;
     lastName: string;
     employeeNo: string | null;
-    employments: {
-      hireDate: string | null;
-      department: { name: string } | null;
-      position: { title: string } | null;
-      contracts: {
-        schedule: {
-          id: string;
-          name: string;
-          timezone: string | null;
-          days: WorkScheduleDay[];
-        } | null;
-        compensations: ActiveCompensation[];
-      }[];
-    }[];
-  };
-  payrollPeriod: {
-    id: number;
-    startDate: string;
-    endDate: string;
-    payoutDate: string;
-    status: PeriodStatus;
-    payrollSchedule: { name: string; frequency: string } | null;
   };
   basicPay: string;
-  holidayPay: string;
-  overtimePay: string;
-  paidLeavePay: string;
   allowance: string;
   grossPay: string;
+  // Deduction breakdown
   sssDeduction: string;
   philhealthDeduction: string;
   pagibigDeduction: string;
@@ -129,14 +64,22 @@ interface PayslipDetail {
   cashAdvanceRepayment: string;
   totalDeductions: string;
   netPay: string;
-  disbursedStatus: string;
-  preparedAt: string | null;
   approvedAt: string | null;
-  acknowledgedAt: string | null;
-  preparedBy: { id: string; name: string } | null;
   approvedBy: { id: string; name: string } | null;
+  acknowledgedAt: string | null;
   acknowledgedBy: { id: string; name: string } | null;
-  hrSetting: { strictOvertimeApproval: boolean; disableLateUndertimeGlobal: boolean } | null;
+  disbursedStatus: string;
+  preparedBy: { id: string; name: string } | null;
+}
+
+interface PeriodDetail {
+  id: number;
+  startDate: string;
+  endDate: string;
+  payoutDate: string;
+  status: PeriodStatus;
+  payrollSchedule: { id: string; name: string; frequency: string } | null;
+  payslips: PayslipRow[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -172,489 +115,270 @@ const fmtDateTime = (d: string) =>
     minute: '2-digit',
   });
 
-const fmtTime = (dt: string | null): string => {
-  if (!dt) return '—';
-  const d = new Date(dt);
-  const h = d.getUTCHours();
-  const m = d.getUTCMinutes();
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const h12 = h % 12 || 12;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-};
+// ─── Component ────────────────────────────────────────────────────
 
-const fmtHours = (h: string | number): string => {
-  const n = Number(h);
-  return n === 0 ? '—' : n.toFixed(2);
-};
-
-function toMin(hhmm: string | null | undefined): number {
-  if (!hhmm) return 0;
-  const parts = hhmm.split(':');
-  if (parts.length !== 2) return 0;
-  const h = Number(parts[0]);
-  const m = Number(parts[1]);
-  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
-}
-
-function computeRowPay(
-  ts: TimesheetRecord,
-  dailyRate: number,
-  payType: string,
-  scheduleDays: WorkScheduleDay[] | undefined,
-  dayOfWeek: number,
-  disableLateUndertime = false
-) {
-  if (disableLateUndertime) return { lateDeduct: 0, undertimeDeduct: 0 };
-  
-  const sd = scheduleDays?.find((d) => d.dayOfWeek === dayOfWeek) ?? null;
-  
-  const schedStart = sd?.startTime ? toMin(sd.startTime) : 9 * 60; // Default 9am
-  const schedEnd = sd?.endTime ? toMin(sd.endTime) : 17 * 60;      // Default 5pm
-  const brkStart = sd?.breakStart ? toMin(sd.breakStart) : null;
-  const brkEnd = sd?.breakEnd ? toMin(sd.breakEnd) : null;
-  
-  const breakMin = (brkStart !== null && brkEnd !== null && brkEnd > brkStart) 
-    ? (brkEnd - brkStart) 
-    : 60;
-    
-  const scheduledWorkMin = Math.max(1, schedEnd - schedStart - breakMin);
-  
-  const lateDeduct = parseFloat(((ts.lateMinutes / scheduledWorkMin) * dailyRate).toFixed(2));
-  const undertimeDeduct = parseFloat(((ts.undertimeMinutes / scheduledWorkMin) * dailyRate).toFixed(2));
-    
-  return { lateDeduct, undertimeDeduct };
-}
-
-const SS_LABEL: Record<string, string> = {
-  PRESENT: 'Present',
-  ABSENT: 'Absent',
-  INCOMPLETE: 'Half Day',
-  PAID_LEAVE: 'Paid Leave',
-  UNPAID_LEAVE: 'Unpaid Leave',
-  DAY_OFF: 'Day Off',
-  REGULAR_HOLIDAY: 'Regular Holiday',
-  SPECIAL_HOLIDAY: 'Special Holiday',
-};
-
-const SS_COLOR: Record<string, string> = {
-  PRESENT: 'text-emerald-600',
-  ABSENT: 'text-red-500',
-  INCOMPLETE: 'text-amber-500',
-  PAID_LEAVE: 'text-blue-500',
-  UNPAID_LEAVE: 'text-orange-500',
-  DAY_OFF: 'text-muted-foreground',
-  REGULAR_HOLIDAY: 'text-purple-600',
-  SPECIAL_HOLIDAY: 'text-violet-500',
-};
-
-const DS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-const PAY_TYPE_LABEL: Record<string, string> = {
-  FIXED_PAY: 'Fixed Pay',
-  VARIABLE_PAY: 'Variable Pay',
-};
-
-const RATE_TYPE_LABEL: Record<string, string> = {
-  DAILY: 'Daily Rate',
-  MONTHLY: 'Monthly Rate',
-};
-
-const FREQ_LABEL: Record<string, string> = {
-  ONCE_A_MONTH: 'Once a Month',
-  TWICE_A_MONTH: 'Twice a Month',
-  WEEKLY: 'Weekly',
-};
-
-function toLocalDateKey(input: Date | string) {
-  const d = new Date(input);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-export function PayslipEditor() {
-  const { id: _periodId, payslipId } = useParams<{ id: string; payslipId: string }>();
+export function PayrollPeriodDetail() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { success, error } = useToast();
+  const { data: session } = authClient.useSession();
 
-  const [payslip, setPayslip] = useState<PayslipDetail | null>(null);
+  const sessionUser = session?.user as { role?: string } | undefined;
+  const isAdmin = sessionUser?.role === 'ADMIN' || sessionUser?.role === 'SUPER_ADMIN';
+
+  const [period, setPeriod] = useState<PeriodDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [acknowledging, setAcknowledging] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showCompModal, setShowCompModal] = useState(false);
-  const [timesheets, setTimesheets] = useState<TimesheetRecord[]>([]);
-  const [timesheetsLoading, setTimesheetsLoading] = useState(false);
-  const [leaveRequests, setLeaveRequests] = useState<{ startDate: string; endDate: string; leaveType: { isPaid: boolean } }[]>([]);
-  const [approving, setApproving] = useState(false);
-  const [markingPaid, setMarkingPaid] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [holidays, setHolidays] = useState<Record<string, string>>({});
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // <-- Added Refresh State
+  const [approvingPayslip, setApprovingPayslip] = useState<string | null>(null);
+  const [payingPayslip, setPayingPayslip] = useState<string | null>(null);
 
-  // Editable fields
-  const [basicPay, setBasicPay] = useState('0');
-  const [holidayPay, setHolidayPay] = useState('0');
-  const [overtimePay, setOvertimePay] = useState('0');
-  const [paidLeavePay, setPaidLeavePay] = useState('0');
-  const [allowance, setAllowance] = useState('0');
-  const [sss, setSss] = useState('0');
-  const [philhealth, setPhilhealth] = useState('0');
-  const [pagibig, setPagibig] = useState('0');
-  const [tax, setTax] = useState('0');
-  const [lateUnder, setLateUnder] = useState('0');
-  const [pagibigLoan, setPagibigLoan] = useState('0');
-  const [sssLoan, setSssLoan] = useState('0');
-  const [cashAdv, setCashAdv] = useState('0');
+  // Revert approval confirmation modal
+  const [revertModalOpen, setRevertModalOpen] = useState(false);
+  const [revertConfirmText, setRevertConfirmText] = useState('');
 
-  const fetchPayslip = useCallback(async () => {
+  // Expanded deduction rows
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Array state for reactivity, strictly using Strings
+  const [selectedPayslips, setSelectedPayslips] = useState<string[]>([]);
+  const [approvingBatch, setApprovingBatch] = useState(false);
+
+  // File-on-behalf modal
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [fileTarget, setFileTarget] = useState<{ employeeId: number; name: string } | null>(null);
+  const [requestType, setRequestType] = useState<RequestType>('COA');
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [filing, setFiling] = useState(false);
+
+  // COA form
+  const [coaDate, setCoaDate] = useState('');
+  const [coaAction, setCoaAction] = useState<CoaActionType>('TIME_IN');
+  const [coaTime, setCoaTime] = useState('');
+  const [coaReason, setCoaReason] = useState('');
+
+  // Leave form
+  const [leaveTypeId, setLeaveTypeId] = useState<number | ''>('');
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveCredits, setLeaveCredits] = useState('1');
+  const [leaveReason, setLeaveReason] = useState('');
+
+  // OT form
+  const [otDate, setOtDate] = useState('');
+  const [otType, setOtType] = useState('REGULAR_OT');
+  const [otFrom, setOtFrom] = useState('');
+  const [otTo, setOtTo] = useState('');
+  const [otHours, setOtHours] = useState('');
+  const [otReason, setOtReason] = useState('');
+
+  const fetchPeriod = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/hr/payslips/${payslipId}`);
-      const json: { data?: PayslipDetail; error?: string } = await res.json();
+      const res = await fetch(`/api/hr/payroll-periods/${id}`);
+      const json: { data?: PeriodDetail; error?: string } = await res.json();
       if (!res.ok || !json.data) {
-        error('Failed to load', json.error ?? 'Could not load payslip');
+        error('Failed to load', json.error ?? 'Could not load period details');
         return;
       }
-      const ps = json.data;
-      setPayslip(ps);
-      setBasicPay(ps.basicPay);
-      setHolidayPay(ps.holidayPay);
-      setOvertimePay(ps.overtimePay);
-      setPaidLeavePay(ps.paidLeavePay);
-      setAllowance(ps.allowance);
-      setSss(ps.sssDeduction);
-      setPhilhealth(ps.philhealthDeduction);
-      setPagibig(ps.pagibigDeduction);
-      setTax(ps.withholdingTax);
-      setLateUnder(ps.lateUndertimeDeduction);
-      setPagibigLoan(ps.pagibigLoan);
-      setSssLoan(ps.sssLoan);
-      setCashAdv(ps.cashAdvanceRepayment);
+      setPeriod(json.data);
+      setSelectedPayslips([]); // Clear array on refresh
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
       setLoading(false);
     }
-  }, [payslipId, error]);
+  }, [id, error]);
 
   useEffect(() => {
-    void fetchPayslip();
-  }, [fetchPayslip]);
+    void fetchPeriod();
+  }, [fetchPeriod]);
 
-  
-
-  const fetchTimesheets = useCallback(async () => {
-    setTimesheetsLoading(true);
+  // ─── Recalculate Handler ───
+  const handleRefreshCalculations = async () => {
+    if (!period) return;
+    setIsRefreshing(true);
     try {
-      const res = await fetch(`/api/hr/payslips/${payslipId}/timesheet`);
-      const json: { data?: TimesheetRecord[]; leaveRequests?: { startDate: string; endDate: string; leaveType: { isPaid: boolean } }[]; error?: string } = await res.json();
-      if (res.ok && json.data) {
-        setTimesheets(json.data);
-        setLeaveRequests(json.leaveRequests ?? []);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setTimesheetsLoading(false);
-    }
-  }, [payslipId]);
-
-  useEffect(() => {
-    void fetchTimesheets();
-  }, [fetchTimesheets]);
-
-  const fetchHolidays = useCallback(async () => {
-    if (!payslip) return;
-    try {
-      const res = await fetch('/api/hr/holidays');
-      const json = await res.json();
-      if (res.ok && json.data) {
-        const hMap: Record<string, string> = {};
-        json.data.forEach((h: any) => {
-          const dateStr = new Date(h.date).toISOString().slice(0, 10);
-          hMap[dateStr] = h.type; 
-        });
-        setHolidays(hMap);
-      }
-    } catch {
-      // gracefully fail
-    }
-  }, [payslip]);
-
-  useEffect(() => {
-    void fetchHolidays();
-  }, [fetchHolidays]);
-
-  // Safe mapping of structure elements to avoid missing relation crashes
-  const periodDays = useMemo(() => {
-    if (!payslip) return [];
-    
-    const tsMap = new Map(timesheets.map((t) => [toLocalDateKey(t.date), t]));
-    const scheduleDays = payslip?.employee?.employments?.[0]?.contracts?.[0]?.schedule?.days ?? [];
-    const workingDaySet = new Set(
-      scheduleDays.filter((d) => d.isWorkingDay).map((d) => d.dayOfWeek)
-    );
-
-    // Build a set of leave-covered date keys for days without a timesheet punch
-    const leaveDateMap = new Map<string, 'PAID_LEAVE' | 'UNPAID_LEAVE'>();
-    for (const lr of leaveRequests) {
-      const leaveStart = new Date(`${lr.startDate.slice(0, 10)}T00:00:00`);
-      const leaveEnd   = new Date(`${lr.endDate.slice(0, 10)}T00:00:00`);
-      const leaveStatus = lr.leaveType.isPaid ? 'PAID_LEAVE' : 'UNPAID_LEAVE';
-      const c = new Date(leaveStart);
-      while (c <= leaveEnd) {
-        leaveDateMap.set(toLocalDateKey(c), leaveStatus);
-        c.setDate(c.getDate() + 1);
-      }
-    }
-    
-    const days: any[] = [];
-    const start = new Date(`${payslip.payrollPeriod.startDate.slice(0, 10)}T00:00:00`);
-    const end = new Date(`${payslip.payrollPeriod.endDate.slice(0, 10)}T00:00:00`);
-    const cursor = new Date(start);
-
-    while (cursor <= end) {
-      const key = toLocalDateKey(cursor);
-      const ts = tsMap.get(key) ?? null;
-
-      // Use ts.status if present, else check leave records, else absent/day-off
-      let derivedStatus: string;
-      if (ts) {
-        derivedStatus = ts.status;
-      } else if (leaveDateMap.has(key)) {
-        derivedStatus = leaveDateMap.get(key)!;
-      } else {
-        derivedStatus = workingDaySet.has(cursor.getDay()) ? 'ABSENT' : 'DAY_OFF';
-      }
-
-      const holidayType = holidays[key];
-      const isLeaveStatus = derivedStatus === 'PAID_LEAVE' || derivedStatus === 'UNPAID_LEAVE';
-      if (holidayType && !isLeaveStatus) {
-        derivedStatus = holidayType === 'REGULAR' ? 'REGULAR_HOLIDAY' : 'SPECIAL_HOLIDAY';
-      }
-
-      days.push({
-        date: new Date(cursor),
-        ts,
-        derivedStatus,
+      const res = await fetch(`/api/hr/payroll-periods/${period.id}/recalculate`, {
+        method: 'POST',
       });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return days;
-  }, [payslip, timesheets, holidays, leaveRequests]);
-
-   const displayLateUnder = Number(lateUnder);
-
-  const displayBasicPay = Number(basicPay);
-  const displayOtPay = Number(overtimePay);
-
-  const liveGross = Number(payslip?.grossPay ?? 0);
-  const liveDed = Number(payslip?.totalDeductions ?? 0);
-  const liveNet = Number(payslip?.netPay ?? 0);
-
-  const canEdit =
-    payslip !== null &&
-    payslip.approvedAt === null &&
-    (payslip.payrollPeriod.status === 'DRAFT' || payslip.payrollPeriod.status === 'PROCESSING');
-
-  const canPDF = payslip !== null;
-
-  const handleAcknowledge = async () => {
-    if (!payslip) return;
-    setAcknowledging(true);
-    try {
-      const res = await fetch(`/api/hr/payslips/${payslip.id}/acknowledge`, { method: 'POST' });
       const json: { error?: string } = await res.json();
       if (!res.ok) {
-        error('Failed', json.error ?? 'Could not acknowledge payslip');
+        error('Failed to recalculate', json.error ?? 'Could not recalculate payroll period');
         return;
       }
-      success('Acknowledged', 'Payslip has been acknowledged on behalf of the employee.');
-      await fetchPayslip();
+      success('Recalculated Successfully', 'All payslips and deductions have been refreshed.');
+      await fetchPeriod(); // Re-fetch the newly calculated data
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
-      setAcknowledging(false);
+      setIsRefreshing(false);
     }
   };
 
-  const handleRevert = async () => {
-    if (!payslip) return;
-    const res = await fetch(`/api/hr/payroll-periods/${payslip.payrollPeriod.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'PROCESSING' }),
-    });
-    const json: { error?: string } = await res.json();
-    if (!res.ok) {
-      error('Failed', json.error ?? 'Could not revert period');
-      return;
-    }
-    success('Reverted', 'Payroll period is now back in Processing.');
-    await fetchPayslip();
-  };
-
-  const handleViewPDF = async () => {
-    if (!payslip) return;
-    setIsPrinting(true);
+  const updateStatus = async (newStatus: PeriodStatus) => {
+    if (!period) return;
+    setUpdatingStatus(true);
     try {
-      const [{ pdf }, { PayslipPDF }] = await Promise.all([
-        import('@react-pdf/renderer'),
-        import('@/components/hr/PayslipPDF'),
-      ]);
-      const ReactInstance = (await import('react')).default;
-      const emp = payslip.employee.employments[0];
-      const pdfPayslip = {
-        id: payslip.id,
-        employee: {
-          firstName: payslip.employee.firstName,
-          lastName: payslip.employee.lastName,
-          employeeNo: payslip.employee.employeeNo,
-          position: emp?.position?.title ? { title: emp.position.title } : null,
-          department: emp?.department ?? null,
-        },
-        payrollPeriod: payslip.payrollPeriod,
-        basicPay: payslip.basicPay,
-        holidayPay: payslip.holidayPay,
-        overtimePay: payslip.overtimePay,
-        paidLeavePay: payslip.paidLeavePay,
-        allowance: payslip.allowance,
-        grossPay: payslip.grossPay,
-        sssDeduction: payslip.sssDeduction,
-        philhealthDeduction: payslip.philhealthDeduction,
-        pagibigDeduction: payslip.pagibigDeduction,
-        withholdingTax: payslip.withholdingTax,
-        lateUndertimeDeduction: payslip.lateUndertimeDeduction,
-        pagibigLoan: payslip.pagibigLoan,
-        sssLoan: payslip.sssLoan,
-        cashAdvanceRepayment: payslip.cashAdvanceRepayment,
-        totalDeductions: payslip.totalDeductions,
-        netPay: payslip.netPay,
-        preparedAt: payslip.preparedAt,
-        approvedAt: payslip.approvedAt,
-        acknowledgedAt: payslip.acknowledgedAt,
-        preparedBy: payslip.preparedBy,
-        approvedBy: payslip.approvedBy,
-        acknowledgedBy: payslip.acknowledgedBy,
-      };
-      const el = ReactInstance.createElement(PayslipPDF, { payslip: pdfPayslip }) as Parameters<typeof pdf>[0];
-      const blob = await pdf(el).toBlob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const res = await fetch(`/api/hr/payroll-periods/${period.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const json: { error?: string } = await res.json();
+      if (!res.ok) {
+        error('Failed to update', json.error ?? 'An error occurred');
+        return;
+      }
+      success('Status updated', `Payroll period moved to ${STATUS_LABEL[newStatus]}.`);
+      await fetchPeriod();
     } catch {
-      error('PDF failed', 'Could not generate the payslip PDF. Please try again.');
+      error('Network error', 'Could not reach the server');
     } finally {
-      setIsPrinting(false);
+      setUpdatingStatus(false);
     }
   };
 
-  const handleApprove = async () => {
-    if (!payslip) return;
-    setApproving(true);
+  const approvePayslip = async (payslipId: string | number) => {
+    const safeId = String(payslipId);
+    setApprovingPayslip(safeId);
     try {
-      const res = await fetch(`/api/hr/payslips/${payslip.id}/approve`, { method: 'POST' });
+      const res = await fetch(`/api/hr/payslips/${safeId}/approve`, { method: 'POST' });
       const json: { error?: string } = await res.json();
       if (!res.ok) {
         error('Failed to approve', json.error ?? 'Could not approve payslip');
         return;
       }
       success('Approved', 'Payslip approved — employee can now see and acknowledge it.');
-      await fetchPayslip();
+      await fetchPeriod();
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
-      setApproving(false);
+      setApprovingPayslip(null);
     }
   };
 
-  const handleRefreshAndSave = async () => {
-    if (!payslip) return;
-    setRefreshing(true);
+  const handleBatchApprove = async () => {
+    if (selectedPayslips.length === 0) return;
+    setApprovingBatch(true);
     try {
-      const recalcRes = await fetch(`/api/hr/payslips/${payslipId}/recalculate`, { method: 'POST' });
-      const recalcJson = await recalcRes.json();
-      if (!recalcRes.ok) {
-        error('Recalculation failed', recalcJson.error ?? 'Server error during recalculation');
-        return;
-      }
-      const { timesheets: freshTs, suggestions, meta } = recalcJson.data!;
-
-      const patchRes = await fetch(`/api/hr/payslips/${payslip.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          basicPay: suggestions.basicPay,
-          holidayPay: suggestions.holidayPay,
-          allowance: suggestions.allowance,
-          overtimePay: suggestions.overtimePay,
-          paidLeavePay: suggestions.paidLeavePay,
-          lateUndertimeDeduction: suggestions.lateUndertimeDeduction,
-          sssDeduction: suggestions.sssDeduction,
-          philhealthDeduction: suggestions.philhealthDeduction,
-          pagibigDeduction: suggestions.pagibigDeduction,
-        }),
-      });
-      const patchJson = await patchRes.json();
-      if (!patchRes.ok) {
-        error('Save failed', patchJson.error ?? 'Could not save refreshed values');
-        return;
-      }
-
-      await fetchPayslip();
-      setTimesheets(freshTs);
-
-      const parts: string[] = [];
-      if (meta.recalcCount > 0)
-        parts.push(`${meta.recalcCount} timesheet row${meta.recalcCount > 1 ? 's' : ''} recomputed`);
-      if (meta.otRequestCount > 0)
-        parts.push(`${meta.otRequestCount} OT request${meta.otRequestCount > 1 ? 's' : ''} applied`);
-      if (meta.leaveRequestCount > 0)
-        parts.push(`${meta.leaveRequestCount} leave request${meta.leaveRequestCount > 1 ? 's' : ''} applied`);
-      if (parts.length === 0) parts.push('all values are up to date');
-
-      success('Payslip refreshed & saved', parts.join(' · '));
+      await Promise.all(
+        selectedPayslips.map((psId) =>
+          fetch(`/api/hr/payslips/${psId}/approve`, { method: 'POST' })
+        )
+      );
+      success('Batch Approved', `Successfully approved ${selectedPayslips.length} payslips.`);
+      await fetchPeriod();
     } catch {
-      error('Network error', 'Could not reach the server');
+      error('Batch Approval Failed', 'An error occurred while approving payslips. Please try again.');
     } finally {
-      setRefreshing(false);
+      setApprovingBatch(false);
     }
   };
 
-  const handleMarkPaid = async () => {
-    if (!payslip) return;
-    setMarkingPaid(true);
+  const markPayslipPaid = async (payslipId: string | number) => {
+    const safeId = String(payslipId);
+    setPayingPayslip(safeId);
     try {
-      const res = await fetch(`/api/hr/payslips/${payslip.id}/paid`, { method: 'POST' });
-      const json = await res.json();
+      const res = await fetch(`/api/hr/payslips/${safeId}/paid`, { method: 'POST' });
+      const json: { error?: string } = await res.json();
       if (!res.ok) {
         error('Failed to mark paid', json.error ?? 'Could not mark payslip as paid');
         return;
       }
       success('Marked as Paid', 'Payslip disbursement recorded.');
-      await fetchPayslip();
+      await fetchPeriod();
     } catch {
       error('Network error', 'Could not reach the server');
     } finally {
-      setMarkingPaid(false);
+      setPayingPayslip(null);
     }
+  };
+
+  const submitFileRequest = async () => {
+    if (!fileTarget) return;
+    setFiling(true);
+    try {
+      let url = '';
+      let body: Record<string, unknown> = {};
+
+      if (requestType === 'COA') {
+        url = `/api/hr/employees/${fileTarget.employeeId}/file-coa`;
+        body = { dateAffected: coaDate, actionType: coaAction, timeValue: coaTime, reason: coaReason };
+      } else if (requestType === 'LEAVE') {
+        url = `/api/hr/employees/${fileTarget.employeeId}/file-leave`;
+        body = {
+          leaveTypeId: Number(leaveTypeId),
+          startDate: leaveStart,
+          endDate: leaveEnd,
+          creditUsed: parseFloat(leaveCredits),
+          reason: leaveReason,
+        };
+      } else {
+        url = `/api/hr/employees/${fileTarget.employeeId}/file-overtime`;
+        body = { date: otDate, type: otType, timeFrom: otFrom, timeTo: otTo, hours: parseFloat(otHours), reason: otReason };
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json: { error?: string } = await res.json();
+      if (!res.ok) {
+        error('Failed to file', json.error ?? 'An error occurred');
+        return;
+      }
+      success('Request filed', `${requestType} request submitted for ${fileTarget.name}.`);
+      setFileModalOpen(false);
+    } catch {
+      error('Network error', 'Could not reach the server');
+    } finally {
+      setFiling(false);
+    }
+  };
+
+  const toggleRow = (payslipId: string | number) => {
+    const key = String(payslipId);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const openFileModal = (employeeId: number, name: string) => {
+    setFileTarget({ employeeId, name });
+    setRequestType('COA');
+    setCoaDate(''); setCoaAction('TIME_IN'); setCoaTime(''); setCoaReason('');
+    setLeaveTypeId(''); setLeaveStart(''); setLeaveEnd(''); setLeaveCredits('1'); setLeaveReason('');
+    setOtDate(''); setOtType('REGULAR_OT'); setOtFrom(''); setOtTo(''); setOtHours(''); setOtReason('');
+    if (leaveTypes.length === 0) {
+      void (async () => {
+        try {
+          const res = await fetch('/api/hr/leave-types');
+          const json: { data?: LeaveType[] } = await res.json();
+          if (res.ok && json.data) setLeaveTypes(json.data);
+        } catch { /* silent */ }
+      })();
+    }
+    setFileModalOpen(true);
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 gap-2 text-muted-foreground">
         <Loader2 size={20} className="animate-spin" />
-        <span className="text-sm">Loading payslip…</span>
+        <span className="text-sm">Loading payroll period…</span>
       </div>
     );
   }
 
-  if (!payslip) {
+  if (!period) {
     return (
       <div className="text-center py-20 text-muted-foreground">
-        <p className="text-sm">Payslip not found.</p>
+        <p className="text-sm">Payroll period not found.</p>
         <Button variant="outline" className="mt-4" onClick={() => router.back()}>
           Go Back
         </Button>
@@ -662,37 +386,48 @@ export function PayslipEditor() {
     );
   }
 
-  // ─── Hoisted Variables ──────────────────────────────────────────
-  const activeEmp = payslip?.employee?.employments?.[0] ?? null;
-  const activeCt = activeEmp?.contracts?.[0] ?? null;
-  const hireDate = activeEmp?.hireDate ?? null;
-  const activeSchedule = activeCt?.schedule ?? null;
-  const activeComp = activeCt?.compensations?.[0] ?? null;
-  const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
-  const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
-  // ────────────────────────────────────────────────────────────────
+  const acknowledged = period.payslips.filter((ps) => ps.acknowledgedAt !== null).length;
+  const approved = period.payslips.filter((ps) => ps.approvedAt !== null).length;
+  const total = period.payslips.length;
+  const allAcknowledged = total > 0 && acknowledged === total;
+  const ackPercent = total > 0 ? Math.round((acknowledged / total) * 100) : 0;
+  const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0;
 
-  const lateUnderLabel =
-    tablePayType === 'VARIABLE_PAY' ? 'Late / Undertime (reflected in Basic Pay)' : 'Late / Undertime';
+  const grossTotal = period.payslips.reduce((s, ps) => s + Number(ps.grossPay || 0), 0);
+  
+  // Pure display total — sums each payslip's own persisted totalDeductions
+  // rather than re-deriving it here.
+  const dedTotal = period.payslips.reduce((s, ps) => s + Number(ps.totalDeductions || 0), 0);
 
-  const deductionGridItems = [
-    { label: 'SSS', value: sss },
-    { label: 'PhilHealth', value: philhealth },
-    { label: 'Pag-IBIG', value: pagibig },
-    { label: 'Withholding Tax', value: tax },
-    { label: lateUnderLabel, value: displayLateUnder },
-    { label: 'SSS Loan', value: sssLoan },
-    { label: 'Pag-IBIG Loan', value: pagibigLoan },
-    { label: 'Cash Advance', value: cashAdv },
-  ].filter((r) => {
-    const whitelist = ['SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding Tax', lateUnderLabel];
-    if (whitelist.includes(r.label)) return true;
-    return (Number(r.value) || 0) !== 0;
-  });
+  // Net Pay on this list mirrors Gross Pay — Deductions is shown separately,
+  // for display only, and is not subtracted here.
+  const netTotal = grossTotal;
+
+  const preparedBy = period.payslips[0]?.preparedBy ?? null;
+  const approvablePayslips = period.payslips.filter((ps) => !ps.approvedAt);
+  const isAllApprovableSelected =
+    approvablePayslips.length > 0 && selectedPayslips.length === approvablePayslips.length;
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedPayslips(approvablePayslips.map((ps) => String(ps.id)));
+    } else {
+      setSelectedPayslips([]);
+    }
+  };
+
+  const handleSelect = (id: string | number, checked: boolean) => {
+    const safeId = String(id);
+    if (checked) {
+      setSelectedPayslips((prev) => [...prev, safeId]);
+    } else {
+      setSelectedPayslips((prev) => prev.filter((x) => x !== safeId));
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
+      {/* ── Back + Title ── */}
       <div className="flex items-start gap-3">
         <button
           onClick={() => router.back()}
@@ -702,857 +437,745 @@ export function PayslipEditor() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-black text-foreground">
-            {payslip.employee.firstName} {payslip.employee.lastName}
+            {period.payrollSchedule?.name ?? 'Payroll Period'}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {payslip.payrollPeriod.payrollSchedule?.name ?? 'Payroll Period'}
-            &nbsp;·&nbsp;
-            {fmtDate(payslip.payrollPeriod.startDate)} – {fmtDate(payslip.payrollPeriod.endDate)}
-            &nbsp;·&nbsp;Payout: {fmtDate(payslip.payrollPeriod.payoutDate)}
+            {fmtDate(period.startDate)} – {fmtDate(period.endDate)}
+            &nbsp;·&nbsp;Payout: {fmtDate(period.payoutDate)}
+            {preparedBy && (
+              <>
+                &nbsp;·&nbsp;Prepared by: <span className="font-medium text-foreground">{preparedBy.name}</span>
+              </>
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0 mt-1">
-          <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]}>
-            {STATUS_LABEL[payslip.payrollPeriod.status]}
-          </Badge>
-        </div>
+        <Badge variant={STATUS_VARIANT[period.status]} className="shrink-0 mt-1">
+          {STATUS_LABEL[period.status]}
+        </Badge>
       </div>
 
-      {/* ── Employee Information ── */}
-      <Card className="p-5">
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-          <Briefcase size={15} className="text-muted-foreground" />
-          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
-            Employee Information
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-              Personal
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Gross Pay', value: fmt(grossTotal), color: 'text-emerald-600' },
+          { label: 'Net Pay', value: fmt(netTotal), color: 'text-blue-600' },
+          { label: 'Deductions', value: fmt(dedTotal), color: 'text-red-500' },
+          { label: 'Employees', value: String(total), color: 'text-foreground' },
+        ].map((s) => (
+          <Card key={s.label} className="p-4">
+            <p className={`text-lg font-black ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-muted-foreground uppercase font-bold mt-1">
+              {s.label}
             </p>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Name</p>
-              <p className="font-semibold text-foreground">
-                {payslip.employee.firstName} {payslip.employee.lastName}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Employee No.</p>
-              <p className="font-semibold text-foreground">
-                {payslip.employee.employeeNo ?? '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Hire Date</p>
-              <p className="font-semibold text-foreground">
-                {hireDate ? fmtDate(hireDate) : '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Position</p>
-              <p className="font-semibold text-foreground">
-                {activeEmp?.position?.title ?? '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Department</p>
-              <p className="font-semibold text-foreground">
-                {activeEmp?.department?.name ?? '—'}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-              Payroll
-            </p>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Agreed Salary Rate</p>
-              <p className="font-semibold text-foreground">
-                {activeComp ? fmt(Number(activeComp.baseRate)) : '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Payslip Status</p>
-              <Badge variant={STATUS_VARIANT[payslip.payrollPeriod.status]} className="mt-0.5">
-                {STATUS_LABEL[payslip.payrollPeriod.status]}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Pay Type</p>
-              <p className="font-semibold text-foreground">
-                {activeComp ? PAY_TYPE_LABEL[activeComp.payType] ?? activeComp.payType : '—'}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-              Approval
-            </p>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Work Schedule</p>
-              <button
-                onClick={() => setShowScheduleModal(true)}
-                className="text-blue-600 underline text-sm font-semibold hover:text-blue-700"
-              >
-                {activeSchedule ? activeSchedule.name : 'View'}
-              </button>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Compensation</p>
-              <button
-                onClick={() => setShowCompModal(true)}
-                className="text-blue-600 underline text-sm font-semibold hover:text-blue-700"
-              >
-                View
-              </button>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Approved by</p>
-              <p className="font-semibold text-foreground">
-                {payslip.approvedBy?.name ?? '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Acknowledged by</p>
-              <p className="font-semibold text-foreground">
-                {payslip.acknowledgedBy?.name ?? '—'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </Card>
+          </Card>
+        ))}
+      </div>
 
-      <Modal
-        isOpen={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-        title="Work Schedule"
-        size="lg"
-      >
-        {activeSchedule ? (
-          <div className="p-5 space-y-4">
+      {/* ── Acknowledgment Progress ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <Building2 size={14} className="text-muted-foreground" />
-              <p className="font-bold text-foreground">{activeSchedule.name}</p>
-              {activeSchedule.timezone && (
-                <span className="text-xs text-muted-foreground">
-                  ({activeSchedule.timezone})
-                </span>
-              )}
+              <ThumbsUp size={15} className="text-muted-foreground" />
+              <span className="text-sm font-bold text-foreground">Approval Progress</span>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border">
-                    {['Day', 'Start', 'End', 'Break Start', 'Break End', 'Working'].map((h) => (
-                      <th
-                        key={h}
-                        className="px-3 py-2 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {activeSchedule.days.map((day) => (
-                    <tr key={day.dayOfWeek} className={day.isWorkingDay ? '' : 'opacity-50'}>
-                      <td className="px-3 py-2 font-semibold text-foreground">
-                        {DOW[day.dayOfWeek] ?? day.dayOfWeek}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {day.isWorkingDay ? day.startTime : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {day.isWorkingDay ? day.endTime : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {day.breakStart ?? '—'}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {day.breakEnd ?? '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={
-                            day.isWorkingDay
-                              ? 'text-emerald-600 font-semibold'
-                              : 'text-muted-foreground'
-                          }
-                        >
-                          {day.isWorkingDay ? 'Yes' : 'Rest'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <span className="text-sm font-bold text-foreground">
+              {approved}/{total}
+            </span>
           </div>
-        ) : (
-          <p className="p-5 text-sm text-muted-foreground">No work schedule assigned.</p>
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={showCompModal}
-        onClose={() => setShowCompModal(false)}
-        title="Compensation Details"
-        size="md"
-      >
-        {activeComp ? (
-          <div className="p-5 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign size={14} className="text-muted-foreground" />
-              <p className="text-sm font-bold text-foreground">Active Compensation</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                ['Base Rate', fmt(Number(activeComp.baseRate))],
-                ['Allowance Rate', fmt(Number(activeComp.allowanceRate))],
-                ['Pay Type', PAY_TYPE_LABEL[activeComp.payType] ?? activeComp.payType],
-                ['Rate Type', RATE_TYPE_LABEL[activeComp.rateType] ?? activeComp.rateType],
-                ['Frequency', FREQ_LABEL[activeComp.frequency] ?? activeComp.frequency],
-                ['Daily Rate', fmt(Number(activeComp.calculatedDailyRate))],
-                ['Monthly Rate', fmt(Number(activeComp.calculatedMonthlyRate))],
-              ].map(([label, value]) => (
-                <div key={label} className="p-3 bg-muted/40 rounded-lg">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                    {label}
-                  </p>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
-                </div>
-              ))}
-            </div>
+          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500 bg-blue-500"
+              style={{ width: `${approvedPercent}%` }}
+            />
           </div>
-        ) : (
-          <p className="p-5 text-sm text-muted-foreground">
-            No active compensation record found.
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {approved === total && total > 0
+              ? 'All payslips approved.'
+              : `${total - approved} payslip${total - approved !== 1 ? 's' : ''} pending approval.`}
           </p>
-        )}
-      </Modal>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <CheckCheck size={16} className="text-muted-foreground" />
+              <span className="text-sm font-bold text-foreground">Employee Acknowledgment</span>
+            </div>
+            <span className="text-sm font-bold text-foreground">
+              {acknowledged}/{total}
+            </span>
+          </div>
+          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500 bg-emerald-500"
+              style={{ width: `${ackPercent}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {allAcknowledged
+              ? 'All employees have acknowledged their payslips.'
+              : `${total - acknowledged} employee${total - acknowledged !== 1 ? 's have' : ' has'} not yet acknowledged.`}
+          </p>
+        </Card>
+      </div>
 
-      {/* ── Daily Breakdown ── */}
-      <Card className="overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center gap-2">
-          <Calendar size={15} className="text-muted-foreground" />
-          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
-            Daily Breakdown
-          </h2>
-          {timesheetsLoading && (
-            <Loader2 size={14} className="animate-spin text-muted-foreground ml-1" />
+      {/* ── Status Actions ── */}
+      {period.status !== 'CLOSED' && (
+        <div className="flex flex-wrap items-center gap-2">
+          {period.status === 'DRAFT' && (
+            <Button
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={updatingStatus || isRefreshing}
+              onClick={() => {
+                void updateStatus('PROCESSING');
+              }}
+            >
+              {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
+              Start Processing
+            </Button>
           )}
-        </div>
-        {(payslip.hrSetting?.disableLateUndertimeGlobal ||
-          payslip.hrSetting?.strictOvertimeApproval) && (
-          <div className="px-4 py-3 border-b border-border space-y-2">
-            {payslip.hrSetting.disableLateUndertimeGlobal && (
-              <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
-                <Info size={13} className="mt-0.5 shrink-0" />
-                <span>
-                  <strong>Late &amp; undertime deductions are disabled</strong> for this company.
-                  Late/undertime minutes are not deducted from pay. Click <em>Refresh &amp; Save</em>{' '}
-                  to apply this to any existing rows.
-                </span>
-              </div>
-            )}
-            {payslip.hrSetting.strictOvertimeApproval && (
-              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-                <Info size={13} className="mt-0.5 shrink-0" />
-                <span>
-                  <strong>Strict overtime approval is enabled.</strong> Only approved overtime
-                  requests count toward OT pay — excess punch hours are not automatically credited.
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs whitespace-nowrap">
-            <thead>
-              <tr className="bg-muted/50 border-b border-border">
-                {[
-                  'Date',
-                  'Day',
-                  'Time In',
-                  'Lunch Start',
-                  'Lunch End',
-                  'Time Out',
-                  'Status',
-                  'Reg Pay',
-                  'Reg OT',
-                  'RDOT',
-                  'RDOT Excess',
-                  'SH',
-                  'SH OT',
-                  'SH RD',
-                  'SH RD OT',
-                  'RH',
-                  'RH OT',
-                  'RH RD',
-                  'RH RD OT',
-                  'OT Pay',
-                  'Late',
-                  'Under',
-                  'Gross',
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-2 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider text-[9px]"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {periodDays.map(({ date, ts, derivedStatus }) => {
-                if (!ts) {
-                  const noTsLabel = SS_LABEL[derivedStatus] ?? derivedStatus;
-                  const noTsColor = SS_COLOR[derivedStatus] ?? 'text-muted-foreground';
-                  return (
-                    <tr
-                      key={toLocalDateKey(date)}
-                      className={`hover:bg-muted/30 ${
-                        derivedStatus === 'DAY_OFF' ? 'opacity-40' : 'opacity-60'
-                      }`}
-                    >
-                      <td className="px-2 py-2 font-medium">
-                        {date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">{DS[date.getDay()]}</td>
-                      <td className="px-2 py-2">—</td>
-                      <td className="px-2 py-2">—</td>
-                      <td className="px-2 py-2">—</td>
-                      <td className="px-2 py-2">—</td>
-                      <td className={`px-2 py-2 font-semibold ${noTsColor}`}>{noTsLabel}</td>
-                      <td className="px-2 py-2 text-right">
-                        {derivedStatus === 'PAID_LEAVE' ? fmt(tableDailyRate) : '—'}
-                      </td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">
-                        {derivedStatus === 'REGULAR_HOLIDAY' && tablePayType !== 'FIXED_PAY' ? fmt(tableDailyRate) : '—'}
-                      </td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right">—</td>
-                      <td className="px-2 py-2 text-right text-red-500">—</td>
-                      <td className="px-2 py-2 text-right text-muted-foreground">—</td>
-                      <td className="px-2 py-2 text-right font-medium">
-                        {(derivedStatus === 'REGULAR_HOLIDAY' && tablePayType !== 'FIXED_PAY') || derivedStatus === 'PAID_LEAVE' ? fmt(tableDailyRate) : '—'}
-                      </td>
-                    </tr>
-                  );
-                }
-                
-                const { lateDeduct, undertimeDeduct } = computeRowPay(
-                  ts,
-                  tableDailyRate,
-                  tablePayType,
-                  activeSchedule?.days,
-                  date.getDay(),
-                  false
-                );
+          {period.status === 'PROCESSING' && (
+            <>
+              <Button
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={updatingStatus || isRefreshing}
+                onClick={() => {
+                  void updateStatus('APPROVED');
+                }}
+              >
+                {updatingStatus ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={15} />
+                )}
+                Approve All
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={updatingStatus || isRefreshing}
+                onClick={() => {
+                  void updateStatus('DRAFT');
+                }}
+              >
+                <PauseCircle size={15} /> Back to Draft
+              </Button>
+            </>
+          )}
+          
+          {/* ── RECALCULATE BUTTON ── */}
+          {isAdmin && (period.status === 'DRAFT' || period.status === 'PROCESSING') && (
+            <Button
+              variant="outline"
+              className="gap-2 text-violet-600 border-violet-200 hover:bg-violet-50 hover:border-violet-300 ml-auto"
+              disabled={updatingStatus || isRefreshing}
+              onClick={() => { void handleRefreshCalculations(); }}
+              title="Refresh timesheets and recalculate all payslips"
+            >
+              {isRefreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Recalculate Calculations
+            </Button>
+          )}
 
-                const statusLabel = SS_LABEL[derivedStatus] ?? SS_LABEL[ts.status] ?? ts.status;
-                const statusColor = SS_COLOR[derivedStatus] ?? SS_COLOR[ts.status] ?? 'text-muted-foreground';
-
-                return (
-                  <tr
-                    key={String(ts.id)}
-                    className="border-b border-border hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="px-2 py-2 font-medium">
-                      {date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                    </td>
-                    <td className="px-2 py-2 text-muted-foreground">{DS[date.getDay()]}</td>
-                    <td className="px-2 py-2">{fmtTime(ts.timeIn)}</td>
-                    <td className="px-2 py-2">{fmtTime(ts.lunchStart)}</td>
-                    <td className="px-2 py-2">{fmtTime(ts.lunchEnd)}</td>
-                    <td className="px-2 py-2">{fmtTime(ts.timeOut)}</td>
-                    <td className={`px-2 py-2 font-semibold ${statusColor}`}>
-                      <span>{statusLabel}</span>
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {(tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(ts.rdHours) > 0) ? '—' : fmt(tableDailyRate)}
-                    </td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.regOtHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rdHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rdOtHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.shHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.shOtHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.shRdHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.shRdOtHours)}</td>
-                    <td className="px-2 py-2 text-right">
-                      {tablePayType === 'FIXED_PAY' && derivedStatus === 'REGULAR_HOLIDAY' ? fmt(tableDailyRate) : fmtHours(ts.rhHours)}
-                    </td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rhOtHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdHours)}</td>
-                    <td className="px-2 py-2 text-right">{fmtHours(ts.rhRdOtHours)}</td>
-                    <td className="px-2 py-2 text-right text-blue-600 font-semibold">
-                      {(() => {
-                        const hr = tableDailyRate / 8;
-                        const isRH = derivedStatus === 'REGULAR_HOLIDAY';
-                        const pay =
-                          (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr) +
-                          Number(ts.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr +
-                          Number(ts.rdOtHours) * 1.69 * hr +
-                          Number(ts.shOtHours) * 1.69 * hr +
-                          Number(ts.shRdOtHours) * 1.95 * hr +
-                          (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr +
-                          Number(ts.rhRdOtHours) * 3.38 * hr;
-                        return pay > 0 ? fmt(parseFloat(pay.toFixed(2))) : '—';
-                      })()}
-                    </td>
-                    <td className="px-2 py-2 text-right text-red-500">
-                      {lateDeduct > 0 ? `-${fmt(lateDeduct)}` : '—'}
-                    </td>
-                    <td className="px-2 py-2 text-right text-amber-500">
-                      {undertimeDeduct > 0 ? `-${fmt(undertimeDeduct)}` : '—'}
-                    </td>
-                    <td className="px-2 py-2 text-right font-bold text-emerald-600">
-                      {(() => {
-                        const hr2 = tableDailyRate / 8;
-                        const isRH = derivedStatus === 'REGULAR_HOLIDAY';
-                        const isSH = derivedStatus === 'SPECIAL_HOLIDAY';
-                        
-                        const rowOtPay =
-                          (isRH ? 0 : Number(ts.regOtHours) * 1.25 * hr2) +
-                          Number(ts.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr2 +
-                          Number(ts.rdOtHours) * 1.69 * hr2 +
-                          Number(ts.shOtHours) * 1.69 * hr2 +
-                          Number(ts.shRdOtHours) * 1.95 * hr2 +
-                          (Number(ts.rhOtHours) + (isRH ? Number(ts.regOtHours) : 0)) * 2.60 * hr2 +
-                          Number(ts.rhRdOtHours) * 3.38 * hr2;
-                        
-                        // FIX 4: Correct row Gross computation for Fixed vs Variable Pay metrics
-                        // Rest day (rdHours > 0): basePay = 0 — gross is RDOT pay only (PH law)
-                        // Fixed pay is exempt — salary is always the agreed amount
-                        const isRD = tablePayType !== 'FIXED_PAY' && Number(ts.rdHours) > 0;
-                        let basePay = 0;
-                        if (isRD) {
-                          basePay = 0;
-                        } else if (isRH) {
-                          basePay =
-                            tablePayType === 'FIXED_PAY'
-                              ? tableDailyRate
-                              : Number(ts.dailyGrossPay) > 0
-                                ? Number(ts.dailyGrossPay)
-                                : tableDailyRate * 2;
-                        } else if (isSH) {
-                          basePay = Number(ts.dailyGrossPay) > 0 ? Number(ts.dailyGrossPay) : tableDailyRate * 1.30;
-                        } else {
-                          // Regular working day: gross daily rate, no deductions in table
-                          basePay = tableDailyRate;
-                        }
-                        
-                        const rowGross = basePay + rowOtPay;
-                        return rowGross > 0 ? fmt(parseFloat(rowGross.toFixed(2))) : '—';
-                      })()}
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr className="bg-muted/50 border-t-2 border-border font-bold">
-                <td className="px-2 py-2 text-xs font-bold" colSpan={7}>
-                  TOTALS
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {(() => {
-                    const total = timesheets.reduce((s, t) => {
-                      const amount = (tablePayType === 'FIXED_PAY' && t.status === 'REGULAR_HOLIDAY') || (tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0) ? 0 : tableDailyRate;
-                      return s + amount;
-                    }, 0);
-                    return total > 0 ? fmt(total) : '—';
-                  })()}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
-                    t && ds !== 'REGULAR_HOLIDAY' ? s + Number(t.regOtHours) : s, 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rdOtHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.shHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.shOtHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.shRdHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.shRdOtHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {(() => {
-                    const total = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
-                      if (tablePayType === 'FIXED_PAY' && ds === 'REGULAR_HOLIDAY' && t) {
-                        return s + tableDailyRate;
-                      }
-                      return ds === 'REGULAR_HOLIDAY' && !t ? s + tableDailyRate : s;
-                    }, 0);
-                    return total > 0 ? fmt(total) : '—';
-                  })()}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {(() => {
-                    const hr = tableDailyRate / 8;
-                    const total = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
-                      if (!t) return s;
-                      const rhOt = Number(t.rhOtHours) + (ds === 'REGULAR_HOLIDAY' ? Number(t.regOtHours) : 0);
-                      return s + rhOt * 2.60 * hr;
-                    }, 0);
-                    return total > 0 ? fmt(parseFloat(total.toFixed(2))) : '—';
-                  })()}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs">
-                  {fmtHours(String(timesheets.reduce((s, t) => s + Number(t.rhRdOtHours), 0)))}
-                </td>
-                <td className="px-2 py-2 text-right text-xs text-blue-600">
-                  {(() => {
-                    const hr = tableDailyRate / 8;
-                    const total = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
-                      if (!t) return s;
-                      const isRH = ds === 'REGULAR_HOLIDAY';
-                      return s +
-                        (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr) +
-                        Number(t.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr +
-                        Number(t.rdOtHours) * 1.69 * hr +
-                        Number(t.shOtHours) * 1.69 * hr +
-                        Number(t.shRdOtHours) * 1.95 * hr +
-                        (Number(t.rhOtHours) + (isRH ? Number(t.regOtHours) : 0)) * 2.60 * hr +
-                        Number(t.rhRdOtHours) * 3.38 * hr;
-                    }, 0);
-                    return total > 0 ? fmt(parseFloat(total.toFixed(2))) : '—';
-                  })()}
-                </td>
-                <td className="px-2 py-2 text-right text-xs text-red-500">
-                  {(() => {
-                    const total = periodDays.reduce((s, { ts: t, date: d }) => {
-                      if (!t) return s;
-                      const { lateDeduct: ld } = computeRowPay(t, tableDailyRate, tablePayType, activeSchedule?.days, d.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
-                      return s + ld;
-                    }, 0);
-                    return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
-                  })()}
-                </td>
-                <td className="px-2 py-2 text-right text-xs text-amber-500">
-                  {(() => {
-                    const total = periodDays.reduce((s, { ts: t, date: d }) => {
-                      if (!t) return s;
-                      const { undertimeDeduct: ud } = computeRowPay(t, tableDailyRate, tablePayType, activeSchedule?.days, d.getDay(), payslip.hrSetting?.disableLateUndertimeGlobal ?? false);
-                      return s + ud;
-                    }, 0);
-                    return total > 0 ? `-${fmt(parseFloat(total.toFixed(2)))}` : '—';
-                  })()}
-                </td>
-                <td className="px-2 py-2 text-right text-xs text-emerald-600">
-                  {(() => {
-                    const hr2 = tableDailyRate / 8;
-                    const tsTotal = timesheets.reduce((s, t) => {
-                      const periodMap = new Map(
-                        periodDays
-                          .filter(p => p.ts)
-                          .map(p => [p.ts!.id, p.derivedStatus])
-                      );
-
-                      const isRH = periodMap.get(t.id) === 'REGULAR_HOLIDAY';
-                      const isSH = periodMap.get(t.id) === 'SPECIAL_HOLIDAY';
-                      const isRD = tablePayType !== 'FIXED_PAY' && Number(t.rdHours) > 0;
-                      
-                      // Rest day: basePay = 0 — gross is RDOT pay only (PH law)
-                      // Fixed pay is exempt — salary is always the agreed amount
-                      const basePay = isRD
-                        ? 0
-                        : isRH
-                          ? (tablePayType === 'FIXED_PAY' ? tableDailyRate : Number(t.dailyGrossPay))
-                          : isSH
-                            ? Number(t.dailyGrossPay)
-                            : tableDailyRate; // Regular day: gross rate, no deductions in table
-                        
-                      const otPay =
-                        (isRH ? 0 : Number(t.regOtHours) * 1.25 * hr2) +
-                        Number(t.rdHours) * (tablePayType === 'FIXED_PAY' ? 0.30 : 1.30) * hr2 +
-                        Number(t.rdOtHours) * 1.69 * hr2 +
-                        Number(t.shOtHours) * 1.69 * hr2 +
-                        Number(t.shRdOtHours) * 1.95 * hr2 +
-                        (Number(t.rhOtHours) + (isRH ? Number(t.regOtHours) : 0)) * 2.60 * hr2 +
-                        Number(t.rhRdOtHours) * 3.38 * hr2;
-                      return s + basePay + otPay;
-                    }, 0);
-                    const unworkedRhPay = periodDays.reduce((s, { ts: t, derivedStatus: ds }) =>
-                      !t && ds === 'REGULAR_HOLIDAY' ? s + tableDailyRate : s, 0);
-                    const total = tsTotal + unworkedRhPay;
-                    return total > 0 ? fmt(total) : '—';
-                  })()}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* ── Audit Trail ── */}
-      <Card className="p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-          <div className="flex items-start gap-2">
-            <User size={14} className="mt-0.5 text-muted-foreground shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                Prepared By
-              </p>
-              <p className="font-semibold text-foreground">
-                {payslip.preparedBy?.name ?? '—'}
-              </p>
-              {payslip.preparedAt && (
-                <p className="text-[11px] text-muted-foreground">
-                  {fmtDateTime(payslip.preparedAt)}
-                </p>
+          {period.status === 'APPROVED' && (
+            <>
+              <Button
+                className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50"
+                disabled={updatingStatus || !allAcknowledged}
+                onClick={() => {
+                  void updateStatus('PAID');
+                }}
+                title={allAcknowledged ? 'Mark as Paid' : 'All employees must acknowledge first'}
+              >
+                {updatingStatus ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={15} />
+                )}
+                Mark as Paid
+                {!allAcknowledged && (
+                  <span className="text-xs opacity-80 ml-1">
+                    ({acknowledged}/{total} acked)
+                  </span>
+                )}
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="gap-2 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                  disabled={updatingStatus}
+                  onClick={() => {
+                    setRevertConfirmText('');
+                    setRevertModalOpen(true);
+                  }}
+                >
+                  <RotateCcw size={15} /> Revert to Processing
+                </Button>
               )}
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <CheckCircle size={14} className="mt-0.5 text-muted-foreground shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                Approved By
-              </p>
-              <p className="font-semibold text-foreground">
-                {payslip.approvedBy?.name ?? '—'}
-              </p>
-              {payslip.approvedAt && (
-                <p className="text-[11px] text-muted-foreground">
-                  {fmtDateTime(payslip.approvedAt)}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <Calendar size={14} className="mt-0.5 text-muted-foreground shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                Acknowledged By
-              </p>
-              <p className="font-semibold text-foreground">
-                {payslip.acknowledgedBy?.name ?? '—'}
-              </p>
-              {payslip.acknowledgedAt ? (
-                <p className="text-[11px] text-muted-foreground">
-                  {fmtDateTime(payslip.acknowledgedAt)}
-                </p>
-              ) : (
-                <p className="text-[11px] text-amber-500">Pending acknowledgment</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {!canEdit && payslip.payrollPeriod.status === 'APPROVED' && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
-          <RotateCcw size={14} />
-          <span>
-            This payroll is <strong>Approved</strong>. To edit deductions, revert to Processing first.
-          </span>
-          <Button
-            variant="outline"
-            className="ml-auto gap-1.5 text-xs h-7"
-            onClick={() => {
-              void handleRevert();
-            }}
-          >
-            <RotateCcw size={12} /> Revert to Processing
-          </Button>
+            </>
+          )}
+          {period.status === 'PAID' && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={updatingStatus}
+              onClick={() => {
+                void updateStatus('CLOSED');
+              }}
+            >
+              <RotateCcw size={15} /> Close Period
+            </Button>
+          )}
         </div>
       )}
 
-      {/* ── Info callout ── */}
-      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-800">
-        <Info size={14} className="mt-0.5 shrink-0" />
-        <span>
-          <strong>Values are auto-computed</strong> from timesheets (including COA corrections),
-          approved overtime requests, paid and unpaid leave. Click <strong>Refresh &amp; Save</strong>{' '}
-          to re-check all attendance data and update this payslip.
-        </span>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ── Earnings ── */}
-        <Card className="p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <CreditCard size={15} className="text-muted-foreground" />
-            <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
-              Earnings
-            </h2>
+      {/* ── Payslips Table ── */}
+      <Card className="overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Users size={16} className="text-muted-foreground" />
+            <span className="text-sm font-bold text-foreground">Employee Payslips</span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              ['Basic Pay', String(parseFloat(displayBasicPay.toFixed(2)))],
-              ['Holiday Pay', holidayPay],
-              ['OT Pay', String(parseFloat(displayOtPay.toFixed(2)))],
-              ['Paid Leave Pay', paidLeavePay],
-              ['Allowance', allowance],
-            ].map(([label, val]) => (
-              <div key={label}>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {label}
-                </p>
-                <p className="text-sm font-semibold text-foreground">{fmt(Number(val))}</p>
-              </div>
-            ))}
-          </div>
-          <div className="pt-3 border-t border-border flex justify-between items-center">
-            <span className="text-xs font-bold text-muted-foreground uppercase">
-              Gross Pay
-            </span>
-            <span className="text-base font-black text-emerald-600">{fmt(liveGross)}</span>
-          </div>
-        </Card>
-
-        {/* ── Deductions ── */}
-        <Card className="p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <CreditCard size={15} className="text-red-400" />
-            <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
-              Deductions
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {deductionGridItems.map((r) => (
-              <div key={r.label}>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {r.label}
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {fmt(Number(r.value))}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="pt-3 border-t border-border flex justify-between items-center">
-            <span className="text-xs font-bold text-muted-foreground uppercase">
-              Total Deductions
-            </span>
-            <span className="text-base font-black text-red-500">{fmt(liveDed)}</span>
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Net Pay ── */}
-      <Card className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-            Net Pay
-          </p>
-          <p className="text-3xl font-black text-blue-600">{fmt(liveNet)}</p>
-        </div>
-        <div className="text-right text-xs text-muted-foreground">
-          <p>Gross: {fmt(liveGross)}</p>
-          <p>Deductions: {fmt(liveDed)}</p>
-        </div>
-      </Card>
-
-      {/* ── Actions ── */}
-      <div className="flex flex-wrap gap-3">
-        {!payslip.approvedAt && (
-          <Button
-            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={refreshing}
-            onClick={() => {
-              void handleRefreshAndSave();
-            }}
-            title="Re-check all timesheets, apply approved OT, recompute government deductions, and save"
-          >
-            {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-            Refresh &amp; Save
-          </Button>
-        )}
-        {!payslip.approvedAt && payslip.payrollPeriod.status === 'PROCESSING' && (
-          <Button
-            className="gap-2 bg-blue-500 hover:bg-blue-600 text-white"
-            disabled={approving}
-            onClick={() => {
-              void handleApprove();
-            }}
-          >
-            {approving ? <Loader2 size={15} className="animate-spin" /> : <ThumbsUp size={15} />}
-            Approve Payslip
-          </Button>
-        )}
-        {payslip.approvedAt && (
-          <div className="flex items-center gap-1.5 text-sm text-blue-600 font-semibold">
-            <ThumbsUp size={14} /> Approved {fmtDateTime(payslip.approvedAt)}
-          </div>
-        )}
-        {payslip.approvedAt &&
-          payslip.acknowledgedAt &&
-          payslip.disbursedStatus !== 'COMPLETED' && (
+          {period.status === 'PROCESSING' && selectedPayslips.length > 0 && (
             <Button
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-              disabled={markingPaid}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
               onClick={() => {
-                void handleMarkPaid();
+                void handleBatchApprove();
               }}
+              disabled={approvingBatch || isRefreshing}
             >
-              {markingPaid ? (
-                <Loader2 size={15} className="animate-spin" />
+              {approvingBatch ? (
+                <Loader2 size={14} className="animate-spin" />
               ) : (
-                <Banknote size={15} />
+                <CheckCircle size={14} />
               )}
-              Mark as Paid
+              Approve Selected ({selectedPayslips.length})
             </Button>
           )}
-        {payslip.disbursedStatus === 'COMPLETED' && (
-          <div className="flex items-center gap-1.5 text-sm text-emerald-600 font-semibold">
-            <Banknote size={14} /> Paid
+        </div>
+        {period.payslips.length === 0 ? (
+          <div className="py-14 text-center text-sm text-muted-foreground">
+            No payslips in this period.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/50 border-b border-border">
+                  {period.status === 'PROCESSING' && (
+                    <th className="w-10 px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                        checked={isAllApprovableSelected}
+                        onChange={handleSelectAll}
+                        disabled={approvablePayslips.length === 0}
+                      />
+                    </th>
+                  )}
+                  <th className="text-left px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
+                    Employee
+                  </th>
+                  <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
+                    Deductions
+                  </th>
+                  <th className="text-right px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
+                    Net Pay
+                  </th>
+                  <th className="text-center px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
+                    Approved
+                  </th>
+                  <th className="text-center px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
+                    Acknowledged
+                  </th>
+                  <th className="text-center px-4 py-3 font-bold text-muted-foreground text-xs uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className={isRefreshing ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+                {period.payslips.map((ps) => {
+                  // Net Pay mirrors Gross Pay on this list. Deductions is shown
+                  // for display only and is not subtracted into Net Pay here.
+                  const calcDeductions = Number(ps.totalDeductions || 0);
+                  const calcNetPay = Number(ps.grossPay || 0);
+
+                  return (
+                    <React.Fragment key={String(ps.id)}>
+                      <tr className="border-b border-border hover:bg-muted/30 transition-colors">
+                        {period.status === 'PROCESSING' && (
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                              checked={selectedPayslips.includes(String(ps.id))}
+                              onChange={(e) => handleSelect(ps.id, e.target.checked)}
+                              disabled={ps.approvedAt !== null}
+                            />
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-foreground">
+                            {ps.employee.firstName} {ps.employee.lastName}
+                          </p>
+                          {ps.employee.employeeNo && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {ps.employee.employeeNo}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleRow(ps.id)}
+                            className="inline-flex items-center gap-1 text-red-500 hover:text-red-600 transition-colors"
+                            title="Show deduction breakdown"
+                          >
+                            {fmt(calcDeductions)}
+                            <ChevronDown
+                              size={12}
+                              className={`transition-transform ${expandedRows.has(String(ps.id)) ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">
+                          {fmt(calcNetPay)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {ps.approvedAt ? (
+                            <span className="inline-flex items-center gap-1 text-blue-600 font-semibold text-xs">
+                              <ThumbsUp size={12} /> Approved
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {ps.acknowledgedAt ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-xs">
+                                <CheckCircle size={13} />
+                                Acknowledged
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {fmtDateTime(ps.acknowledgedAt)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            {/* Approve individual payslip */}
+                            {!ps.approvedAt && period.status === 'PROCESSING' && (
+                              <Button
+                                variant="ghost"
+                                className="h-7 px-2 text-xs gap-1 text-blue-600"
+                                disabled={approvingPayslip === String(ps.id)}
+                                onClick={() => {
+                                  void approvePayslip(ps.id);
+                                }}
+                              >
+                                {approvingPayslip === String(ps.id) ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <ThumbsUp size={11} />
+                                )}
+                                Approve
+                              </Button>
+                            )}
+                            {/* Mark individual payslip paid */}
+                            {ps.approvedAt &&
+                              ps.acknowledgedAt &&
+                              ps.disbursedStatus !== 'COMPLETED' && (
+                                <Button
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs gap-1 text-emerald-700"
+                                  disabled={payingPayslip === String(ps.id)}
+                                  onClick={() => {
+                                    void markPayslipPaid(ps.id);
+                                  }}
+                                >
+                                  {payingPayslip === String(ps.id) ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    <Banknote size={11} />
+                                  )}
+                                  Mark Paid
+                                </Button>
+                              )}
+                            {ps.disbursedStatus === 'COMPLETED' && (
+                              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                                <Banknote size={11} /> Paid
+                              </span>
+                            )}
+                            {/* File request on behalf */}
+                            <Button
+                              variant="ghost"
+                              className="h-7 px-2 text-xs gap-1 text-violet-600"
+                              onClick={() => openFileModal(ps.employee.id, `${ps.employee.firstName} ${ps.employee.lastName}`)}
+                              title="File a COA, Leave, or OT request on behalf of this employee"
+                            >
+                              <FilePlus size={11} />
+                              File
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="h-7 px-2 text-xs gap-1"
+                              onClick={() =>
+                                router.push(
+                                  `/portal/hr/payroll-coordination/${period.id}/payslips/${ps.id}`
+                                )
+                              }
+                            >
+                              <Edit size={12} />
+                              View
+                              <ChevronRight size={12} className="text-muted-foreground" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* ── Deduction Breakdown Row ── */}
+                      {expandedRows.has(String(ps.id)) && (
+                        <tr className="bg-muted/20 border-b border-border">
+                          <td
+                            colSpan={period.status === 'PROCESSING' ? 7 : 6}
+                            className="px-6 py-3"
+                          >
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                              {[
+                                { label: 'SSS', value: ps.sssDeduction },
+                                { label: 'PhilHealth', value: ps.philhealthDeduction },
+                                { label: 'Pag-IBIG', value: ps.pagibigDeduction },
+                                { label: 'Withholding Tax', value: ps.withholdingTax },
+                                { label: 'Late / Undertime', value: ps.lateUndertimeDeduction },
+                                ...(Number(ps.pagibigLoan) > 0 ? [{ label: 'Pag-IBIG Loan', value: ps.pagibigLoan }] : []),
+                                ...(Number(ps.sssLoan) > 0 ? [{ label: 'SSS Loan', value: ps.sssLoan }] : []),
+                                ...(Number(ps.cashAdvanceRepayment) > 0 ? [{ label: 'Cash Advance', value: ps.cashAdvanceRepayment }] : []),
+                              ].map((d) => (
+                                <div key={d.label} className="flex justify-between gap-2 py-0.5 border-b border-border/50 last:border-0">
+                                  <span className="text-muted-foreground">{d.label}</span>
+                                  <span className={`font-medium tabular-nums ${Number(d.value) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                    {fmt(Number(d.value))}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border bg-muted/30">
+                  {period.status === 'PROCESSING' && <td />}
+                  <td className="px-4 py-3 text-xs font-bold text-muted-foreground uppercase">
+                    {total} employees
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-red-500">
+                    {fmt(dedTotal)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-black text-foreground">
+                    {fmt(netTotal)}
+                  </td>
+                  <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                    {approved}/{total} approved
+                  </td>
+                  <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                    {acknowledged}/{total} acked
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
-        {payslip.approvedAt !== null && payslip.acknowledgedAt === null && (
-          <Button
-            variant="outline"
-            className="gap-2"
-            disabled={acknowledging}
-            onClick={() => {
-              void handleAcknowledge();
-            }}
-            title="Manually acknowledge on behalf of the employee"
-          >
-            {acknowledging ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <CheckCircle size={15} className="text-emerald-500" />
+      </Card>
+
+      {/* ── File Request Modal ── */}
+      <Modal
+        isOpen={fileModalOpen}
+        onClose={() => setFileModalOpen(false)}
+        title={`File Request — ${fileTarget?.name ?? ''}`}
+        size="md"
+      >
+        <div className="p-2 space-y-6">
+          {/* Request type selector */}
+          <div>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Request Type
+            </label>
+            <div className="flex gap-2 mt-2">
+              {(['COA', 'LEAVE', 'OVERTIME'] as RequestType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setRequestType(t)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
+                    requestType === t
+                      ? 'bg-foreground text-background border-foreground shadow-sm'
+                      : 'border-border text-muted-foreground hover:bg-muted hover:border-foreground/20'
+                  }`}
+                >
+                  {t === 'COA' ? 'Attendance Correction' : t === 'LEAVE' ? 'Leave' : 'Overtime'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Form Section Container */}
+          <div className="space-y-4">
+            {requestType === 'COA' && (
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Date Affected</label>
+                    <input
+                      type="date"
+                      value={coaDate}
+                      onChange={(e) => setCoaDate(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Action</label>
+                    <select
+                      value={coaAction}
+                      onChange={(e) => setCoaAction(e.target.value as CoaActionType)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {COA_ACTION_TYPES.map((a) => (
+                        <option key={a} value={a}>{a.replace('_', ' ')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Correct Time</label>
+                  <input
+                    type="time"
+                    value={coaTime}
+                    onChange={(e) => setCoaTime(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                  <textarea
+                    value={coaReason}
+                    onChange={(e) => setCoaReason(e.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
             )}
-            Mark Acknowledged
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          className="gap-2 disabled:opacity-50"
-          disabled={!canPDF || isPrinting}
-          onClick={() => {
-            void handleViewPDF();
-          }}
-          title="View payslip PDF"
-        >
-          {isPrinting ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
-          View PDF
-        </Button>
-      </div>
+
+            {requestType === 'LEAVE' && (
+              <div className="grid gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Leave Type</label>
+                  <select
+                    value={leaveTypeId}
+                    onChange={(e) => setLeaveTypeId(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select leave type…</option>
+                    {leaveTypes.map((lt) => (
+                      <option key={lt.id} value={lt.id}>
+                        {lt.name} ({lt.isPaid ? 'Paid' : 'Unpaid'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+                    <input
+                      type="date"
+                      value={leaveStart}
+                      onChange={(e) => setLeaveStart(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">End Date</label>
+                    <input
+                      type="date"
+                      value={leaveEnd}
+                      onChange={(e) => setLeaveEnd(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Credits Used (days)</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={leaveCredits}
+                    onChange={(e) => setLeaveCredits(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                  <textarea
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+            )}
+
+            {requestType === 'OVERTIME' && (
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Date</label>
+                    <input
+                      type="date"
+                      value={otDate}
+                      onChange={(e) => setOtDate(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">OT Type</label>
+                    <select
+                      value={otType}
+                      onChange={(e) => setOtType(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="REGULAR_OT">Regular OT</option>
+                      <option value="REST_DAY_OT">Rest Day OT</option>
+                      <option value="HOLIDAY_OT">Holiday OT</option>
+                      <option value="SPECIAL_HOLIDAY_OT">Special Holiday OT</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Time From</label>
+                    <input
+                      type="time"
+                      value={otFrom}
+                      onChange={(e) => setOtFrom(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Time To</label>
+                    <input
+                      type="time"
+                      value={otTo}
+                      onChange={(e) => setOtTo(e.target.value)}
+                      className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Total Hours</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={otHours}
+                    onChange={(e) => setOtHours(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Reason</label>
+                  <textarea
+                    value={otReason}
+                    onChange={(e) => setOtReason(e.target.value)}
+                    rows={3}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button variant="outline" onClick={() => setFileModalOpen(false)} disabled={filing}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+              onClick={() => { void submitFileRequest(); }}
+              disabled={filing}
+            >
+              {filing ? <Loader2 size={16} className="animate-spin" /> : <FilePlus size={16} />}
+              Submit Request
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Revert Approval Confirmation Modal ── */}
+      <Modal
+        isOpen={revertModalOpen}
+        onClose={() => setRevertModalOpen(false)}
+        title="Revert Payroll Approval"
+        size="sm"
+      >
+        <div className="p-2 space-y-4">
+          {/* Warning banner */}
+          <div className="flex gap-3 rounded-lg bg-red-50 border border-red-200 p-3">
+            <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-red-700">
+              <p className="font-bold mb-1">This action cannot be undone easily.</p>
+              <p>Reverting will move this payroll period back to <strong>Processing</strong>. Employees will no longer be able to see or acknowledge their payslips until the period is re-approved.</p>
+            </div>
+          </div>
+
+          {/* Confirmation input */}
+          <div>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Type <span className="text-red-600 font-black">REVERT</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={revertConfirmText}
+              onChange={(e) => setRevertConfirmText(e.target.value)}
+              placeholder="REVERT"
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/40 font-mono"
+              autoComplete="off"
+            />
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              onClick={() => setRevertModalOpen(false)}
+              disabled={updatingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="gap-2 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+              disabled={revertConfirmText !== 'REVERT' || updatingStatus}
+              onClick={async () => {
+                setRevertModalOpen(false);
+                await updateStatus('PROCESSING');
+              }}
+            >
+              {updatingStatus ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+              Confirm Revert
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
