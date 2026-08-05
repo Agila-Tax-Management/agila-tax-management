@@ -394,8 +394,14 @@ export function PayrollPeriodDetail() {
   const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0;
 
   const grossTotal = period.payslips.reduce((s, ps) => s + Number(ps.grossPay || 0), 0);
+  
+  // Pure display total — sums each payslip's own persisted totalDeductions
+  // rather than re-deriving it here.
   const dedTotal = period.payslips.reduce((s, ps) => s + Number(ps.totalDeductions || 0), 0);
-  const netTotal = period.payslips.reduce((s, ps) => s + Number(ps.netPay || 0), 0);
+
+  // Net Pay on this list mirrors Gross Pay — Deductions is shown separately,
+  // for display only, and is not subtracted here.
+  const netTotal = grossTotal;
 
   const preparedBy = period.payslips[0]?.preparedBy ?? null;
   const approvablePayslips = period.payslips.filter((ps) => !ps.approvedAt);
@@ -689,8 +695,10 @@ export function PayrollPeriodDetail() {
               </thead>
               <tbody className={isRefreshing ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
                 {period.payslips.map((ps) => {
+                  // Net Pay mirrors Gross Pay on this list. Deductions is shown
+                  // for display only and is not subtracted into Net Pay here.
                   const calcDeductions = Number(ps.totalDeductions || 0);
-                  const calcNetPay = Number(ps.netPay || 0);
+                  const calcNetPay = Number(ps.grossPay || 0);
 
                   return (
                     <React.Fragment key={String(ps.id)}>
