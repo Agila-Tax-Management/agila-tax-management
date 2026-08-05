@@ -445,114 +445,14 @@ export function PayslipEditor() {
     return days;
   }, [payslip, timesheets, holidays, leaveRequests]);
 
-  const dynamicDeductions = useMemo(() => {
-    let regularLateUnder = 0;
-    let regularHolidayLateUnder = 0;
-    let specialHolidayLateUnder = 0;
+   const displayLateUnder = Number(lateUnder);
 
-    if (!payslip) return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
-
-    const activeEmp = payslip?.employee?.employments?.[0] ?? null;
-    const activeCt = activeEmp?.contracts?.[0] ?? null;
-    const activeSchedule = activeCt?.schedule ?? null;
-    const activeComp = activeCt?.compensations?.[0] ?? null;
-    const tableDailyRate = Number(activeComp?.calculatedDailyRate ?? 0);
-    const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
-
-    if (payslip.hrSetting?.disableLateUndertimeGlobal) {
-      return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
-    }
-
-    periodDays.forEach(({ ts, date, derivedStatus }) => {
-      if (!ts) return;
-      const { lateDeduct, undertimeDeduct } = computeRowPay(
-        ts,
-        tableDailyRate,
-        tablePayType,
-        activeSchedule?.days,
-        date.getDay(),
-        false
-      );
-
-      const amount = lateDeduct + undertimeDeduct;
-
-      if (derivedStatus === 'REGULAR_HOLIDAY') {
-        regularHolidayLateUnder += amount;
-      } else if (derivedStatus === 'SPECIAL_HOLIDAY') {
-        specialHolidayLateUnder += amount;
-      } else {
-        regularLateUnder += amount;
-      }
-    });
-
-    return { regularLateUnder, regularHolidayLateUnder, specialHolidayLateUnder };
-  }, [payslip, periodDays]);
-
-  // FIX 1: Ensure total calculated late captures ALL sources if it's 0 (pre-refresh)
-  const computedTotalLateUnder = 
-    dynamicDeductions.regularLateUnder + 
-    dynamicDeductions.regularHolidayLateUnder + 
-    dynamicDeductions.specialHolidayLateUnder;
-
-  const displayLateUnder = Number(lateUnder) > 0 ? Number(lateUnder) : computedTotalLateUnder;
-
-  // Live pay values — computed from the table columns so earnings always match the table
-  const _payType = payslip?.employee?.employments?.[0]?.contracts?.[0]?.compensations?.[0]?.payType ?? 'FIXED_PAY';
-  const _otHr = Number(payslip?.employee?.employments?.[0]?.contracts?.[0]?.compensations?.[0]?.calculatedDailyRate ?? 0) / 8;
-
-  // Reg Pay total — mirrors the Reg Pay column (excludes rest-day rows for non-fixed-pay)
-  const liveRegPay = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
-    if (!t) return s;
-    if (_payType === 'FIXED_PAY' && ds === 'REGULAR_HOLIDAY') return s;
-    if (_payType !== 'FIXED_PAY' && Number(t.rdHours) > 0) return s;
-    // Use gross daily rate — deductions are captured separately in liveDed
-    return s + (_otHr * 8);
-  }, 0);
-
-  // For FIXED_PAY: use the DB-stored basicPay (the agreed salary, not timesheet-derived)
-  // For VARIABLE_PAY: use liveRegPay from the table so RDOT is not double-counted
-  const displayBasicPay = _payType === 'FIXED_PAY' ? Number(basicPay) : liveRegPay;
-
-  // OT Pay total — mirrors the OT Pay column (includes RDOT, excludes holiday base pay)
-  const liveOtTotal = periodDays.reduce((s, { ts: t, derivedStatus: ds }) => {
-    if (!t) return s;
-    const isRH = ds === 'REGULAR_HOLIDAY';
-    return s +
-      (isRH ? 0 : Number(t.regOtHours) * 1.25 * _otHr) +
-      Number(t.rdHours) * (_payType === 'FIXED_PAY' ? 0.30 : 1.30) * _otHr +
-      Number(t.rdOtHours) * 1.69 * _otHr +
-      Number(t.shOtHours) * 1.69 * _otHr +
-      Number(t.shRdOtHours) * 1.95 * _otHr +
-      (Number(t.rhOtHours) + (isRH ? Number(t.regOtHours) : 0)) * 2.60 * _otHr +
-      Number(t.rhRdOtHours) * 3.38 * _otHr;
-  }, 0);
-
-  // Earnings/deductions/net pay are derived from the persisted payslip snapshot,
-  // using the same formula the server applies in PATCH /api/hr/payslips/[id]
-  // (grossPay = basicPay + holidayPay + overtimePay + paidLeavePay + allowance).
-  // This keeps the figures shown here in sync with the payroll coordination list
-  // and the exported PDF, which both read the saved fields. Click "Refresh & Save"
-  // to recompute these from current timesheets, OT requests, and leave requests.
+  const displayBasicPay = Number(basicPay);
   const displayOtPay = Number(overtimePay);
 
-  const liveGross =
-    displayBasicPay +
-    Number(holidayPay) +
-    displayOtPay +
-    Number(paidLeavePay) +
-    Number(allowance);
-
-  const liveDed =
-    Number(sss) +
-    Number(philhealth) +
-    Number(pagibig) +
-    Number(tax) +
-    displayLateUnder +
-    Number(pagibigLoan) +
-    Number(sssLoan) +
-    Number(cashAdv);
-
-  const liveNet = liveGross - liveDed;
+  const liveGross = Number(payslip?.grossPay ?? 0);
+  const liveDed = Number(payslip?.totalDeductions ?? 0);
+  const liveNet = Number(payslip?.netPay ?? 0);
 
   const canEdit =
     payslip !== null &&
