@@ -269,14 +269,13 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       const cashAdvanceRepayment = Number(payslip.cashAdvanceRepayment?.toString() || 0);
       
       const lateUndertimeForTotal = comp.payType === 'FIXED_PAY' ? lateUndertimeDeduction : 0;
-      
-      // Force totalDeductions using every individual field — mirrors PayslipEditor liveDed exactly
+
       const totalDeductions =
         sssDeduction +
         philhealthDeduction +
         pagibigDeduction +
         withholdingTax +
-        lateUndertimeDeduction +   // always include, not gated by payType
+        lateUndertimeForTotal +
         pagibigLoan +
         sssLoan +
         cashAdvanceRepayment;

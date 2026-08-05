@@ -394,24 +394,8 @@ export function PayrollPeriodDetail() {
   const approvedPercent = total > 0 ? Math.round((approved / total) * 100) : 0;
 
   const grossTotal = period.payslips.reduce((s, ps) => s + Number(ps.grossPay || 0), 0);
-  
-  // Calculate reliable deductions directly based on individual breakdown if the parent field is missing
-  const dedTotal = period.payslips.reduce((s, ps) => {
-    const calcDeds = Number(ps.totalDeductions) || (
-      Number(ps.sssDeduction || 0) +
-      Number(ps.philhealthDeduction || 0) +
-      Number(ps.pagibigDeduction || 0) +
-      Number(ps.withholdingTax || 0) +
-      Number(ps.lateUndertimeDeduction || 0) +
-      Number(ps.pagibigLoan || 0) +
-      Number(ps.sssLoan || 0) +
-      Number(ps.cashAdvanceRepayment || 0)
-    );
-    return s + calcDeds;
-  }, 0);
-
-  // Guarantee Net Total is exactly Gross - Deductions
-  const netTotal = grossTotal - dedTotal;
+  const dedTotal = period.payslips.reduce((s, ps) => s + Number(ps.totalDeductions || 0), 0);
+  const netTotal = period.payslips.reduce((s, ps) => s + Number(ps.netPay || 0), 0);
 
   const preparedBy = period.payslips[0]?.preparedBy ?? null;
   const approvablePayslips = period.payslips.filter((ps) => !ps.approvedAt);
@@ -705,20 +689,8 @@ export function PayrollPeriodDetail() {
               </thead>
               <tbody className={isRefreshing ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
                 {period.payslips.map((ps) => {
-                  // Fallback calculation to enforce accuracy if API response is zeroed or missing the scalar sum
-                  const calcDeductions = Number(ps.totalDeductions) || (
-                    Number(ps.sssDeduction || 0) +
-                    Number(ps.philhealthDeduction || 0) +
-                    Number(ps.pagibigDeduction || 0) +
-                    Number(ps.withholdingTax || 0) +
-                    Number(ps.lateUndertimeDeduction || 0) +
-                    Number(ps.pagibigLoan || 0) +
-                    Number(ps.sssLoan || 0) +
-                    Number(ps.cashAdvanceRepayment || 0)
-                  );
-                  
-                  // Strictly enforce Net Pay
-                  const calcNetPay = Number(ps.grossPay || 0) - calcDeductions;
+                  const calcDeductions = Number(ps.totalDeductions || 0);
+                  const calcNetPay = Number(ps.netPay || 0);
 
                   return (
                     <React.Fragment key={String(ps.id)}>

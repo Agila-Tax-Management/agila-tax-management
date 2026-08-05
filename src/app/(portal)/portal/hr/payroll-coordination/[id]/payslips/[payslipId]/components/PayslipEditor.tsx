@@ -772,18 +772,20 @@ export function PayslipEditor() {
   const tablePayType = activeComp?.payType ?? 'FIXED_PAY';
   // ────────────────────────────────────────────────────────────────
 
-  // FIX 3: Remove double mapping in deduction array
+  const lateUnderLabel =
+    tablePayType === 'VARIABLE_PAY' ? 'Late / Undertime (reflected in Basic Pay)' : 'Late / Undertime';
+
   const deductionGridItems = [
     { label: 'SSS', value: sss },
     { label: 'PhilHealth', value: philhealth },
     { label: 'Pag-IBIG', value: pagibig },
     { label: 'Withholding Tax', value: tax },
-    { label: 'Late / Undertime', value: displayLateUnder },
+    { label: lateUnderLabel, value: displayLateUnder },
     { label: 'SSS Loan', value: sssLoan },
     { label: 'Pag-IBIG Loan', value: pagibigLoan },
     { label: 'Cash Advance', value: cashAdv },
   ].filter((r) => {
-    const whitelist = ['SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding Tax', 'Late / Undertime'];
+    const whitelist = ['SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding Tax', lateUnderLabel];
     if (whitelist.includes(r.label)) return true;
     return (Number(r.value) || 0) !== 0;
   });
